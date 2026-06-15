@@ -259,15 +259,15 @@
 
 参考文档：[实施计划阶段 7](docs/plan/recursive-service-import-implementation-plan.md)、[Taskfile.yml](Taskfile.yml)、[scripts/test-coverage.sh](scripts/test-coverage.sh)。
 
-- [ ] 7.1 工作树和产物审计
+- [x] 7.1 工作树和产物审计
   - 依赖：6.4。
   - 工作内容：检查 `git status --short`，确认 diff 只包含 recursive import 相关代码、测试、脚本和文档；清理不应提交的 `bin/`、coverage、node_modules、日志、data dir、service artifacts。
   - 可并行子任务：
-    - [ ] 可并行：工作树未跟踪文件审计。
-    - [ ] 可并行：文档和脚本变更范围审计。
+    - [x] 可并行：工作树未跟踪文件审计。
+    - [x] 可并行：文档和脚本变更范围审计。
   - 测试方案：`git status --short`；必要时 `git diff --stat`。
   - 验收标准：无无关改动；无敏感或生成产物进入待提交范围。
-  - 完成总结：待完成。
+  - 完成总结：已完成工作树和产物审计。初始 `git status --short --branch` 显示分支 `feat/recursive-service-import` 与 `origin/feat/recursive-service-import` 同步且无待提交 diff；`git diff --stat` 无输出。`git status --short --ignored` 仅发现 `.task/`、`bin/`、`coverage/`、SDK/example `node_modules`、SDK `dist` 和 npm platform `bin` 等忽略产物，已运行 `task clean` 清理；残留旧 `sdk/coverage/` 已单独删除。复查 `git status --short --ignored` 无输出。`find . -maxdepth 3 \( -name node_modules -o -name coverage -o -name bin -o -name '*.tgz' -o -name '*.log' \) -print` 剩余的 `services/*/bin`、`examples/*/bin` 和 `npm/octobus/bin` 均为 `git ls-files` 跟踪的服务/示例入口目录，不是待提交生成产物。
 
 - [ ] 7.2 运行完整 focused 和 e2e 验证
   - 依赖：7.1。
