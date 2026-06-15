@@ -199,15 +199,15 @@
   - 验收标准：脚本不再调用旧 `service import --id ...` 形态；Node 测试通过。
   - 完成总结：已将 `services/scripts/import-check-all.mjs` 改为递归发现 service roots，跳过 `node_modules`、`.git` 和隐藏目录；主流程启动 daemon 后执行一次 `octobus service import --recursive <root>`，再通过 `octobus service list` 校验每个发现 service 的 `ID`、`ServiceRoot`、`NodeEntry`。Node 测试保留参数校验和 discoverServices 断言，并新增静态断言确认脚本使用 `--recursive` 且不再使用旧 `service import --id` 形态。验证命令：`node --test services/tests/validate-service-package.test.mjs`，结果通过。
 
-- [ ] 5.3 聚焦验证 CLI + admin + importer 串联
+- [x] 5.3 聚焦验证 CLI + admin + importer 串联
   - 依赖：5.1、5.2。
   - 工作内容：运行 recursive 相关 focused tests，修复跨层请求体、响应字段、source 规范化不一致问题。
   - 可并行子任务：
-    - [ ] 可并行：Go focused tests。
-    - [ ] 可并行：Node service package script tests。
+    - [x] 可并行：Go focused tests。
+    - [x] 可并行：Node service package script tests。
   - 测试方案：`go test ./internal/cli ./internal/admin ./internal/packageimport`；`node --test services/tests/validate-service-package.test.mjs`。
   - 验收标准：Go 和 Node focused tests 均通过。
-  - 完成总结：待完成。
+  - 完成总结：已完成 recursive import 的 CLI 请求体、admin 分流/响应聚合、packageimport 核心流程和 services import-check 脚本串联 focused 验证，未发现跨层字段、source 规范化或响应 shape 不一致。验证命令：`go test ./internal/cli ./internal/admin ./internal/packageimport`，结果通过；`node --test services/tests/validate-service-package.test.mjs`，结果通过。
 
 ## 6. 端到端覆盖和文档
 
