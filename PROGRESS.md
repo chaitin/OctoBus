@@ -143,15 +143,15 @@
 
 参考文档：[实施计划阶段 4](docs/plan/recursive-service-import-implementation-plan.md)、[技术方案 Admin API 变化](docs/spec/recursive-service-import-spec.md)。
 
-- [ ] 4.1 在 import endpoint 接入 recursive 分流
+- [x] 4.1 在 import endpoint 接入 recursive 分流
   - 依赖：3.4。
   - 工作内容：在 `handleServiceImport` 中按 `req.Recursive` 分流；recursive 请求校验 `source` 必填、`service_id` 为空、`name` 为空；单 service import 响应保持兼容。
   - 可并行子任务：
-    - [ ] 可并行：实现请求校验和错误响应测试。
-    - [ ] 可并行：实现单 service import 兼容测试。
+    - [x] 可并行：实现请求校验和错误响应测试。
+    - [x] 可并行：实现单 service import 兼容测试。
   - 测试方案：`go test ./internal/admin`。
   - 验收标准：recursive 请求调用 `ImportRecursive`；非法组合返回 HTTP 400；单 service import 原测试通过。
-  - 完成总结：待完成。
+  - 完成总结：`handleServiceImport` 已按 `req.Recursive` 分流，recursive 请求校验 `source` 必填、`service_id` 为空、`name` 为空，合法请求调用 `Importer.ImportRecursive`；单 service 请求继续调用 `Importer.Import`，响应 shape 和重启路径保持兼容。相关实现和测试在 1.3 骨架接入时已落地，本阶段在真实 `ImportRecursive` 完成后重新验证。验证命令：`go test ./internal/admin`，结果通过。
 
 - [ ] 4.2 聚合 recursive 重启结果
   - 依赖：4.1。
