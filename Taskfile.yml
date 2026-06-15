@@ -47,11 +47,11 @@ tasks:
       - bash ./scripts/build-octobus.sh bin/octobus
       - |
         if command -v ldd >/dev/null 2>&1; then
-          if ldd bin/octobus 2>&1 | grep -q "not a dynamic executable"; then
+          if LC_ALL=C ldd bin/octobus 2>&1 | grep -q "not a dynamic executable"; then
             exit 0
           fi
           echo "bin/octobus is dynamically linked; expected a static binary" >&2
-          ldd bin/octobus >&2
+          LC_ALL=C ldd bin/octobus >&2
           exit 1
         fi
 

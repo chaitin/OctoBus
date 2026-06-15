@@ -23,11 +23,11 @@ ARG OCTOBUS_VERSION
 ARG OCTOBUS_COMMIT
 ARG OCTOBUS_BUILD_DATE
 RUN bash ./scripts/build-octobus.sh /out/octobus \
-	&& if ldd /out/octobus 2>&1 | grep -q "not a dynamic executable"; then \
+	&& if LC_ALL=C ldd /out/octobus 2>&1 | grep -q "not a dynamic executable"; then \
 		true; \
 	else \
 		echo "/out/octobus is dynamically linked; expected a static binary" >&2; \
-		ldd /out/octobus >&2; \
+		LC_ALL=C ldd /out/octobus >&2; \
 		exit 1; \
 	fi
 
