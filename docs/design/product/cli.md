@@ -83,6 +83,17 @@ octobus service import \
 
 第一个位置参数是 Octobus 本地 service id，必填，不从 `service.json` 推导。`--name` 是可选的展示名覆盖值；未提供时，首次导入按 `service.json.displayName`、`service.json.name` 的顺序选择展示名。
 
+multi-service distribution package 可以使用 recursive 模式一次导入发现到的所有 service：
+
+```text
+octobus service import --recursive npm:@chaitin-ai/octobus-tentacles
+octobus service import --recursive ./platform-services//subset
+```
+
+recursive 模式只接受 `SOURCE` 一个位置参数，禁止 `--name`，service id 来自每个
+discovered service 的 `service.json.name`。`SOURCE//some-dir` 在 recursive 模式下表示
+递归发现的 scan root；依赖安装和 artifact 仍以 distribution package root 为准。
+
 行为：
 
 - 获取 package source。

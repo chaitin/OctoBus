@@ -92,9 +92,18 @@ octobus service import hanqing ./platform-services.zip//chaitin__hanqing-ticket
 octobus service import hanqing https://github.com/acme/platform-services.git//chaitin__hanqing-ticket@v1.0.0
 ```
 
+需要一次导入 distribution package 中所有 service root 时，使用 recursive 模式：
+
+```text
+octobus service import --recursive npm:@chaitin-ai/octobus-tentacles
+octobus service import --recursive ./platform-services//chaitin__subset
+```
+
 规则：
 
 - `//service-dir` 选择 distribution artifact 内的 service root。
+- recursive 模式中 `//service-dir` 表示递归发现的 scan root；该 scan root 下发现到的
+  每个 `service.json` 都会按其 `name` 导入为独立 service。
 - 缺省 `//service-dir` 时，distribution package root 本身就是 service root。
 - service dir 必须是相对路径，不允许绝对路径、空路径或 `..`。
 - service dir 不裁剪 artifact，也不改变 dependency install root。
@@ -119,6 +128,10 @@ octobus service import hanqing https://github.com/acme/platform-services.git//ch
 - `node_entry`：根 package 相对路径，例如 `bin/hanqing-ticket.js`。
 - `service_root`：根 package 相对路径，例如 `chaitin__hanqing-ticket`；根 service 使用 `"."`。
 - `package_source`：保留规范化后的 source 字符串，包含 `//service-dir`。
+
+recursive import 对每个 discovered service 写入一条现有 service 记录，不新增 store schema；
+导入前会先校验本次发现到的所有 manifest、service id、bin、schema 和 descriptor，校验失败
+时不提交任何 service。
 
 依赖安装只以根 `package.json` 为准。子目录 `package.json` 不参与 import/runtime
 依赖解析。

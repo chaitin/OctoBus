@@ -233,16 +233,16 @@
   - 验收标准：至少一类跨组件测试证明重启聚合语义；没有覆盖的 e2e 细节有明确理由。
   - 完成总结：已复用 internal integration 的 admin/importer/store/supervisor 组合，新增 `TestRecursiveServiceImportRestartDegradedIntegration`：先 recursive import 本地 multi-service fixture，再创建 enabled long-running instance，随后通过 admin recursive reimport 触发 restart failure，断言 HTTP 409、`status:"degraded"` 和按 `alpha-service` 聚合的 restart error，并确认已导入 service 不因 restart failure 回滚。未增加完整 e2e 进程测试，因为该 integration 已覆盖 admin + importer + store + supervisor 的跨组件语义，完整 e2e 会在最终门禁运行。验证命令：`go test ./internal/integration ./internal/admin`，结果通过。
 
-- [ ] 6.3 更新用户和设计文档
+- [x] 6.3 更新用户和设计文档
   - 依赖：5.3。
   - 工作内容：更新 `README.md`、`README.zh-CN.md` 和相关设计文档，加入 `service import --recursive SOURCE` 示例、`source//some-dir` 作为 scan root 的说明，并同步 spec 如有实现偏差。
   - 可并行子任务：
-    - [ ] 可并行：英文 README 和设计文档更新。
-    - [ ] 可并行：中文 README 更新。
-    - [ ] 可并行：检查不出现 `--all` alias 承诺。
+    - [x] 可并行：英文 README 和设计文档更新。
+    - [x] 可并行：中文 README 更新。
+    - [x] 可并行：检查不出现 `--all` alias 承诺。
   - 测试方案：文档检查；`rg -n -- "--all|--recursive|service import --id" README.md README.zh-CN.md docs services/scripts services/tests`。
   - 验收标准：文档只承诺首版范围；不引入与 CLI 资源定位规范冲突的 `--id` 示例。
-  - 完成总结：待完成。
+  - 完成总结：已更新 `README.md`、`README.zh-CN.md`、`docs/design/product/cli.md`、`docs/design/technical/multi-service-npm-package.md` 和 `docs/design/technical/service-package.md`，加入 `service import --recursive SOURCE` 示例、`npm:@chaitin-ai/octobus-tentacles` 用法，以及 `source//some-dir` 在 recursive 模式下作为 scan root 的说明；文档明确 recursive 模式 service id 来自 `service.json.name`，不承诺 `--all` alias。文档审计命令：`rg -n -- "--all|--recursive|service import --id" README.md README.zh-CN.md docs services/scripts services/tests`；结果仅包含 catalog 合法 `--all`、recursive 示例、spec/plan 中“不提供 --all alias”的说明，未出现 service import `--all` 或 `service import --id`。
 
 - [ ] 6.4 阶段收口验证
   - 依赖：6.1、6.2、6.3。

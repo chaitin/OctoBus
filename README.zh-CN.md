@@ -144,6 +144,7 @@ curl -X POST \
 补充提示：
 
 - `service import` 除了本地目录，也支持 `.tgz`、`.zip`、`npm:` source 和 HTTPS Git source；所有 source 都可追加 `//service-dir` 来选择 distribution package 内的 service root，例如 `npm:@scope/tentacle@1.0.0//Hanqing_Ticket` 或 `https://github.com/acme/tentacle.git//Hanqing_Ticket@v1.0.0`；离线导入、强制重装依赖等参数可查看 `./bin/octobus service import --help`
+- 使用 `service import --recursive SOURCE` 可以一次导入 multi-service distribution package 中发现到的所有 service root，例如 `./bin/octobus service import --recursive npm:@chaitin-ai/octobus-tentacles`。recursive 模式下，`SOURCE//some-dir` 表示递归发现的 scan root；每个导入的 service id 来自对应 `service.json.name`
 - `instance` 支持 `list/get/update/delete/update-config/update-secret/start/stop/restart`；`create` 对 `long-running` service 默认会立即启动实例，配置可以来自 `--config`、`--config-json` 或 stdin，敏感信息可以来自 `--secret`、`--secret-json` 或 stdin
 - `on-demand` instance 会保持 enabled/running 的逻辑状态，但 `start/stop/restart` 和带 `--restart` 的配置更新会返回运行模式不支持持久运行时控制的错误
 - `capset` 支持 `list/get/update/delete/add-instance/remove-instance`，也可以用 `select-method` / `unselect-method` 精确控制暴露的方法；`add-token/list-tokens/remove-token` 用于管理访问 token
@@ -284,7 +285,7 @@ my-service/
     index.js
 ```
 
-也可以用一个 npm distribution package 承载多个 service root。此时根 `package.json` 是依赖安装、发布和 runtime entry 的唯一权威来源，每个 service root 子目录提供自己的 `service.json`、proto 和 schema。导入时在 source 后追加 `//service-dir` 选择目标 service root；不追加时，根目录本身就是 service root。
+也可以用一个 npm distribution package 承载多个 service root。此时根 `package.json` 是依赖安装、发布和 runtime entry 的唯一权威来源，每个 service root 子目录提供自己的 `service.json`、proto 和 schema。单 service 导入时在 source 后追加 `//service-dir` 选择目标 service root；不追加时，根目录本身就是 service root。使用 `octobus service import --recursive SOURCE` 可以一次发现并导入所有 service root；recursive 模式下 `SOURCE//some-dir` 是发现范围的 scan root。
 
 `service.json` 示例：
 

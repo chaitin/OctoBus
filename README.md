@@ -170,6 +170,7 @@ curl -X POST \
 Additional notes:
 
 - In addition to local directories, `service import` supports `.tgz`, `.zip`, `npm:` sources, and HTTPS Git sources. Every source can append `//service-dir` to select a service root inside the distribution package, for example `npm:@scope/tentacle@1.0.0//Hanqing_Ticket` or `https://github.com/acme/tentacle.git//Hanqing_Ticket@v1.0.0`. See `./bin/octobus service import --help` for offline import, forced dependency reinstall, and other options.
+- Use `service import --recursive SOURCE` to import every service root discovered in a multi-service distribution package, for example `./bin/octobus service import --recursive npm:@chaitin-ai/octobus-tentacles`. In recursive mode, `SOURCE//some-dir` limits discovery to that scan root while still importing each discovered service with the id from its `service.json.name`.
 - `instance` supports `list/get/update/delete/update-config/update-secret/start/stop/restart`. For `long-running` services, `create` starts the instance by default. Config can come from `--config`, `--config-json`, or stdin; secrets can come from `--secret`, `--secret-json`, or stdin.
 - `on-demand` instances keep the logical `enabled/running` state, but `start/stop/restart` and config updates with `--restart` return an error because the runtime mode does not support persistent runtime control.
 - `capset` supports `list/get/update/delete/add-instance/remove-instance`. You can also use `select-method` / `unselect-method` for precise method exposure control. `add-token/list-tokens/remove-token` manage access tokens.
@@ -306,7 +307,7 @@ my-service/
     index.js
 ```
 
-A single npm distribution package can also contain multiple service roots. In that case, the root `package.json` is the single source of truth for dependency installation, publishing, and runtime entries, while each service root subdirectory provides its own `service.json`, proto, and schema. Append `//service-dir` to the source during import to select the target service root. Without that suffix, the root directory itself is the service root.
+A single npm distribution package can also contain multiple service roots. In that case, the root `package.json` is the single source of truth for dependency installation, publishing, and runtime entries, while each service root subdirectory provides its own `service.json`, proto, and schema. Append `//service-dir` to the source during single-service import to select the target service root. Without that suffix, the root directory itself is the service root. Use `octobus service import --recursive SOURCE` to discover and import all service roots in one command; in recursive mode, `SOURCE//some-dir` is the scan root for discovery.
 
 Example `service.json`:
 

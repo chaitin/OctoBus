@@ -120,6 +120,16 @@ OctoBus 对 package artifact 计算 sha256，并把 hash 写入 SQLite。
 
 `service.json` 是 import 阶段的 manifest。每个 service root 必须提供 `service.json`。单个 distribution package 可以包含多个 service root；导入时由 source 的 `//service-dir` 选择其中一个。
 
+也可以使用 recursive import 一次导入 distribution package 中发现到的多个 service root：
+
+```text
+octobus service import --recursive npm:@chaitin-ai/octobus-tentacles
+octobus service import --recursive ./platform-services//subset
+```
+
+recursive 模式不接受用户指定 service id，导入的 service id 来自各自 `service.json.name`；
+`source//some-dir` 表示递归发现的 scan root，不裁剪 artifact，也不改变依赖安装根目录。
+
 示例：
 
 ```json
