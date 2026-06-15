@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -13,6 +15,39 @@ import (
 
 	"octobus/internal/domain"
 )
+
+func TestOpenPathBoundaryErrors(t *testing.T) {
+	dir := t.TempDir()
+	parentFile := filepath.Join(dir, "parent-file")
+	if err := os.WriteFile(parentFile, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(filepath.Join(parentFile, "octobus.db")); err == nil {
+		t.Fatal("expected parent path mkdir error")
+	}
+	if _, err := Open(dir); err == nil {
+		t.Fatal("expected directory open error")
+	}
+}
+
+func TestAddColumnIfMissingErrors(t *testing.T) {
+	s, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+
+	if err := addColumnIfMissing(ctx, s.DB(), "missing_table", "extra", "TEXT"); err == nil {
+		t.Fatal("expected alter missing table error")
+	}
+	if err := addColumnIfMissing(ctx, s.DB(), "services", "runtime_mode", "TEXT"); err != nil {
+		t.Fatalf("existing column should be a no-op: %v", err)
+	}
+	if err := addColumnIfMissing(ctx, s.DB(), "services", "bad_definition", "NOT A VALID COLUMN TYPE ???"); err == nil {
+		t.Fatal("expected invalid column definition error")
+	}
+}
 
 func TestStoreServiceAndInstance(t *testing.T) {
 	s, err := Open(t.TempDir() + "/octobus.db")

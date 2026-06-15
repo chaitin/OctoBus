@@ -125,10 +125,12 @@ func TestParseGitSourceRejectsInvalidForms(t *testing.T) {
 		"http://github.com/acme/repo.git",
 		"ssh://github.com/acme/repo.git",
 		"git+https://github.com/acme/repo.git",
+		"https://%zz",
 		"https:///acme/repo.git",
 		"https://github.com/acme/repo.git?x=1",
 		"https://github.com/acme/repo.git#main",
 		"https://github.com/acme/repo.git//@v1.0.0",
+		"https://github.com/acme/repo.git//bad%zz@v1.0.0",
 		"https://github.com/acme/repo.git///abs@v1.0.0",
 		"https://github.com/acme/repo.git//../svc@v1.0.0",
 		"https://github.com/acme/repo.git//svc/../other@v1.0.0",
@@ -189,6 +191,12 @@ func TestGitSourceAdditionalParsingBranches(t *testing.T) {
 	if err := validateGitSubdir("."); err == nil {
 		t.Fatal("expected dot subdir error")
 	}
+	if ref, without := splitGitRef("package@v1.2.3"); ref != "v1.2.3" || without != "package" {
+		t.Fatalf("split no-scheme ref=%q without=%q", ref, without)
+	}
+	if ref, without := splitGitRef("https://host.example"); ref != "" || without != "https://host.example" {
+		t.Fatalf("split host-only ref=%q without=%q", ref, without)
+	}
 }
 
 func TestLatestStableSemVerSelection(t *testing.T) {
@@ -209,6 +217,9 @@ func TestLatestStableSemVerSelection(t *testing.T) {
 	}
 	if got := versions[len(versions)-1].tag; got != "v2.0.0" {
 		t.Fatalf("highest stable tag=%q", got)
+	}
+	if !versions[0].less(semverTag{tag: "v1.2.1", major: 1, minor: 2, patch: 1}) {
+		t.Fatal("patch version comparison did not order lower patch first")
 	}
 }
 
@@ -246,6 +257,9 @@ func TestGitRunnerAndArchiveHelpers(t *testing.T) {
 	}
 	if _, err := runner.output(context.Background(), t.TempDir(), "definitely-not-a-git-command", "p@ss"); err == nil || strings.Contains(err.Error(), "p@ss") || strings.Contains(err.Error(), "p%40ss") {
 		t.Fatalf("expected scrubbed git error, got %v", err)
+	}
+	if _, err := highestStableSemVerTag(context.Background(), runner, t.TempDir()); err == nil {
+		t.Fatal("expected git tag listing error outside a repository")
 	}
 	if got := isFullCommitSHA(strings.Repeat("a", 40)); !got {
 		t.Fatal("valid commit sha rejected")
@@ -292,6 +306,76 @@ func TestGitRunnerAndArchiveHelpers(t *testing.T) {
 	}
 	if string(body) != "body" {
 		t.Fatalf("rewritten body=%q", body)
+	}
+
+	if err := rewriteGitArchive(strings.NewReader("not a tar stream"), tar.NewWriter(io.Discard), ""); err == nil {
+		t.Fatal("expected invalid tar stream error")
+	}
+	var closedInput bytes.Buffer
+	closedInputTar := tar.NewWriter(&closedInput)
+	if err := closedInputTar.WriteHeader(&tar.Header{Name: "file.txt", Typeflag: tar.TypeReg, Mode: 0o644}); err != nil {
+		t.Fatal(err)
+	}
+	if err := closedInputTar.Close(); err != nil {
+		t.Fatal(err)
+	}
+	closedTar := tar.NewWriter(io.Discard)
+	if err := closedTar.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := rewriteGitArchive(&closedInput, closedTar, ""); err == nil {
+		t.Fatal("expected closed tar writer error")
+	}
+}
+
+func TestGitAskpassWriteError(t *testing.T) {
+	src, err := parseGitSource("https://user:p%40ss@host.example/repo.git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeGitAskpass(filepath.Join(t.TempDir(), "missing"), src); err == nil {
+		t.Fatal("expected askpass write error")
+	}
+}
+
+func TestGitArchivePackageHelperBranches(t *testing.T) {
+	requireGit(t)
+	root := t.TempDir()
+	work := filepath.Join(root, "work")
+	gitInit(t, work)
+	if err := os.MkdirAll(filepath.Join(work, "svc"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(work, "svc", "file.txt"), "body", 0o644)
+	gitCommit(t, work, "initial")
+	commit := gitRevParse(t, work, "HEAD")
+
+	src, err := parseGitSource("https://host.example/repo.git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := &gitRunner{source: src, env: os.Environ()}
+	artifact := filepath.Join(root, "svc.tgz")
+	if err := gitArchivePackage(context.Background(), runner, work, commit, "svc", artifact); err != nil {
+		t.Fatal(err)
+	}
+	extracted := filepath.Join(root, "extracted")
+	if err := untarGz(artifact, extracted); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(extracted, "file.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "body" {
+		t.Fatalf("archived subdir body=%q", got)
+	}
+
+	if err := gitArchivePackage(context.Background(), runner, work, commit, "svc", filepath.Join(root, "missing", "svc.tgz")); err == nil {
+		t.Fatal("expected artifact create error")
+	}
+	if err := gitArchivePackage(context.Background(), runner, work, strings.Repeat("0", 40), "", filepath.Join(root, "bad.tgz")); err == nil {
+		t.Fatal("expected git archive wait error")
 	}
 }
 

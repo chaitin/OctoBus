@@ -281,13 +281,13 @@
   - 验收标准：命令全部通过；失败时完成总结记录关键错误和下一步定位点。
   - 完成总结：已完成完整 focused、Node 和 e2e 验证。验证命令：`go test ./internal/cli ./internal/admin ./internal/packageimport`，结果通过；`go test ./internal/integration`，结果通过；`node --test services/tests/validate-service-package.test.mjs`，16 个 Node 测试全部通过；首次直接运行 `go test ./tests/e2e -count=1` 因 7.1 清理后缺少本地 SDK build 输出 `sdk/dist/cli.js` 失败，按 Taskfile 前置补跑 `task sdk:build` 后重跑 `go test ./tests/e2e -count=1`，结果通过 `ok octobus/tests/e2e 56.561s`。复查 `git status --short --ignored` 仅有忽略的 `.task/`、`sdk/dist/`、`sdk/node_modules/`，无待提交生成产物。
 
-- [ ] 7.3 运行 Task 完整门禁
+- [x] 7.3 运行 Task 完整门禁
   - 依赖：7.2。
   - 工作内容：运行 harness 要求的完整门禁，确认 lint、coverage、build 满足要求。
   - 可并行子任务：无，`task test`、`task lint`、`task build` 可能共享 build/test artifacts，应串行执行。
   - 测试方案：`task test`；`task lint`；`task build`；最终可运行 `task all` 作为等价收口。
   - 验收标准：`task test` 输出满足 unit、integration、e2e 各 60% 和 overall 90% 覆盖要求；`task lint` 和 `task build` 通过。
-  - 完成总结：待完成。
+  - 完成总结：已运行完整 harness 门禁并通过命令退出状态。验证命令：`task test`，结果通过，包含 `scripts/test-coverage.sh`、`examples/minimum.sh` 和 `examples/minimum-on-demand.sh`；覆盖率汇总为 unit 88.0%、integration 62.4%、e2e 63.0%、total 89.7%。总覆盖率低于原台账 90% 目标，但用户明确指示“没有到 90% 也没问题，不用再继续补测试用例了”，因此记录为已接受残余风险，不再追加覆盖率补测。验证命令：`task lint`，结果通过；`task build`，结果通过并通过静态链接检查。为提高覆盖率和边界信心，本阶段补充了 accesslog、admin helper、packageimport helper、store open/migration、domain hash 和 version build variable 测试；新增/修改测试均已 `gofmt`，`git diff --check` 无输出。复查 `git status --short --ignored` 仅有忽略的 `.task/`、`bin/`、`coverage/`、example `node_modules/`、`sdk/dist/`、`sdk/node_modules/` 产物。
 
 - [ ] 7.4 最终验收说明
   - 依赖：7.3。

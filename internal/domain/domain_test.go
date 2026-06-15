@@ -143,6 +143,12 @@ func TestConfigHashAndRedactionHelpers(t *testing.T) {
 	if got := ConfigHash(raw); got != HashBytes(raw) {
 		t.Fatalf("ConfigHash=%q HashBytes=%q", got, HashBytes(raw))
 	}
+	if got := CapsetTokenHash("capset-token"); got != HashBytes([]byte("capset-token")) {
+		t.Fatalf("CapsetTokenHash=%q", got)
+	}
+	if got := AdminTokenHash("admin-token"); got != HashBytes([]byte("admin-token")) {
+		t.Fatalf("AdminTokenHash=%q", got)
+	}
 	secretCases := []string{"password", "apiToken", "client_secret", "privateKey"}
 	for _, key := range secretCases {
 		if got := RedactConfigValue(key, "value"); got != "******" {

@@ -17,6 +17,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/labstack/echo/v5"
+
 	"octobus/internal/domain"
 	"octobus/internal/packageimport"
 	"octobus/internal/protocol"
@@ -1246,6 +1248,113 @@ func TestAccessLogFollowFailureWritesDaemonLog(t *testing.T) {
 	got := out.String()
 	if !strings.Contains(got, "level=WARN msg=access_log_follow_failed") {
 		t.Fatalf("missing follow failure daemon log:\n%s", got)
+	}
+}
+
+func TestAccessLogHandlerBoundaries(t *testing.T) {
+	srv := &Server{}
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/v1/logs/access", nil)
+	w := httptest.NewRecorder()
+	srv.handleAccessLogs(w, req)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("method status=%d body=%s", w.Code, w.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/admin/v1/logs/access", nil)
+	w = httptest.NewRecorder()
+	srv.handleAccessLogs(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("missing path status=%d body=%s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "access log path is not configured") {
+		t.Fatalf("missing path body=%s", w.Body.String())
+	}
+}
+
+func TestParseAccessLogQueryBoundaries(t *testing.T) {
+	for _, path := range []string{
+		"/admin/v1/logs/access?limit=",
+		"/admin/v1/logs/access?tail=",
+	} {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			if _, err := parseAccessLogQuery(req); err == nil {
+				t.Fatalf("expected query error for %s", path)
+			}
+		})
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/v1/logs/access?follow=true", nil)
+	filter, err := parseAccessLogQuery(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !filter.Follow || !filter.TailSet || filter.Tail == 0 {
+		t.Fatalf("follow default filter=%+v", filter)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/admin/v1/logs/access?follow=false", nil)
+	filter, err = parseAccessLogQuery(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filter.Follow || filter.TailSet {
+		t.Fatalf("follow=false filter=%+v", filter)
+	}
+}
+
+func TestParseCatalogQueryBoundaries(t *testing.T) {
+	for _, path := range []string{
+		"/admin/v1/catalog/dev?mcp=maybe",
+		"/admin/v1/catalog/dev?connect=maybe",
+		"/admin/v1/catalog/dev?all=maybe",
+	} {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			if _, _, err := parseCatalogQuery(req); err == nil {
+				t.Fatalf("expected query error for %s", path)
+			}
+		})
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/v1/catalog/dev?grpc=false&mcp=false&connect=false", nil)
+	opts, format, err := parseCatalogQuery(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if format != "json" || !opts.IncludeGRPC || opts.IncludeMCP || opts.IncludeConnect {
+		t.Fatalf("default grpc opts=%+v format=%q", opts, format)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/admin/v1/catalog/dev?all=true&format=md", nil)
+	opts, format, err = parseCatalogQuery(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if format != "md" || !opts.IncludeGRPC || !opts.IncludeMCP || !opts.IncludeConnect {
+		t.Fatalf("all opts=%+v format=%q", opts, format)
+	}
+}
+
+func TestFlushResponseWriterFlushesUnderlyingWriter(t *testing.T) {
+	rec := httptest.NewRecorder()
+	flushResponseWriter{ResponseWriter: rec}.Flush()
+	if !rec.Flushed {
+		t.Fatal("underlying response writer was not flushed")
+	}
+}
+
+func TestLoggerAndEchoErrorStatusHelpers(t *testing.T) {
+	var srv *Server
+	if srv.logger() == nil {
+		t.Fatal("nil server logger is nil")
+	}
+	if got := echoErrorStatus(echo.NewHTTPError(http.StatusTeapot, "teapot")); got != http.StatusTeapot {
+		t.Fatalf("echo error status=%d", got)
+	}
+	if got := echoErrorStatus(errors.New("boom")); got != http.StatusInternalServerError {
+		t.Fatalf("plain error status=%d", got)
 	}
 }
 

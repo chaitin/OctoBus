@@ -447,6 +447,7 @@ func TestSplitSourceServiceRoot(t *testing.T) {
 		{source: "./tentacle.tgz//services/../ticket", wantErrText: "must not contain .."},
 		{source: "./tentacle.tgz///abs", wantErrText: "must be relative"},
 		{source: "./tentacle.tgz//", wantErrText: "must not be empty"},
+		{source: "//svc", wantErrText: "source is required"},
 		{source: "https://github.com/acme/tentacle.git//svc@main", wantSource: "https://github.com/acme/tentacle.git//svc@main", wantRoot: "."},
 		{source: "ssh://github.com/acme/tentacle.git//svc", wantSource: "ssh://github.com/acme/tentacle.git//svc", wantRoot: "."},
 	}
@@ -478,6 +479,13 @@ func TestDiscoverServiceRoots(t *testing.T) {
 	want := []string{"nested/vendor__gamma", "vendor__alpha", "vendor__beta"}
 	if strings.Join(roots, ",") != strings.Join(want, ",") {
 		t.Fatalf("discoverServiceRoots(.)=%v want %v", roots, want)
+	}
+	roots, err = discoverServiceRoots(pkg.Root, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(roots, ",") != strings.Join(want, ",") {
+		t.Fatalf("discoverServiceRoots(empty)=%v want %v", roots, want)
 	}
 }
 
@@ -1110,6 +1118,39 @@ func TestNPMInstallSelectsCIAndOfflineArgs(t *testing.T) {
 	}
 }
 
+func TestNpmPackOutputAndErrorBranches(t *testing.T) {
+	binDir := t.TempDir()
+	logPath := filepath.Join(t.TempDir(), "npm-mode.log")
+	writeTestFile(t, filepath.Join(binDir, "npm"), `#!/bin/sh
+case "$NPM_FAKE_MODE" in
+empty) exit 0 ;;
+fail) printf 'boom\n' >&2; exit 7 ;;
+*) printf 'notice\npkg-1.0.0.tgz\n' ;;
+esac
+`, 0o755)
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("NPM_FAKE_LOG", logPath)
+
+	t.Setenv("NPM_FAKE_MODE", "ok")
+	packed, err := npmPack(context.Background(), t.TempDir(), filepath.Join(t.TempDir(), "packed"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Base(packed) != "pkg-1.0.0.tgz" {
+		t.Fatalf("packed path=%q", packed)
+	}
+
+	t.Setenv("NPM_FAKE_MODE", "empty")
+	if _, err := npmPack(context.Background(), t.TempDir(), filepath.Join(t.TempDir(), "packed")); err == nil || !strings.Contains(err.Error(), "did not produce") {
+		t.Fatalf("expected empty npm pack output error, got %v", err)
+	}
+
+	t.Setenv("NPM_FAKE_MODE", "fail")
+	if _, err := runNPMOutput(context.Background(), t.TempDir(), []string{"pack"}); err == nil || !strings.Contains(err.Error(), "boom") {
+		t.Fatalf("expected npm failure output, got %v", err)
+	}
+}
+
 func TestPackageJSONAndPathHelpers(t *testing.T) {
 	dir := t.TempDir()
 	writeTestFile(t, filepath.Join(dir, "package.json"), `{"name":"echo-wrapper","bin":"bin/echo.js","scripts":{"build":"tsc"}}`, 0o644)
@@ -1139,13 +1180,35 @@ func TestPackageJSONAndPathHelpers(t *testing.T) {
 	if _, err := parsePackageBin(dir); err == nil || !strings.Contains(err.Error(), "target must be a string") {
 		t.Fatalf("expected non-string bin target error, got %v", err)
 	}
+	writeTestFile(t, filepath.Join(dir, "package.json"), `{"name":"echo-wrapper","bin":{"echo-wrapper":"bin/echo.js"}}`, 0o644)
+	if entry, err := parsePackageBin(dir); err != nil || entry != filepath.Clean("bin/echo.js") {
+		t.Fatalf("expected single map bin target, entry=%q err=%v", entry, err)
+	}
+	writeTestFile(t, filepath.Join(dir, "package.json"), `{"name":"echo-wrapper","bin":{}}`, 0o644)
+	if _, err := parsePackageBinTargets(dir); err == nil || !strings.Contains(err.Error(), "bin is required") {
+		t.Fatalf("expected empty bin target error, got %v", err)
+	}
+	writeTestFile(t, filepath.Join(dir, "package.json"), `{"name":"echo-wrapper","bin":{"echo-wrapper":42}}`, 0o644)
+	if _, err := parsePackageBinTargets(dir); err == nil || !strings.Contains(err.Error(), "target must be a string") {
+		t.Fatalf("expected non-string bin target list error, got %v", err)
+	}
+	writeTestFile(t, filepath.Join(dir, "package.json"), `{"name":"echo-wrapper","bin":"/bin/echo.js"}`, 0o644)
+	if _, err := parsePackageBinTargets(dir); err == nil || !strings.Contains(err.Error(), "relative") {
+		t.Fatalf("expected invalid bin target list error, got %v", err)
+	}
 	writeTestFile(t, filepath.Join(dir, "package.json"), `{`, 0o644)
 	if _, err := parsePackageBin(dir); err == nil {
 		t.Fatal("expected invalid package.json error")
 	}
+	if _, err := parsePackageBinTargets(dir); err == nil {
+		t.Fatal("expected invalid package.json target list error")
+	}
 	missing := filepath.Join(t.TempDir(), "missing")
 	if _, err := readPackageScripts(missing); err == nil {
 		t.Fatal("expected package.json read error")
+	}
+	if _, err := parsePackageBinTargets(missing); err == nil || !strings.Contains(err.Error(), "package.json cannot be read") {
+		t.Fatalf("expected package bin targets read error, got %v", err)
 	}
 	if _, err := inferPackageBin(missing); err == nil || !strings.Contains(err.Error(), "package.json cannot be read") {
 		t.Fatalf("expected infer package bin read error, got %v", err)
@@ -1158,6 +1221,76 @@ func TestPackageJSONAndPathHelpers(t *testing.T) {
 	}
 	if err := validatePackageFile(dir, "missing.js", "package.json bin"); err == nil || !strings.Contains(err.Error(), "does not exist") {
 		t.Fatalf("expected missing package file error, got %v", err)
+	}
+}
+
+func TestPackageBinServiceNameBranches(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "bin"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, filepath.Join(dir, "bin/echo.js"), "console.log('echo')", 0o644)
+
+	writeTestFile(t, filepath.Join(dir, "package.json"), `{"bin":{"echo":"bin/echo.js","other":"bin/missing.js"}}`, 0o644)
+	entry, err := parsePackageBinForService(dir, "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry != filepath.Clean("bin/echo.js") {
+		t.Fatalf("entry=%q", entry)
+	}
+	if entry, err := inferPackageBinForService(dir, "echo"); err != nil || entry != filepath.Clean("bin/echo.js") {
+		t.Fatalf("infer entry=%q err=%v", entry, err)
+	}
+	if !packageBinTargetsExist(dir, []string{"bin/echo.js"}) {
+		t.Fatal("existing bin target was not detected")
+	}
+	if packageBinTargetsExist(dir, []string{"bin/missing.js"}) {
+		t.Fatal("missing bin target was reported as existing")
+	}
+
+	if _, err := parsePackageBinForService(dir, "missing"); err == nil || !strings.Contains(err.Error(), "missing entry") {
+		t.Fatalf("expected missing service bin error, got %v", err)
+	}
+	writeTestFile(t, filepath.Join(dir, "package.json"), `{"bin":{"echo":42}}`, 0o644)
+	if _, err := parsePackageBinForService(dir, "echo"); err == nil || !strings.Contains(err.Error(), "target must be a string") {
+		t.Fatalf("expected non-string service bin error, got %v", err)
+	}
+	writeTestFile(t, filepath.Join(dir, "package.json"), `{"bin":{"echo":"/abs.js"}}`, 0o644)
+	if _, err := parsePackageBinForService(dir, "echo"); err == nil || !strings.Contains(err.Error(), "relative") {
+		t.Fatalf("expected invalid service bin path error, got %v", err)
+	}
+	writeTestFile(t, filepath.Join(dir, "package.json"), `{"bin":"bin/missing.js"}`, 0o644)
+	if _, err := inferPackageBinForService(dir, ""); err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Fatalf("expected missing inferred bin file error, got %v", err)
+	}
+	writeTestFile(t, filepath.Join(dir, "package.json"), `{"bin":"/abs.js"}`, 0o644)
+	if _, err := parsePackageBinForService(dir, ""); err == nil || !strings.Contains(err.Error(), "relative") {
+		t.Fatalf("expected invalid string bin path error, got %v", err)
+	}
+}
+
+func TestManifestAndSourceRootHelpers(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := readManifest(dir); err == nil {
+		t.Fatal("expected missing manifest error")
+	}
+	writeTestFile(t, filepath.Join(dir, "service.json"), `{"schema":42}`, 0o644)
+	if _, err := readManifest(dir); err == nil {
+		t.Fatal("expected manifest type error")
+	}
+
+	if got := recursiveBasePackageSource("not-git//svc", "fallback"); got != "fallback" {
+		t.Fatalf("non-git recursive base=%q", got)
+	}
+	if got := recursiveBasePackageSource("https://%zz", "fallback"); got != "fallback" {
+		t.Fatalf("invalid git recursive base=%q", got)
+	}
+	if got := recursiveBasePackageSource("https://host.example/repo.git//svc", "fallback"); got != "https://host.example/repo.git" {
+		t.Fatalf("git recursive base without ref=%q", got)
+	}
+	if got := sourceWithServiceRootForPackage("https://host.example/repo.git", "svc"); got != "https://host.example/repo.git//svc" {
+		t.Fatalf("git source with root without ref=%q", got)
 	}
 }
 
@@ -1255,6 +1388,9 @@ func TestReplaceServiceDirRollbackAndCleanup(t *testing.T) {
 	if err := cleanup(); err != nil {
 		t.Fatal(err)
 	}
+	if _, _, err := replaceServiceDir(filepath.Join(parent, "missing-prepared-target"), filepath.Join(parent, "missing-prepared")); err == nil {
+		t.Fatal("expected missing prepared dir rename error")
+	}
 }
 
 func TestCopyFileAndCopyDirHelpers(t *testing.T) {
@@ -1284,6 +1420,9 @@ func TestCopyFileAndCopyDirHelpers(t *testing.T) {
 	if err := copyFile(src, filepath.Join(dir, "nested"), 0o600); err == nil {
 		t.Fatal("expected destination directory error")
 	}
+	if err := copyFile(treeReadErrorSource(t, dir), filepath.Join(dir, "read-error.txt"), 0o600); err == nil {
+		t.Fatal("expected source read error")
+	}
 
 	tree := filepath.Join(dir, "tree")
 	if err := os.MkdirAll(filepath.Join(tree, "sub"), 0o755); err != nil {
@@ -1306,6 +1445,15 @@ func TestCopyFileAndCopyDirHelpers(t *testing.T) {
 	if err := copyDir(filepath.Join(dir, "missing-tree"), filepath.Join(dir, "missing-copy")); err == nil {
 		t.Fatal("expected missing tree copy error")
 	}
+}
+
+func treeReadErrorSource(t *testing.T, dir string) string {
+	t.Helper()
+	sourceDir := filepath.Join(dir, "source-dir")
+	if err := os.MkdirAll(sourceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return sourceDir
 }
 
 func TestTarGzUntarAndUnzipHelpers(t *testing.T) {
@@ -1393,6 +1541,30 @@ func TestTarGzUntarAndUnzipHelpers(t *testing.T) {
 	writeZipArchive(t, unsafeZip, "../escape.txt", "bad")
 	if err := unzip(unsafeZip, filepath.Join(dir, "unsafe-zip-out")); err == nil || !strings.Contains(err.Error(), "unsafe archive path") {
 		t.Fatalf("expected unsafe zip path error, got %v", err)
+	}
+	if err := tarGzDir(filepath.Join(dir, "missing-src"), filepath.Join(dir, "missing-src.tgz")); err == nil {
+		t.Fatal("expected missing source tar error")
+	}
+	if err := untarGz(filepath.Join(dir, "missing.tgz"), filepath.Join(dir, "missing-out")); err == nil {
+		t.Fatal("expected missing tgz error")
+	}
+	invalidTar := filepath.Join(dir, "invalid-tar.tgz")
+	var invalid bytes.Buffer
+	invalidGz := gzip.NewWriter(&invalid)
+	if _, err := invalidGz.Write([]byte("not tar")); err != nil {
+		t.Fatal(err)
+	}
+	if err := invalidGz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(invalidTar, invalid.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := untarGz(invalidTar, filepath.Join(dir, "invalid-tar-out")); err == nil {
+		t.Fatal("expected invalid tar error")
+	}
+	if err := unzip(filepath.Join(dir, "missing.zip"), filepath.Join(dir, "missing-zip-out")); err == nil {
+		t.Fatal("expected missing zip error")
 	}
 }
 

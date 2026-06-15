@@ -3,6 +3,7 @@ package accesslog
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -173,6 +174,9 @@ func TestFilterLinesDefaultLimitAndAll(t *testing.T) {
 func TestReadFileEmptyMissingAndInvalidLimit(t *testing.T) {
 	dir := t.TempDir()
 	var out bytes.Buffer
+	if err := ReadFile(filepath.Join(dir, "missing.log"), Filter{Limit: -1, LimitSet: true}, &out); err == nil {
+		t.Fatal("expected invalid read limit error")
+	}
 	if err := ReadFile(filepath.Join(dir, "missing.log"), Filter{}, &out); err != nil {
 		t.Fatal(err)
 	}
@@ -194,6 +198,118 @@ func TestReadFileEmptyMissingAndInvalidLimit(t *testing.T) {
 	}
 	if err := FilterLines(strings.NewReader(""), Filter{Limit: 1, LimitSet: true, Tail: 1, TailSet: true}, &out); err == nil {
 		t.Fatal("expected limit tail conflict error")
+	}
+}
+
+func TestNilLoggerCloseAppendAreNoops(t *testing.T) {
+	var logger *Logger
+	if err := logger.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := logger.Append(Record{Protocol: "grpc"}); err != nil {
+		t.Fatal(err)
+	}
+
+	logger = &Logger{}
+	if err := logger.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := logger.Append(Record{Protocol: "grpc"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAppendReturnsMarshalAndWriteErrors(t *testing.T) {
+	dir := t.TempDir()
+	logger, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := logger.Append(Record{TS: time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC)}); err == nil {
+		t.Fatal("expected marshal error")
+	}
+	if err := logger.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := logger.Append(Record{Protocol: "grpc"}); err == nil {
+		t.Fatal("expected write error")
+	}
+}
+
+func TestOpenReturnsCreateError(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "not-a-dir")
+	if err := os.WriteFile(filePath, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Open(filePath); err == nil {
+		t.Fatal("expected open error")
+	}
+}
+
+func TestFilterLinesErrors(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		filter Filter
+		writer func() *errorWriter
+	}{
+		{
+			name:  "invalid json",
+			input: "{not-json}\n",
+		},
+		{
+			name:   "line write error",
+			input:  `{"capset":"dev"}` + "\n",
+			writer: func() *errorWriter { return &errorWriter{failOn: 1} },
+		},
+		{
+			name:   "newline write error",
+			input:  `{"capset":"dev"}` + "\n",
+			writer: func() *errorWriter { return &errorWriter{failOn: 2} },
+		},
+		{
+			name:   "tail line write error",
+			input:  `{"capset":"dev"}` + "\n",
+			filter: Filter{Tail: 1, TailSet: true},
+			writer: func() *errorWriter { return &errorWriter{failOn: 1} },
+		},
+		{
+			name:   "tail newline write error",
+			input:  `{"capset":"dev"}` + "\n",
+			filter: Filter{Tail: 1, TailSet: true},
+			writer: func() *errorWriter { return &errorWriter{failOn: 2} },
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var out bytes.Buffer
+			var w interface{ Write([]byte) (int, error) } = &out
+			if tt.writer != nil {
+				w = tt.writer()
+			}
+			if err := FilterLines(strings.NewReader(tt.input), tt.filter, w); err == nil {
+				t.Fatal("expected error")
+			}
+		})
+	}
+}
+
+func TestFilterLinesSkipsBlankLines(t *testing.T) {
+	var out bytes.Buffer
+	if err := FilterLines(strings.NewReader("\n"+`{"capset":"dev"}`+"\n"), Filter{}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); got != `{"capset":"dev"}`+"\n" {
+		t.Fatalf("output=%q", got)
+	}
+}
+
+func TestFilterLinesScannerError(t *testing.T) {
+	var out bytes.Buffer
+	if err := FilterLines(errorReader{}, Filter{}, &out); !errors.Is(err, errReadFailed) {
+		t.Fatalf("error=%v want %v", err, errReadFailed)
 	}
 }
 
@@ -259,7 +375,91 @@ func TestFollowFileStreamsAppendedMatchingLines(t *testing.T) {
 	}
 }
 
+func TestFollowFileValidationAndInitialErrors(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, FileName)
+	var out bytes.Buffer
+	done := make(chan struct{})
+	close(done)
+
+	if err := FollowFile(path, Filter{Limit: -1, LimitSet: true}, &out, done); err == nil {
+		t.Fatal("expected invalid limit error")
+	}
+	if err := FollowFile(path, Filter{Tail: -1, TailSet: true}, &out, done); err == nil {
+		t.Fatal("expected invalid tail error")
+	}
+	if err := FollowFile(filepath.Join(dir, "missing.log"), Filter{}, &out, done); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(path, []byte("{bad-json}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := FollowFile(path, Filter{}, &out, done); err == nil {
+		t.Fatal("expected initial filter error")
+	}
+}
+
+func TestFollowFileFlushesInitialOutput(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, FileName)
+	if err := os.WriteFile(path, []byte(`{"capset":"dev"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	close(done)
+	out := &flushBuffer{}
+	if err := FollowFile(path, Filter{}, out, done); err != nil {
+		t.Fatal(err)
+	}
+	if out.flushes != 1 {
+		t.Fatalf("flushes=%d want 1", out.flushes)
+	}
+}
+
+func TestReadNextLineReturnsReadError(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, FileName)
+	if err := os.WriteFile(path, []byte("partial"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readNextLine(f, make(chan struct{})); err == nil {
+		t.Fatal("expected read error")
+	}
+}
+
 const httpStatusOK = 200
+
+var (
+	errReadFailed  = errors.New("read failed")
+	errWriteFailed = errors.New("write failed")
+)
+
+type errorReader struct{}
+
+func (errorReader) Read([]byte) (int, error) {
+	return 0, errReadFailed
+}
+
+type errorWriter struct {
+	writes int
+	failOn int
+}
+
+func (w *errorWriter) Write(p []byte) (int, error) {
+	w.writes++
+	if w.writes == w.failOn {
+		return 0, errWriteFailed
+	}
+	return len(p), nil
+}
 
 type safeBuffer struct {
 	mu sync.Mutex
@@ -276,4 +476,13 @@ func (b *safeBuffer) String() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.b.String()
+}
+
+type flushBuffer struct {
+	bytes.Buffer
+	flushes int
+}
+
+func (b *flushBuffer) Flush() {
+	b.flushes++
 }
