@@ -1,6 +1,14 @@
-# OctoBus
+<p align="center">
+  <img src="octobuslogo.jpg" alt="OctoBus" width="240">
+</p>
 
-[![ci](https://github.com/chaitin/OctoBus/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/chaitin/OctoBus/actions/workflows/ci.yml)
+<p align="center">
+  <a href="https://github.com/chaitin/OctoBus/actions/workflows/ci.yml">
+    <img src="https://github.com/chaitin/OctoBus/actions/workflows/ci.yml/badge.svg?branch=main" alt="ci">
+  </a>
+</p>
+
+---
 
 [中文版 README](README.zh-CN.md)
 

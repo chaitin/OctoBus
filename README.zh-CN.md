@@ -1,6 +1,14 @@
-# OctoBus
+<p align="center">
+  <img src="octobuslogo.jpg" alt="OctoBus" width="240">
+</p>
 
-[![ci](https://github.com/chaitin/OctoBus/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/chaitin/OctoBus/actions/workflows/ci.yml)
+<p align="center">
+  <a href="https://github.com/chaitin/OctoBus/actions/workflows/ci.yml">
+    <img src="https://github.com/chaitin/OctoBus/actions/workflows/ci.yml/badge.svg?branch=main" alt="ci">
+  </a>
+</p>
+
+---
 
 OctoBus 是一个本地运行的单程序网关，用来管理可插拔的 Node.js service package，并把这些 package 中的 gRPC 能力按 capset 暴露给客户端或 agent
 
