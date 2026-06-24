@@ -1,0 +1,7 @@
+{
+  "method": "WD_K01_V9_0_2.WD_K01_V9_0_2/QueryThreatIntel",
+  "request": {},
+  "protocols": ["connect", "grpc", "mcp"],
+  "requireBusinessSuccess": true,
+  "requireUpstreamPerProtocol": true
+}

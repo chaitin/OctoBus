@@ -150,7 +150,8 @@
     "siem": "bin/siem.js",
     "security-engine": "bin/security-engine.js",
     "kubernetes-api": "bin/kubernetes-api.js",
-    "openstack-yoga-2022-1": "bin/openstack-yoga-2022-1.js"
+    "openstack-yoga-2022-1": "bin/openstack-yoga-2022-1.js",
+    "wd-k01-v9-0-2": "bin/wd-k01-v9-0-2.js"
   },
   "files": [
     "bin/huawei-ccm.js",
@@ -296,6 +297,7 @@
     "bin/opencti.js",
     "bin/qianxin-caasm.js",
     "bin/api7-enterprise-v3-10-2.js",
+    "bin/wd-k01-v9-0-2.js",
     "bin/wangsu-label-ip.js",
     "bin/reportedip.js",
     "bin/anyi-cloud-native-security.js",
@@ -414,6 +416,7 @@
     "qianxin__caasm_v1",
     "api7__enterprise_v3-10-2",
     "fofa__network-space-mapper",
+    "wd__k01_v9-0-2",
     "wangsu__label-ip",
     "reportedip__reportedip",
     "anyi__cloud-native-security",
