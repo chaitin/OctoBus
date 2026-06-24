@@ -1,0 +1,45 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "wd-k01-v9-0-2",
+  "displayName": "WD K01 V9.0.2",
+  "description": "OctoBus package for WD K01 threat-intelligence joint-defense system V9.0.2: attack-monitor log query, IP blacklist/whitelist query, and private (attack) threat-intel add/delete/query.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/wd_k01_v9_0_2.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "WD_K01_V9_0_2.WD_K01_V9_0_2/QueryAttackLog": {
+          "name": "query-attack-log",
+          "description": "Query WD K01 attack-monitor logs."
+        },
+        "WD_K01_V9_0_2.WD_K01_V9_0_2/QueryIPList": {
+          "name": "query-ip-list",
+          "description": "Query WD K01 IP blacklist/whitelist entries."
+        },
+        "WD_K01_V9_0_2.WD_K01_V9_0_2/QueryThreatIntel": {
+          "name": "query-threat-intel",
+          "description": "Query WD K01 private (attack) threat intelligence."
+        },
+        "WD_K01_V9_0_2.WD_K01_V9_0_2/AddThreatIntel": {
+          "name": "add-threat-intel",
+          "description": "Add a WD K01 private (attack) threat-intel IP."
+        },
+        "WD_K01_V9_0_2.WD_K01_V9_0_2/DeleteThreatIntel": {
+          "name": "delete-threat-intel",
+          "description": "Delete a WD K01 private (attack) threat-intel entry by id."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,89 @@
+syntax = "proto3";
+
+package WD_K01_V9_0_2;
+
+option go_package = "miner/grpc-service/WD_K01_V9_0_2";
+
+// 网盾 K01 威胁情报联防阻断系统 V9.0.2 RESTful API（V9 新增接口）。
+// 认证: POST /api/cms/user/login 取 token.access_token，业务请求带 Authorization: Bearer <token>，
+//       完成后 POST /api/cms/user/logout。每次方法调用为一次 login→操作→logout 的无状态会话。
+// 本 service 覆盖只读告警/黑白名单查询与私有情报(攻击类)的增删查，
+// 与已有 wd__k01（BlockIP/UnblockIP）互补。
+service WD_K01_V9_0_2 {
+  // 攻击监测日志查询: /api/v1/logsystem/atkmntlog/query
+  rpc QueryAttackLog(QueryAttackLogRequest) returns (QueryResponse) {}
+  // IP 黑白名单查询: /api/v1/security/iplist/query
+  rpc QueryIPList(QueryIPListRequest) returns (QueryResponse) {}
+  // 私有情报(攻击类)查询: /api/v1/threatintelligence/attack/query
+  rpc QueryThreatIntel(QueryThreatIntelRequest) returns (QueryResponse) {}
+  // 私有情报(攻击类)添加: /api/v1/threatintelligence/attack/save
+  rpc AddThreatIntel(AddThreatIntelRequest) returns (MutationResponse) {}
+  // 私有情报(攻击类)删除: /api/v1/threatintelligence/attack/delete
+  rpc DeleteThreatIntel(DeleteThreatIntelRequest) returns (MutationResponse) {}
+}
+
+message QueryAttackLogRequest {
+  int32 page = 1;                   // 页码，默认 1
+  int32 count = 2;                  // 每页数量，取值 [10,20,50,100]，默认 10
+  repeated int32 type_mask = 3;     // 情报类型编码（见文档表1，如 256=IP黑名单）
+  repeated int32 severity_mask = 4; // 威胁等级（0 低 / 1 中危 / 2 高危）
+  repeated int32 party_3rd_mask = 5;// 命中情报源（0 公有 / 1 私有）
+  repeated int32 action_mask = 6;   // 处理动作（1 监控 / 2 阻断）
+  string r_sip = 7;                 // 攻击 IP
+  string r_dip = 8;                 // 被攻击 IP
+  int32 country = 9;                // 国家编码
+  int32 province = 10;              // 省份编码
+  string r_s_time = 11;            // 开始时间，如 2025-07-01 00:00:00
+  string r_e_time = 12;            // 结束时间
+}
+
+message QueryIPListRequest {
+  int32 page = 1;           // 页码，默认 1
+  int32 count = 2;          // 每页数量，取值 [10,20,50,100]，默认 10
+  int32 color = 3;          // 名单类型（0 IP 黑名单 / 1 IP 白名单），默认 0
+  int32 dir = 4;            // 方向（0 源 / 1 目的 / 2 源和目的），默认 2
+  string ip_search = 5;     // 过滤 IP/网段，可选
+  string comment_search = 6;// 过滤备注，可选
+  string r_s_time = 7;      // 过滤开始时间，可选
+  string r_e_time = 8;      // 过滤结束时间，可选
+}
+
+message QueryThreatIntelRequest {
+  int32 page = 1;      // 页码，默认 1
+  int32 count = 2;     // 每页数量，默认 10
+  int32 source_id = 3; // 情报源 id，可选（接口新增的情报源查询时传 63）
+}
+
+message AddThreatIntelRequest {
+  string ip = 1;     // 私有情报 IP，必填，IPv4
+  int32 type = 2;    // 攻击类型，必填
+  int32 severity = 3;// 攻击优先级，必填
+}
+
+message DeleteThreatIntelRequest {
+  int64 id = 1; // 情报 id，必填，>0
+}
+
+// 查询类统一响应：data 透传为 raw_json，并抽取分页字段。
+message QueryResponse {
+  bool success = 1;          // 设备 success 字段或 msgType=success
+  string msg_type = 2;       // 设备 msgType
+  string msg = 3;            // 设备 msg
+  int64 total = 4;           // data.total
+  int64 page = 5;            // data.page
+  int64 count = 6;           // data.count
+  string raw_json = 7;       // 业务响应原始 JSON
+  string login_raw_json = 8; // 登录响应原始 JSON
+  string logout_raw_text = 9;// 登出响应原始文本
+}
+
+// 写类统一响应。
+message MutationResponse {
+  bool success = 1;          // 设备 success 字段或 msgType=success
+  string msg_type = 2;       // 设备 msgType
+  string msg = 3;            // 设备 msg
+  int64 id = 4;             // 设备返回的 id（如有）
+  string raw_json = 5;       // 业务响应原始 JSON
+  string login_raw_json = 6; // 登录响应原始 JSON
+  string logout_raw_text = 7;// 登出响应原始文本
+}
