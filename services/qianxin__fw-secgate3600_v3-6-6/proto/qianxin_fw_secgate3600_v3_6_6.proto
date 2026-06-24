@@ -1,0 +1,109 @@
+syntax = "proto3";
+
+package QIANXIN_FW_SecGate3600_V3_6_6;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/QIANXIN_FW_SecGate3600_V3_6_6";
+
+// 奇安信网神 SecGate3600 防火墙 V3.6.6.0 RESTful API。
+// 认证: POST /v1.0/login，返回 token，写入 Cookie: token=...
+// 业务: POST /v1.0/rest/，报文 [{head:{module,function}, body:{...}}]
+// 注销: POST /v1.0/out
+// 本 service 覆盖 IP 地址黑名单(addr_blacklist) 的封禁/解禁/查询能力。
+service QIANXIN_FW_SecGate3600_V3_6_6 {
+  // 登录并缓存 token/cookie 会话
+  rpc Login(LoginRequest) returns (LoginResponse) {}
+  // 封禁 IP：addr_blacklist/add_blacklist_ip，设备单次仅支持 1 条，故按 items 逐条下发
+  rpc BlockIP(BlockIPRequest) returns (BlacklistOpResponse) {}
+  // 解禁 IP：addr_blacklist/del_blacklist_by_id，按 ip_start/ip_end 逐条删除
+  rpc UnblockIP(UnblockIPRequest) returns (BlacklistOpResponse) {}
+  // 查询地址黑名单：addr_blacklist/get_blacklist_config，按 search_key 过滤
+  rpc QueryBlacklist(QueryBlacklistRequest) returns (QueryBlacklistResponse) {}
+  // 注销并清除会话
+  rpc Logout(LogoutRequest) returns (LogoutResponse) {}
+}
+
+message HttpHeader {
+  string key = 1;
+  repeated string values = 2;
+}
+
+message LoginRequest {
+  string host = 1;     // 设备管理地址，含 scheme 与端口，如 https://198.51.100.10:8443，可由 config.host 提供
+  string username = 2; // 登录用户名，可由 secret.user 提供
+  string password = 3; // 登录密码，可由 secret.password 提供
+}
+
+message LoginResponse {
+  bool success = 1;                 // 设备返回 success 字段
+  string token = 2;                 // 认证 token，已写入会话缓存
+  string error_code = 3;            // 设备 result.error_code
+  int32 http_status = 4;            // 上游 HTTP 状态码
+  string raw_body = 5;              // 上游原始响应体
+  google.protobuf.Value raw_json = 6; // 上游原始 JSON 透传
+  repeated HttpHeader headers = 7;  // 上游响应头(含 set-cookie)
+}
+
+message BlacklistItem {
+  string ip_start = 1; // 黑名单起始 IP，必填
+  string ip_end = 2;   // 黑名单结束 IP，可选，缺省等于 ip_start
+  string enable = 3;   // 状态，可选，默认 "enable"
+  string desc = 4;     // 描述，可选
+  string schedule = 5; // 引用时间对象名称，可选
+}
+
+message BlockIPRequest {
+  string host = 1;                  // 设备地址，可选，缺省取 config.host
+  repeated BlacklistItem items = 2; // 待封禁条目，必填且非空
+}
+
+message BlacklistTarget {
+  string ip_start = 1; // 起始 IP，必填
+  string ip_end = 2;   // 结束 IP，可选，缺省等于 ip_start
+}
+
+message UnblockIPRequest {
+  string host = 1;                    // 设备地址，可选，缺省取 config.host
+  repeated BlacklistTarget targets = 2; // 待解禁条目，必填且非空
+}
+
+message BlacklistOpResult {
+  string ip_start = 1;              // 本条对应的起始 IP
+  string ip_end = 2;               // 本条对应的结束 IP
+  int64 error_code = 3;            // 设备 head.error_code，0 表示成功
+  string error_string = 4;         // 设备 head.error_string
+  int32 http_status = 5;           // 上游 HTTP 状态码
+  google.protobuf.Value raw_json = 6; // 上游原始 JSON 透传
+}
+
+message BlacklistOpResponse {
+  repeated BlacklistOpResult results = 1; // 与请求条目一一对应的逐条结果
+}
+
+message QueryBlacklistRequest {
+  string host = 1;       // 设备地址，可选，缺省取 config.host
+  string search_key = 2; // 按 IP 或 MAC 过滤，可选，缺省查询全部
+}
+
+message QueryBlacklistResponse {
+  int64 error_code = 1;            // 设备 head.error_code
+  string error_string = 2;         // 设备 head.error_string
+  int64 total = 3;                 // 设备 head.total
+  google.protobuf.Value data = 4;  // 设备 data 字段透传(黑名单明细)
+  int32 http_status = 5;           // 上游 HTTP 状态码
+  google.protobuf.Value raw_json = 6; // 上游原始 JSON 透传
+  repeated HttpHeader headers = 7; // 上游响应头
+}
+
+message LogoutRequest {
+  string host = 1;     // 设备地址，可选，缺省取 config.host
+  string username = 2; // 登录用户名，可选，缺省取会话或 secret.user
+}
+
+message LogoutResponse {
+  int32 http_status = 1;           // 上游 HTTP 状态码
+  string raw_body = 2;             // 上游原始响应体
+  google.protobuf.Value raw_json = 3; // 上游原始 JSON 透传，可能为空
+  repeated HttpHeader headers = 4; // 上游响应头
+}
