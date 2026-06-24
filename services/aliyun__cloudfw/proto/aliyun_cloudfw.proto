@@ -1,0 +1,211 @@
+syntax = "proto3";
+
+package aliyun.cloudfw.v1;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/aliyun/cloudfw/v1";
+
+service AliyunCloudFWService {
+  rpc ListAssets(ListAssetsRequest) returns (CloudfwResponse) {}
+  rpc ListAddressBooks(ListAddressBooksRequest) returns (CloudfwResponse) {}
+  rpc CreateAddressBook(CreateAddressBookRequest) returns (CloudfwResponse) {}
+  rpc DeleteAddressBook(DeleteAddressBookRequest) returns (CloudfwResponse) {}
+
+  rpc ListInternetControlPolicies(ListInternetControlPoliciesRequest) returns (CloudfwResponse) {}
+  rpc CreateInternetControlPolicy(ControlPolicyMutationRequest) returns (CloudfwResponse) {}
+  rpc UpdateInternetControlPolicy(ControlPolicyMutationRequest) returns (CloudfwResponse) {}
+  rpc DeleteInternetControlPolicy(DeleteInternetControlPolicyRequest) returns (CloudfwResponse) {}
+
+  rpc ListVpcFirewalls(ListVpcFirewallsRequest) returns (CloudfwResponse) {}
+  rpc ListVpcControlPolicies(ListVpcControlPoliciesRequest) returns (CloudfwResponse) {}
+  rpc CreateVpcControlPolicy(ControlPolicyMutationRequest) returns (CloudfwResponse) {}
+  rpc UpdateVpcControlPolicy(ControlPolicyMutationRequest) returns (CloudfwResponse) {}
+  rpc DeleteVpcControlPolicy(DeleteVpcControlPolicyRequest) returns (CloudfwResponse) {}
+
+  rpc ListNatControlPolicies(ListNatControlPoliciesRequest) returns (CloudfwResponse) {}
+  rpc CreateNatControlPolicy(ControlPolicyMutationRequest) returns (CloudfwResponse) {}
+  rpc UpdateNatControlPolicy(ControlPolicyMutationRequest) returns (CloudfwResponse) {}
+  rpc DeleteNatControlPolicy(DeleteNatControlPolicyRequest) returns (CloudfwResponse) {}
+}
+
+message CloudfwResponse {
+  string request_id = 1 [json_name = "requestId"];
+  google.protobuf.Value body = 2;
+  string raw_json = 3 [json_name = "rawJson"];
+}
+
+message ListAssetsRequest {
+  string current_page = 1 [json_name = "currentPage"];
+  string page_size = 2 [json_name = "pageSize"];
+  string region_no = 3 [json_name = "regionNo"];
+  string search_item = 4 [json_name = "searchItem"];
+  string resource_type = 5 [json_name = "resourceType"];
+  string status = 6;
+  string ip_version = 7 [json_name = "ipVersion"];
+  string user_type = 8 [json_name = "userType"];
+  string sg_status = 9 [json_name = "sgStatus"];
+  string sensitive_status = 10 [json_name = "sensitiveStatus"];
+  string new_resource_tag = 11 [json_name = "newResourceTag"];
+  string out_statistic = 12 [json_name = "outStatistic"];
+  string member_uid = 13 [json_name = "memberUid"];
+  string type = 14;
+  string lang = 15;
+}
+
+message ListAddressBooksRequest {
+  string contain_port = 1 [json_name = "containPort"];
+  string current_page = 2 [json_name = "currentPage"];
+  string group_type = 3 [json_name = "groupType"];
+  string group_uuid = 4 [json_name = "groupUuid"];
+  string lang = 5;
+  string page_size = 6 [json_name = "pageSize"];
+  string query = 7;
+}
+
+message AddressBookAckLabel {
+  string key = 1;
+  string value = 2;
+}
+
+message AddressBookTag {
+  string tag_key = 1 [json_name = "tagKey"];
+  string tag_value = 2 [json_name = "tagValue"];
+}
+
+message CreateAddressBookRequest {
+  string ack_cluster_connector_id = 1 [json_name = "ackClusterConnectorId"];
+  repeated AddressBookAckLabel ack_labels = 2 [json_name = "ackLabels"];
+  repeated string ack_namespaces = 3 [json_name = "ackNamespaces"];
+  string address_list = 4 [json_name = "addressList"];
+  string auto_add_tag_ecs = 5 [json_name = "autoAddTagEcs"];
+  string description = 6;
+  string group_name = 7 [json_name = "groupName"];
+  string group_type = 8 [json_name = "groupType"];
+  string lang = 9;
+  string source_ip = 10 [json_name = "sourceIp"];
+  repeated AddressBookTag tag_list = 11 [json_name = "tagList"];
+  string tag_relation = 12 [json_name = "tagRelation"];
+}
+
+message DeleteAddressBookRequest {
+  string group_uuid = 1 [json_name = "groupUuid"];
+  string lang = 2;
+  string source_ip = 3 [json_name = "sourceIp"];
+}
+
+message ListInternetControlPoliciesRequest {
+  string acl_action = 1 [json_name = "aclAction"];
+  string acl_uuid = 2 [json_name = "aclUuid"];
+  string current_page = 3 [json_name = "currentPage"];
+  string description = 4;
+  string destination = 5;
+  string direction = 6;
+  string ip_version = 7 [json_name = "ipVersion"];
+  string lang = 8;
+  string page_size = 9 [json_name = "pageSize"];
+  string proto = 10;
+  string release = 11;
+  string repeat_type = 12 [json_name = "repeatType"];
+  string source = 13;
+}
+
+message ControlPolicyMutationRequest {
+  string acl_action = 1 [json_name = "aclAction"];
+  string acl_uuid = 2 [json_name = "aclUuid"];
+  string application_name = 3 [json_name = "applicationName"];
+  repeated string application_name_list = 4 [json_name = "applicationNameList"];
+  string description = 5;
+  string dest_port = 6 [json_name = "destPort"];
+  string dest_port_group = 7 [json_name = "destPortGroup"];
+  string dest_port_type = 8 [json_name = "destPortType"];
+  string destination = 9;
+  string destination_type = 10 [json_name = "destinationType"];
+  string direction = 11;
+  string domain_resolve_type = 12 [json_name = "domainResolveType"];
+  int64 end_time = 13 [json_name = "endTime"];
+  string ip_version = 14 [json_name = "ipVersion"];
+  string lang = 15;
+  string member_uid = 16 [json_name = "memberUid"];
+  string nat_gateway_id = 17 [json_name = "natGatewayId"];
+  string new_order = 18 [json_name = "newOrder"];
+  string proto = 19;
+  string release = 20;
+  repeated int32 repeat_days = 21 [json_name = "repeatDays"];
+  string repeat_end_time = 22 [json_name = "repeatEndTime"];
+  string repeat_start_time = 23 [json_name = "repeatStartTime"];
+  string repeat_type = 24 [json_name = "repeatType"];
+  string source = 25;
+  string source_ip = 26 [json_name = "sourceIp"];
+  string source_type = 27 [json_name = "sourceType"];
+  int64 start_time = 28 [json_name = "startTime"];
+  string vpc_firewall_id = 29 [json_name = "vpcFirewallId"];
+}
+
+message DeleteInternetControlPolicyRequest {
+  string acl_uuid = 1 [json_name = "aclUuid"];
+  string direction = 2;
+  string lang = 3;
+  string source_ip = 4 [json_name = "sourceIp"];
+}
+
+message ListVpcFirewallsRequest {
+  string cen_id = 1 [json_name = "cenId"];
+  string current_page = 2 [json_name = "currentPage"];
+  string firewall_switch_status = 3 [json_name = "firewallSwitchStatus"];
+  string lang = 4;
+  string member_uid = 5 [json_name = "memberUid"];
+  string network_instance_id = 6 [json_name = "networkInstanceId"];
+  string owner_id = 7 [json_name = "ownerId"];
+  string page_size = 8 [json_name = "pageSize"];
+  string region_no = 9 [json_name = "regionNo"];
+  string route_mode = 10 [json_name = "routeMode"];
+  string transit_router_type = 11 [json_name = "transitRouterType"];
+  string vpc_firewall_id = 12 [json_name = "vpcFirewallId"];
+  string vpc_firewall_name = 13 [json_name = "vpcFirewallName"];
+}
+
+message ListVpcControlPoliciesRequest {
+  string acl_action = 1 [json_name = "aclAction"];
+  string acl_uuid = 2 [json_name = "aclUuid"];
+  string current_page = 3 [json_name = "currentPage"];
+  string description = 4;
+  string destination = 5;
+  string lang = 6;
+  string member_uid = 7 [json_name = "memberUid"];
+  string page_size = 8 [json_name = "pageSize"];
+  string proto = 9;
+  string release = 10;
+  string repeat_type = 11 [json_name = "repeatType"];
+  string source = 12;
+  string vpc_firewall_id = 13 [json_name = "vpcFirewallId"];
+}
+
+message DeleteVpcControlPolicyRequest {
+  string acl_uuid = 1 [json_name = "aclUuid"];
+  string lang = 2;
+  string vpc_firewall_id = 3 [json_name = "vpcFirewallId"];
+}
+
+message ListNatControlPoliciesRequest {
+  string acl_action = 1 [json_name = "aclAction"];
+  string acl_uuid = 2 [json_name = "aclUuid"];
+  string current_page = 3 [json_name = "currentPage"];
+  string description = 4;
+  string destination = 5;
+  string direction = 6;
+  string lang = 7;
+  string nat_gateway_id = 8 [json_name = "natGatewayId"];
+  string page_size = 9 [json_name = "pageSize"];
+  string proto = 10;
+  string release = 11;
+  string repeat_type = 12 [json_name = "repeatType"];
+  string source = 13;
+}
+
+message DeleteNatControlPolicyRequest {
+  string acl_uuid = 1 [json_name = "aclUuid"];
+  string direction = 2;
+  string lang = 3;
+  string nat_gateway_id = 4 [json_name = "natGatewayId"];
+}

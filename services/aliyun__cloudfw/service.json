@@ -1,0 +1,93 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "aliyun-cloudfw",
+  "displayName": "Alibaba Cloud Cloud Firewall",
+  "description": "OctoBus package for Alibaba Cloud Cloud Firewall asset, address book, internet ACL, VPC ACL, and NAT ACL APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/aliyun_cloudfw.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "aliyun.cloudfw.v1.AliyunCloudFWService/ListAssets": {
+          "name": "list-assets",
+          "description": "Query Alibaba Cloud Cloud Firewall assets."
+        },
+        "aliyun.cloudfw.v1.AliyunCloudFWService/ListAddressBooks": {
+          "name": "list-address-books",
+          "description": "Query Alibaba Cloud Cloud Firewall address books."
+        },
+        "aliyun.cloudfw.v1.AliyunCloudFWService/CreateAddressBook": {
+          "name": "create-address-book",
+          "description": "Create an Alibaba Cloud Cloud Firewall address book."
+        },
+        "aliyun.cloudfw.v1.AliyunCloudFWService/DeleteAddressBook": {
+          "name": "delete-address-book",
+          "description": "Delete an Alibaba Cloud Cloud Firewall address book."
+        },
+        "aliyun.cloudfw.v1.AliyunCloudFWService/ListInternetControlPolicies": {
+          "name": "list-internet-control-policies",
+          "description": "Query internet border access control policies."
+        },
+        "aliyun.cloudfw.v1.AliyunCloudFWService/CreateInternetControlPolicy": {
+          "name": "create-internet-control-policy",
+          "description": "Create an internet border access control policy."
+        },
+        "aliyun.cloudfw.v1.AliyunCloudFWService/UpdateInternetControlPolicy": {
+          "name": "update-internet-control-policy",
+          "description": "Update an internet border access control policy."
+        },
+        "aliyun.cloudfw.v1.AliyunCloudFWService/DeleteInternetControlPolicy": {
+          "name": "delete-internet-control-policy",
+          "description": "Delete an internet border access control policy."
+        },
+        "aliyun.cloudfw.v1.AliyunCloudFWService/ListVpcFirewalls": {
+          "name": "list-vpc-firewalls",
+          "description": "Query VPC firewall instances."
+        },
+        "aliyun.cloudfw.v1.AliyunCloudFWService/ListVpcControlPolicies": {
+          "name": "list-vpc-control-policies",
+          "description": "Query VPC firewall access control policies."
+        },
+        "aliyun.cloudfw.v1.AliyunCloudFWService/CreateVpcControlPolicy": {
+          "name": "create-vpc-control-policy",
+          "description": "Create a VPC firewall access control policy."
+        },
+        "aliyun.cloudfw.v1.AliyunCloudFWService/UpdateVpcControlPolicy": {
+          "name": "update-vpc-control-policy",
+          "description": "Update a VPC firewall access control policy."
+        },
+        "aliyun.cloudfw.v1.AliyunCloudFWService/DeleteVpcControlPolicy": {
+          "name": "delete-vpc-control-policy",
+          "description": "Delete a VPC firewall access control policy."
+        },
+        "aliyun.cloudfw.v1.AliyunCloudFWService/ListNatControlPolicies": {
+          "name": "list-nat-control-policies",
+          "description": "Query NAT firewall access control policies."
+        },
+        "aliyun.cloudfw.v1.AliyunCloudFWService/CreateNatControlPolicy": {
+          "name": "create-nat-control-policy",
+          "description": "Create a NAT firewall access control policy."
+        },
+        "aliyun.cloudfw.v1.AliyunCloudFWService/UpdateNatControlPolicy": {
+          "name": "update-nat-control-policy",
+          "description": "Update a NAT firewall access control policy."
+        },
+        "aliyun.cloudfw.v1.AliyunCloudFWService/DeleteNatControlPolicy": {
+          "name": "delete-nat-control-policy",
+          "description": "Delete a NAT firewall access control policy."
+        }
+      }
+    }
+  }
+}

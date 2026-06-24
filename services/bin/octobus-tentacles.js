@@ -5,6 +5,10 @@ import { runServiceMain } from "@chaitin-ai/octobus-sdk";
 import { Command } from "commander";
 
 const services = {
+  "aliyun-cloudfw": {
+    entryFile: "../aliyun__cloudfw/bin/aliyun-cloudfw.js",
+    serviceModule: "../aliyun__cloudfw/src/service.js",
+  },
   "safeline-waf": {
     entryFile: "../chaitin__safeline-waf/bin/safeline-waf.js",
     serviceModule: "../chaitin__safeline-waf/src/service.js",
