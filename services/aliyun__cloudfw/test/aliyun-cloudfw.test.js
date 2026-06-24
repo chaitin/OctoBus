@@ -10,6 +10,7 @@ import {
   METHOD_LIST_ASSETS_FULL,
   METHOD_LIST_NAT_CONTROL_POLICIES_FULL,
   METHOD_LIST_VPC_CONTROL_POLICIES_FULL,
+  METHOD_LIST_VPC_FIREWALLS_FULL,
   createHandlers,
   createRuntime,
   rpcdef,
@@ -61,6 +62,12 @@ class FakeCloudfwClient {
     });
   }
 
+  async describeVpcFirewallList(request) {
+    return this.record('describeVpcFirewallList', request, {
+      body: { RequestId: 'req-vpc-firewalls', VpcFirewalls: [{ ConnectSubType: 'vpcpeer' }] },
+    });
+  }
+
   async describeNatFirewallControlPolicy(request) {
     return this.record('describeNatFirewallControlPolicy', request, {
       body: { RequestId: 'req-nat-policy', TotalCount: 2 },
@@ -81,6 +88,7 @@ const fakeSdk = {
   DescribeAddressBookRequest: FakeRequest,
   AddAddressBookRequest: FakeRequest,
   DeleteControlPolicyRequest: FakeRequest,
+  DescribeVpcFirewallListRequest: FakeRequest,
   DescribeVpcFirewallControlPolicyRequest: FakeRequest,
   DescribeNatFirewallControlPolicyRequest: FakeRequest,
 };
@@ -129,6 +137,7 @@ test('service exports all CloudFW handlers', () => {
   assert.equal(typeof handlers[METHOD_LIST_ADDRESS_BOOKS_FULL], 'function');
   assert.equal(typeof handlers[METHOD_CREATE_ADDRESS_BOOK_FULL], 'function');
   assert.equal(typeof handlers[METHOD_DELETE_INTERNET_CONTROL_POLICY_FULL], 'function');
+  assert.equal(typeof handlers[METHOD_LIST_VPC_FIREWALLS_FULL], 'function');
   assert.equal(typeof handlers[METHOD_LIST_VPC_CONTROL_POLICIES_FULL], 'function');
   assert.equal(typeof handlers[METHOD_LIST_NAT_CONTROL_POLICIES_FULL], 'function');
 });
@@ -197,7 +206,7 @@ test('supports address book create payload aliases and array fields', async () =
   const result = await handlers[METHOD_CREATE_ADDRESS_BOOK_FULL]({
     group_name: 'octobus-ci-test',
     groupType: 'ip',
-    address_list: '198.51.100.10/32 test',
+    address_list: ['198.51.100.10/32 test', '198.51.100.11/32'],
     description: 'temporary',
     tag_list: [{ tag_key: 'env', tag_value: 'test' }],
   }, buildCtx());
@@ -207,7 +216,7 @@ test('supports address book create payload aliases and array fields', async () =
   assert.deepEqual(call.request.map, {
     groupName: 'octobus-ci-test',
     groupType: 'ip',
-    addressList: '198.51.100.10/32 test',
+    addressList: '198.51.100.10/32 test,198.51.100.11/32',
     description: 'temporary',
     tagList: [{ tagKey: 'env', tagValue: 'test' }],
     lang: 'zh',
@@ -232,6 +241,33 @@ test('lists address books with camelCase request fields and default language fal
     lang: 'zh',
   });
   assert.equal(result.request_id, 'req-address-books');
+});
+
+test('lists VPC firewalls with peering filters through generic CloudFW API', async () => {
+  const handlers = buildHandlers();
+  const result = await handlers[METHOD_LIST_VPC_FIREWALLS_FULL]({
+    connect_sub_type: 'vpcpeer',
+    current_page: '1',
+    member_uid: '1234567890123456',
+    page_size: '10',
+    peer_uid: '1234567890123456',
+    region_no: 'cn-hangzhou',
+    vpc_id: 'vpc-1',
+  }, buildCtx());
+
+  const call = FakeCloudfwClient.instances[0].calls[0];
+  assert.equal(call.method, 'describeVpcFirewallList');
+  assert.deepEqual(call.request.map, {
+    connectSubType: 'vpcpeer',
+    currentPage: '1',
+    memberUid: '1234567890123456',
+    pageSize: '10',
+    peerUid: '1234567890123456',
+    regionNo: 'cn-hangzhou',
+    vpcId: 'vpc-1',
+    lang: 'zh',
+  });
+  assert.equal(result.request_id, 'req-vpc-firewalls');
 });
 
 test('maps internet policy delete and VPC/NAT list requests to dedicated SDK methods', async () => {
