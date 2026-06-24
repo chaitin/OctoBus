@@ -1,0 +1,57 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "dbappsecurity-mingyu-waf",
+  "displayName": "DBAPPSecurity Mingyu WAF",
+  "description": "OctoBus package for DBAPPSecurity Mingyu WAF IP blocking rules (basic rules) and IP allowlist rules (protection control rules).",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/waf.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "mingyu_waf.v1.WafService/ListBlockRules": {
+          "name": "list-block-rules",
+          "description": "List IP blocking rules (basic rules)."
+        },
+        "mingyu_waf.v1.WafService/CreateBlockRule": {
+          "name": "create-block-rule",
+          "description": "Create an IP blocking rule."
+        },
+        "mingyu_waf.v1.WafService/UpdateBlockRule": {
+          "name": "update-block-rule",
+          "description": "Update an IP blocking rule."
+        },
+        "mingyu_waf.v1.WafService/DeleteBlockRule": {
+          "name": "delete-block-rule",
+          "description": "Delete an IP blocking rule by ID."
+        },
+        "mingyu_waf.v1.WafService/ListAllowRules": {
+          "name": "list-allow-rules",
+          "description": "List IP allowlist rules (protection control rules)."
+        },
+        "mingyu_waf.v1.WafService/CreateAllowRule": {
+          "name": "create-allow-rule",
+          "description": "Create an IP allowlist rule."
+        },
+        "mingyu_waf.v1.WafService/UpdateAllowRule": {
+          "name": "update-allow-rule",
+          "description": "Update an IP allowlist rule."
+        },
+        "mingyu_waf.v1.WafService/DeleteAllowRule": {
+          "name": "delete-allow-rule",
+          "description": "Delete an IP allowlist rule by ID."
+        },
+        "mingyu_waf.v1.WafService/ListSites": {
+          "name": "list-sites",
+          "description": "List protected sites."
+        }
+      }
+    }
+  }
+}
