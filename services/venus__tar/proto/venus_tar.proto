@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package Venus_TAR;
+
+option go_package = "miner/grpc-service/Venus_TAR";
+
+service TARService {
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse) {}
+  rpc Login(LoginRequest) returns (LoginResponse) {}
+  rpc Logout(LogoutRequest) returns (LogoutResponse) {}
+  rpc GetCurrentUser(GetCurrentUserRequest) returns (JSONResponse) {}
+  rpc Request(RestRequest) returns (RestResponse) {}
+  rpc GetDashboardOverview(JSONRequest) returns (JSONResponse) {}
+  rpc GetAlarmTotal(JSONRequest) returns (JSONResponse) {}
+  rpc ListEventLogs(JSONRequest) returns (JSONResponse) {}
+  rpc ListAssets(JSONRequest) returns (JSONResponse) {}
+  rpc GetAssetById(JSONRequest) returns (JSONResponse) {}
+  rpc GetPcapDetail(JSONRequest) returns (JSONResponse) {}
+  rpc TrackPcapFlow(JSONRequest) returns (JSONResponse) {}
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  bool ok = 1;
+  string message = 2;
+}
+
+message LoginRequest {
+  string check_code = 1;
+  string code_key = 2;
+}
+
+message LoginResponse {
+  bool authenticated = 1;
+  string token = 2;
+  string cookie = 3;
+  string message = 4;
+}
+
+message LogoutRequest {}
+
+message LogoutResponse {
+  bool ok = 1;
+  string message = 2;
+}
+
+message GetCurrentUserRequest {}
+
+message JSONRequest {
+  string json_body = 1;
+  string request_id = 2;
+}
+
+message JSONResponse {
+  string json_body = 1;
+  string request_id = 2;
+}
+
+message RestRequest {
+  string method = 1;
+  string path = 2;
+  map<string, string> query = 3;
+  map<string, string> headers = 4;
+  string json_body = 5;
+  string raw_body_base64 = 6;
+  string request_id = 7;
+}
+
+message RestResponse {
+  int32 status_code = 1;
+  map<string, string> headers = 2;
+  string json_body = 3;
+  string raw_body_base64 = 4;
+  string request_id = 5;
+}
