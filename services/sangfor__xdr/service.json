@@ -1,0 +1,36 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "sangfor-xdr",
+  "displayName": "Sangfor XDR",
+  "description": "OctoBus package for Sangfor XDR OpenAPI: asset management, security incidents, linkage response, vulnerability management, SOAR, OAuth2 auth, and threat expert incidents.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/sangfor_xdr.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "sangfor_xdr.AssetService/ListAssets": { "name": "list-assets", "description": "List XDR assets with pagination and filters." },
+        "sangfor_xdr.AssetService/GetAsset": { "name": "get-asset", "description": "Get a single XDR asset by ID." },
+        "sangfor_xdr.AssetService/GetAssetCard": { "name": "get-asset-card", "description": "Get XDR asset summary card." },
+        "sangfor_xdr.AssetService/GetAssetStats": { "name": "get-asset-stats", "description": "Get XDR asset statistics." },
+        "sangfor_xdr.IncidentService/ListIncidents": { "name": "list-incidents", "description": "List XDR security incidents." },
+        "sangfor_xdr.IncidentService/ListAlerts": { "name": "list-alerts", "description": "List XDR security alerts." },
+        "sangfor_xdr.IncidentService/GetIncidentTrend": { "name": "get-incident-trend", "description": "Get XDR incident trend data." },
+        "sangfor_xdr.ResponseService/BanIP": { "name": "ban-ip", "description": "Ban an IP through XDR linkage response." },
+        "sangfor_xdr.ResponseService/IsolateHost": { "name": "isolate-host", "description": "Isolate a host through XDR linkage." },
+        "sangfor_xdr.ResponseService/UnblockIPs": { "name": "unblock-ips", "description": "Unblock IPs through XDR linkage." },
+        "sangfor_xdr.VulnerabilityService/ListVulnerabilities": { "name": "list-vulns", "description": "List XDR vulnerabilities." },
+        "sangfor_xdr.VulnerabilityService/GetRiskOverview": { "name": "get-risk-overview", "description": "Get XDR vulnerability risk overview." },
+        "sangfor_xdr.SoarService/GetDictionary": { "name": "get-dictionary", "description": "Get SOAR dictionary from XDR." },
+        "sangfor_xdr.AuthService/GetToken": { "name": "get-token", "description": "Get OAuth2 token from XDR." },
+        "sangfor_xdr.ThreatExpertService/GetProductInfo": { "name": "get-product-info", "description": "Get XDR product information." }
+      }
+    }
+  }
+}

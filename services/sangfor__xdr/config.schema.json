@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "xdrBaseUrl": {
+      "type": "string",
+      "description": "XDR 管理平台地址，如 https://xdr.example.com"
+    },
+    "endpoint": {
+      "type": "string",
+      "description": "XDR REST API base URL alias for xdrBaseUrl"
+    },
+    "restBaseUrl": {
+      "type": "string",
+      "description": "Legacy alias for xdrBaseUrl"
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "Legacy alias for xdrBaseUrl"
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "Optional extra HTTP headers"
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 10000,
+      "description": "HTTP timeout in milliseconds"
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification"
+    }
+  }
+}
