@@ -1,0 +1,140 @@
+syntax = "proto3";
+
+package Chaitin_COSMOS;
+
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Chaitin_COSMOS";
+
+service Chaitin_COSMOS {
+  // 获取日志详情，根据日志 ID 列表查询
+  rpc SearchLogInfo(SearchLogInfoRequest) returns (SearchLogInfoResponse) {}
+
+  // 获取日志列表，支持关键字搜索、时间范围、条件过滤与分页
+  rpc SearchLogList(SearchLogListRequest) returns (SearchLogListResponse) {}
+
+  // 获取日志聚合统计，按指定维度聚合并返回时序数据
+  rpc SearchAggregationStatistics(SearchAggregationStatisticsRequest) returns (SearchAggregationStatisticsResponse) {}
+}
+
+// ─── SearchLogInfo ───
+
+message SearchLogInfoRequest {
+  string api_token = 1; // 访问凭证，必填
+  repeated string ids = 2; // 日志 ID 列表，必填且非空
+}
+
+message SearchLogInfoResponse {
+  google.protobuf.Value err = 1;
+  google.protobuf.Value msg = 2;
+  SearchLogInfoData data = 3;
+}
+
+message SearchLogInfoData {
+  repeated CosmoLogRecord records = 1;
+}
+
+// ─── SearchLogList ───
+
+message SearchLogListRequest {
+  string api_token = 1; // 访问凭证，必填
+  repeated string keyword = 2; // 关键字搜索，可选
+  google.protobuf.Int64Value time_range_start = 3; // 时间范围起始（Unix 秒），可选
+  google.protobuf.Int64Value time_range_end = 4; // 时间范围结束（Unix 秒），可选
+  string advanced_query = 5; // 高级查询语句，可选
+  CosmoConditionQuery condition_query = 6; // 条件查询，可选
+  CosmoFilter filter = 7; // 过滤条件，可选
+  google.protobuf.Int64Value count = 8; // 分页大小，可选，默认 100
+  google.protobuf.Int64Value offset = 9; // 分页偏移，可选，默认 0
+  string attack_chain_phase = 10; // 攻击链阶段筛选，可选
+  google.protobuf.BoolValue fall = 11; // 失陷状态筛选，可选
+  repeated CosmoOrganization organization = 12; // 组织机构筛选，可选
+}
+
+message CosmoConditionQuery {
+  string logical_op = 1; // 逻辑运算符，如 "AND"
+  repeated CosmoExpression expressions = 2; // 条件表达式列表
+}
+
+message CosmoExpression {
+  string column = 1; // 字段名，如 "src_ip", "log_id"
+  string op = 2; // 运算符，如 "equal", "contains"
+  string value = 3; // 值
+}
+
+message CosmoFilter {
+  repeated string origin_event_name = 1; // 原始事件名过滤
+  repeated string src_ip = 2; // 源 IP 过滤
+  repeated string dest_ip = 3; // 目的 IP 过滤
+  repeated string src_country = 4; // 源国家过滤
+  repeated string src_port = 5; // 源端口过滤
+  repeated string dest_port = 6; // 目的端口过滤
+  repeated int32 attack_result = 7; // 攻击结果过滤
+}
+
+message CosmoOrganization {
+  string oper = 1; // 运算符，如 "="
+  int64 target = 2; // 目标 ID
+}
+
+message SearchLogListResponse {
+  google.protobuf.Value err = 1;
+  google.protobuf.Value msg = 2;
+  SearchLogListData data = 3;
+}
+
+message SearchLogListData {
+  repeated CosmoLogRecord records = 1;
+  int64 start_time = 2;
+  int64 end_time = 3;
+}
+
+// ─── SearchAggregationStatistics ───
+
+message SearchAggregationStatisticsRequest {
+  string api_token = 1; // 访问凭证，必填
+  repeated string keyword = 2; // 关键字搜索，可选
+  google.protobuf.Int64Value time_range_start = 3; // 时间范围起始（Unix 秒），可选
+  google.protobuf.Int64Value time_range_end = 4; // 时间范围结束（Unix 秒），可选
+  string advanced_query = 5; // 高级查询语句，可选
+  CosmoConditionQuery condition_query = 6; // 条件查询，可选
+  CosmoFilter filter = 7; // 过滤条件，可选
+  repeated string key = 8; // 聚合维度，如 ["src_ip","dest_ip","event_type"]
+  google.protobuf.Int64Value count = 9; // 返回条数，可选，默认 10
+  google.protobuf.BoolValue asc = 10; // 是否升序，可选，默认 false
+  string attack_chain_phase = 11; // 攻击链阶段筛选，可选
+  google.protobuf.BoolValue fall = 12; // 失陷状态筛选，可选
+  repeated CosmoOrganization organization = 13; // 组织机构筛选，可选
+}
+
+message SearchAggregationStatisticsResponse {
+  google.protobuf.Value err = 1;
+  google.protobuf.Value msg = 2;
+  SearchAggregationStatisticsData data = 3;
+}
+
+message SearchAggregationStatisticsData {
+  repeated CosmoAggregationGroup groups = 1;
+  int64 total = 2;
+}
+
+message CosmoAggregationGroup {
+  google.protobuf.Struct result = 1; // 聚合键值，如 {"src_ip":"1.2.3.4","event_type":52001}
+  repeated CosmoAggregationPoint data = 2; // 时序数据点
+  int64 count = 3; // 总数
+}
+
+message CosmoAggregationPoint {
+  int64 start_time = 1; // 时间点（Unix 秒）
+  int64 count = 2; // 计数
+}
+
+// ─── 通用日志记录 ───
+
+message CosmoLogRecord {
+  // Cosmos API 返回字段非常丰富且可能随版本变化，
+  // 使用 google.protobuf.Struct 保留完整的原始数据，
+  // 避免 proto 字段名 (snake_case) 与 protobuf-es JS 表示 (camelCase) 的转换问题
+  google.protobuf.Struct raw = 1;
+}
