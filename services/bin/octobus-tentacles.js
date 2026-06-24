@@ -81,6 +81,10 @@ const services = {
     entryFile: "../qianxin__fw-secgate3600/bin/qianxin-fw-secgate3600.js",
     serviceModule: "../qianxin__fw-secgate3600/src/service.js",
   },
+  "qianxin-fw-secgate3600-policy": {
+    entryFile: "../qianxin__fw-secgate3600-policy/bin/qianxin-fw-secgate3600-policy.js",
+    serviceModule: "../qianxin__fw-secgate3600-policy/src/service.js",
+  },
   "qianxin-fw-secgate3600-http-x": {
     entryFile: "../qianxin__fw-secgate3600-http-x/bin/qianxin-fw-secgate3600-http-x.js",
     serviceModule: "../qianxin__fw-secgate3600-http-x/src/service.js",

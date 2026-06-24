@@ -1,0 +1,121 @@
+syntax = "proto3";
+
+package QIANXIN_FW_SecGate3600_Policy;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/QIANXIN_FW_SecGate3600_Policy";
+
+// 网神 SecGate3600 防火墙 - 安全策略 (sec_policy) 管理（在现有 qianxin__fw-secgate3600 基础上增量）。
+// 有状态：先 Login 获取会话（PHPSESSID + token，按 instance/host 缓存），业务方法经 POST /v1.0/rest/ 调用，
+// body 为数组 [{head:{module,function,...}, body:{...}}]。响应大对象用 google.protobuf.Value 原样透传。
+service QIANXIN_FW_SecGate3600_Policy {
+  // 登录获取会话（沿用现有模板语义）
+  rpc Login(LoginRequest) returns (LoginResponse) {}
+
+  // 查询安全策略 (function get_sec_policy)
+  rpc ListSecPolicy(ListSecPolicyRequest) returns (SecPolicyResponse) {}
+
+  // 新增/修改安全策略 (function set_sec_policy)，写操作
+  rpc SetSecPolicy(SetSecPolicyRequest) returns (SecPolicyResponse) {}
+
+  // 调整安全策略优先级 (function set_move_sec_policy_pri)，写操作
+  rpc MoveSecPolicyPriority(MoveSecPolicyPriorityRequest) returns (SecPolicyResponse) {}
+
+  // 注销会话（沿用现有模板语义）
+  rpc Logout(LogoutRequest) returns (LogoutResponse) {}
+}
+
+// 一个上游响应头（与现有模板 extractHeaders 输出一致：key + 多值）
+message HttpHeader {
+  string key = 1;
+  repeated string values = 2;
+}
+
+// ============================ Login / Logout (沿用现有模板) ============================
+
+message LoginRequest {
+  string host = 1;     // 设备管理地址，如 https://1.1.1.1:8080，必填
+  string username = 2; // 用户名（可由 secret.user 提供）
+  string password = 3; // 密码（可由 secret.password 提供）
+}
+
+message LoginResult {
+  string error_code = 1; // 登录错误码，success 表示成功
+  string token = 2;      // 会话秘钥
+  google.protobuf.Value raw = 3;
+}
+
+message LoginResponse {
+  bool success = 1;
+  LoginResult result = 2;
+  int32 http_status = 3;
+  string raw_body = 4;
+  google.protobuf.Value raw_json = 5;
+  repeated HttpHeader headers = 6;
+}
+
+message LogoutRequest {
+  string host = 1;     // 设备地址，必填
+  string username = 2; // 可选，缺省取会话/配置中的用户名
+}
+
+message LogoutResponse {
+  int32 http_status = 1;
+  string raw_body = 2;
+  google.protobuf.Value raw_json = 3;
+  repeated HttpHeader headers = 4;
+}
+
+// ============================ 公共响应 ============================
+
+// 上游 head{} 透传：error_code(0 成功)、error_string、total，以及原始 head。
+message SecPolicyResponseHead {
+  int64 error_code = 1; // 0 成功，非 0 业务失败（透传，不抛错）
+  string message = 2;   // 上游 error_string，例 "执行成功"
+  int64 total = 3;      // 上游 head.total（无则 0）
+  google.protobuf.Value raw = 4;
+}
+
+// get/set/move 统一响应：head + data(Value 透传)。
+message SecPolicyResponse {
+  SecPolicyResponseHead head = 1;
+  google.protobuf.Value data = 2; // 上游 data：列表为对象数组，set/move 多为布尔，原样透传
+  int32 http_status = 3;
+  string raw_body = 4;
+  google.protobuf.Value raw_json = 5;
+  repeated HttpHeader headers = 6;
+}
+
+// ============================ ListSecPolicy ============================
+
+message ListSecPolicyRequest {
+  string host = 1;            // 设备地址，必填；选择已登录会话
+  repeated string names = 2;  // 策略名称列表；空表示查询全部；单个名非空时长度 1-63
+  bool is_detail = 3;         // 是否返回每条策略详情
+  int64 page_index = 4;       // 页码，<=0 归一化为 1
+  int64 page_size = 5;        // 每页数量，<=0 归一化为 20
+}
+
+// ============================ SetSecPolicy ============================
+
+message SetSecPolicyRequest {
+  string host = 1;                              // 设备地址，必填
+  repeated google.protobuf.Struct policies = 2; // 策略对象列表，非空；每个对象须含非空 name；其余字段
+                                                 // (desc/action/state/src_zone/dst_zone/rule_type/user_item/
+                                                 //  src_addr_item/dst_addr_item/service_item/app_item/
+                                                 //  option_item/schedule/vlan_list) 原样透传
+}
+
+// ============================ MoveSecPolicyPriority ============================
+
+message MoveItem {
+  string name = 1;     // 待调整的策略名称，必填
+  string direct = 2;   // 调序方向：top/end/before/after，必填
+  string dst_name = 3; // 目的策略名称；before/after 时必填，top/end 时强制为空
+}
+
+message MoveSecPolicyPriorityRequest {
+  string host = 1;             // 设备地址，必填
+  repeated MoveItem moves = 2; // 调序指令列表，非空
+}
