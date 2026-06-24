@@ -150,17 +150,17 @@ message DeleteInternetControlPolicyRequest {
 }
 
 message ListVpcFirewallsRequest {
-  string cen_id = 1 [json_name = "cenId"];
+  string connect_sub_type = 1 [json_name = "connectSubType"];
   string current_page = 2 [json_name = "currentPage"];
   string firewall_switch_status = 3 [json_name = "firewallSwitchStatus"];
   string lang = 4;
   string member_uid = 5 [json_name = "memberUid"];
-  string network_instance_id = 6 [json_name = "networkInstanceId"];
-  string owner_id = 7 [json_name = "ownerId"];
+  string peer_uid = 6 [json_name = "peerUid"];
+  string vpc_id = 7 [json_name = "vpcId"];
   string page_size = 8 [json_name = "pageSize"];
   string region_no = 9 [json_name = "regionNo"];
-  string route_mode = 10 [json_name = "routeMode"];
-  string transit_router_type = 11 [json_name = "transitRouterType"];
+  reserved 10, 11;
+  reserved "route_mode", "transit_router_type";
   string vpc_firewall_id = 12 [json_name = "vpcFirewallId"];
   string vpc_firewall_name = 13 [json_name = "vpcFirewallName"];
 }

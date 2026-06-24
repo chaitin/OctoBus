@@ -117,6 +117,7 @@ export const operationSpecs = [
       'tagList',
       'tagRelation',
     ],
+    commaListFields: ['addressList'],
     nestedFields: {
       ackLabels: ['key', 'value'],
       tagList: ['tagKey', 'tagValue'],
@@ -154,20 +155,18 @@ export const operationSpecs = [
   },
   {
     fullMethod: METHOD_LIST_VPC_FIREWALLS_FULL,
-    sdkMethod: 'describeVpcFirewallCenList',
-    requestClass: 'DescribeVpcFirewallCenListRequest',
+    sdkMethod: 'describeVpcFirewallList',
+    requestClass: 'DescribeVpcFirewallListRequest',
     fields: [
-      'cenId',
+      'connectSubType',
       'currentPage',
       'firewallSwitchStatus',
       'lang',
       'memberUid',
-      'networkInstanceId',
-      'ownerId',
       'pageSize',
+      'peerUid',
       'regionNo',
-      'routeMode',
-      'transitRouterType',
+      'vpcId',
       'vpcFirewallId',
       'vpcFirewallName',
     ],
@@ -270,6 +269,10 @@ export const normalizeRequest = (request = {}, spec) => {
     const raw = firstPresent(request, field);
     if (raw === undefined || raw === null) continue;
     const nestedFields = spec.nestedFields?.[field];
+    if (spec.commaListFields?.includes(field) && Array.isArray(raw)) {
+      out[field] = raw.map((item) => unwrapScalar(item)).filter((item) => item !== undefined && item !== null && item !== '').join(',');
+      continue;
+    }
     if (nestedFields && Array.isArray(raw)) {
       out[field] = raw.map((item) => normalizeObjectFields(item, nestedFields));
       continue;
