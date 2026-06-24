@@ -1,0 +1,17 @@
+{
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "regionId": {
+      "type": "string",
+      "default": "cn-hangzhou",
+      "description": "Alibaba Cloud region ID (e.g. cn-hangzhou, cn-shanghai)"
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 10000,
+      "description": "HTTP request timeout in milliseconds"
+    }
+  }
+}

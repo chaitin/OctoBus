@@ -1,0 +1,45 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "aliyun-ddoscoo-20200101",
+  "displayName": "Alibaba Cloud DDoS COO (2020-01-01)",
+  "description": "OctoBus package for Alibaba Cloud DDoS COO (Anti-DDoS Pro/Premium) API v2020-01-01. Provides instance management, L4/L7 forwarding rule queries, DDoS attack event queries, and CC protection configuration.",
+  "runtime": {
+    "mode": "on-demand"
+  },
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/aliyun_ddoscoo_20200101.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Aliyun_DDoSCOO_20200101.DDoSCOOService/DescribeInstances": {
+          "name": "describe-instances",
+          "description": "Describeinstaces"
+        },
+        "Aliyun_DDoSCOO_20200101.DDoSCOOService/DescribeDomainResource": {
+          "name": "describe-domain-resource",
+          "description": "Query L7 website forwarding rules"
+        },
+        "Aliyun_DDoSCOO_20200101.DDoSCOOService/DescribeNetworkRules": {
+          "name": "describe-network-rules",
+          "description": "Query L4 port forwarding rules"
+        },
+        "Aliyun_DDoSCOO_20200101.DDoSCOOService/DescribeDDosAllEventList": {
+          "name": "describe-ddos-all-event-list",
+          "description": "Query all DDoS attack events"
+        },
+        "Aliyun_DDoSCOO_20200101.DDoSCOOService/EnableWebCC": {
+          "name": "enable-web-cc",
+          "description": "Enable or disable CC protection for a domain"
+        },
+        "Aliyun_DDoSCOO_20200101.DDoSCOOService/ConfigWebCCTemplate": {
+          "name": "config-web-cc-template",
+          "description": "Set CC protection template mode"
+        }
+      }
+    }
+  }
+}

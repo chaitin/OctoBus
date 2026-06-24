@@ -1,0 +1,102 @@
+syntax = "proto3";
+package Aliyun_DDoSCOO_20200101;
+option go_package = "miner/grpc-service/Aliyun_DDoSCOO_20200101";
+
+import "google/protobuf/struct.proto";
+
+service DDoSCOOService {
+  rpc DescribeInstances(DescribeInstancesRequest) returns (DescribeInstancesResponse) {}
+  rpc DescribeDomainResource(DescribeDomainResourceRequest) returns (DescribeDomainResourceResponse) {}
+  rpc DescribeNetworkRules(DescribeNetworkRulesRequest) returns (DescribeNetworkRulesResponse) {}
+  rpc DescribeDDosAllEventList(DescribeDDosAllEventListRequest) returns (DescribeDDosAllEventListResponse) {}
+  rpc EnableWebCC(EnableWebCCRequest) returns (EnableWebCCResponse) {}
+  rpc ConfigWebCCTemplate(ConfigWebCCTemplateRequest) returns (ConfigWebCCTemplateResponse) {}
+}
+
+message DescribeInstancesRequest {
+  string page_number = 1 [json_name = "pageNumber"];
+  string page_size = 2 [json_name = "pageSize"];
+  repeated string instance_ids = 3 [json_name = "instanceIds"];
+  string ip = 4;
+  string remark = 5;
+  repeated int32 status = 6;
+  int32 edition = 7;
+  int32 enabled = 8;
+  int64 expire_start_time = 9 [json_name = "expireStartTime"];
+  int64 expire_end_time = 10 [json_name = "expireEndTime"];
+  string resource_group_id = 11 [json_name = "resourceGroupId"];
+  string tag_key = 12 [json_name = "tagKey"];
+  string tag_value = 13 [json_name = "tagValue"];
+}
+
+message DescribeInstancesResponse {
+  int32 http_status = 1 [json_name = "httpStatus"];
+  string raw_body = 2 [json_name = "rawBody"];
+  google.protobuf.Value raw_json = 3 [json_name = "rawJson"];
+}
+
+message DescribeDomainResourceRequest {
+  string page_number = 1 [json_name = "pageNumber"];
+  string page_size = 2 [json_name = "pageSize"];
+  string domain = 3;
+  repeated string instance_ids = 4 [json_name = "instanceIds"];
+  string query_domain_pattern = 5 [json_name = "queryDomainPattern"];
+  string resource_group_id = 6 [json_name = "resourceGroupId"];
+}
+
+message DescribeDomainResourceResponse {
+  int32 http_status = 1 [json_name = "httpStatus"];
+  string raw_body = 2 [json_name = "rawBody"];
+  google.protobuf.Value raw_json = 3 [json_name = "rawJson"];
+}
+
+message DescribeNetworkRulesRequest {
+  string page_number = 1 [json_name = "pageNumber"];
+  string page_size = 2 [json_name = "pageSize"];
+  string instance_id = 3 [json_name = "instanceId"];
+  string forward_protocol = 4 [json_name = "forwardProtocol"];
+  int32 frontend_port = 5 [json_name = "frontendPort"];
+}
+
+message DescribeNetworkRulesResponse {
+  int32 http_status = 1 [json_name = "httpStatus"];
+  string raw_body = 2 [json_name = "rawBody"];
+  google.protobuf.Value raw_json = 3 [json_name = "rawJson"];
+}
+
+message DescribeDDosAllEventListRequest {
+  int32 page_number = 1 [json_name = "pageNumber"];
+  int32 page_size = 2 [json_name = "pageSize"];
+  int64 start_time = 3 [json_name = "startTime"];
+  int64 end_time = 4 [json_name = "endTime"];
+  string event_type = 5 [json_name = "eventType"];
+}
+
+message DescribeDDosAllEventListResponse {
+  int32 http_status = 1 [json_name = "httpStatus"];
+  string raw_body = 2 [json_name = "rawBody"];
+  google.protobuf.Value raw_json = 3 [json_name = "rawJson"];
+}
+
+message EnableWebCCRequest {
+  string domain = 1;
+  string resource_group_id = 2 [json_name = "resourceGroupId"];
+}
+
+message EnableWebCCResponse {
+  int32 http_status = 1 [json_name = "httpStatus"];
+  string raw_body = 2 [json_name = "rawBody"];
+  google.protobuf.Value raw_json = 3 [json_name = "rawJson"];
+}
+
+message ConfigWebCCTemplateRequest {
+  string domain = 1;
+  string template = 2;
+  string resource_group_id = 3 [json_name = "resourceGroupId"];
+}
+
+message ConfigWebCCTemplateResponse {
+  int32 http_status = 1 [json_name = "httpStatus"];
+  string raw_body = 2 [json_name = "rawBody"];
+  google.protobuf.Value raw_json = 3 [json_name = "rawJson"];
+}
