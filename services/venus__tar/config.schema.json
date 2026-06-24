@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "description": "Venus TAR REST base URL."
+    },
+    "restBaseUrl": {
+      "type": "string",
+      "description": "Alias for baseUrl."
+    },
+    "host": {
+      "type": "string",
+      "description": "Alias for baseUrl."
+    },
+    "username": {
+      "type": "string",
+      "description": "Optional default TAR login username."
+    },
+    "user": {
+      "type": "string",
+      "description": "Alias for username."
+    },
+    "formState": {
+      "type": "string",
+      "default": "1",
+      "description": "TAR login formState. Default 1 means password login."
+    },
+    "checkCode": {
+      "type": "string",
+      "description": "Optional captcha value for TAR login."
+    },
+    "codeKey": {
+      "type": "string",
+      "description": "Optional captcha context key for TAR login."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 8000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for private deployments."
+    },
+    "tlsInsecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Legacy alias for skipTlsVerify."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional additional HTTP headers."
+    }
+  }
+}
