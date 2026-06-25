@@ -2,7 +2,7 @@
   "schema": "chaitin.octobus.service.v1",
   "name": "qianxin-tianyan-platform",
   "displayName": "QIANXIN TianYan Platform",
-  "description": "OctoBus package for QIANXIN TianYan threat detection platform alarm query APIs.",
+  "description": "OctoBus package for QIANXIN TianYan threat detection platform: alarm query/update, log search, asset management, vulnerability list, threat hunting, and IP whitelist management.",
   "runtime": {
     "mode": "long-running"
   },
@@ -17,7 +17,39 @@
       "commands": {
         "QIANXIN_TianYan_Platform.QIANXIN_TianYan_Platform/ListAlarms": {
           "name": "list-alarms",
-          "description": "Query threat alarms with optional filters for level, time range, attacker/victim IP, IOC, and disposition status."
+          "description": "Query threat alarms with optional filters for level, time range, attacker/victim IP (gzip+base64 encoded), IOC, and disposition status."
+        },
+        "QIANXIN_TianYan_Platform.QIANXIN_TianYan_Platform/UpdateAlarmStatus": {
+          "name": "update-alarm-status",
+          "description": "Update the disposition status of one or more alarms: 0=unhandled, 1=handled, 6=ignored, 7=false-positive."
+        },
+        "QIANXIN_TianYan_Platform.QIANXIN_TianYan_Platform/SearchLogs": {
+          "name": "search-logs",
+          "description": "Search raw security logs by keyword or SPL filter with time range, log index, and category."
+        },
+        "QIANXIN_TianYan_Platform.QIANXIN_TianYan_Platform/SPLSearch": {
+          "name": "spl-search",
+          "description": "Expert SPL query mode with structured field extraction and result rows."
+        },
+        "QIANXIN_TianYan_Platform.QIANXIN_TianYan_Platform/ListAssets": {
+          "name": "list-assets",
+          "description": "Query asset inventory with optional filters for IP, name, group, port, and type."
+        },
+        "QIANXIN_TianYan_Platform.QIANXIN_TianYan_Platform/ListVulnerabilities": {
+          "name": "list-vulnerabilities",
+          "description": "List asset vulnerabilities with optional filters for IP, name, and severity level."
+        },
+        "QIANXIN_TianYan_Platform.QIANXIN_TianYan_Platform/ThreatHuntSearch": {
+          "name": "threat-hunt-search",
+          "description": "Build a threat relationship graph for an IOC keyword (IP, domain, URL, MD5, or email)."
+        },
+        "QIANXIN_TianYan_Platform.QIANXIN_TianYan_Platform/AddFlowWhitelist": {
+          "name": "add-flow-whitelist",
+          "description": "Add an IP, IOC, or threat type to the flow sensor whitelist to suppress future alerts."
+        },
+        "QIANXIN_TianYan_Platform.QIANXIN_TianYan_Platform/GetCompromisedHostStatus": {
+          "name": "get-compromised-host-status",
+          "description": "Check whether a host is compromised and return its alarm count, risk score, and IOC count."
         }
       }
     }
