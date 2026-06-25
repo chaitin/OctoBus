@@ -187,11 +187,12 @@ const callMisp = async (ctx, method, path, body, queryParams) => {
       method: method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
-      timeoutMs,
+      signal: AbortSignal.timeout(timeoutMs),
       agent,
     });
   } catch (err) {
-    const reason = err?.cause?.message || err?.message || 'fetch failed';
+    const isTimeout = err?.name === 'TimeoutError' || err?.name === 'AbortError';
+    const reason = isTimeout ? 'timeout after ' + timeoutMs + 'ms' : (err?.cause?.message || err?.message || 'fetch failed');
     logFlow(meta, method + ':error', { error: reason });
     throw errorWithCode('UNAVAILABLE', 'upstream error: ' + reason);
   }
@@ -305,7 +306,7 @@ const getEvent = async (req = {}, ctx = {}) => {
   if (!eventId) {
     throw errorWithCode('INVALID_ARGUMENT', 'event_id is required');
   }
-  const response = await callMisp(ctx, 'GET', '/events/' + eventId);
+  const response = await callMisp(ctx, 'GET', '/events/' + encodeURIComponent(eventId));
   const eventData = response?.Event ?? {};
   const attributes = eventData?.Attribute ?? [];
   return {
@@ -365,7 +366,7 @@ const addAttribute = async (req = {}, ctx = {}) => {
   if (toInt64(req.distribution) !== null) attrBody.distribution = toInt64(req.distribution);
   if (req.comment) attrBody.comment = toTrimmedString(req.comment);
 
-  const response = await callMisp(ctx, 'POST', '/attributes/add/' + eventId, { Attribute: attrBody });
+  const response = await callMisp(ctx, 'POST', '/attributes/add/' + encodeURIComponent(eventId), { Attribute: attrBody });
   return { attribute: mapAttribute(response?.Attribute ?? response) };
 };
 
