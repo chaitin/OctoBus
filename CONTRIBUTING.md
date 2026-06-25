@@ -109,4 +109,4 @@ Connectors or service packages merged into this repository or referenced by proj
 
 ## Compliance Complaints
 
-If you believe any content in this project infringes your rights or includes unauthorized code, documentation, interface implementations, secrets, trade secrets, or other disputed materials, please contact us through the compliance complaint channel described in the [Security Policy](./SECURITY.md).
+If you believe any content in this project infringes your rights or includes unauthorized code, documentation, interface implementations, secrets, trade secrets, or other disputed materials, please contact us through the compliance complaint channel described in the [Security Feedback](./SECURITY.md).
