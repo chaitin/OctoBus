@@ -1,0 +1,65 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "qianxin-vs-secvss3600",
+  "displayName": "QIANXIN VS SecVSS3600",
+  "description": "奇安信 SecVSS 3600 漏洞扫描系统 OctoBus 服务包，支持获取认证令牌、创建扫描任务、任务控制（启动/暂停/停止）、任务状态查询、系统扫描结果查询及扫描任务列表分页查询。",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/qianxin_vs_secvss3600.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/GetToken": {
+          "name": "get-token",
+          "description": "使用用户名和密码向 SecVSS3600 请求认证令牌。"
+        },
+        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/AddTask": {
+          "name": "add-task",
+          "description": "创建新的漏洞扫描任务，返回任务 ID 集合（含系统扫描、Web 扫描、存活探测、弱口令检测子任务 ID）。"
+        },
+        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/Control": {
+          "name": "control",
+          "description": "对指定扫描任务执行控制操作（启动、暂停、停止等），通过 controltype 参数指定操作类型。"
+        },
+        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/GetStatus": {
+          "name": "get-status",
+          "description": "查询指定扫描任务的当前状态与完成进度百分比。"
+        },
+        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/QuerySysScan": {
+          "name": "query-sys-scan",
+          "description": "查询系统扫描结果，返回主机数、漏洞总数及高/中/低危漏洞统计与主机详情列表。"
+        },
+        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/QueryTaskList": {
+          "name": "query-task-list",
+          "description": "分页查询扫描任务列表，支持按状态和时间范围过滤。"
+        },
+        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/QueryWebScanResult": {
+          "name": "query-web-scan",
+          "description": "查询 WEB 漏洞扫描结果，返回各主机 WEB 漏洞统计"
+        },
+        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/QueryWeakPassResult": {
+          "name": "query-weak-pass",
+          "description": "查询弱口令扫描结果，返回已破解的账号密码列表"
+        },
+        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/GetDeviceStatus": {
+          "name": "get-device-status",
+          "description": "查询漏洞扫描器自身状态（CPU、磁盘、内存、引擎在线情况）"
+        },
+        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/ListVulTemplates": {
+          "name": "list-vul-templates",
+          "description": "查询规则库模板列表，type 可选 sysscan 或 webscan"
+        }
+      }
+    }
+  }
+}
