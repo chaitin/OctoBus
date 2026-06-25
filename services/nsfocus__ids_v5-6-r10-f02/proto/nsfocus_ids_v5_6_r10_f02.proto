@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package NSFOCUS_IDS_V5_6_R10_F02;
+
+option go_package = "miner/grpc-service/NSFOCUS_IDS_V5_6_R10_F02";
+
+// 绿盟(NSFOCUS)入侵检测/防御系统 IDS/IPS V5.6R10F02。
+// 认证为 web 会话 Cookie:GET /ips/eventList/detail/false/dns/false，credentials=include，
+// 需带 Referer:/ips/event 与 X-Requested-With: XMLHttpRequest。
+// 设备返回 HTML 事件表(id=mytable),本 service 解析表行为结构化告警事件。
+service NSFOCUS_IDS_V5_6_R10_F02 {
+  // 查询 IDS 告警事件列表: GET /ips/eventList/detail/false/dns/false
+  rpc QueryEventList(QueryEventListRequest) returns (QueryEventListResponse) {}
+}
+
+message QueryEventListRequest {
+  int32 limit = 1; // 返回条目上限(客户端侧截断)，<=0 表示全部
+}
+
+// 对应事件表列:状态(危险程度+动作)/时间/事件(编号+名称)/源/目的/认证用户/关联账号。
+message IdsEvent {
+  string severity = 1;       // 危险程度(低/中/高)
+  string action = 2;         // 动作(允许/阻断 等)
+  string time = 3;           // 时间
+  string event_id = 4;       // 事件编号
+  string event_name = 5;     // 事件名称
+  string src_ip = 6;         // 源IP
+  string src_port = 7;       // 源端口
+  string dst_ip = 8;         // 目的IP
+  string dst_port = 9;       // 目的端口
+  string auth_user = 10;     // 认证用户
+  string linked_account = 11;// 关联账号
+}
+
+message QueryEventListResponse {
+  int32 http_status = 1;       // 上游 HTTP 状态码
+  int32 total = 2;             // 解析到的事件数
+  repeated IdsEvent entries = 3; // 结构化告警事件
+}
