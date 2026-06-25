@@ -157,6 +157,10 @@ const services = {
     entryFile: "../wd__k01/bin/wd-k01.js",
     serviceModule: "../wd__k01/src/service.js",
   },
+  "yxlink-waf": {
+    entryFile: "../yxlink__waf/bin/yxlink-waf.js",
+    serviceModule: "../yxlink__waf/src/service.js",
+  },
 };
 
 const serviceNames = Object.keys(services);

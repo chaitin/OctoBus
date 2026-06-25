@@ -42,7 +42,8 @@
     "topsec-fw-2u": "bin/topsec-fw-2u.js",
     "venus-ads-v3-6": "bin/venus-ads-v3-6.js",
     "wangsu-label-ip": "bin/wangsu-label-ip.js",
-    "wd-k01": "bin/wd-k01.js"
+    "wd-k01": "bin/wd-k01.js",
+    "yxlink-waf": "bin/yxlink-waf.js"
   },
   "files": [
     "bin/das-gateway-v3.js",
@@ -83,6 +84,7 @@
     "bin/venus-ads-v3-6.js",
     "bin/wd-k01.js",
     "bin/wangsu-label-ip.js",
+    "bin/yxlink-waf.js",
     "das__gateway_v3",
     "das__tgfw_v6",
     "dingtalk__group-robot",
@@ -121,6 +123,7 @@
     "venus__ads_v3-6",
     "wd__k01",
     "wangsu__label-ip",
+    "yxlink__waf",
     "scripts",
     "bin/octobus-tentacles.js"
   ],

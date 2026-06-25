@@ -1,0 +1,194 @@
+syntax = "proto3";
+
+package YXLink_WAF;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/YXLink_WAF";
+
+service YXLinkWafService {
+  // 获取网页防篡改列表
+  rpc ListTamperSites(ListTamperSitesRequest) returns (ListTamperSitesResponse) {}
+
+  // 新增网页防篡改记录
+  rpc CreateTamperSite(TamperSiteMutationRequest) returns (CreateTamperSiteResponse) {}
+
+  // 修改网页防篡改记录
+  rpc UpdateTamperSite(UpdateTamperSiteRequest) returns (UpdateTamperSiteResponse) {}
+
+  // 删除网页防篡改记录
+  rpc DeleteTamperSites(IdsRequest) returns (ActionResponse) {}
+
+  // 启动监控
+  rpc EnableTamperSites(IdsRequest) returns (ActionResponse) {}
+
+  // 停止监控
+  rpc DisableTamperSites(IdsRequest) returns (ActionResponse) {}
+
+  // 重建备份
+  rpc RebuildTamperBackups(IdsRequest) returns (ActionResponse) {}
+
+  // 获取入侵记录列表
+  rpc ListIntrusionLogs(ListIntrusionLogsRequest) returns (ListIntrusionLogsResponse) {}
+
+  // 删除入侵记录
+  rpc DeleteIntrusionLogs(DeleteIntrusionLogsRequest) returns (ActionResponse) {}
+
+  // 获取某日入侵记录数量
+  rpc CountIntrusionLogs(CountIntrusionLogsRequest) returns (CountIntrusionLogsResponse) {}
+}
+
+message ListTamperSitesRequest {
+  int64 start = 1; // 起始位置，默认 0
+  int64 limit = 2; // 长度，默认 30
+}
+
+message ListTamperSitesResponse {
+  bool success = 1;
+  string msg = 2;
+  string code = 3;
+  int64 total_amount = 4;
+  repeated TamperSite sites = 5;
+  google.protobuf.Struct raw = 6;
+}
+
+message TamperSiteMutationRequest {
+  string website = 1; // 网站名称，必填
+  string description = 2; // 网站说明
+  bool start = 3; // 是否启用
+  int64 schedule = 4; // 计划任务：1 全天 / 2 工作时间 / 3 下班时间
+  string address = 5; // 网站 IP 地址，必填
+  string filecharset = 6; // 默认编码：gbk/utf8/gb18030
+  string username = 7; // 连接用户，必填
+  string password = 8; // 连接密码
+  int64 connect = 9; // 连接类型：1 FTP / 2 SFTP
+  int64 port = 10; // 端口
+  string folder = 11; // 网站相对路径
+  int64 parallel = 12; // 并发连接数
+  int64 quickdiff = 13; // 监控检查间隔/秒
+  int64 maxsize = 14; // 监控文件大小限制/B
+  string exclude = 15; // 忽略文件列表，多个以换行分割
+}
+
+message UpdateTamperSiteRequest {
+  string id = 1; // 记录 ID，必填
+  TamperSiteMutationRequest site = 2; // 更新后的记录内容
+}
+
+message CreateTamperSiteResponse {
+  bool success = 1;
+  string msg = 2;
+  string code = 3;
+  string inserted_id = 4;
+  google.protobuf.Struct raw = 5;
+}
+
+message UpdateTamperSiteResponse {
+  bool success = 1;
+  string msg = 2;
+  string code = 3;
+  string id = 4;
+  string inserted_id = 5;
+  google.protobuf.Struct raw = 6;
+}
+
+message IdsRequest {
+  repeated string ids = 1; // 记录 ID 列表，提交给设备时用英文逗号拼接
+}
+
+message ActionResponse {
+  bool success = 1;
+  string msg = 2;
+  string code = 3;
+  google.protobuf.Struct raw = 4;
+}
+
+message ListIntrusionLogsRequest {
+  string view_mode = 1; // normal / summary，默认 normal
+  string timestamp = 2; // 攻击日期，格式 yyyy-MM-dd
+  string src_ip = 3;
+  int64 src_port = 4;
+  string dst_ip = 5;
+  int64 dst_port = 6;
+  int64 sid_start = 7;
+  int64 sid_end = 8;
+  string action_type = 9; // B/D/C/P
+  int64 length_type = 10; // 2/1/3
+  int64 data_len = 11;
+  string http_protocol = 12; // GET/POST/Response
+  string get_data = 13;
+  int64 start = 14; // 起始位置，默认 0
+  int64 limit = 15; // 长度，默认 30
+}
+
+message ListIntrusionLogsResponse {
+  bool success = 1;
+  string msg = 2;
+  string code = 3;
+  int64 total_amount = 4;
+  repeated IntrusionLog logs = 5;
+  google.protobuf.Struct raw = 6;
+}
+
+message DeleteIntrusionLogsRequest {
+  repeated string ids = 1; // normal 视图为 id_date；summary 视图可使用 hack_id_list
+  string id_list = 2; // summary 视图中的 hack_id_list
+  string view_mode = 3; // normal / summary
+  string timestamp = 4; // 攻击日期，必填
+}
+
+message CountIntrusionLogsRequest {
+  string date = 1; // 日期，格式 yyyy-MM-dd
+}
+
+message CountIntrusionLogsResponse {
+  bool success = 1;
+  string msg = 2;
+  string code = 3;
+  int64 count = 4;
+  google.protobuf.Struct raw = 5;
+}
+
+message TamperSite {
+  string id = 1;
+  string website = 2;
+  string description = 3;
+  bool start = 4;
+  string address = 5;
+  int64 port = 6;
+  int64 connect = 7;
+  string folder = 8;
+  string username = 9;
+  int64 quickdiff = 10;
+  int64 maxsize = 11;
+  string exclude = 12;
+  string filecharset = 13;
+  int64 parallel = 14;
+  int64 schedule = 15;
+  string status = 16;
+  google.protobuf.Struct raw = 17;
+}
+
+message IntrusionLog {
+  string hack_id = 1;
+  string hack_time = 2;
+  string src_ip = 3;
+  string src_ip_addr = 4;
+  string dst_ip = 5;
+  string src_mac = 6;
+  string dst_mac = 7;
+  int64 data_len = 8;
+  int64 src_port = 9;
+  int64 dst_port = 10;
+  int64 block_reason = 11;
+  string action_type = 12;
+  string http_protocol = 13;
+  string get_data = 14;
+  string raw_data = 15;
+  string rule_name = 16;
+  string rule_type = 17;
+  int64 ranking = 18;
+  string description = 19;
+  string solution = 20;
+  google.protobuf.Struct raw = 21;
+}

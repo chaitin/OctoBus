@@ -1,0 +1,65 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "yxlink-waf",
+  "displayName": "YXLink WAF",
+  "description": "OctoBus package for YXLink WAF tamper resistance and intrusion log APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/yxlink_waf.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "YXLink_WAF.YXLinkWafService/ListTamperSites": {
+          "name": "list-tamper-sites",
+          "description": "List YXLink WAF tamper resistance sites."
+        },
+        "YXLink_WAF.YXLinkWafService/CreateTamperSite": {
+          "name": "create-tamper-site",
+          "description": "Create a YXLink WAF tamper resistance site."
+        },
+        "YXLink_WAF.YXLinkWafService/UpdateTamperSite": {
+          "name": "update-tamper-site",
+          "description": "Update a YXLink WAF tamper resistance site."
+        },
+        "YXLink_WAF.YXLinkWafService/DeleteTamperSites": {
+          "name": "delete-tamper-sites",
+          "description": "Delete YXLink WAF tamper resistance sites."
+        },
+        "YXLink_WAF.YXLinkWafService/EnableTamperSites": {
+          "name": "enable-tamper-sites",
+          "description": "Enable tamper monitoring."
+        },
+        "YXLink_WAF.YXLinkWafService/DisableTamperSites": {
+          "name": "disable-tamper-sites",
+          "description": "Disable tamper monitoring."
+        },
+        "YXLink_WAF.YXLinkWafService/RebuildTamperBackups": {
+          "name": "rebuild-tamper-backups",
+          "description": "Rebuild tamper resistance backups."
+        },
+        "YXLink_WAF.YXLinkWafService/ListIntrusionLogs": {
+          "name": "list-intrusion-logs",
+          "description": "List YXLink WAF intrusion logs."
+        },
+        "YXLink_WAF.YXLinkWafService/DeleteIntrusionLogs": {
+          "name": "delete-intrusion-logs",
+          "description": "Delete YXLink WAF intrusion logs."
+        },
+        "YXLink_WAF.YXLinkWafService/CountIntrusionLogs": {
+          "name": "count-intrusion-logs",
+          "description": "Count intrusion logs for a date."
+        }
+      }
+    }
+  }
+}
