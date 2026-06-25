@@ -10,7 +10,7 @@ OctoBus service package for [HFish](https://hfish.net/) honeypot by ThreatBook (
 - `secret.schema.json`: HFish API key.
 - `src/hfish.js`: HFish REST API proxy implementation.
 - `src/service.js`: OctoBus SDK `defineService` wrapper.
-- `bin/hfish.js`: service-local executable entrypoint.
+- `bin/threatbook-hfish.js`: service-local executable entrypoint.
 - `test/hfish.test.js`: node:test coverage for request validation, REST mapping, error mapping, and SDK handler invocation.
 - `test/mock_upstream.js`: optional local HFish HTTP mock.
 
