@@ -1,0 +1,145 @@
+syntax = "proto3";
+
+package Tencent_Lighthouse_FIREWALL;
+
+option go_package = "miner/grpc-service/Tencent_Lighthouse_FIREWALL";
+
+service Tencent_Lighthouse_FIREWALL {
+  rpc ListFirewallRules(ListFirewallRulesRequest) returns (ListFirewallRulesResponse) {}
+  rpc CreateFirewallRules(CreateFirewallRulesRequest) returns (CreateFirewallRulesResponse) {}
+  rpc DeleteFirewallRules(DeleteFirewallRulesRequest) returns (DeleteFirewallRulesResponse) {}
+  rpc ModifyFirewallRules(ModifyFirewallRulesRequest) returns (ModifyFirewallRulesResponse) {}
+  rpc ApplyFirewallTemplate(ApplyFirewallTemplateRequest) returns (ApplyFirewallTemplateResponse) {}
+  rpc BlockIP(BlockIPRequest) returns (BlockIPResponse) {}
+  rpc UnblockIP(UnblockIPRequest) returns (UnblockIPResponse) {}
+}
+
+message TencentCredential {
+  string secret_id = 1;
+  string secret_key = 2;
+  string token = 3;
+}
+
+message ListFirewallRulesRequest {
+  TencentCredential credential = 1;
+  string region = 2;
+  string instance_id = 3;
+  int64 offset = 4;
+  int64 limit = 5;
+}
+
+message ListFirewallRulesResponse {
+  int64 total_count = 1;
+  repeated FirewallRule rules = 2;
+  string request_id = 3;
+  string raw_json = 4;
+}
+
+message CreateFirewallRulesRequest {
+  TencentCredential credential = 1;
+  string region = 2;
+  string instance_id = 3;
+  repeated FirewallRuleInput rules = 4;
+  string audit_note = 5;
+}
+
+message CreateFirewallRulesResponse {
+  string request_id = 1;
+  string raw_json = 2;
+}
+
+message DeleteFirewallRulesRequest {
+  TencentCredential credential = 1;
+  string region = 2;
+  string instance_id = 3;
+  repeated FirewallRuleInput rules = 4;
+  string audit_note = 5;
+}
+
+message DeleteFirewallRulesResponse {
+  string request_id = 1;
+  string raw_json = 2;
+}
+
+message ModifyFirewallRulesRequest {
+  TencentCredential credential = 1;
+  string region = 2;
+  string instance_id = 3;
+  repeated FirewallRulePair rules = 4;
+  string audit_note = 5;
+}
+
+message ModifyFirewallRulesResponse {
+  string request_id = 1;
+  string raw_json = 2;
+}
+
+message ApplyFirewallTemplateRequest {
+  TencentCredential credential = 1;
+  string region = 2;
+  string template_id = 3;
+  repeated string instance_ids = 4;
+  string audit_note = 5;
+}
+
+message ApplyFirewallTemplateResponse {
+  string request_id = 1;
+  string raw_json = 2;
+}
+
+message BlockIPRequest {
+  TencentCredential credential = 1;
+  string region = 2;
+  string instance_id = 3;
+  repeated string source_ips = 4;
+  string protocol = 5;
+  string port = 6;
+  string firewall_rule_description = 7;
+  string audit_note = 8;
+}
+
+message BlockIPResponse {
+  repeated FirewallRuleInput created_rules = 1;
+  string request_id = 2;
+  string raw_json = 3;
+}
+
+message UnblockIPRequest {
+  TencentCredential credential = 1;
+  string region = 2;
+  string instance_id = 3;
+  repeated string source_ips = 4;
+  string protocol = 5;
+  string port = 6;
+  string firewall_rule_description = 7;
+  string audit_note = 8;
+}
+
+message UnblockIPResponse {
+  repeated FirewallRuleInput deleted_rules = 1;
+  string request_id = 2;
+  string raw_json = 3;
+}
+
+message FirewallRulePair {
+  FirewallRuleInput firewall_rule = 1;
+  FirewallRuleInput new_firewall_rule = 2;
+}
+
+message FirewallRuleInput {
+  string protocol = 1;
+  string port = 2;
+  string cidr_block = 3;
+  string action = 4;
+  string firewall_rule_description = 5;
+}
+
+message FirewallRule {
+  string app_type = 1;
+  string protocol = 2;
+  string port = 3;
+  string cidr_block = 4;
+  string action = 5;
+  string firewall_rule_description = 6;
+  string raw_json = 7;
+}
