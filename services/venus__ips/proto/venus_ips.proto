@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package VENUS_IPS;
+
+option go_package = "miner/grpc-service/VENUS_IPS";
+
+// 启明星辰 IPS(入侵防御系统)攻击日志查询。
+// 认证为 web 会话 Cookie:GET /log/memorylog/ipslog.php，浏览器 credentials=include。
+// 设备返回 HTML 日志页,本 service 解析其中的日志表行,映射为结构化条目。
+service VENUS_IPS {
+  // 查询 IPS 攻击日志(内存日志): GET /log/memorylog/ipslog.php
+  rpc QueryIpsLog(QueryIpsLogRequest) returns (QueryIpsLogResponse) {}
+}
+
+message QueryIpsLogRequest {
+  int32 limit = 1; // 返回条目上限(客户端侧截断)，<=0 表示全部
+}
+
+// 对应日志表列:名称/源IP/源端口/目的IP/目的端口/协议/时间/类型/级别/优先级/动作/策略ID/次数/内容。
+message IpsLogEntry {
+  string name = 1;      // 名称
+  string src_ip = 2;    // 源IP
+  string src_port = 3;  // 源端口
+  string dst_ip = 4;    // 目的IP
+  string dst_port = 5;  // 目的端口
+  string protocol = 6;  // 协议类型
+  string time = 7;      // 时间
+  string type = 8;      // 类型
+  string severity = 9;  // 事件级别
+  string priority = 10; // 优先级
+  string action = 11;   // 动作
+  string policy_id = 12;// 入侵防御策略ID
+  string count = 13;    // 发生次数
+  string content = 14;  // 内容
+}
+
+message QueryIpsLogResponse {
+  int32 http_status = 1;          // 上游 HTTP 状态码
+  int32 total = 2;                // 解析到的条目数
+  repeated IpsLogEntry entries = 3; // 结构化日志条目
+}

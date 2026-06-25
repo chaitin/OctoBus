@@ -1,0 +1,20 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "venus-ips",
+  "displayName": "Venustech IPS",
+  "description": "OctoBus package for Venustech IPS attack-log query (GET /log/memorylog/ipslog.php, web session cookie, HTML log page parsed into structured entries).",
+  "runtime": { "mode": "long-running" },
+  "proto": { "roots": ["proto"], "files": ["proto/venus_ips.proto"] },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "VENUS_IPS.VENUS_IPS/QueryIpsLog": {
+          "name": "query-ips-log",
+          "description": "Query Venus IPS attack logs (memory log)."
+        }
+      }
+    }
+  }
+}
