@@ -1,4 +1,6 @@
 import { Buffer } from 'node:buffer';
+import http from 'node:http';
+import https from 'node:https';
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
@@ -256,6 +258,47 @@ const applyAuthHeaders = (headers, auth = {}) => {
   if (auth.cookie) headers.Cookie = auth.cookie;
 };
 
+const responseHeaders = (headers = {}) => {
+  const normalized = {};
+  for (const [key, value] of Object.entries(headers)) {
+    normalized[String(key).toLowerCase()] = Array.isArray(value) ? value.join(', ') : String(value ?? '');
+  }
+  return {
+    get: (key) => normalized[String(key).toLowerCase()] || '',
+    forEach: (fn) => {
+      for (const [key, value] of Object.entries(normalized)) fn(value, key);
+    },
+  };
+};
+
+const fetchWithInsecureTls = (url, options = {}) => new Promise((resolve, reject) => {
+  const target = url instanceof URL ? url : new URL(String(url));
+  const client = target.protocol === 'https:' ? https : http;
+  const req = client.request(target, {
+    method: options.method,
+    headers: options.headers,
+    rejectUnauthorized: target.protocol === 'https:' ? false : undefined,
+    timeout: options.timeoutMs,
+  }, (res) => {
+    const chunks = [];
+    res.on('data', (chunk) => chunks.push(chunk));
+    res.on('end', () => {
+      const body = Buffer.concat(chunks);
+      const status = res.statusCode || 0;
+      resolve({
+        ok: status >= 200 && status < 300,
+        status,
+        headers: responseHeaders(res.headers),
+        text: async () => body.toString('utf8'),
+      });
+    });
+  });
+  req.on('timeout', () => req.destroy(new Error('request timed out')));
+  req.on('error', reject);
+  if (options.body !== undefined) req.write(options.body);
+  req.end();
+});
+
 const doFetch = async (env, options) => {
   const headers = {
     'content-type': 'application/json',
@@ -274,6 +317,9 @@ const doFetch = async (env, options) => {
     fetchOptions.tlsInsecureSkipVerify = true;
   }
   try {
+    if (env.skipTlsVerify && options.url?.protocol === 'https:') {
+      return await fetchWithInsecureTls(options.url, fetchOptions);
+    }
     return await fetch(options.url, fetchOptions);
   } catch (err) {
     throw errorWithCode('UNAVAILABLE', `${options.action || 'request'} failed: ${err?.cause?.message || err?.message || 'fetch failed'}`);

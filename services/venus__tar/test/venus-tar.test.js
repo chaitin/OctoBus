@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { Buffer } from 'node:buffer';
+import https from 'node:https';
 import test from 'node:test';
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
@@ -218,6 +219,86 @@ test('validation and upstream errors map to gRPC errors', async () => {
 
   setFetch(async () => { throw Object.assign(new Error('outer'), { cause: new Error('timeout') }); });
   await expectGrpcError(() => handlers[METHOD_REQUEST_FULL]({ method: 'GET', path: '/x' }, buildCtx({ secret: { token: TOKEN } })), 'UNAVAILABLE', (err) => assert.match(err.message, /timeout/));
+});
+
+test('service definition handlers accept SDK HandlerContext', async () => {
+  const calls = [];
+  setFetch(async (url, init = {}) => {
+    calls.push({ url: String(url), init });
+    assert.equal(init.headers.Authorization, `Bearer ${TOKEN}`);
+    return responseOf(200, JSON.stringify({ ok: true }));
+  });
+
+  const res = await service.handlers[METHOD_REQUEST_FULL]({
+    request: { method: 'GET', path: '/user/info', requestId: 'sdk-context' },
+    metadata: { get: () => [], getMap: () => ({}) },
+    config: { baseUrl: 'https://tar.example.com' },
+    secret: { token: TOKEN },
+    method: METHOD_REQUEST_FULL,
+    serviceId: 'venus-tar',
+    instanceId: 'venus-tar-test',
+    workdir: '/tmp',
+    packageDir: '/tmp',
+    getMetadata: () => undefined,
+    getMetadataAll: () => [],
+  });
+
+  assert.equal(res.status_code, 200);
+  assert.equal(res.request_id, 'sdk-context');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, 'https://tar.example.com/user/info');
+});
+
+test('doFetch uses insecure TLS fallback for https requests', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalRequest = https.request;
+  let fetchCalled = false;
+
+  globalThis.fetch = async () => {
+    fetchCalled = true;
+    throw new Error('fetch should not be used');
+  };
+  https.request = (url, options, cb) => {
+    assert.match(String(url), /^https:/);
+    assert.equal(options.rejectUnauthorized, false);
+    const request = {
+      write() {},
+      end() {
+        const res = new (class {
+          constructor() {
+            this.statusCode = 200;
+            this.headers = { 'content-type': 'application/json' };
+            this.handlers = {};
+          }
+          on(event, handler) {
+            this.handlers[event] = handler;
+          }
+          emit(event, ...args) {
+            this.handlers[event]?.(...args);
+          }
+        })();
+        cb(res);
+        res.emit('data', Buffer.from('{"ok":true}'));
+        res.emit('end');
+      },
+      on() {},
+      destroy() {},
+    };
+    return request;
+  };
+
+  try {
+    const res = await _test.doFetch(
+      { baseUrl: 'https://tar.example.com', skipTlsVerify: true, timeoutMs: 1000, headers: {} },
+      { url: new URL('https://tar.example.com/user/info'), method: 'GET', action: 'request' },
+    );
+    assert.equal(fetchCalled, false);
+    assert.equal(res.status, 200);
+    assert.equal(await res.text(), '{"ok":true}');
+  } finally {
+    globalThis.fetch = originalFetch;
+    https.request = originalRequest;
+  }
 });
 
 test('helper functions cover parsing and context behavior', () => {
