@@ -1,0 +1,37 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "tencent-tix-saas",
+  "displayName": "Tencent TIX SaaS",
+  "description": "OctoBus package for Tencent Security Threat Intelligence Center TIX SaaS read-only intelligence query APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/tencent_tix_saas.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Tencent_TIX_SaaS.Tencent_TIX_SaaS/QueryIOC": {
+          "name": "query-ioc",
+          "description": "Query Tencent TIX IOC compromise intelligence."
+        },
+        "Tencent_TIX_SaaS.Tencent_TIX_SaaS/GetIPIngressInfo": {
+          "name": "get-ip-ingress-info",
+          "description": "Query Tencent TIX active attack source IP intelligence."
+        },
+        "Tencent_TIX_SaaS.Tencent_TIX_SaaS/GetFileInfo": {
+          "name": "get-file-info",
+          "description": "Query Tencent TIX file reputation intelligence."
+        }
+      }
+    }
+  }
+}
