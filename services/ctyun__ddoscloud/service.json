@@ -1,0 +1,57 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "ctyun-ddoscloud",
+  "displayName": "CTYun DDoS Cloud",
+  "description": "OctoBus package for CTYun DDoS High Protection Edge Cloud read-only query APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/ctyun_ddoscloud.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "CTYun_DDoSCloud.CTYun_DDoSCloud/DomainQuery": {
+          "name": "domain-query",
+          "description": "Query CTYun DDoS Cloud domain basic information."
+        },
+        "CTYun_DDoSCloud.CTYun_DDoSCloud/TopDomain": {
+          "name": "top-domain",
+          "description": "Query CTYun DDoS Cloud subscribed service information."
+        },
+        "CTYun_DDoSCloud.CTYun_DDoSCloud/GetDdosAttackTrend": {
+          "name": "get-ddos-attack-trend",
+          "description": "Query CTYun DDoS Cloud DDoS attack trends."
+        },
+        "CTYun_DDoSCloud.CTYun_DDoSCloud/GetDdosAttackEvent": {
+          "name": "get-ddos-attack-event",
+          "description": "Query CTYun DDoS Cloud DDoS attack events."
+        },
+        "CTYun_DDoSCloud.CTYun_DDoSCloud/GetCcAttackEvent": {
+          "name": "get-cc-attack-event",
+          "description": "Query CTYun DDoS Cloud CC attack events."
+        },
+        "CTYun_DDoSCloud.CTYun_DDoSCloud/GetPortList": {
+          "name": "get-port-list",
+          "description": "Query CTYun DDoS Cloud protected port list."
+        },
+        "CTYun_DDoSCloud.CTYun_DDoSCloud/CertList": {
+          "name": "cert-list",
+          "description": "Query CTYun DDoS Cloud certificate list."
+        },
+        "CTYun_DDoSCloud.CTYun_DDoSCloud/InvokeReadOnlyApi": {
+          "name": "invoke-read-only-api",
+          "description": "Invoke a built-in CTYun DDoS Cloud read-only API."
+        }
+      }
+    }
+  }
+}
