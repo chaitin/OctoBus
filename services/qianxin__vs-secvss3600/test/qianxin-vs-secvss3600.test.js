@@ -1275,7 +1275,7 @@ describe('GetDeviceStatus', () => {
 
   it('throws when no baseUrl', async () => {
     global.fetch = makeFetch({ success: true });
-    const ctx = buildCtx({ bindings: {} });
+    const ctx = buildCtx({ bindings: { restBaseUrl: '' } });
     const def = rpcdef({ ...ctx, req: {} });
     await assert.rejects(def[PREFIX + 'GetDeviceStatus'](), /INVALID_ARGUMENT/);
   });
