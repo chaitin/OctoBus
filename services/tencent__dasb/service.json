@@ -1,0 +1,89 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "tencent-dasb",
+  "displayName": "Tencent Cloud DASB",
+  "description": "OctoBus package for Tencent Cloud Operation Security Center read-only and audit query APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/tencent_dasb.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Tencent_DASB.Tencent_DASB/DescribeUsers": {
+          "name": "describe-users",
+          "description": "Query Tencent Cloud DASB users."
+        },
+        "Tencent_DASB.Tencent_DASB/DescribeUserGroups": {
+          "name": "describe-user-groups",
+          "description": "Query Tencent Cloud DASB user groups."
+        },
+        "Tencent_DASB.Tencent_DASB/DescribeDevices": {
+          "name": "describe-devices",
+          "description": "Query Tencent Cloud DASB devices."
+        },
+        "Tencent_DASB.Tencent_DASB/DescribeDeviceAccounts": {
+          "name": "describe-device-accounts",
+          "description": "Query Tencent Cloud DASB device accounts."
+        },
+        "Tencent_DASB.Tencent_DASB/DescribeResources": {
+          "name": "describe-resources",
+          "description": "Query Tencent Cloud DASB resources."
+        },
+        "Tencent_DASB.Tencent_DASB/DescribeAcls": {
+          "name": "describe-acls",
+          "description": "Query Tencent Cloud DASB ACL policies."
+        },
+        "Tencent_DASB.Tencent_DASB/DescribeLoginEvent": {
+          "name": "describe-login-event",
+          "description": "Query Tencent Cloud DASB login events."
+        },
+        "Tencent_DASB.Tencent_DASB/DescribeOperationEvent": {
+          "name": "describe-operation-event",
+          "description": "Query Tencent Cloud DASB operation events."
+        },
+        "Tencent_DASB.Tencent_DASB/SearchAuditLog": {
+          "name": "search-audit-log",
+          "description": "Search Tencent Cloud DASB audit logs."
+        },
+        "Tencent_DASB.Tencent_DASB/SearchCommand": {
+          "name": "search-command",
+          "description": "Search Tencent Cloud DASB commands."
+        },
+        "Tencent_DASB.Tencent_DASB/SearchCommandBySid": {
+          "name": "search-command-by-sid",
+          "description": "Search Tencent Cloud DASB commands by session ID."
+        },
+        "Tencent_DASB.Tencent_DASB/SearchFile": {
+          "name": "search-file",
+          "description": "Search Tencent Cloud DASB file operation records."
+        },
+        "Tencent_DASB.Tencent_DASB/SearchFileBySid": {
+          "name": "search-file-by-sid",
+          "description": "Search Tencent Cloud DASB file operation records by session ID."
+        },
+        "Tencent_DASB.Tencent_DASB/SearchSession": {
+          "name": "search-session",
+          "description": "Search Tencent Cloud DASB sessions."
+        },
+        "Tencent_DASB.Tencent_DASB/SearchSessionCommand": {
+          "name": "search-session-command",
+          "description": "Search Tencent Cloud DASB session commands."
+        },
+        "Tencent_DASB.Tencent_DASB/InvokeReadOnlyAction": {
+          "name": "invoke-read-only-action",
+          "description": "Invoke an allowed Tencent Cloud DASB Describe* or Search* action."
+        }
+      }
+    }
+  }
+}

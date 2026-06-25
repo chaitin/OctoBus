@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package Tencent_DASB;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Tencent_DASB";
+
+service Tencent_DASB {
+  rpc DescribeUsers(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeUserGroups(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeUserGroupMembers(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDevices(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDeviceAccounts(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDeviceGroups(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDeviceGroupMembers(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeResources(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeAcls(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCmdTemplates(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDomains(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeLoginEvent(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeOperationEvent(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeAssetSyncStatus(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeChangePwdTask(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeChangePwdTaskDetail(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDepartments(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeUserDirectory(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeUserSyncStatus(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeAccessWhiteListRules(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeOperationTask(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc SearchAuditLog(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc SearchCommand(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc SearchCommandBySid(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc SearchFile(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc SearchFileBySid(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc SearchSession(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc SearchSessionCommand(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc SearchSubtaskResultById(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc SearchTaskResult(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc InvokeReadOnlyAction(InvokeReadOnlyActionRequest) returns (TencentCloudResponse) {}
+}
+
+message TencentCloudRequest {
+  google.protobuf.Struct payload = 1;
+}
+
+message InvokeReadOnlyActionRequest {
+  string action = 1;
+  google.protobuf.Struct payload = 2;
+}
+
+message TencentCloudResponse {
+  google.protobuf.Value response = 1;
+}
