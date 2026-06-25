@@ -7,10 +7,16 @@ package f5.awaf.v1;
 service F5AWAF {
   // 登录并获取 Token（凭据来自 Instance Secret）
   rpc Login(LoginRequest) returns (LoginResponse) {}
-  // 在指定 ASM 策略中封禁 IP（添加 blockRequests=always 的 IP Exception）
+  // 在指定 ASM 策略中封禁 IP（blockRequests=always）
   rpc BlockIP(BlockIPRequest) returns (BlockIPResponse) {}
   // 解封 IP（删除对应 IP Exception）
   rpc UnblockIP(UnblockIPRequest) returns (UnblockIPResponse) {}
+  // 将 IP 加入白名单（blockRequests=never）
+  rpc AllowIP(AllowIPRequest) returns (AllowIPResponse) {}
+  // 切换 ASM 策略执行模式（blocking / transparent）
+  rpc SetEnforcementMode(SetEnforcementModeRequest) returns (SetEnforcementModeResponse) {}
+  // 列出所有 ASM 策略及执行模式
+  rpc ListPolicies(ListPoliciesRequest) returns (ListPoliciesResponse) {}
   // 释放 Token（DELETE /mgmt/shared/authz/tokens/<token>）
   rpc Logout(LogoutRequest) returns (LogoutResponse) {}
 }
@@ -66,6 +72,60 @@ message UnblockIPResponse {
   string message = 2;
   repeated string unblocked = 3;
   repeated string failed = 4;
+}
+
+// AllowIP ───────────────────────────────────────────────────────────────────
+
+message AllowIPRequest {
+  string token = 1;
+  // 要加白名单的 IP 地址列表
+  repeated string addresses = 2;
+  // ASM 策略名称；留空则使用 config.default_policy_name
+  string policy_name = 3;
+  // 可选备注
+  string description = 4;
+}
+
+message AllowIPResponse {
+  int32 code = 1;
+  string message = 2;
+  repeated string allowed = 3;
+  repeated string failed = 4;
+}
+
+// SetEnforcementMode ─────────────────────────────────────────────────────────
+
+message SetEnforcementModeRequest {
+  string token = 1;
+  string policy_name = 2;
+  // "blocking" 或 "transparent"
+  string mode = 3;
+}
+
+message SetEnforcementModeResponse {
+  int32 code = 1;
+  string message = 2;
+  string policy_name = 3;
+  string mode = 4;
+}
+
+// ListPolicies ───────────────────────────────────────────────────────────────
+
+message ListPoliciesRequest {
+  string token = 1;
+}
+
+message Policy {
+  string id = 1;
+  string name = 2;
+  string enforcement_mode = 3;
+  bool active = 4;
+}
+
+message ListPoliciesResponse {
+  int32 code = 1;
+  string message = 2;
+  repeated Policy policies = 3;
 }
 
 // Logout ────────────────────────────────────────────────────────────────────

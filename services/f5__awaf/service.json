@@ -31,6 +31,21 @@
           "description": "解封 IP（删除对应 IP Exception）"
         },
         {
+          "name": "allow-ip",
+          "proto": "f5.awaf.v1.F5AWAF/AllowIP",
+          "description": "将 IP 加入白名单（添加 blockRequests=never 的 IP Exception）"
+        },
+        {
+          "name": "set-enforcement-mode",
+          "proto": "f5.awaf.v1.F5AWAF/SetEnforcementMode",
+          "description": "切换 ASM 策略执行模式（blocking / transparent）"
+        },
+        {
+          "name": "list-policies",
+          "proto": "f5.awaf.v1.F5AWAF/ListPolicies",
+          "description": "列出所有 ASM 策略及其执行模式"
+        },
+        {
           "name": "logout",
           "proto": "f5.awaf.v1.F5AWAF/Logout",
           "description": "释放 Token"

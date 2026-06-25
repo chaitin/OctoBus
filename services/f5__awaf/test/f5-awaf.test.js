@@ -8,9 +8,9 @@
  * Run:  node --test test/
  */
 
-import { describe, it, before, after, beforeEach } from 'node:test';
+import { describe, it, before, after, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { rpcdef, handlers, _test } from '../src/f5-awaf.js';
+import { rpcdef, handlers, _test, METHOD_ALLOW_IP, METHOD_SET_MODE, METHOD_LIST_POLICIES } from '../src/f5-awaf.js';
 import { start, stop, state, reset } from './mock_upstream.js';
 
 // ── test context builder ───────────────────────────────────────────────────────
@@ -84,23 +84,32 @@ describe('rpcdef — config validation', () => {
     );
   });
 
-  it('returns all four paths when config is valid', () => {
+  it('returns all seven paths when config is valid', () => {
     const sdkHandlers = rpcdef(buildCtx());
-    assert.ok(typeof sdkHandlers['/f5.awaf.v1.F5AWAF/Login'] === 'function');
-    assert.ok(typeof sdkHandlers['/f5.awaf.v1.F5AWAF/BlockIP'] === 'function');
-    assert.ok(typeof sdkHandlers['/f5.awaf.v1.F5AWAF/UnblockIP'] === 'function');
-    assert.ok(typeof sdkHandlers['/f5.awaf.v1.F5AWAF/Logout'] === 'function');
+    const paths = [
+      '/f5.awaf.v1.F5AWAF/Login',
+      '/f5.awaf.v1.F5AWAF/BlockIP',
+      '/f5.awaf.v1.F5AWAF/UnblockIP',
+      '/f5.awaf.v1.F5AWAF/AllowIP',
+      '/f5.awaf.v1.F5AWAF/SetEnforcementMode',
+      '/f5.awaf.v1.F5AWAF/ListPolicies',
+      '/f5.awaf.v1.F5AWAF/Logout',
+    ];
+    for (const p of paths) assert.ok(typeof sdkHandlers[p] === 'function', `Missing path: ${p}`);
   });
 });
 
 // ── handlers export ───────────────────────────────────────────────────────────
 
 describe('handlers export', () => {
-  it('exports all four method keys', () => {
+  it('exports all seven method keys', () => {
     const keys = [
       'f5.awaf.v1.F5AWAF/Login',
       'f5.awaf.v1.F5AWAF/BlockIP',
       'f5.awaf.v1.F5AWAF/UnblockIP',
+      'f5.awaf.v1.F5AWAF/AllowIP',
+      'f5.awaf.v1.F5AWAF/SetEnforcementMode',
+      'f5.awaf.v1.F5AWAF/ListPolicies',
       'f5.awaf.v1.F5AWAF/Logout',
     ];
     for (const k of keys) {
@@ -127,14 +136,14 @@ describe('Login — unit (mock fetch)', () => {
 
   it('throws INVALID_ARGUMENT when username missing', async () => {
     await assert.rejects(
-      () => rpcdef(buildCtx({}, { secret: { password: 'p' } }))['/f5.awaf.v1.F5AWAF/Login'](),
+      () => rpcdef(buildCtx({}, { secret: { username: null, password: 'p' } }))['/f5.awaf.v1.F5AWAF/Login'](),
       (err) => err.code === 3,
     );
   });
 
   it('throws INVALID_ARGUMENT when password missing', async () => {
     await assert.rejects(
-      () => rpcdef(buildCtx({}, { secret: { username: 'u' } }))['/f5.awaf.v1.F5AWAF/Login'](),
+      () => rpcdef(buildCtx({}, { secret: { username: 'u', password: null } }))['/f5.awaf.v1.F5AWAF/Login'](),
       (err) => err.code === 3,
     );
   });
@@ -186,7 +195,7 @@ describe('BlockIP — unit (mock fetch)', () => {
   it('throws INVALID_ARGUMENT when no policy_name and no default', async () => {
     await assert.rejects(
       () => rpcdef(buildCtx({ token: 'tok', addresses: ['1.2.3.4'] }, {
-        config: { host: '1.1.1.1' }, // no default_policy_name
+        config: { host: '1.1.1.1', default_policy_name: null }, // no default_policy_name
       }))['/f5.awaf.v1.F5AWAF/BlockIP'](),
       (err) => err.code === 3,
     );
@@ -316,6 +325,122 @@ describe('Logout — unit (mock fetch)', () => {
   });
 });
 
+// ── AllowIP (unit, mock fetch) ────────────────────────────────────────────────
+
+describe('AllowIP — unit (mock fetch)', () => {
+  afterEach(() => restoreFetch());
+
+  it('throws INVALID_ARGUMENT when token missing', async () => {
+    await assert.rejects(
+      () => rpcdef(buildCtx({ addresses: ['1.2.3.4'] }))['/f5.awaf.v1.F5AWAF/AllowIP'](),
+      (err) => err.code === 3,
+    );
+  });
+
+  it('throws INVALID_ARGUMENT when addresses empty', async () => {
+    await assert.rejects(
+      () => rpcdef(buildCtx({ token: 'tok', addresses: [] }))['/f5.awaf.v1.F5AWAF/AllowIP'](),
+      (err) => err.code === 3,
+    );
+  });
+
+  it('creates new exception with blockRequests=never', async () => {
+    let capturedBody;
+    mockFetch(async (url, opts) => {
+      if (url.includes('/mgmt/tm/asm/policies?')) {
+        return { status: 200, text: async () => JSON.stringify({ items: [{ id: 'p1', name: 'test_policy' }] }) };
+      }
+      if (url.includes('/ip-exceptions') && opts?.method === 'GET') {
+        return { status: 200, text: async () => JSON.stringify({ items: [] }) };
+      }
+      if (url.includes('/ip-exceptions') && opts?.method === 'POST') {
+        capturedBody = JSON.parse(opts.body);
+        return { status: 201, text: async () => JSON.stringify({ id: 'exc-1', ipAddress: '10.0.0.2', blockRequests: 'never' }) };
+      }
+      return { status: 200, text: async () => '{}' };
+    });
+
+    const res = await rpcdef(buildCtx({
+      token: 'tok', addresses: ['10.0.0.2'], policy_name: 'test_policy',
+    }))['/f5.awaf.v1.F5AWAF/AllowIP']();
+
+    assert.equal(res.code, 0);
+    assert.deepEqual(res.allowed, ['10.0.0.2']);
+    assert.equal(capturedBody.blockRequests, 'never');
+  });
+});
+
+// ── SetEnforcementMode (unit, mock fetch) ─────────────────────────────────────
+
+describe('SetEnforcementMode — unit (mock fetch)', () => {
+  afterEach(() => restoreFetch());
+
+  it('throws INVALID_ARGUMENT when token missing', async () => {
+    await assert.rejects(
+      () => rpcdef(buildCtx({ policy_name: 'p', mode: 'blocking' }))['/f5.awaf.v1.F5AWAF/SetEnforcementMode'](),
+      (err) => err.code === 3,
+    );
+  });
+
+  it('throws INVALID_ARGUMENT for invalid mode', async () => {
+    await assert.rejects(
+      () => rpcdef(buildCtx({ token: 'tok', policy_name: 'p', mode: 'disabled' }))['/f5.awaf.v1.F5AWAF/SetEnforcementMode'](),
+      (err) => err.code === 3,
+    );
+  });
+
+  it('PATCHes policy with correct enforcementMode', async () => {
+    let patchBody;
+    mockFetch(async (url, opts) => {
+      if (url.includes('/mgmt/tm/asm/policies?')) {
+        return { status: 200, text: async () => JSON.stringify({ items: [{ id: 'p1', name: 'test_policy' }] }) };
+      }
+      if (opts?.method === 'PATCH' && url.includes('/mgmt/tm/asm/policies/p1')) {
+        patchBody = JSON.parse(opts.body);
+        return { status: 200, text: async () => JSON.stringify({ id: 'p1', enforcementMode: 'transparent' }) };
+      }
+      return { status: 200, text: async () => '{}' };  // apply-policy
+    });
+
+    const res = await rpcdef(buildCtx({
+      token: 'tok', policy_name: 'test_policy', mode: 'transparent',
+    }))['/f5.awaf.v1.F5AWAF/SetEnforcementMode']();
+
+    assert.equal(res.code, 0);
+    assert.equal(res.mode, 'transparent');
+    assert.equal(patchBody.enforcementMode, 'transparent');
+  });
+});
+
+// ── ListPolicies (unit, mock fetch) ───────────────────────────────────────────
+
+describe('ListPolicies — unit (mock fetch)', () => {
+  afterEach(() => restoreFetch());
+
+  it('throws INVALID_ARGUMENT when token missing', async () => {
+    await assert.rejects(
+      () => rpcdef(buildCtx({}))['/f5.awaf.v1.F5AWAF/ListPolicies'](),
+      (err) => err.code === 3,
+    );
+  });
+
+  it('returns mapped policy list', async () => {
+    mockFetch(fakeFetchOk({
+      items: [
+        { id: 'p1', name: 'policy_a', enforcementMode: 'blocking', active: true },
+        { id: 'p2', name: 'policy_b', enforcementMode: 'transparent', active: false },
+      ],
+    }));
+
+    const res = await rpcdef(buildCtx({ token: 'tok' }))['/f5.awaf.v1.F5AWAF/ListPolicies']();
+    assert.equal(res.code, 0);
+    assert.equal(res.policies.length, 2);
+    assert.equal(res.policies[0].enforcement_mode, 'blocking');
+    assert.equal(res.policies[1].enforcement_mode, 'transparent');
+    assert.equal(res.policies[1].active, false);
+  });
+});
+
 // ── Integration tests (mock_upstream HTTP server) ─────────────────────────────
 
 describe('Integration — full flow via mock_upstream', () => {
@@ -427,5 +552,34 @@ describe('Integration — full flow via mock_upstream', () => {
   it('Logout — already-expired token (404) returns success', async () => {
     const res = await testRpc({ token: 'expired-or-nonexistent' })['/f5.awaf.v1.F5AWAF/Logout']();
     assert.equal(res.code, 0);
+  });
+
+  it('AllowIP — creates exception with blockRequests=never', async () => {
+    const { token } = await testRpc({})['/f5.awaf.v1.F5AWAF/Login']();
+    const res = await testRpc({ token, addresses: ['172.16.0.1'], policy_name: 'test_policy' })['/f5.awaf.v1.F5AWAF/AllowIP']();
+    assert.equal(res.code, 0);
+    assert.deepEqual(res.allowed, ['172.16.0.1']);
+    // verify stored blockRequests value
+    const excMap = state.exceptions.get('policy-001');
+    const exc = [...excMap.values()].find((e) => e.ipAddress === '172.16.0.1');
+    assert.equal(exc?.blockRequests, 'never');
+  });
+
+  it('SetEnforcementMode — switches policy to transparent', async () => {
+    const { token } = await testRpc({})['/f5.awaf.v1.F5AWAF/Login']();
+    const res = await testRpc({ token, policy_name: 'test_policy', mode: 'transparent' })['/f5.awaf.v1.F5AWAF/SetEnforcementMode']();
+    assert.equal(res.code, 0);
+    assert.equal(res.mode, 'transparent');
+    assert.equal(state.policies.get('policy-001').enforcementMode, 'transparent');
+  });
+
+  it('ListPolicies — returns all policies with enforcement mode', async () => {
+    const { token } = await testRpc({})['/f5.awaf.v1.F5AWAF/Login']();
+    const res = await testRpc({ token })['/f5.awaf.v1.F5AWAF/ListPolicies']();
+    assert.equal(res.code, 0);
+    assert.equal(res.policies.length, 1);
+    assert.equal(res.policies[0].name, 'test_policy');
+    assert.equal(res.policies[0].enforcement_mode, 'blocking');
+    assert.equal(res.policies[0].active, true);
   });
 });

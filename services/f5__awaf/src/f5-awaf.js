@@ -9,15 +9,21 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 
 // ── Path constants ────────────────────────────────────────────────────────────
 
-const LOGIN_PATH    = '/f5.awaf.v1.F5AWAF/Login';
-const BLOCK_IP_PATH = '/f5.awaf.v1.F5AWAF/BlockIP';
-const UNBLOCK_PATH  = '/f5.awaf.v1.F5AWAF/UnblockIP';
-const LOGOUT_PATH   = '/f5.awaf.v1.F5AWAF/Logout';
+const LOGIN_PATH        = '/f5.awaf.v1.F5AWAF/Login';
+const BLOCK_IP_PATH     = '/f5.awaf.v1.F5AWAF/BlockIP';
+const UNBLOCK_PATH      = '/f5.awaf.v1.F5AWAF/UnblockIP';
+const ALLOW_IP_PATH     = '/f5.awaf.v1.F5AWAF/AllowIP';
+const SET_MODE_PATH     = '/f5.awaf.v1.F5AWAF/SetEnforcementMode';
+const LIST_POLICIES_PATH = '/f5.awaf.v1.F5AWAF/ListPolicies';
+const LOGOUT_PATH       = '/f5.awaf.v1.F5AWAF/Logout';
 
-export const METHOD_LOGIN     = 'f5.awaf.v1.F5AWAF/Login';
-export const METHOD_BLOCK_IP  = 'f5.awaf.v1.F5AWAF/BlockIP';
-export const METHOD_UNBLOCK   = 'f5.awaf.v1.F5AWAF/UnblockIP';
-export const METHOD_LOGOUT    = 'f5.awaf.v1.F5AWAF/Logout';
+export const METHOD_LOGIN        = 'f5.awaf.v1.F5AWAF/Login';
+export const METHOD_BLOCK_IP     = 'f5.awaf.v1.F5AWAF/BlockIP';
+export const METHOD_UNBLOCK      = 'f5.awaf.v1.F5AWAF/UnblockIP';
+export const METHOD_ALLOW_IP     = 'f5.awaf.v1.F5AWAF/AllowIP';
+export const METHOD_SET_MODE     = 'f5.awaf.v1.F5AWAF/SetEnforcementMode';
+export const METHOD_LIST_POLICIES = 'f5.awaf.v1.F5AWAF/ListPolicies';
+export const METHOD_LOGOUT       = 'f5.awaf.v1.F5AWAF/Logout';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -258,6 +264,115 @@ async function doUnblockIP(req, bindings, baseUrl, doFetch, timeoutMs) {
   };
 }
 
+async function doAllowIP(req, bindings, baseUrl, doFetch, timeoutMs) {
+  const { token, addresses = [], policy_name, description } = req;
+  if (!token) throw new GrpcError(grpcStatus.INVALID_ARGUMENT, 'token is required');
+  if (!addresses.length) throw new GrpcError(grpcStatus.INVALID_ARGUMENT, 'addresses must not be empty');
+
+  const policyName = policy_name || bindings.default_policy_name;
+  if (!policyName) {
+    throw new GrpcError(grpcStatus.INVALID_ARGUMENT, 'policy_name is required (or set config.default_policy_name)');
+  }
+
+  const policyId = await findPolicyId(policyName, token, baseUrl, doFetch, timeoutMs);
+  const existing = await listIpExceptions(policyId, token, baseUrl, doFetch, timeoutMs);
+  const existingMap = new Map(existing.map((e) => [e.ipAddress, e]));
+
+  const allowed = [], failed = [];
+
+  for (const address of addresses) {
+    try {
+      const exc = existingMap.get(address);
+      if (exc) {
+        const r = await f5Fetch(doFetch, 'PATCH',
+          `${baseUrl}/mgmt/tm/asm/policies/${policyId}/ip-exceptions/${exc.id}`,
+          { token, timeoutMs, body: { blockRequests: 'never' } });
+        r.status === 200 ? allowed.push(address) : failed.push(address);
+      } else {
+        const r = await f5Fetch(doFetch, 'POST',
+          `${baseUrl}/mgmt/tm/asm/policies/${policyId}/ip-exceptions`,
+          {
+            token, timeoutMs,
+            body: {
+              ipAddress: address,
+              blockRequests: 'never',
+              description: description || 'Allowed by OctoBus f5__awaf',
+            },
+          });
+        (r.status === 200 || r.status === 201) ? allowed.push(address) : failed.push(address);
+      }
+    } catch {
+      failed.push(address);
+    }
+  }
+
+  if (allowed.length > 0) await applyPolicy(policyId, token, baseUrl, doFetch, timeoutMs);
+
+  return {
+    code: failed.length === 0 ? 0 : 1,
+    message: failed.length === 0
+      ? `Allowed ${allowed.length} IP(s) in policy "${policyName}"`
+      : `Allowed ${allowed.length}, failed ${failed.length} in policy "${policyName}"`,
+    allowed,
+    failed,
+  };
+}
+
+const VALID_MODES = new Set(['blocking', 'transparent']);
+
+async function doSetEnforcementMode(req, bindings, baseUrl, doFetch, timeoutMs) {
+  const { token, policy_name, mode } = req;
+  if (!token) throw new GrpcError(grpcStatus.INVALID_ARGUMENT, 'token is required');
+  if (!mode || !VALID_MODES.has(mode)) {
+    throw new GrpcError(grpcStatus.INVALID_ARGUMENT, 'mode must be "blocking" or "transparent"');
+  }
+
+  const policyName = policy_name || bindings.default_policy_name;
+  if (!policyName) {
+    throw new GrpcError(grpcStatus.INVALID_ARGUMENT, 'policy_name is required (or set config.default_policy_name)');
+  }
+
+  const policyId = await findPolicyId(policyName, token, baseUrl, doFetch, timeoutMs);
+
+  const r = await f5Fetch(doFetch, 'PATCH',
+    `${baseUrl}/mgmt/tm/asm/policies/${policyId}`,
+    { token, timeoutMs, body: { enforcementMode: mode } });
+
+  if (r.status !== 200) throwForStatus(r.status, r.text, 'SetEnforcementMode');
+
+  await applyPolicy(policyId, token, baseUrl, doFetch, timeoutMs);
+
+  return {
+    code: 0,
+    message: `Policy "${policyName}" enforcement mode set to "${mode}"`,
+    policy_name: policyName,
+    mode,
+  };
+}
+
+async function doListPolicies(req, _bindings, baseUrl, doFetch, timeoutMs) {
+  const { token } = req;
+  if (!token) throw new GrpcError(grpcStatus.INVALID_ARGUMENT, 'token is required');
+
+  const url = `${baseUrl}/mgmt/tm/asm/policies?$select=id,name,enforcementMode,active`;
+  const r = await f5Fetch(doFetch, 'GET', url, { token, timeoutMs });
+
+  if (r.status !== 200) throwForStatus(r.status, r.text, 'ListPolicies');
+
+  const policies = (r.data?.items ?? []).map((p) => ({
+    id: p.id,
+    name: p.name,
+    enforcement_mode: p.enforcementMode ?? 'blocking',
+    active: p.active ?? false,
+  }));
+
+  return {
+    code: 0,
+    message: `Found ${policies.length} policy(ies)`,
+    policies,
+  };
+}
+
 async function doLogout(req, _bindings, baseUrl, doFetch, timeoutMs) {
   const { token } = req;
   if (!token) throw new GrpcError(grpcStatus.INVALID_ARGUMENT, 'token is required');
@@ -294,20 +409,26 @@ export function rpcdef(ctx) {
   const req = ctx.req ?? {};
 
   return {
-    [LOGIN_PATH]:    () => doLogin(req, bindings, baseUrl, doFetch, timeoutMs),
-    [BLOCK_IP_PATH]: () => doBlockIP(req, bindings, baseUrl, doFetch, timeoutMs),
-    [UNBLOCK_PATH]:  () => doUnblockIP(req, bindings, baseUrl, doFetch, timeoutMs),
-    [LOGOUT_PATH]:   () => doLogout(req, bindings, baseUrl, doFetch, timeoutMs),
+    [LOGIN_PATH]:         () => doLogin(req, bindings, baseUrl, doFetch, timeoutMs),
+    [BLOCK_IP_PATH]:      () => doBlockIP(req, bindings, baseUrl, doFetch, timeoutMs),
+    [UNBLOCK_PATH]:       () => doUnblockIP(req, bindings, baseUrl, doFetch, timeoutMs),
+    [ALLOW_IP_PATH]:      () => doAllowIP(req, bindings, baseUrl, doFetch, timeoutMs),
+    [SET_MODE_PATH]:      () => doSetEnforcementMode(req, bindings, baseUrl, doFetch, timeoutMs),
+    [LIST_POLICIES_PATH]: () => doListPolicies(req, bindings, baseUrl, doFetch, timeoutMs),
+    [LOGOUT_PATH]:        () => doLogout(req, bindings, baseUrl, doFetch, timeoutMs),
   };
 }
 
 // ── SDK handlers (for defineService) ─────────────────────────────────────────
 
 export const handlers = {
-  [METHOD_LOGIN]:    (ctx) => rpcdef(ctx)[LOGIN_PATH](),
-  [METHOD_BLOCK_IP]: (ctx) => rpcdef(ctx)[BLOCK_IP_PATH](),
-  [METHOD_UNBLOCK]:  (ctx) => rpcdef(ctx)[UNBLOCK_PATH](),
-  [METHOD_LOGOUT]:   (ctx) => rpcdef(ctx)[LOGOUT_PATH](),
+  [METHOD_LOGIN]:          (ctx) => rpcdef(ctx)[LOGIN_PATH](),
+  [METHOD_BLOCK_IP]:       (ctx) => rpcdef(ctx)[BLOCK_IP_PATH](),
+  [METHOD_UNBLOCK]:        (ctx) => rpcdef(ctx)[UNBLOCK_PATH](),
+  [METHOD_ALLOW_IP]:       (ctx) => rpcdef(ctx)[ALLOW_IP_PATH](),
+  [METHOD_SET_MODE]:       (ctx) => rpcdef(ctx)[SET_MODE_PATH](),
+  [METHOD_LIST_POLICIES]:  (ctx) => rpcdef(ctx)[LIST_POLICIES_PATH](),
+  [METHOD_LOGOUT]:         (ctx) => rpcdef(ctx)[LOGOUT_PATH](),
 };
 
 // ── Internal test exports ─────────────────────────────────────────────────────

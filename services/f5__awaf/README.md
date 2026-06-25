@@ -1,6 +1,6 @@
 # f5__awaf
 
-OctoBus service package for **F5 Advanced WAF (AWAF)** — exposes IP blocking/unblocking via iControl REST API.
+OctoBus service package for **F5 Advanced WAF (AWAF)** — exposes IP management and policy control via iControl REST API.
 
 ## Supported Versions
 
@@ -114,6 +114,91 @@ Remove IP addresses from an ASM policy's IP exception list.
 
 ---
 
+### AllowIP
+
+Add one or more IP addresses to an ASM policy's IP exception list with `blockRequests: never` (whitelist).
+
+**Request**:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `token` | string | ✓ | Token from Login |
+| `addresses` | repeated string | ✓ | IP addresses to whitelist |
+| `policy_name` | string | — | ASM policy name (falls back to `config.default_policy_name`) |
+| `description` | string | — | Audit description added to each IP exception |
+
+**Response**:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `code` | int32 | 0 = all allowed, 1 = partial failure |
+| `message` | string | Summary |
+| `allowed` | repeated string | Successfully whitelisted IPs |
+| `failed` | repeated string | IPs that could not be whitelisted |
+
+**Behavior**:
+- If the IP already exists, `PATCH` updates `blockRequests` to `never` (idempotent).
+- Triggers apply-policy after any change.
+
+---
+
+### SetEnforcementMode
+
+Switch an ASM policy between `blocking` and `transparent` mode.
+
+**Request**:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `token` | string | ✓ | Token from Login |
+| `policy_name` | string | — | ASM policy name (falls back to `config.default_policy_name`) |
+| `mode` | string | ✓ | `"blocking"` or `"transparent"` |
+
+**Response**:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `code` | int32 | 0 = success |
+| `message` | string | Status |
+| `policy_name` | string | Affected policy name |
+| `mode` | string | Resulting enforcement mode |
+
+**Behavior**:
+- Issues `PATCH /mgmt/tm/asm/policies/{id}` with `{ enforcementMode: <mode> }`.
+- Triggers apply-policy to activate the mode change.
+- Invalid `mode` values return `INVALID_ARGUMENT` immediately without network calls.
+
+---
+
+### ListPolicies
+
+Enumerate all ASM policies with their current enforcement mode.
+
+**Request**:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `token` | string | ✓ | Token from Login |
+
+**Response**:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `code` | int32 | 0 = success |
+| `message` | string | Summary (e.g., "Found 3 policy(ies)") |
+| `policies` | repeated Policy | List of policies |
+
+**Policy fields**:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Internal F5 policy ID |
+| `name` | string | Policy name |
+| `enforcement_mode` | string | `"blocking"` or `"transparent"` |
+| `active` | bool | Whether the policy is active |
+
+---
+
 ### Logout
 
 Invalidate the session token.
@@ -153,10 +238,13 @@ Invalidate the session token.
 ## Suggested Capset
 
 ```
-Login         → read
-BlockIP       → write
-UnblockIP     → write
-Logout        → read
+Login                → read
+BlockIP              → write
+UnblockIP            → write
+AllowIP              → write
+SetEnforcementMode   → write
+ListPolicies         → read
+Logout               → read
 ```
 
 ---

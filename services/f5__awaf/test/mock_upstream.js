@@ -30,8 +30,8 @@ export const state = {
   validPassword: 'admin',
   // active tokens (Set of string)
   tokens: new Set(),
-  // ASM policies: Map<id, { id, name }>
-  policies: new Map([['policy-001', { id: 'policy-001', name: 'test_policy' }]]),
+  // ASM policies: Map<id, { id, name, enforcementMode, active }>
+  policies: new Map([['policy-001', { id: 'policy-001', name: 'test_policy', enforcementMode: 'blocking', active: true }]]),
   // IP exceptions per policy: Map<policyId, Map<excId, { id, ipAddress, blockRequests }>>
   exceptions: new Map([['policy-001', new Map()]]),
   // apply-policy call count
@@ -42,7 +42,7 @@ export const state = {
 
 export function reset() {
   state.tokens = new Set();
-  state.policies = new Map([['policy-001', { id: 'policy-001', name: 'test_policy' }]]);
+  state.policies = new Map([['policy-001', { id: 'policy-001', name: 'test_policy', enforcementMode: 'blocking', active: true }]]);
   state.exceptions = new Map([['policy-001', new Map()]]);
   state.applyCallCount = 0;
   state.forceError = null;
@@ -125,10 +125,23 @@ const handler = async (req, res) => {
   // ── GET /mgmt/tm/asm/policies ─────────────────────────────────────────────
   if (method === 'GET' && path === '/mgmt/tm/asm/policies') {
     if (!requireAuth(req, res)) return;
-    const nameFilter = url.searchParams.get('$filter')?.match(/name\+eq\+(.+)/)?.[1];
+    const nameFilter = url.searchParams.get('$filter')?.match(/name eq (.+)/)?.[1];
     let items = [...state.policies.values()];
     if (nameFilter) items = items.filter((p) => p.name === decodeURIComponent(nameFilter));
     json(res, 200, { items });
+    return;
+  }
+
+  // ── PATCH /mgmt/tm/asm/policies/:id  (SetEnforcementMode) ────────────────
+  const policyItemMatch = path.match(/^\/mgmt\/tm\/asm\/policies\/([^/]+)$/);
+  if (policyItemMatch && method === 'PATCH') {
+    if (!requireAuth(req, res)) return;
+    const policyId = policyItemMatch[1];
+    if (!state.policies.has(policyId)) { json(res, 404, { message: 'Policy not found' }); return; }
+    const body = await readBody(req);
+    const policy = { ...state.policies.get(policyId), ...body };
+    state.policies.set(policyId, policy);
+    json(res, 200, policy);
     return;
   }
 
