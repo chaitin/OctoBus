@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "region": {
+      "type": "string",
+      "default": "cn-beijing",
+      "description": "Volcengine region used for signing. Cloud Firewall docs recommend cn-beijing."
+    },
+    "endpoint": {
+      "type": "string",
+      "description": "Optional Volcengine Cloud Firewall endpoint override."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional additional HTTP headers. Signing headers are set by the service."
+    }
+  }
+}
