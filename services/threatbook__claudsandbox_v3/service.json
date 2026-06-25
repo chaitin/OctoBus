@@ -1,0 +1,37 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "threatbook-claudsandbox-v3",
+  "displayName": "ThreatBook ClaudSandbox V3",
+  "description": "OctoBus package for ThreatBook ClaudSandbox V3 file upload and report APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/threatbook_claudsandbox_v3.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "ThreatBook_ClaudSandbox_V3.ThreatBook_ClaudSandbox_V3/UploadFile": {
+          "name": "upload-file",
+          "description": "Submit a file to ThreatBook ClaudSandbox V3."
+        },
+        "ThreatBook_ClaudSandbox_V3.ThreatBook_ClaudSandbox_V3/GetFileReport": {
+          "name": "get-file-report",
+          "description": "Get ThreatBook ClaudSandbox V3 file reputation report."
+        },
+        "ThreatBook_ClaudSandbox_V3.ThreatBook_ClaudSandbox_V3/GetMultiEnginesReport": {
+          "name": "get-multi-engines-report",
+          "description": "Get ThreatBook ClaudSandbox V3 multi-engine report."
+        }
+      }
+    }
+  }
+}

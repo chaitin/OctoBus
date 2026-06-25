@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "threatbook_domain": {
+      "type": "string",
+      "description": "ThreatBook API base URL, for example https://api.threatbook.cn."
+    },
+    "domain": {
+      "type": "string",
+      "description": "Alias for threatbook_domain."
+    },
+    "restBaseUrl": {
+      "type": "string",
+      "description": "Legacy alias for threatbook_domain."
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "Alias for threatbook_domain."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1500,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for private deployments."
+    },
+    "tlsInsecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Legacy alias for skipTlsVerify."
+    },
+    "insecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Alias for skipTlsVerify."
+    }
+  }
+}

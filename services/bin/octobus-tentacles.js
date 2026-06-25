@@ -121,6 +121,10 @@ const services = {
     entryFile: "../threatbook__cloudapi_v3/bin/threatbook-cloudapi-v3.js",
     serviceModule: "../threatbook__cloudapi_v3/src/service.js",
   },
+  "threatbook-claudsandbox-v3": {
+    entryFile: "../threatbook__claudsandbox_v3/bin/threatbook-claudsandbox-v3.js",
+    serviceModule: "../threatbook__claudsandbox_v3/src/service.js",
+  },
   "threatbook-onesig": {
     entryFile: "../threatbook__onesig/bin/threatbook-onesig.js",
     serviceModule: "../threatbook__onesig/src/service.js",
