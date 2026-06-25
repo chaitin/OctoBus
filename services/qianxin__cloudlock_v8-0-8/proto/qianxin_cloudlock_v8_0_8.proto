@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package QIANXIN_CloudLock_V8_0_8;
+
+option go_package = "miner/grpc-service/QIANXIN_CloudLock_V8_0_8";
+
+// 奇安信网神云锁服务器安全管理系统(椒图) V8.0.8 Hotfix1。主机安全/HIDS。
+// 认证为 web 会话 token:请求头 `token: <会话token>`,并按页面带 `menuCode`。
+// 会话 token 由外部获取后经 secret.token 传入(有时效,过期需更换)。
+// 本 service 当前实现服务器列表查询一项(已用真机请求对齐),后续按真机抓包扩展。
+service QIANXIN_CloudLock_V8_0_8 {
+  // 服务器列表/基础信息: POST /api/assetSrv/machineController/searchMachineList (menuCode 5101)
+  rpc QueryMachineList(QueryMachineListRequest) returns (QueryMachineListResponse) {}
+}
+
+// 字段名对应设备请求体(camelCase);未设置的字符串过滤项以空串下发,与真机请求保持一致。
+message QueryMachineListRequest {
+  int32 current_page = 1;               // currentPage，默认 1
+  int32 max_results = 2;                // maxResults，默认 20，取值 [10,20,50,100]
+  string group_uuid = 3;               // groupUuid，分组 uuid，可选
+  int32 if_show_current_group_info = 4; // ifShowCurrentGroupInfo，默认 0
+  repeated string search_info_list = 5; // searchInfoList，默认空数组
+
+  string machine_group = 6;     // machineGroup
+  string machine_tags = 7;      // machineTags
+  string online_status = 8;     // onlineStatus
+  string run_status = 9;        // runStatus
+  string os_type = 10;          // osType
+  string operation_system = 11; // operationSystem
+  string department = 12;       // department
+  string direct_person = 13;    // directPerson
+  string asset_level = 14;      // assetLevel
+  string os_category = 15;      // osCategory
+  string arch = 16;             // arch
+  string system_language = 17;  // systemLanguage
+  string memory_size = 18;      // memorySize
+  string disk_size = 19;        // diskSize
+  string disk_usage = 20;       // diskUsage
+  string kernel_version = 21;   // kernelVersion
+}
+
+message QueryMachineListResponse {
+  string code = 1;       // 设备 code 字段，成功为 "1"
+  string msg = 2;        // 设备 msg 字段，成功为 "成功"
+  int64 total = 3;       // data.total（若返回包含）
+  int32 http_status = 4; // 上游 HTTP 状态码
+  string raw_json = 5;   // 上游原始响应 JSON（含 data.list）
+}
