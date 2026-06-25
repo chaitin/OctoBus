@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -965,6 +967,70 @@ func TestPrepareSourceFileArchives(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(prepared.PackageDir, "service.json")); err != nil {
 		t.Fatalf("zip package was not extracted: %v", err)
+	}
+}
+
+func TestPrepareSourceRemoteArchives(t *testing.T) {
+	dataDir, s := openTestStore(t)
+	imp := &Importer{DataDir: dataDir, Store: s}
+	pkg := writeTestPackage(t, t.TempDir(), `{"schema":"chaitin.octobus.service.v1","name":"echo-wrapper","proto":{"roots":["proto"],"files":["proto/echo.proto"]}}`)
+
+	tgz := filepath.Join(t.TempDir(), "package.tgz")
+	writeTarGzPackage(t, tgz, pkg)
+	zipPath := filepath.Join(t.TempDir(), "package.zip")
+	writeZipPackage(t, zipPath, pkg)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/package.tgz":
+			http.ServeFile(w, r, tgz)
+		case "/package.zip":
+			http.ServeFile(w, r, zipPath)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	prepared, err := imp.prepareSource(context.Background(), Options{Source: server.URL + "/package.tgz?X-Amz-Signature=test"}, filepath.Join(t.TempDir(), "remote-tgz-staging"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prepared.BuildAllowed || filepath.Base(prepared.ArtifactPath) != "package.tgz" || prepared.PackageSource != server.URL+"/package.tgz" {
+		t.Fatalf("unexpected remote tgz prepared source: %+v", prepared)
+	}
+	if _, err := os.Stat(filepath.Join(prepared.PackageDir, "service.json")); err != nil {
+		t.Fatalf("remote tgz package was not extracted: %v", err)
+	}
+
+	prepared, err = imp.prepareSource(context.Background(), Options{Source: server.URL + "/package.zip"}, filepath.Join(t.TempDir(), "remote-zip-staging"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Base(prepared.ArtifactPath) != "package.zip" {
+		t.Fatalf("unexpected remote zip artifact path: %+v", prepared)
+	}
+	if _, err := os.Stat(filepath.Join(prepared.PackageDir, "service.json")); err != nil {
+		t.Fatalf("remote zip package was not extracted: %v", err)
+	}
+}
+
+func TestPrepareSourceRemoteArchiveErrorsRedactSignedURL(t *testing.T) {
+	dataDir, s := openTestStore(t)
+	imp := &Importer{DataDir: dataDir, Store: s}
+	server := httptest.NewServer(http.NotFoundHandler())
+	defer server.Close()
+
+	source := server.URL + "/missing.zip?X-Amz-Signature=secret"
+	_, err := imp.prepareSource(context.Background(), Options{Source: source}, filepath.Join(t.TempDir(), "remote-error-staging"))
+	if err == nil {
+		t.Fatal("expected remote archive download error")
+	}
+	if strings.Contains(err.Error(), "X-Amz-Signature") || strings.Contains(err.Error(), "secret") {
+		t.Fatalf("remote archive error leaked signed URL: %v", err)
+	}
+	if !strings.Contains(err.Error(), server.URL+"/missing.zip") {
+		t.Fatalf("remote archive error lost useful source context: %v", err)
 	}
 }
 
