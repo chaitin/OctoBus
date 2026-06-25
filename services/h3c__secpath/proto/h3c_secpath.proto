@@ -1,0 +1,182 @@
+syntax = "proto3";
+
+package H3C_SECPATH;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
+
+option go_package = "miner/grpc-service/H3C_SECPATH";
+
+// H3C_SECPATH exposes H3C SecPath Comware 7 REST API as unary RPCs.
+service H3C_SECPATH {
+  // GetDeviceBase retrieves basic device information.
+  rpc GetDeviceBase(GetDeviceBaseRequest) returns (GetDeviceBaseResponse) {}
+
+  // GetSecurityZones retrieves all configured security zones.
+  rpc GetSecurityZones(GetSecurityZonesRequest) returns (GetSecurityZonesResponse) {}
+
+  // GetZonePairs retrieves all configured zone pairs.
+  rpc GetZonePairs(GetZonePairsRequest) returns (GetZonePairsResponse) {}
+
+  // GetIPv4SecurityPolicies retrieves IPv4 security policy rules with optional filtering.
+  rpc GetIPv4SecurityPolicies(GetIPv4SecurityPoliciesRequest) returns (GetIPv4SecurityPoliciesResponse) {}
+
+  // GetIPv4ObjectGroups retrieves IPv4 address object groups with optional filtering.
+  rpc GetIPv4ObjectGroups(GetIPv4ObjectGroupsRequest) returns (GetIPv4ObjectGroupsResponse) {}
+
+  // GetServiceGroups retrieves service object groups with optional filtering.
+  rpc GetServiceGroups(GetServiceGroupsRequest) returns (GetServiceGroupsResponse) {}
+
+  // GetSessions retrieves active sessions up to an optional maximum count.
+  rpc GetSessions(GetSessionsRequest) returns (GetSessionsResponse) {}
+
+  // GetInterfaces retrieves interface information with optional filtering by name.
+  rpc GetInterfaces(GetInterfacesRequest) returns (GetInterfacesResponse) {}
+
+  // GetACLGroups retrieves ACL groups with optional filtering by name.
+  rpc GetACLGroups(GetACLGroupsRequest) returns (GetACLGroupsResponse) {}
+
+  // GetNATStaticMappings retrieves NAT static mapping entries with optional paging.
+  rpc GetNATStaticMappings(GetNATStaticMappingsRequest) returns (GetNATStaticMappingsResponse) {}
+}
+
+// GetDeviceBaseRequest is an empty request for retrieving device base information.
+message GetDeviceBaseRequest {}
+
+// GetSecurityZonesRequest is an empty request for retrieving all security zones.
+message GetSecurityZonesRequest {}
+
+// GetZonePairsRequest is an empty request for retrieving all zone pairs.
+message GetZonePairsRequest {}
+
+// GetIPv4SecurityPoliciesRequest optionally filters security policies by page size or rule name.
+message GetIPv4SecurityPoliciesRequest {
+  // page_size limits the number of policy rules returned per page.
+  google.protobuf.Int32Value page_size = 1;
+
+  // rule_name filters results to the policy rule with the given name.
+  google.protobuf.StringValue rule_name = 2;
+}
+
+// GetIPv4ObjectGroupsRequest optionally filters IPv4 address object groups by name.
+message GetIPv4ObjectGroupsRequest {
+  // group_name filters results to the object group with the given name.
+  google.protobuf.StringValue group_name = 1;
+}
+
+// GetServiceGroupsRequest optionally filters service object groups by name.
+message GetServiceGroupsRequest {
+  // group_name filters results to the service group with the given name.
+  google.protobuf.StringValue group_name = 1;
+}
+
+// GetSessionsRequest optionally limits the number of active sessions returned.
+message GetSessionsRequest {
+  // max_count limits the total number of session entries returned.
+  google.protobuf.Int32Value max_count = 1;
+}
+
+// GetInterfacesRequest optionally filters interfaces by interface name.
+message GetInterfacesRequest {
+  // if_name filters results to the interface with the given name.
+  google.protobuf.StringValue if_name = 1;
+}
+
+// GetACLGroupsRequest optionally filters ACL groups by name.
+message GetACLGroupsRequest {
+  // group_name filters results to the ACL group with the given name.
+  google.protobuf.StringValue group_name = 1;
+}
+
+// GetNATStaticMappingsRequest optionally limits NAT static mapping results by page size.
+message GetNATStaticMappingsRequest {
+  // page_size limits the number of NAT static mapping entries returned per page.
+  google.protobuf.Int32Value page_size = 1;
+}
+
+// GetDeviceBaseResponse carries structured device base information.
+message GetDeviceBaseResponse {
+  // info contains the raw structured device information as returned by the upstream API.
+  google.protobuf.Value info = 1;
+}
+
+// GetSecurityZonesResponse carries the list of security zone entries.
+message GetSecurityZonesResponse {
+  // items contains each security zone as a structured value.
+  repeated google.protobuf.Value items = 1;
+
+  // count is the total number of security zones returned.
+  int32 count = 2;
+}
+
+// GetZonePairsResponse carries the list of zone pair entries.
+message GetZonePairsResponse {
+  // items contains each zone pair as a structured value.
+  repeated google.protobuf.Value items = 1;
+
+  // count is the total number of zone pairs returned.
+  int32 count = 2;
+}
+
+// GetIPv4SecurityPoliciesResponse carries the list of IPv4 security policy rule entries.
+message GetIPv4SecurityPoliciesResponse {
+  // items contains each security policy rule as a structured value.
+  repeated google.protobuf.Value items = 1;
+
+  // count is the total number of security policy rules returned.
+  int32 count = 2;
+}
+
+// GetIPv4ObjectGroupsResponse carries the list of IPv4 address object group entries.
+message GetIPv4ObjectGroupsResponse {
+  // items contains each IPv4 address object group as a structured value.
+  repeated google.protobuf.Value items = 1;
+
+  // count is the total number of IPv4 address object groups returned.
+  int32 count = 2;
+}
+
+// GetServiceGroupsResponse carries the list of service object group entries.
+message GetServiceGroupsResponse {
+  // items contains each service object group as a structured value.
+  repeated google.protobuf.Value items = 1;
+
+  // count is the total number of service object groups returned.
+  int32 count = 2;
+}
+
+// GetSessionsResponse carries the list of active session entries.
+message GetSessionsResponse {
+  // items contains each active session as a structured value.
+  repeated google.protobuf.Value items = 1;
+
+  // count is the total number of active sessions returned.
+  int32 count = 2;
+}
+
+// GetInterfacesResponse carries the list of interface entries.
+message GetInterfacesResponse {
+  // items contains each interface as a structured value.
+  repeated google.protobuf.Value items = 1;
+
+  // count is the total number of interfaces returned.
+  int32 count = 2;
+}
+
+// GetACLGroupsResponse carries the list of ACL group entries.
+message GetACLGroupsResponse {
+  // items contains each ACL group as a structured value.
+  repeated google.protobuf.Value items = 1;
+
+  // count is the total number of ACL groups returned.
+  int32 count = 2;
+}
+
+// GetNATStaticMappingsResponse carries the list of NAT static mapping entries.
+message GetNATStaticMappingsResponse {
+  // items contains each NAT static mapping as a structured value.
+  repeated google.protobuf.Value items = 1;
+
+  // count is the total number of NAT static mapping entries returned.
+  int32 count = 2;
+}

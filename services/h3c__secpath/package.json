@@ -1,0 +1,13 @@
+{
+  "name": "h3c__secpath",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "main": "src/service.js",
+  "bin": {
+    "h3c-secpath": "bin/h3c-secpath.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "workspace:^"
+  }
+}
