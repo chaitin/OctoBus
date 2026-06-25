@@ -81,6 +81,18 @@ const services = {
     entryFile: "../qianxin__fw-secgate3600/bin/qianxin-fw-secgate3600.js",
     serviceModule: "../qianxin__fw-secgate3600/src/service.js",
   },
+  "qianxin-fw-secgate3600-policy": {
+    entryFile: "../qianxin__fw-secgate3600-policy/bin/qianxin-fw-secgate3600-policy.js",
+    serviceModule: "../qianxin__fw-secgate3600-policy/src/service.js",
+  },
+  "qianxin-vs-secvss3600": {
+    entryFile: "../qianxin__vs-secvss3600/bin/qianxin-vs-secvss3600.js",
+    serviceModule: "../qianxin__vs-secvss3600/src/service.js",
+  },
+  "qianxin-tianyan-platform": {
+    entryFile: "../qianxin__tianyan-platform/bin/qianxin-tianyan-platform.js",
+    serviceModule: "../qianxin__tianyan-platform/src/service.js",
+  },
   "qianxin-fw-secgate3600-http-x": {
     entryFile: "../qianxin__fw-secgate3600-http-x/bin/qianxin-fw-secgate3600-http-x.js",
     serviceModule: "../qianxin__fw-secgate3600-http-x/src/service.js",
@@ -104,6 +116,14 @@ const services = {
   "sangfor-fw-v8-0-45": {
     entryFile: "../sangfor__fw_v8-0-45/bin/sangfor-fw-v8-0-45.js",
     serviceModule: "../sangfor__fw_v8-0-45/src/service.js",
+  },
+  "sangfor-sip": {
+    entryFile: "../sangfor__sip/bin/sangfor-sip.js",
+    serviceModule: "../sangfor__sip/src/service.js",
+  },
+  "h3c-secpath": {
+    entryFile: "../h3c__secpath/bin/h3c-secpath.js",
+    serviceModule: "../h3c__secpath/src/service.js",
   },
   "skycloud-inet": {
     entryFile: "../skycloud__inet/bin/skycloud-inet.js",
