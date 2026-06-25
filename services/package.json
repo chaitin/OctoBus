@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "bin": {
+    "jumpserver-bastionhost-v4-10-16": "bin/jumpserver-bastionhost-v4-10-16.js",
     "cisa-kev": "bin/cisa-kev.js",
     "shodan-internetdb": "bin/shodan-internetdb.js",
     "alienvault-otx": "bin/alienvault-otx.js",
@@ -96,6 +97,8 @@
     "api7-enterprise-v3-10-2": "bin/api7-enterprise-v3-10-2.js"
   },
   "files": [
+    "bin/jumpserver-bastionhost-v4-10-16.js",
+    "jumpserver__bastionhost_v4-10-16",
     "bin/cisa-kev.js",
     "cisa__kev",
     "shodan__internetdb",

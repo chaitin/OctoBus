@@ -1,0 +1,41 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "jumpserver-bastionhost-v4-10-16",
+  "displayName": "JumpServer Bastionhost V4.10.16",
+  "description": "OctoBus package for JumpServer Bastionhost V4.10.16 asset, user, and session query APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/jumpserver_bastionhost_v4_10_16.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "JumpServer_Bastionhost_V41016.JumpServer_Bastionhost_V41016/ListAssets": {
+          "name": "list-assets",
+          "description": "List JumpServer assets."
+        },
+        "JumpServer_Bastionhost_V41016.JumpServer_Bastionhost_V41016/GetAsset": {
+          "name": "get-asset",
+          "description": "Get one JumpServer asset by ID."
+        },
+        "JumpServer_Bastionhost_V41016.JumpServer_Bastionhost_V41016/ListUsers": {
+          "name": "list-users",
+          "description": "List JumpServer users."
+        },
+        "JumpServer_Bastionhost_V41016.JumpServer_Bastionhost_V41016/ListOnlineSessions": {
+          "name": "list-online-sessions",
+          "description": "List JumpServer online terminal sessions."
+        }
+      }
+    }
+  }
+}
