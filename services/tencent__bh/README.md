@@ -140,6 +140,36 @@ octobus service import --id tencent-bh ./services//tencent__bh
 - Non-JSON responses map to `UNKNOWN`.
 - Missing credentials (secret_id/secret_key) map to `FAILED_PRECONDITION`.
 - Missing required request parameters (e.g., `session_id`, `user_id`) map to `INVALID_ARGUMENT`.
+- All API calls log `x-engine-instance` and `x-request-id` headers for traceability.
+
+## Write Operation Semantics
+
+### KillSession
+
+| Aspect | Description |
+|--------|-------------|
+| **Default parameters** | `session_id` 必填，无默认值 |
+| **Idempotency** | 幂等。对已终止的会话再次执行 KillSession 返回成功（BH API 幂等处理） |
+| **Rollback** | 不可回滚。会话终止后无法恢复，用户需重新建立连接 |
+| **Audit fields** | 请求通过 `x-engine-instance` 和 `x-request-id` 追踪；Tencent Cloud BH 侧自动记录操作审计日志 |
+
+### LockUser
+
+| Aspect | Description |
+|--------|-------------|
+| **Default parameters** | `user_id` 必填，无默认值 |
+| **Idempotency** | 幂等。对已锁定的用户再次执行 LockUser 为 no-op |
+| **Rollback** | 通过 `UnlockUser` 操作回滚解锁 |
+| **Audit fields** | 同 KillSession，通过请求头和工作台审计日志追踪 |
+
+### UnlockUser
+
+| Aspect | Description |
+|--------|-------------|
+| **Default parameters** | `user_id` 必填，无默认值 |
+| **Idempotency** | 幂等。对未锁定的用户执行 UnlockUser 为 no-op |
+| **Rollback** | 通过 `LockUser` 操作重新锁定 |
+| **Audit fields** | 同 KillSession，通过请求头和工作台审计日志追踪 |
 
 ## Risk & Recommended Capset
 
