@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package Volcengine_DDoS;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Volcengine_DDoS";
+
+service Volcengine_DDoS {
+  rpc GetBasicAlarm(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc AdvDefenceDescInstanceList(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc AdvDefenceDescInstance(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc AdvDefenceDescFwdRule(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc AdvDefenceGetFwdRuleLipList(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc AdvDefenceDescHostRules(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc AdvDefenceDescCertificate(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc AdvDefenceDescAttackEvent(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc AdvDefenceDescAttackFlow(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc AdvDefenceDescAttackSrcIpTop100(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc AdvDefenceDescAttackSrcRegionTop100(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc AdvDefenceDescAttackTypeTop100(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc AdvDefenceDescAttackDstPortTop100(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc AdvDefenceDescAtkAlarmThreshold(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc AdvDefenceDescWebDefCcRule(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc AdvDefenceGetHostDefStatus(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc AdvDefenceGetWebDefAttackLog(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc OriginDefenceDescInstanceList(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc OriginDefenceDescInstance(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc OriginDefenceDescFreeEipList(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc OriginDefenceDescResourceList(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc OriginDefenceDescAttackEvent(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc OriginDefenceDescAttackFlow(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc InvokeReadOnlyAction(InvokeReadOnlyActionRequest) returns (VolcengineResponse) {}
+}
+
+message VolcengineRequest {
+  google.protobuf.Struct payload = 1;
+}
+
+message InvokeReadOnlyActionRequest {
+  string action = 1;
+  string service_code = 2;
+  string version = 3;
+  string method = 4;
+  string endpoint = 5;
+  google.protobuf.Struct payload = 6;
+}
+
+message VolcengineResponse {
+  google.protobuf.Value response = 1;
+}

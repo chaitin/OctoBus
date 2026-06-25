@@ -228,6 +228,9 @@ const services = {
   "volcengine-cloud-firewall": {
     entryFile: "../volcengine__cloud-firewall/bin/volcengine-cloud-firewall.js",
     serviceModule: "../volcengine__cloud-firewall/src/service.js",
+  "volcengine-ddos": {
+    entryFile: "../volcengine__ddos/bin/volcengine-ddos.js",
+    serviceModule: "../volcengine__ddos/src/service.js",
   },
   "wangsu-label-ip": {
     entryFile: "../wangsu__label-ip/bin/wangsu-label-ip.js",
