@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package Tencent_CSIP;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Tencent_CSIP";
+
+service Tencent_CSIP {
+  rpc DescribeAlertList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCVMAssets(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribePublicIpAssets(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeVpcAssets(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeRiskCenterAssetViewVULRiskList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeRiskCenterAssetViewWeakPasswordRiskList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeRiskCenterAssetViewCFGRiskList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeRiskCenterAssetViewPortRiskList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCSIPRiskStatistics(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeAccessKeyRisk(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCosAlarmList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeSkillScanResult(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeOrganizationUserInfo(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeSubUserInfo(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc InvokeReadOnlyAction(InvokeReadOnlyActionRequest) returns (TencentCloudResponse) {}
+}
+
+message TencentCloudRequest {
+  google.protobuf.Struct payload = 1;
+}
+
+message InvokeReadOnlyActionRequest {
+  string action = 1;
+  google.protobuf.Struct payload = 2;
+}
+
+message TencentCloudResponse {
+  google.protobuf.Value response = 1;
+}
