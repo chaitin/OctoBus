@@ -76,6 +76,10 @@ const services = {
     entryFile: "../chaitin__cloudwalker/bin/cloudwalker.js",
     serviceModule: "../chaitin__cloudwalker/src/service.js",
   },
+  "t-answer-ndr": {
+    entryFile: "../chaitin__t-answer-ndr/bin/t-answer-ndr.js",
+    serviceModule: "../chaitin__t-answer-ndr/src/service.js",
+  },
   "das-gateway-v3": {
     entryFile: "../das__gateway_v3/bin/das-gateway-v3.js",
     serviceModule: "../das__gateway_v3/src/service.js",

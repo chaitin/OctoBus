@@ -1,0 +1,15 @@
+{
+  "name": "t-answer-ndr",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "t-answer-ndr": "bin/t-answer-ndr.js"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.6.0"
+  }
+}

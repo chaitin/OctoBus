@@ -1,0 +1,329 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "t-answer-ndr",
+  "displayName": "Chaitin T-Answer NDR (全悉/Quanxi)",
+  "description": "OctoBus service for Chaitin T-Answer (TA, 全悉/Quanxi) NDR full-traffic detection security operations APIs. Network/user-permission configuration APIs are intentionally excluded.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/t_answer_ndr.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/ListAlerts": {
+          "name": "list-alerts",
+          "description": "Search threat alerts."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/SearchAttackRecords": {
+          "name": "search-attack-records",
+          "description": "Scenario tool: search alert records by exact attack_name, keyword, attacker_ip, victim_ip, asset_ip, severity, result, and days or explicit Unix-ms time range."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/AnalyzeIpActivity": {
+          "name": "analyze-ip-activity",
+          "description": "Scenario tool: correlate one IP across assets, attacker-side alerts, victim-side alerts, and optional raw logs. Use role=any, attacker, or victim."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/HuntThreats": {
+          "name": "hunt-threats",
+          "description": "Scenario tool: threat hunting over recent alerts. Provide query or attack_name plus optional IP/severity filters; returns matching alerts and top attacker/victim/attack-name aggregations."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/InvestigateAttackCampaign": {
+          "name": "investigate-attack-campaign",
+          "description": "Report tool: investigate an attack campaign by query or attack_name and return distilled totals, top attack names, top attackers, top victims, sample alerts, and pivot IPs."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/AssessIpThreatProfile": {
+          "name": "assess-ip-threat-profile",
+          "description": "Report tool: assess one IP as attacker and victim, returning alert totals, top related entities, sample alerts, and optional traffic-log totals."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/GetAlert": {
+          "name": "get-alert",
+          "description": "Get threat alert details."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/GetAlertRawDocument": {
+          "name": "get-alert-raw-document",
+          "description": "Get raw alert document."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/ListCustomIntelligences": {
+          "name": "list-custom-intelligences",
+          "description": "Search custom threat intelligence."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/CreateCustomIntelligence": {
+          "name": "create-custom-intelligence",
+          "description": "Create custom threat intelligence."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/UpdateCustomIntelligence": {
+          "name": "update-custom-intelligence",
+          "description": "Update custom threat intelligence."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/UpdateCustomIntelligenceStatus": {
+          "name": "update-custom-intelligence-status",
+          "description": "Enable or disable custom threat intelligence."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/DeleteCustomIntelligence": {
+          "name": "delete-custom-intelligence",
+          "description": "Delete custom threat intelligence."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/ListCustomRules": {
+          "name": "list-custom-rules",
+          "description": "Search custom detection rules."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/CreateCustomRule": {
+          "name": "create-custom-rule",
+          "description": "Create a custom detection rule."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/UpdateCustomRule": {
+          "name": "update-custom-rule",
+          "description": "Update a custom detection rule."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/UpdateCustomRuleStatus": {
+          "name": "update-custom-rule-status",
+          "description": "Enable or disable custom detection rules."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/DeleteCustomRule": {
+          "name": "delete-custom-rule",
+          "description": "Delete custom detection rules."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/CreateAlarmWhiteList": {
+          "name": "create-alarm-white-list",
+          "description": "Create an alarm whitelist rule."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/UpdateAlarmWhiteList": {
+          "name": "update-alarm-white-list",
+          "description": "Update an alarm whitelist rule."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/DeleteAlarmWhiteList": {
+          "name": "delete-alarm-white-list",
+          "description": "Delete, enable, or disable alarm whitelist rules."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/ListAssets": {
+          "name": "list-assets",
+          "description": "Search managed assets."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/GetAsset": {
+          "name": "get-asset",
+          "description": "Get asset details."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/SearchAssetTree": {
+          "name": "search-asset-tree",
+          "description": "Search the asset tree."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/ListAssetGroups": {
+          "name": "list-asset-groups",
+          "description": "List asset groups."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/ListAssetTags": {
+          "name": "list-asset-tags",
+          "description": "List asset tags."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/ListDiscoveredAssets": {
+          "name": "list-discovered-assets",
+          "description": "Search discovered assets."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/BatchCreateFirewallWhiteList": {
+          "name": "batch-create-firewall-white-list",
+          "description": "Batch create response-disposal whitelist entries."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/CreateFirewallWhiteList": {
+          "name": "create-firewall-white-list",
+          "description": "Create a response-disposal whitelist entry."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/UpdateFirewallWhiteList": {
+          "name": "update-firewall-white-list",
+          "description": "Update a response-disposal whitelist entry."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/UpdateFirewallWhiteListStatus": {
+          "name": "update-firewall-white-list-status",
+          "description": "Enable or disable response-disposal whitelist entries."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/DeleteFirewallWhiteList": {
+          "name": "delete-firewall-white-list",
+          "description": "Delete response-disposal whitelist entries."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/DeleteAllFirewallWhiteList": {
+          "name": "delete-all-firewall-white-list",
+          "description": "Delete all response-disposal whitelist entries."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/CreateBlockRules": {
+          "name": "create-block-rules",
+          "description": "Create block rules."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/UpdateBlockRules": {
+          "name": "update-block-rules",
+          "description": "Update block rules."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/UpdateBlockRulesStatus": {
+          "name": "update-block-rules-status",
+          "description": "Enable, disable, or delete block rules."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/DeleteAllBlockRules": {
+          "name": "delete-all-block-rules",
+          "description": "Delete all block rules."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/ListPcapDetectTasks": {
+          "name": "list-pcap-detect-tasks",
+          "description": "List offline pcap detection tasks."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/UploadPcapDetectFiles": {
+          "name": "upload-pcap-detect-files",
+          "description": "Upload pcap or pcapng files for offline detection. Uses service-held web console credentials when needed."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/CreatePcapDetectTask": {
+          "name": "create-pcap-detect-task",
+          "description": "Create an offline pcap detection task from uploaded file ids. Uses service-held web console credentials when needed."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/DeletePcapDetectTask": {
+          "name": "delete-pcap-detect-task",
+          "description": "Delete an offline pcap detection task. Uses service-held web console credentials when needed."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/AnalyzePcapFiles": {
+          "name": "analyze-pcap-files",
+          "description": "Upload pcap files, create offline detection tasks, optionally wait for completion, and return related alerts. Uses service-held web console credentials when needed."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/ListPcapDetectAlerts": {
+          "name": "list-pcap-detect-alerts",
+          "description": "Search offline pcap detection alerts."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/GetPcapDetectAlert": {
+          "name": "get-pcap-detect-alert",
+          "description": "Get offline pcap detection alert details."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/GetPcapDetectAlertRawDocument": {
+          "name": "get-pcap-detect-alert-raw-document",
+          "description": "Get raw offline pcap detection alert document."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/ListTcpdumpProcesses": {
+          "name": "list-tcpdump-processes",
+          "description": "List online packet capture tasks."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/CreateTcpdumpProcess": {
+          "name": "create-tcpdump-process",
+          "description": "Create an online packet capture task."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/UpdateTcpdumpProcess": {
+          "name": "update-tcpdump-process",
+          "description": "Update an online packet capture task."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/StartTcpdumpProcess": {
+          "name": "start-tcpdump-process",
+          "description": "Start an online packet capture task."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/CancelTcpdumpProcess": {
+          "name": "cancel-tcpdump-process",
+          "description": "Cancel an online packet capture task."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/DeleteTcpdumpProcess": {
+          "name": "delete-tcpdump-process",
+          "description": "Delete online packet capture tasks."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/DownloadFile": {
+          "name": "download-file",
+          "description": "Download a file from the unified download API."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/CountAlerts": {
+          "name": "count-alerts",
+          "description": "Count threat alerts with raw JSON-RPC params."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/ListAlertAggregations": {
+          "name": "list-alert-aggregations",
+          "description": "Search aggregated threat alerts."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/ListAlertAggregationsT2": {
+          "name": "list-alert-aggregations-t2",
+          "description": "Search secondary aggregated threat alerts."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/ListAlertAggTop": {
+          "name": "list-alert-agg-top",
+          "description": "Get top threat alert aggregations."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/ListAlertChart": {
+          "name": "list-alert-chart",
+          "description": "Get threat alert time-series chart data."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/LoadAlertPcapFile": {
+          "name": "load-alert-pcap-file",
+          "description": "Load an alert pcap file for frame inspection."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/ListAlertPcapFrames": {
+          "name": "list-alert-pcap-frames",
+          "description": "List frames from a loaded alert pcap."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/FilterAlertPcapFrames": {
+          "name": "filter-alert-pcap-frames",
+          "description": "Filter frames from an alert pcap using Wireshark-style filters."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/GetAlertPcapFrame": {
+          "name": "get-alert-pcap-frame",
+          "description": "Get one frame from an alert pcap."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/CheckAlertPcapDownload": {
+          "name": "check-alert-pcap-download",
+          "description": "Check whether alert pcap download is available."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/ListBlockRules": {
+          "name": "list-block-rules",
+          "description": "Search block rules."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/ListBlockRulesTrend": {
+          "name": "list-block-rules-trend",
+          "description": "Search block rule trend data."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/ListTapBlockRecords": {
+          "name": "list-tap-block-records",
+          "description": "Search bypass block records."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/CountTapBlocks": {
+          "name": "count-tap-blocks",
+          "description": "Get bypass block count statistics."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/ListTopTapBlocks": {
+          "name": "list-top-tap-blocks",
+          "description": "Get top bypass block targets."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/DownloadPcap": {
+          "name": "download-pcap",
+          "description": "Create or fetch a pcap download for matching traffic."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/MultiDownloadPcap": {
+          "name": "multi-download-pcap",
+          "description": "Create or fetch multi-pcap downloads for matching traffic."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/SearchHttpLogs": {
+          "name": "search-http-logs",
+          "description": "Search original HTTP traffic logs."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/SearchDnsLogs": {
+          "name": "search-dns-logs",
+          "description": "Search original DNS traffic logs."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/SearchTcpUdpLogs": {
+          "name": "search-tcp-udp-logs",
+          "description": "Search original TCP/UDP traffic logs."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/SearchOtherLogs": {
+          "name": "search-other-logs",
+          "description": "Search other original traffic logs."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/SearchTrafficLogs": {
+          "name": "search-traffic-logs",
+          "description": "Scenario tool: search original traffic logs with typed protocol, src_ip, dest_ip, ip, keyword, days, count, and offset. protocol supports all, http, dns, tcp_udp, and other."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/GetOriginalLogDetail": {
+          "name": "get-original-log-detail",
+          "description": "Get original traffic log details."
+        },
+        "chaitin.t_answer_ndr.v1.TAnswerNdrService/MultiDownloadLogJson": {
+          "name": "multi-download-log-json",
+          "description": "Create or fetch JSON exports for original logs."
+        }
+      }
+    }
+  }
+}

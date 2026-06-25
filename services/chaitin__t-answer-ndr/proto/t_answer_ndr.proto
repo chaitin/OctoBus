@@ -1,0 +1,296 @@
+syntax = "proto3";
+
+package chaitin.t_answer_ndr.v1;
+
+service TAnswerNdrService {
+  rpc ListAlerts(ListAlertsRequest) returns (JsonRpcResult) {}
+  rpc SearchAttackRecords(SearchAttackRecordsRequest) returns (JsonRpcResult) {}
+  rpc AnalyzeIpActivity(IpActivityRequest) returns (JsonRpcResult) {}
+  rpc HuntThreats(HuntThreatsRequest) returns (JsonRpcResult) {}
+  rpc InvestigateAttackCampaign(HuntThreatsRequest) returns (JsonRpcResult) {}
+  rpc AssessIpThreatProfile(IpActivityRequest) returns (JsonRpcResult) {}
+  rpc GetAlert(GetAlertRequest) returns (JsonRpcResult) {}
+  rpc GetAlertRawDocument(GetAlertRawDocumentRequest) returns (JsonRpcResult) {}
+  rpc CountAlerts(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc ListAlertAggregations(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc ListAlertAggregationsT2(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc ListAlertAggTop(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc ListAlertChart(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc LoadAlertPcapFile(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc ListAlertPcapFrames(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc FilterAlertPcapFrames(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc GetAlertPcapFrame(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc CheckAlertPcapDownload(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc ListCustomIntelligences(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc CreateCustomIntelligence(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc UpdateCustomIntelligence(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc UpdateCustomIntelligenceStatus(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc DeleteCustomIntelligence(IdsRequest) returns (JsonRpcResult) {}
+  rpc ListCustomRules(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc CreateCustomRule(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc UpdateCustomRule(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc UpdateCustomRuleStatus(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc DeleteCustomRule(IdsRequest) returns (JsonRpcResult) {}
+  rpc CreateAlarmWhiteList(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc UpdateAlarmWhiteList(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc DeleteAlarmWhiteList(IdsActionRequest) returns (JsonRpcResult) {}
+  rpc ListAssets(ListAssetsRequest) returns (JsonRpcResult) {}
+  rpc GetAsset(GetAssetRequest) returns (JsonRpcResult) {}
+  rpc SearchAssetTree(SearchAssetTreeRequest) returns (JsonRpcResult) {}
+  rpc ListAssetGroups(ListAssetGroupsRequest) returns (JsonRpcResult) {}
+  rpc ListAssetTags(ListAssetTagsRequest) returns (JsonRpcResult) {}
+  rpc ListDiscoveredAssets(ListDiscoveredAssetsRequest) returns (JsonRpcResult) {}
+  rpc BatchCreateFirewallWhiteList(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc CreateFirewallWhiteList(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc UpdateFirewallWhiteList(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc UpdateFirewallWhiteListStatus(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc DeleteFirewallWhiteList(IdsRequest) returns (JsonRpcResult) {}
+  rpc DeleteAllFirewallWhiteList(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc CreateBlockRules(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc UpdateBlockRules(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc UpdateBlockRulesStatus(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc DeleteAllBlockRules(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc ListBlockRules(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc ListBlockRulesTrend(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc ListTapBlockRecords(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc CountTapBlocks(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc ListTopTapBlocks(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc ListPcapDetectTasks(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc UploadPcapDetectFiles(UploadPcapDetectFilesRequest) returns (JsonRpcResult) {}
+  rpc CreatePcapDetectTask(PcapDetectTaskRequest) returns (JsonRpcResult) {}
+  rpc DeletePcapDetectTask(DeletePcapDetectTaskRequest) returns (JsonRpcResult) {}
+  rpc AnalyzePcapFiles(AnalyzePcapFilesRequest) returns (JsonRpcResult) {}
+  rpc ListPcapDetectAlerts(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc GetPcapDetectAlert(GetAlertRequest) returns (JsonRpcResult) {}
+  rpc GetPcapDetectAlertRawDocument(GetAlertRawDocumentRequest) returns (JsonRpcResult) {}
+  rpc DownloadPcap(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc MultiDownloadPcap(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc SearchHttpLogs(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc SearchDnsLogs(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc SearchTcpUdpLogs(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc SearchOtherLogs(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc SearchTrafficLogs(TrafficLogSearchRequest) returns (JsonRpcResult) {}
+  rpc GetOriginalLogDetail(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc MultiDownloadLogJson(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc ListTcpdumpProcesses(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc CreateTcpdumpProcess(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc UpdateTcpdumpProcess(RawJsonRequest) returns (JsonRpcResult) {}
+  rpc StartTcpdumpProcess(IdRequest) returns (JsonRpcResult) {}
+  rpc CancelTcpdumpProcess(IdRequest) returns (JsonRpcResult) {}
+  rpc DeleteTcpdumpProcess(IdsRequest) returns (JsonRpcResult) {}
+  rpc DownloadFile(DownloadFileRequest) returns (DownloadFileResult) {}
+}
+
+message Filter {
+  string oper = 1;
+  string target = 2;
+}
+
+message SortField {
+  string field = 1;
+  bool ascending = 2;
+}
+
+message JsonRpcResult {
+  string result_json = 1;
+}
+
+message RawJsonRequest {
+  string raw_params_json = 1;
+}
+
+message SearchAttackRecordsRequest {
+  int64 time_range_start = 1;
+  int64 time_range_end = 2;
+  int64 days = 3;
+  string attack_name = 4;
+  string keyword = 5;
+  string attacker_ip = 6;
+  string victim_ip = 7;
+  string asset_ip = 8;
+  string severity = 9;
+  string result = 10;
+  int64 offset = 11;
+  int64 count = 12;
+  string raw_params_json = 100;
+}
+
+message IpActivityRequest {
+  string ip = 1;
+  string role = 2;
+  int64 time_range_start = 3;
+  int64 time_range_end = 4;
+  int64 days = 5;
+  int64 count = 6;
+  bool include_raw_logs = 7;
+  string raw_params_json = 100;
+}
+
+message HuntThreatsRequest {
+  int64 time_range_start = 1;
+  int64 time_range_end = 2;
+  int64 days = 3;
+  string query = 4;
+  string attack_name = 5;
+  string attacker_ip = 6;
+  string victim_ip = 7;
+  string severity = 8;
+  int64 count = 9;
+  string raw_params_json = 100;
+}
+
+message TrafficLogSearchRequest {
+  string protocol = 1;
+  int64 time_range_start = 2;
+  int64 time_range_end = 3;
+  int64 days = 4;
+  string src_ip = 5;
+  string dest_ip = 6;
+  string ip = 7;
+  string keyword = 8;
+  int64 offset = 9;
+  int64 count = 10;
+  string raw_params_json = 100;
+}
+
+message IdRequest {
+  int64 id = 1;
+  string raw_params_json = 100;
+}
+
+message IdsRequest {
+  repeated int64 ids = 1;
+  string raw_params_json = 100;
+}
+
+message IdsActionRequest {
+  repeated int64 ids = 1;
+  string action = 2;
+  string raw_params_json = 100;
+}
+
+message PcapInputFile {
+  string file_name = 1;
+  string content_base64 = 2;
+}
+
+message UploadedPcapFile {
+  string id = 1;
+  string file_name = 2;
+}
+
+message UploadPcapDetectFilesRequest {
+  repeated PcapInputFile pcap_files = 1;
+}
+
+message PcapDetectTaskRequest {
+  repeated UploadedPcapFile files = 1;
+  int64 detect_pattern = 2;
+  string raw_params_json = 100;
+}
+
+message DeletePcapDetectTaskRequest {
+  int64 id = 1;
+  int64 delete_strategy = 2;
+  string raw_params_json = 100;
+}
+
+message AnalyzePcapFilesRequest {
+  repeated PcapInputFile pcap_files = 1;
+  int64 detect_pattern = 2;
+  bool wait_for_completion = 3;
+  int64 poll_interval_ms = 4;
+  int64 timeout_ms = 5;
+}
+
+message DownloadFileRequest {
+  string id = 1;
+  string query = 2;
+  string query_json = 3;
+}
+
+message DownloadFileResult {
+  string content_type = 1;
+  string filename = 2;
+  string content_base64 = 3;
+}
+
+message ListAlertsRequest {
+  int64 time_range_start = 1;
+  int64 time_range_end = 2;
+  int64 offset = 3;
+  int64 count = 4;
+  repeated Filter src_ip = 5;
+  repeated Filter dest_ip = 6;
+  repeated Filter attacker = 7;
+  repeated Filter victim = 8;
+  repeated Filter severity = 9;
+  repeated Filter result = 10;
+  repeated Filter keyword = 11;
+  repeated Filter name = 12;
+  repeated Filter tag = 13;
+  repeated SortField sort = 14;
+  string raw_params_json = 100;
+}
+
+message GetAlertRequest {
+  string doc_id = 1;
+}
+
+message GetAlertRawDocumentRequest {
+  string doc_id = 1;
+}
+
+message ListAssetsRequest {
+  int64 offset = 1;
+  int64 count = 2;
+  int64 id = 3;
+  int64 group_id = 4;
+  int64 importance = 5;
+  string ip = 6;
+  string mac = 7;
+  string name = 8;
+  string asset_type = 9;
+  repeated int64 tag_id = 10;
+  string raw_params_json = 100;
+}
+
+message GetAssetRequest {
+  int64 id = 1;
+}
+
+message SearchAssetTreeRequest {
+  string keyword = 1;
+  string raw_params_json = 100;
+}
+
+message ListAssetGroupsRequest {
+  int64 id = 1;
+  string name = 2;
+  string raw_params_json = 100;
+}
+
+message ListAssetTagsRequest {
+  int64 offset = 1;
+  int64 count = 2;
+  string name = 3;
+  string raw_params_json = 100;
+}
+
+message ListDiscoveredAssetsRequest {
+  int64 offset = 1;
+  int64 count = 2;
+  int64 group_id = 3;
+  int64 importance = 4;
+  int64 port = 5;
+  int64 time_start = 6;
+  int64 time_end = 7;
+  string ip_addr = 8;
+  string mac = 9;
+  string name = 10;
+  string os = 11;
+  string asset_type = 12;
+  repeated string service = 13;
+  repeated int64 tag_id = 14;
+  string raw_params_json = 100;
+}
