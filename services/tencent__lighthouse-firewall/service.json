@@ -1,0 +1,53 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "lighthouse-firewall",
+  "displayName": "Tencent Cloud Lighthouse Firewall",
+  "description": "OctoBus package for Tencent Cloud Lighthouse firewall rule query, create, delete, modify, and template apply APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/lighthouse_firewall.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Tencent_Lighthouse_FIREWALL.Tencent_Lighthouse_FIREWALL/ListFirewallRules": {
+          "name": "list-firewall-rules",
+          "description": "List Lighthouse firewall rules for an instance."
+        },
+        "Tencent_Lighthouse_FIREWALL.Tencent_Lighthouse_FIREWALL/CreateFirewallRules": {
+          "name": "create-firewall-rules",
+          "description": "Create Lighthouse firewall rules."
+        },
+        "Tencent_Lighthouse_FIREWALL.Tencent_Lighthouse_FIREWALL/DeleteFirewallRules": {
+          "name": "delete-firewall-rules",
+          "description": "Delete Lighthouse firewall rules."
+        },
+        "Tencent_Lighthouse_FIREWALL.Tencent_Lighthouse_FIREWALL/ModifyFirewallRules": {
+          "name": "modify-firewall-rules",
+          "description": "Modify Lighthouse firewall rules."
+        },
+        "Tencent_Lighthouse_FIREWALL.Tencent_Lighthouse_FIREWALL/ApplyFirewallTemplate": {
+          "name": "apply-firewall-template",
+          "description": "Apply Lighthouse firewall template rules to instances."
+        },
+        "Tencent_Lighthouse_FIREWALL.Tencent_Lighthouse_FIREWALL/BlockIP": {
+          "name": "block-ip",
+          "description": "Block IPv4 source addresses by creating DENY firewall rules."
+        },
+        "Tencent_Lighthouse_FIREWALL.Tencent_Lighthouse_FIREWALL/UnblockIP": {
+          "name": "unblock-ip",
+          "description": "Remove matching Lighthouse firewall block rules."
+        }
+      }
+    }
+  }
+}

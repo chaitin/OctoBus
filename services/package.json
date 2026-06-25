@@ -99,7 +99,8 @@
     "anyi-cloud-native-security": "bin/anyi-cloud-native-security.js",
     "api7-enterprise-v3-10-2": "bin/api7-enterprise-v3-10-2.js",
     "sangfor-af-v8-0-35r1": "bin/sangfor-af-v8-0-35r1.js",
-    "ctyun-accessone": "bin/ctyun-accessone.js"
+    "ctyun-accessone": "bin/ctyun-accessone.js",
+    "tencent-lighthouse-firewall": "bin/tencent-lighthouse-firewall.js"
   },
   "files": [
     "bin/jumpserver-bastionhost-v4-10-16.js",
@@ -293,7 +294,9 @@
     "bin/sangfor-af-v8-0-35r1.js",
     "sangfor__af_v8-0-35r1",
     "bin/ctyun-accessone.js",
-    "ctyun__accessone"
+    "ctyun__accessone",
+    "bin/tencent-lighthouse-firewall.js",
+    "tencent__lighthouse-firewall"
   ],
   "scripts": {
     "validate": "node scripts/validate-service-package.mjs",
