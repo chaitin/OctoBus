@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "region": {
+      "type": "string",
+      "default": "cn-hangzhou",
+      "description": "Alibaba Cloud region, e.g. cn-hangzhou, cn-beijing, ap-southeast-1."
+    },
+    "endpoint": {
+      "type": "string",
+      "default": "sas.aliyuncs.com",
+      "description": "Alibaba Cloud Security Center API endpoint hostname."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 10000,
+      "description": "HTTP request timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification."
+    }
+  }
+}

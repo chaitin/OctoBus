@@ -1,0 +1,178 @@
+syntax = "proto3";
+
+package Alibaba_SAS;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
+
+option go_package = "miner/grpc-service/Alibaba_SAS";
+
+service Alibaba_SAS {
+  // 查询容器实例列表
+  rpc ListContainerInstances(ListContainerInstancesRequest) returns (ListContainerInstancesResponse) {}
+  // 查询镜像实例列表
+  rpc ListImageInstances(ListImageInstancesRequest) returns (ListImageInstancesResponse) {}
+  // 查询镜像漏洞列表
+  rpc ListImageVulnerabilities(ListImageVulnerabilitiesRequest) returns (ListImageVulnerabilitiesResponse) {}
+  // 查询集群安全事件统计
+  rpc GetClusterSuspEventStatistics(GetClusterSuspEventStatisticsRequest) returns (GetClusterSuspEventStatisticsResponse) {}
+  // 查询集群拦截规则列表
+  rpc ListClusterInterceptionConfig(ListClusterInterceptionConfigRequest) returns (ListClusterInterceptionConfigResponse) {}
+}
+
+// ── 容器实例 ─────────────────────────────────────────────
+
+message ListContainerInstancesRequest {
+  // 当前页码，从 1 开始
+  google.protobuf.Int64Value current_page = 1;
+  // 每页数量，默认 20，最大 200
+  google.protobuf.Int64Value page_size = 2;
+  // 搜索条件（容器 ID、名称、IP、集群等）
+  string criteria = 3;
+  // 搜索条件的逻辑操作符：AND / OR
+  string logical_exp = 4;
+}
+
+message ListContainerInstancesResponse {
+  repeated ContainerInstanceRecord items = 1;
+  int64 total_count = 2;
+}
+
+message ContainerInstanceRecord {
+  // 容器实例 ID
+  string instance_id = 1;
+  // 容器名称
+  string container_name = 2;
+  // 容器状态
+  string status = 3;
+  // 镜像名称
+  string image_name = 4;
+  // 集群名称
+  string cluster_name = 5;
+  // 集群 ID
+  string cluster_id = 6;
+  // Pod 名称
+  string pod_name = 7;
+  // 命名空间
+  string namespace = 8;
+  // 节点 IP
+  string node_ip = 9;
+  // Pod IP
+  string pod_ip = 10;
+  // 风险等级
+  string risk_level = 11;
+}
+
+// ── 镜像实例 ─────────────────────────────────────────────
+
+message ListImageInstancesRequest {
+  google.protobuf.Int64Value current_page = 1;
+  google.protobuf.Int64Value page_size = 2;
+  // 搜索条件（镜像 ID、标签、仓库等）
+  string criteria = 3;
+  // 搜索条件的逻辑操作符
+  string logical_exp = 4;
+}
+
+message ListImageInstancesResponse {
+  repeated ImageInstanceRecord items = 1;
+  int64 total_count = 2;
+}
+
+message ImageInstanceRecord {
+  // 镜像 UUID
+  string image_uuid = 1;
+  // 镜像标签
+  string image_tag = 2;
+  // 镜像 Digest
+  string digest = 3;
+  // 镜像仓库名称
+  string repo_name = 4;
+  // 镜像仓库命名空间
+  string repo_namespace = 5;
+  // 镜像地域
+  string region = 6;
+  // 镜像大小（字节）
+  int64 image_size = 7;
+  // 漏洞数量
+  int64 vul_count = 8;
+  // 告警数量
+  int64 alarm_count = 9;
+  // 风险等级：high / medium / low
+  string risk_level = 10;
+}
+
+// ── 镜像漏洞 ─────────────────────────────────────────────
+
+message ListImageVulnerabilitiesRequest {
+  // 镜像 UUID（必填）
+  string image_uuid = 1;
+  google.protobuf.Int64Value current_page = 2;
+  google.protobuf.Int64Value page_size = 3;
+  // 漏洞名称模糊搜索
+  string name = 4;
+  // 漏洞等级：high / medium / low
+  string level = 5;
+  // 漏洞类型：sca / cve
+  string vul_type = 6;
+}
+
+message ListImageVulnerabilitiesResponse {
+  repeated ImageVulnerabilityRecord items = 1;
+  int64 total_count = 2;
+}
+
+message ImageVulnerabilityRecord {
+  // 漏洞名称
+  string name = 1;
+  // 漏洞别名
+  string alias_name = 2;
+  // CVE ID
+  string cve_id = 3;
+  // 漏洞等级
+  string level = 4;
+  // 漏洞类型
+  string type = 5;
+  // 修复版本
+  string fix_version = 6;
+  // 是否已修复
+  bool is_fixed = 7;
+  // 首次发现时间
+  string first_found_time = 8;
+}
+
+// ── 集群安全事件统计 ─────────────────────────────────────
+
+message GetClusterSuspEventStatisticsRequest {
+}
+
+message GetClusterSuspEventStatisticsResponse {
+  google.protobuf.Struct statistics = 1;
+}
+
+// ── 集群拦截规则 ─────────────────────────────────────────
+
+message ListClusterInterceptionConfigRequest {
+  // 集群 ID
+  string cluster_id = 1;
+  google.protobuf.Int64Value current_page = 2;
+  google.protobuf.Int64Value page_size = 3;
+}
+
+message ListClusterInterceptionConfigResponse {
+  repeated ClusterInterceptionConfigRecord items = 1;
+  int64 total_count = 2;
+}
+
+message ClusterInterceptionConfigRecord {
+  // 集群名称
+  string cluster_name = 1;
+  // 集群 ID
+  string cluster_id = 2;
+  // 拦截类型
+  string intercept_type = 3;
+  // 规则数量
+  int64 rule_count = 4;
+  // 拦截状态：0 关闭，1 开启
+  int32 state = 5;
+}

@@ -1,0 +1,45 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "alibaba-sas",
+  "displayName": "Alibaba Cloud Security Center (Container Security)",
+  "description": "OctoBus package for Alibaba Cloud Security Center container security APIs: container/image instance query, vulnerability listing, cluster security event statistics.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/alibaba_sas.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Alibaba_SAS.Alibaba_SAS/ListContainerInstances": {
+          "name": "list-container-instances",
+          "description": "List Alibaba Cloud container instances."
+        },
+        "Alibaba_SAS.Alibaba_SAS/ListImageInstances": {
+          "name": "list-image-instances",
+          "description": "List container image instances."
+        },
+        "Alibaba_SAS.Alibaba_SAS/ListImageVulnerabilities": {
+          "name": "list-image-vulnerabilities",
+          "description": "List container image vulnerabilities."
+        },
+        "Alibaba_SAS.Alibaba_SAS/GetClusterSuspEventStatistics": {
+          "name": "get-cluster-susp-event-statistics",
+          "description": "Get cluster security event statistics."
+        },
+        "Alibaba_SAS.Alibaba_SAS/ListClusterInterceptionConfig": {
+          "name": "list-cluster-interception-config",
+          "description": "List cluster interception rules."
+        }
+      }
+    }
+  }
+}

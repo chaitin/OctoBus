@@ -161,6 +161,10 @@ const services = {
     entryFile: "../tencent__bh/bin/tencent-bh.js",
     serviceModule: "../tencent__bh/src/service.js",
   },
+  "alibaba-sas": {
+    entryFile: "../alibaba__sas/bin/alibaba-sas.js",
+    serviceModule: "../alibaba__sas/src/service.js",
+  },
 };
 
 const serviceNames = Object.keys(services);
