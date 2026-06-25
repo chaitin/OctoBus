@@ -129,6 +129,10 @@ const services = {
     entryFile: "../threatbook__tdp/bin/threatbook-tdp.js",
     serviceModule: "../threatbook__tdp/src/service.js",
   },
+  "threatbook-tdp-host": {
+    entryFile: "../threatbook__tdp-host/bin/threatbook-tdp-host.js",
+    serviceModule: "../threatbook__tdp-host/src/service.js",
+  },
   "threatbook-tip-v4": {
     entryFile: "../threatbook__tip_v4/bin/threatbook-tip-v4.js",
     serviceModule: "../threatbook__tip_v4/src/service.js",

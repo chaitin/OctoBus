@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package ThreatBook_TDP_Host;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/ThreatBook_TDP_Host";
+
+service ThreatBook_TDP_Host {
+  // 查询失陷主机汇总列表（TDP web 控制台 /api/web/host/getFallHostSumList）。
+  rpc QueryFallHostList(QueryFallHostListRequest) returns (QueryFallHostListResponse) {}
+}
+
+message QueryFallHostListRequest {
+  // 威胁方向，缺省 ["in","lateral","out"]。
+  repeated string direction = 1;
+  // 威胁类型筛选，缺省覆盖设备全量类型。
+  repeated string threat_type = 2;
+  // 时间范围（Unix 秒），缺省取最近 7 天。
+  int64 time_from = 3;
+  int64 time_to = 4;
+  // 模糊关键字（命中 threat.name / external_ip / machine 等）。
+  string keyword = 5;
+  // 处置结果筛选，缺省空。
+  string result = 6;
+  // 事件状态筛选。
+  repeated string status = 7;
+  // 处置状态筛选。
+  repeated string disposal_status = 8;
+  // 分页，缺省 cur_page=1 / page_size=20。
+  int32 cur_page = 9;
+  int32 page_size = 10;
+  // 排序字段 / 方向，缺省 severity / desc。
+  string sort_by = 11;
+  string sort_flag = 12;
+  // 透传/覆盖 condition 内任意字段（高级用法）。
+  google.protobuf.Struct extra_condition = 13;
+}
+
+message QueryFallHostListResponse {
+  // 设备业务码，0 为成功。
+  int64 response_code = 1;
+  // 本页返回条目数。
+  int64 item_count = 2;
+  // data 段透传（items + page）。
+  google.protobuf.Value data = 3;
+  // 完整响应体透传。
+  google.protobuf.Value raw_json = 4;
+}
