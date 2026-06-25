@@ -1,0 +1,53 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "tencent-cwp",
+  "displayName": "Tencent Cloud CWP",
+  "description": "OctoBus package for Tencent Cloud Host Security (CWP) API 3.0 read-only operations.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/tencent_cwp.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Tencent_CWP.TencentCwpService/DescribeMachines": {
+          "name": "describe-machines",
+          "description": "Query Tencent Cloud CWP protected machines."
+        },
+        "Tencent_CWP.TencentCwpService/DescribeMachineGeneral": {
+          "name": "describe-machine-general",
+          "description": "Query Tencent Cloud CWP machine overview."
+        },
+        "Tencent_CWP.TencentCwpService/DescribeMalWareList": {
+          "name": "describe-malware-list",
+          "description": "Query Tencent Cloud CWP malware events."
+        },
+        "Tencent_CWP.TencentCwpService/DescribeVulList": {
+          "name": "describe-vul-list",
+          "description": "Query Tencent Cloud CWP vulnerability list."
+        },
+        "Tencent_CWP.TencentCwpService/DescribeBaselineDetectOverview": {
+          "name": "describe-baseline-detect-overview",
+          "description": "Query Tencent Cloud CWP baseline overview statistics."
+        },
+        "Tencent_CWP.TencentCwpService/DescribeMachineRiskCnt": {
+          "name": "describe-machine-risk-cnt",
+          "description": "Query Tencent Cloud CWP intrusion event statistics."
+        },
+        "Tencent_CWP.TencentCwpService/InvokeReadOnlyAction": {
+          "name": "invoke-read-only-action",
+          "description": "Invoke an allowed Tencent Cloud CWP Describe* action."
+        }
+      }
+    }
+  }
+}
