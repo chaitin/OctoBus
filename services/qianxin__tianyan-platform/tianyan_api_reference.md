@@ -5,7 +5,7 @@
 > **Base URL**: `https://<platform-ip>:443`  
 > **All paths below are relative to the base URL. The full path prefix is `/skyeye/v1` for auth endpoints; most business endpoints use paths starting directly with `/alarm/`, `/asset/`, `/analysis/`, etc.**  
 > **Compiled**: 2026-06-25  
-> **Total APIs documented**: ~500+ (from 15+ source documents)
+> **Total APIs documented**: ~600+ (from 26 module doc files + 1 main manual; 22 modules)
 
 ---
 
