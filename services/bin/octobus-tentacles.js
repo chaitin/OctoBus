@@ -65,6 +65,10 @@ const services = {
     entryFile: "../huawei__fw-usg6000e/bin/huawei-fw-usg6000e.js",
     serviceModule: "../huawei__fw-usg6000e/src/service.js",
   },
+  "jumpserver-bastionhost-v4-10-16": {
+    entryFile: "../jumpserver__bastionhost_v4-10-16/bin/jumpserver-bastionhost-v4-10-16.js",
+    serviceModule: "../jumpserver__bastionhost_v4-10-16/src/service.js",
+  },
   "nsfocus-ads-v4-5-r90-f06": {
     entryFile: "../nsfocus__ads_v4-5-r90-f06/bin/nsfocus-ads-v4-5-r90-f06.js",
     serviceModule: "../nsfocus__ads_v4-5-r90-f06/src/service.js",
