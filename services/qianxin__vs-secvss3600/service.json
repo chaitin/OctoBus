@@ -2,62 +2,50 @@
   "schema": "chaitin.octobus.service.v1",
   "name": "qianxin-vs-secvss3600",
   "displayName": "QIANXIN VS SecVSS3600",
-  "description": "奇安信网神 SecVSS 3600 漏洞扫描系统 OctoBus 服务包（V6），支持任务下发、任务控制、进度查询、系统/WEB/弱口令扫描结果查询、设备状态查询及规则库模板查询，共 10 个 RPC 方法。",
+  "description": "OctoBus package for QIANXIN SecVSS 3600 scan task management, result query, device status, and task control APIs.",
   "runtime": {
     "mode": "long-running"
   },
   "proto": {
-    "roots": [
-      "proto"
-    ],
-    "files": [
-      "proto/qianxin_vs_secvss3600.proto"
-    ]
+    "roots": ["proto"],
+    "files": ["proto/qianxin_vs_secvss3600.proto"]
   },
   "configSchema": "config.schema.json",
   "secretSchema": "secret.schema.json",
   "sdk": {
     "cli": {
       "commands": {
-        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/GetToken": {
-          "name": "get-token",
-          "description": "使用用户名和密码向 SecVSS3600 请求认证令牌（POST /async/login/token/）。"
-        },
-        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/SubmitScanTask": {
-          "name": "submit-scan-task",
-          "description": "提交漏洞扫描任务，支持系统扫描/WEB/弱口令/存活探测多类型，返回各子任务 ID（POST /async/newtask/add/）。"
-        },
-        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/ControlTask": {
-          "name": "control-task",
-          "description": "控制任务生命周期，controltype 可选 start/stop/pause/continue/enable/disable/delete（POST /async/control/）。"
-        },
-        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/GetTaskProgress": {
-          "name": "get-task-progress",
-          "description": "查询指定任务的当前状态（0-9）与完成进度百分比（POST /async/status/）。"
-        },
-        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/QuerySysScanResult": {
-          "name": "query-sys-scan-result",
-          "description": "查询系统漏洞扫描结果，返回主机数、高/中/低危漏洞统计与主机详情列表（POST /async/sysscan/query/）。"
+        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/GetDeviceStatus": {
+          "name": "get-device-status",
+          "description": "Query scanner health: CPU load, disk/memory usage, engine status."
         },
         "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/ListTasks": {
           "name": "list-tasks",
-          "description": "分页查询扫描任务列表，支持按状态和时间范围过滤（POST /async/tasklist/query/）。"
+          "description": "List scan tasks with optional status/time/pagination filters."
+        },
+        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/GetTaskStatus": {
+          "name": "get-task-status",
+          "description": "Get current status code (0-9) and progress percentage of a scan task."
+        },
+        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/SubmitScanTask": {
+          "name": "submit-scan-task",
+          "description": "Submit a new scan task against an authorized target IP/CIDR/domain."
+        },
+        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/ControlTask": {
+          "name": "control-task",
+          "description": "Control a scan task lifecycle: start, stop, pause, continue, enable, disable, or delete."
+        },
+        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/QuerySysScanResult": {
+          "name": "query-sys-scan-result",
+          "description": "Query system vulnerability scan results including host list and vuln counts."
         },
         "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/QueryWebScanResult": {
           "name": "query-web-scan-result",
-          "description": "查询 WEB 漏洞扫描结果，返回各主机 WEB 漏洞统计与站点信息（POST /async/webscan/query/）。"
+          "description": "Query web vulnerability scan results for each scanned host."
         },
         "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/QueryWeakPassResult": {
           "name": "query-weak-pass-result",
-          "description": "查询弱口令扫描结果，返回已破解的账号/密码/协议列表（POST /async/crack/query/）。"
-        },
-        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/GetDeviceStatus": {
-          "name": "get-device-status",
-          "description": "查询漏洞扫描器自身状态（CPU、磁盘、内存利用率及各引擎在线情况，POST /async/device/status/）。"
-        },
-        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/ListVulTemplates": {
-          "name": "list-vul-templates",
-          "description": "查询规则库模板列表，type 必填 sysscan 或 webscan（POST /async/ruletemplate/query/）。"
+          "description": "Query weak password scan results: cracked accounts, services, and ports."
         }
       }
     }

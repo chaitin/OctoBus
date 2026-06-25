@@ -1,0 +1,116 @@
+syntax = "proto3";
+
+package QIANXIN_VS_SecVSS3600;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
+
+service QIANXIN_VS_SecVSS3600 {
+  rpc GetDeviceStatus (GetDeviceStatusRequest) returns (GetDeviceStatusResponse);
+  rpc ListTasks (ListTasksRequest) returns (ListTasksResponse);
+  rpc GetTaskStatus (GetTaskStatusRequest) returns (GetTaskStatusResponse);
+  rpc SubmitScanTask (SubmitScanTaskRequest) returns (SubmitScanTaskResponse);
+  rpc ControlTask (ControlTaskRequest) returns (ControlTaskResponse);
+  rpc QuerySysScanResult (QuerySysScanResultRequest) returns (QuerySysScanResultResponse);
+  rpc QueryWebScanResult (QueryWebScanResultRequest) returns (QueryWebScanResultResponse);
+  rpc QueryWeakPassResult (QueryWeakPassResultRequest) returns (QueryWeakPassResultResponse);
+}
+
+message GetDeviceStatusRequest {}
+
+message GetDeviceStatusResponse {
+  string cpu_load = 1;
+  string disk_usage = 2;
+  string memory_usage = 3;
+  string system_version = 4;
+  repeated google.protobuf.Value engines = 5;
+}
+
+message ListTasksRequest {
+  string token = 1;
+  google.protobuf.Int32Value status = 2;
+  google.protobuf.StringValue starttime = 3;
+  google.protobuf.StringValue endtime = 4;
+  google.protobuf.Int32Value page = 5;
+  google.protobuf.Int32Value page_size = 6;
+}
+
+message ListTasksResponse {
+  int32 total = 1;
+  repeated google.protobuf.Value tasks = 2;
+}
+
+message GetTaskStatusRequest {
+  string token = 1;
+  int32 task_id = 2;
+}
+
+message GetTaskStatusResponse {
+  int32 status = 1;
+  int32 progress = 2;
+}
+
+message SubmitScanTaskRequest {
+  string token = 1;
+  string target = 2;
+  google.protobuf.Int32Value task_type = 3;
+  google.protobuf.StringValue name = 4;
+  google.protobuf.Int32Value vul_plugin = 5;
+}
+
+message SubmitScanTaskResponse {
+  int32 task_id = 1;
+  int32 sys_task_id = 2;
+  int32 web_task_id = 3;
+  int32 alive_task_id = 4;
+  int32 crack_task_id = 5;
+}
+
+message ControlTaskRequest {
+  string token = 1;
+  int32 task_id = 2;
+  string action = 3;
+}
+
+message ControlTaskResponse {}
+
+message QuerySysScanResultRequest {
+  string token = 1;
+  int32 task_id = 2;
+  google.protobuf.StringValue target = 3;
+}
+
+message QuerySysScanResultResponse {
+  string status = 1;
+  int32 hosts_count = 2;
+  int32 vul_high = 3;
+  int32 vul_medium = 4;
+  int32 vul_low = 5;
+  repeated google.protobuf.Value hosts = 6;
+}
+
+message QueryWebScanResultRequest {
+  string token = 1;
+  int32 task_id = 2;
+  google.protobuf.StringValue target = 3;
+}
+
+message QueryWebScanResultResponse {
+  string status = 1;
+  int32 hosts_count = 2;
+  int32 total_vulns = 3;
+  repeated google.protobuf.Value hosts = 4;
+}
+
+message QueryWeakPassResultRequest {
+  string token = 1;
+  int32 task_id = 2;
+  google.protobuf.StringValue target = 3;
+}
+
+message QueryWeakPassResultResponse {
+  string status = 1;
+  int32 hosts_count = 2;
+  int32 total = 3;
+  repeated google.protobuf.Value hosts = 4;
+}
