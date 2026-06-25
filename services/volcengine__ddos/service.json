@@ -1,0 +1,53 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "volcengine-ddos",
+  "displayName": "Volcengine DDoS",
+  "description": "OctoBus package for Volcengine DDoS Protection read-only and audit query APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/volcengine_ddos.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Volcengine_DDoS.Volcengine_DDoS/GetBasicAlarm": {
+          "name": "get-basic-alarm",
+          "description": "Query Volcengine DDoS basic protection attack alarms."
+        },
+        "Volcengine_DDoS.Volcengine_DDoS/AdvDefenceDescInstanceList": {
+          "name": "adv-defence-desc-instance-list",
+          "description": "Query Volcengine DDoS advanced protection instances."
+        },
+        "Volcengine_DDoS.Volcengine_DDoS/AdvDefenceDescAttackEvent": {
+          "name": "adv-defence-desc-attack-event",
+          "description": "Query Volcengine DDoS advanced protection attack events."
+        },
+        "Volcengine_DDoS.Volcengine_DDoS/AdvDefenceGetWebDefAttackLog": {
+          "name": "adv-defence-get-web-def-attack-log",
+          "description": "Query Volcengine DDoS advanced protection web attack logs."
+        },
+        "Volcengine_DDoS.Volcengine_DDoS/OriginDefenceDescInstanceList": {
+          "name": "origin-defence-desc-instance-list",
+          "description": "Query Volcengine DDoS native protection instances."
+        },
+        "Volcengine_DDoS.Volcengine_DDoS/OriginDefenceDescAttackEvent": {
+          "name": "origin-defence-desc-attack-event",
+          "description": "Query Volcengine DDoS native protection attack events."
+        },
+        "Volcengine_DDoS.Volcengine_DDoS/InvokeReadOnlyAction": {
+          "name": "invoke-read-only-action",
+          "description": "Invoke an allowed Volcengine DDoS read-only action."
+        }
+      }
+    }
+  }
+}
