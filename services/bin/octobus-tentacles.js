@@ -77,6 +77,10 @@ const services = {
     entryFile: "../panabit__tang-r1/bin/panabit-tang-r1.js",
     serviceModule: "../panabit__tang-r1/src/service.js",
   },
+  "qianxin-cloudlock-v8-0-8": {
+    entryFile: "../qianxin__cloudlock_v8-0-8/bin/qianxin-cloudlock-v8-0-8.js",
+    serviceModule: "../qianxin__cloudlock_v8-0-8/src/service.js",
+  },
   "qianxin-fw-secgate3600": {
     entryFile: "../qianxin__fw-secgate3600/bin/qianxin-fw-secgate3600.js",
     serviceModule: "../qianxin__fw-secgate3600/src/service.js",
