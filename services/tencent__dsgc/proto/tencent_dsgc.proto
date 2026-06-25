@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package Tencent_DSGC;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Tencent_DSGC";
+
+service TencentDsgcService {
+  // Query DSGC asset overview, calls DescribeAssetOverview.
+  rpc DescribeAssetOverview(TencentCloudQueryRequest) returns (TencentCloudActionResponse) {}
+
+  // Query DSGC cluster list, calls ListDSPAClusters.
+  rpc ListDSPAClusters(TencentCloudQueryRequest) returns (TencentCloudListResponse) {}
+
+  // Query COS data asset buckets, calls DescribeDSPACOSDataAssetBuckets.
+  rpc DescribeDSPACOSDataAssetBuckets(TencentCloudQueryRequest) returns (TencentCloudListResponse) {}
+
+  // Query RDB data assets by compliance id, calls DescribeDSPARDBDataAssetByComplianceId.
+  rpc DescribeDSPARDBDataAssetByComplianceId(TencentCloudQueryRequest) returns (TencentCloudListResponse) {}
+
+  // Query ES data assets by compliance id, calls DescribeDSPAESDataAssetByComplianceId.
+  rpc DescribeDSPAESDataAssetByComplianceId(TencentCloudQueryRequest) returns (TencentCloudListResponse) {}
+
+  // Query latest assessment risk list, calls DescribeDSPAAssessmentLatestRiskList.
+  rpc DescribeDSPAAssessmentLatestRiskList(TencentCloudQueryRequest) returns (TencentCloudListResponse) {}
+
+  // Query assessment task list, calls DescribeDSPAAssessmentTasks.
+  rpc DescribeDSPAAssessmentTasks(TencentCloudQueryRequest) returns (TencentCloudListResponse) {}
+
+  // Query report task list, calls DescribeReportTasks.
+  rpc DescribeReportTasks(TencentCloudQueryRequest) returns (TencentCloudListResponse) {}
+
+  // Invoke a configured DSGC read-only action.
+  rpc InvokeReadOnlyAction(InvokeReadOnlyActionRequest) returns (TencentCloudActionResponse) {}
+}
+
+message TencentCloudQueryRequest {
+  google.protobuf.Struct params = 1;
+  int64 offset = 2;
+  int64 limit = 3;
+}
+
+message InvokeReadOnlyActionRequest {
+  string action = 1;
+  google.protobuf.Struct params = 2;
+}
+
+message TencentCloudActionResponse {
+  string action = 1;
+  string request_id = 2;
+  google.protobuf.Struct response = 3;
+  google.protobuf.Struct raw = 4;
+}
+
+message TencentCloudListResponse {
+  string action = 1;
+  string request_id = 2;
+  int64 total_count = 3;
+  repeated google.protobuf.Struct items = 4;
+  google.protobuf.Struct response = 5;
+  google.protobuf.Struct raw = 6;
+}
