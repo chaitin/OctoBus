@@ -7,7 +7,7 @@
     <img src="https://github.com/chaitin/OctoBus/actions/workflows/ci.yml/badge.svg?branch=main" alt="ci">
   </a>
   <a href="./CONTRIBUTING.zh-CN.md">
-    <img src="https://img.shields.io/badge/贡献-指南-blue" alt="contributing">
+    <img src="https://img.shields.io/badge/贡献者-指南-blue" alt="contributing">
   </a>
 </p>
 
