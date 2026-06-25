@@ -109,89 +109,45 @@ const sha256 = (data) => crypto.createHash('sha256').update(data).digest('hex');
 
 const hmacSha256 = (key, data) => crypto.createHmac('sha256', key).update(data).digest();
 
-const buildCanonicalRequest = (method, uri, query, headers, signedHeaders, payloadHash) => {
-  const canonicalHeaders = signedHeaders
-    .map((h) => `${h}:${headers[h].trim()}\n`)
-    .join('');
-  return [
-    method,
-    uri,
-    query,
-    canonicalHeaders,
-    signedHeaders.join(';'),
-    payloadHash,
-  ].join('\n');
-};
-
-const buildStringToSign = (timestamp, credentialScope, canonicalRequest) => {
-  return [
-    ALGORITHM,
-    String(timestamp),
-    credentialScope,
-    sha256(canonicalRequest),
-  ].join('\n');
-};
-
-const buildSigningKey = (secretKey, date, service) => {
-  const kDate = hmacSha256(`TC3${secretKey}`, date);
-  const kService = hmacSha256(kDate, service);
-  const kSigning = hmacSha256(kService, 'tc3_request');
-  return kSigning;
-};
-
-const buildSignature = (signingKey, stringToSign) => {
-  return crypto.createHmac('sha256', signingKey).update(stringToSign).digest('hex');
-};
-
-const buildAuthorization = (secretId, timestamp, credentialScope, signedHeaders, signature) => {
-  return `${ALGORITHM} Credential=${secretId}/${credentialScope}, SignedHeaders=${signedHeaders.join(';')}, Signature=${signature}`;
-};
-
 const tc3Sign = (params, secretId, secretKey, region, endpoint, action) => {
   const timestamp = Math.floor(Date.now() / 1000);
-  const date = new Date(timestamp * 1000).toISOString().slice(0, 10).replace(/-/g, '');
+  const date = new Date(timestamp * 1000);
+  const y = date.getUTCFullYear();
+  const m = ('0' + (date.getUTCMonth() + 1)).slice(-2);
+  const d = ('0' + date.getUTCDate()).slice(-2);
+  const dateStr = y + '-' + m + '-' + d;
   const service = 'bh';
-
-  const credentialScope = `${date}/${service}/tc3_request`;
+  const credentialScope = dateStr + '/' + service + '/tc3_request';
 
   const payload = JSON.stringify(params);
   const payloadHash = sha256(payload);
 
-  const headers = {
-    'content-type': 'application/json',
-    host: endpoint,
-    'x-tc-action': action.toLowerCase(),
-    'x-tc-region': region,
-    'x-tc-timestamp': String(timestamp),
-    'x-tc-version': API_VERSION,
-  };
+  // Canonical request: only content-type and host are signed
+  const contentType = 'application/json';
+  const canonicalHeaders = 'content-type:' + contentType + '\n' + 'host:' + endpoint + '\n';
+  const signedHeaders = 'content-type;host';
+  const canonicalRequest = 'POST\n/\n\n' + canonicalHeaders + '\n' + signedHeaders + '\n' + payloadHash;
 
-  const sortedKeys = Object.keys(headers).sort();
-  const signedHeaders = sortedKeys;
-  const canonicalHeaders = {};
-  for (const key of sortedKeys) {
-    canonicalHeaders[key] = headers[key];
-  }
+  const stringToSign = 'TC3-HMAC-SHA256\n' + timestamp + '\n' + credentialScope + '\n' + sha256(canonicalRequest);
 
-  const canonicalRequest = buildCanonicalRequest(
-    'POST',
-    '/',
-    '',
-    canonicalHeaders,
-    signedHeaders,
-    payloadHash,
-  );
+  const dateCompact = y + m + d;
+  const kDate = hmacSha256('TC3' + secretKey, dateStr); // NOTE: SDK uses YYYY-MM-DD format, not YYYYMMDD
+  const kService = hmacSha256(kDate, service);
+  const kSigning = hmacSha256(kService, 'tc3_request');
+  const signature = crypto.createHmac('sha256', kSigning).update(stringToSign).digest('hex');
 
-  const stringToSign = buildStringToSign(timestamp, credentialScope, canonicalRequest);
-  const signingKey = buildSigningKey(secretKey, date, service);
-  const signature = buildSignature(signingKey, stringToSign);
-  const authorization = buildAuthorization(secretId, timestamp, credentialScope, signedHeaders, signature);
+  const authorization = 'TC3-HMAC-SHA256 Credential=' + secretId + '/' + credentialScope + ', SignedHeaders=' + signedHeaders + ', Signature=' + signature;
 
   return {
-    url: `https://${endpoint}`,
+    url: 'https://' + endpoint,
     headers: {
-      ...headers,
-      authorization,
+      'Content-Type': contentType,
+      'Host': endpoint,
+      'X-TC-Action': action,
+      'X-TC-Region': region,
+      'X-TC-Timestamp': String(timestamp),
+      'X-TC-Version': API_VERSION,
+      'Authorization': authorization,
     },
     body: payload,
     timestamp,
@@ -459,7 +415,7 @@ const buildListUsersParams = (req = {}) => {
 const mapSessionRecord = (item) => ({
   id: String(item?.Id ?? item?.id ?? ''),
   user_name: String(item?.UserName ?? item?.user_name ?? ''),
-  device_name: String(item?.DeviceName ?? item?.device_name ?? ''),
+  device_name: String(item?.DeviceName ?? item?.device_name ?? item?.Name ?? ''),
   status: String(item?.Status ?? item?.status ?? ''),
   start_time: String(item?.StartTime ?? item?.start_time ?? ''),
   end_time: String(item?.EndTime ?? item?.end_time ?? ''),
@@ -467,21 +423,25 @@ const mapSessionRecord = (item) => ({
 
 const mapDeviceRecord = (item) => ({
   id: String(item?.Id ?? item?.id ?? ''),
-  name: String(item?.DeviceName ?? item?.name ?? ''),
-  ip: String(item?.Ip ?? item?.ip ?? ''),
-  type: String(item?.DeviceType ?? item?.type ?? ''),
+  name: String(item?.Name ?? item?.name ?? item?.DeviceName ?? ''),
+  ip: String(item?.PrivateIp ?? item?.privateIp ?? item?.Ip ?? item?.ip ?? ''),
+  type: String(item?.OsName ?? item?.osName ?? item?.DeviceType ?? item?.type ?? ''),
   state: String(item?.State ?? item?.state ?? ''),
-  department: String(item?.Department ?? item?.department ?? ''),
+  department: typeof item?.Department === 'object' && item?.Department !== null
+    ? String(item.Department.Name ?? item.Department.name ?? '')
+    : String(item?.Department ?? item?.department ?? ''),
 });
 
 const mapUserRecord = (item) => ({
-  id: String(item?.UserId ?? item?.id ?? ''),
+  id: String(item?.Id ?? item?.id ?? ''),
   user_name: String(item?.UserName ?? item?.user_name ?? ''),
   real_name: String(item?.RealName ?? item?.real_name ?? ''),
   phone: String(item?.Phone ?? item?.phone ?? ''),
   email: String(item?.Email ?? item?.email ?? ''),
   status: String(item?.Status ?? item?.status ?? ''),
-  department: String(item?.Department ?? item?.department ?? ''),
+  department: typeof item?.Department === 'object' && item?.Department !== null
+    ? String(item.Department.Name ?? item.Department.name ?? '')
+    : String(item?.Department ?? item?.department ?? ''),
 });
 
 // ── API method implementations ─────────────────────────────
@@ -527,11 +487,12 @@ const listUsers = async (req = {}, ctx = {}) => {
 };
 
 const lockUser = async (req = {}, ctx = {}) => {
-  const userId = toTrimmedString(firstDefined(req.user_id, req.userId));
-  if (!userId) {
-    throw errorWithCode('INVALID_ARGUMENT', 'user_id is required');
+  const rawId = firstDefined(req.user_id, req.userId);
+  const idNum = toInt64(rawId);
+  if (idNum === null) {
+    throw errorWithCode('INVALID_ARGUMENT', 'user_id is required and must be an integer');
   }
-  const params = { UserId: userId };
+  const params = { IdSet: [idNum] };
   const response = await callAction(ctx, 'LockUser', params);
   return {
     err: toValue(response?.err ?? null),
@@ -540,11 +501,12 @@ const lockUser = async (req = {}, ctx = {}) => {
 };
 
 const unlockUser = async (req = {}, ctx = {}) => {
-  const userId = toTrimmedString(firstDefined(req.user_id, req.userId));
-  if (!userId) {
-    throw errorWithCode('INVALID_ARGUMENT', 'user_id is required');
+  const rawId = firstDefined(req.user_id, req.userId);
+  const idNum = toInt64(rawId);
+  if (idNum === null) {
+    throw errorWithCode('INVALID_ARGUMENT', 'user_id is required and must be an integer');
   }
-  const params = { UserId: userId };
+  const params = { IdSet: [idNum] };
   const response = await callAction(ctx, 'UnlockUser', params);
   return {
     err: toValue(response?.err ?? null),
@@ -580,11 +542,6 @@ export const handlers = {
 // ── Test exports ───────────────────────────────────────────
 
 export const _test = {
-  buildCanonicalRequest,
-  buildStringToSign,
-  buildSigningKey,
-  buildSignature,
-  buildAuthorization,
   tc3Sign,
   callAction,
   errorWithCode,

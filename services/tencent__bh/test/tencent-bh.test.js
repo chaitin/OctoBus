@@ -74,27 +74,22 @@ test('internal helpers work correctly', async () => {
   assert.equal(_test.toBoolean('true'), true);
   assert.equal(_test.toBoolean('false'), false);
   assert.equal(_test.toBoolean({ value: 'true' }), true);
-  assert.equal(_test.toBoolean({}), true);  // object → Boolean({}) = true
-  assert.equal(_test.toBoolean(0), false);  // number 0
-  assert.equal(_test.toBoolean(1), true);   // number non-zero
+  assert.equal(_test.toBoolean({}), true);
+  assert.equal(_test.toBoolean(0), false);
+  assert.equal(_test.toBoolean(1), true);
 
   // toValue - various types including edge cases
   assert.deepEqual(_test.toValue('hello'), { stringValue: 'hello' });
   assert.deepEqual(_test.toValue(42), { numberValue: 42 });
   assert.deepEqual(_test.toValue(true), { boolValue: true });
-  // toValue with object
   const objVal = _test.toValue({ key: 'val' });
   assert.ok(objVal.structValue);
   assert.equal(objVal.structValue.fields.key.stringValue, 'val');
-  // toValue with array
   const arrVal = _test.toValue(['a', 'b']);
   assert.equal(arrVal.listValue.values.length, 2);
-  // toValue with symbol (other type)
   const symVal = _test.toValue(Symbol.for('test'));
   assert.equal(symVal.stringValue, 'Symbol(test)');
-  // toValue with null
   assert.equal(_test.toValue(null), undefined);
-  // toValue with undefined
   assert.equal(_test.toValue(undefined), undefined);
 });
 
@@ -113,29 +108,33 @@ test('TC3 signing produces valid authorization header', async () => {
   );
 
   assert.ok(signed.url.startsWith('https://'));
-  assert.ok(signed.headers.authorization.startsWith('TC3-HMAC-SHA256'));
-  assert.ok(signed.headers['content-type'], 'application/json');
-  assert.ok(signed.headers['x-tc-action'], 'describesessions');
-  assert.ok(signed.headers['x-tc-region'], 'ap-guangzhou');
-  assert.ok(signed.headers['x-tc-version'], '2023-04-18');
-  assert.ok(String(signed.headers['x-tc-timestamp']).length === 10);
+  assert.ok(signed.headers['Authorization'].startsWith('TC3-HMAC-SHA256'));
+  assert.equal(signed.headers['Content-Type'], 'application/json');
+  assert.equal(signed.headers['X-TC-Action'], 'DescribeSessions');
+  assert.equal(signed.headers['X-TC-Region'], 'ap-guangzhou');
+  assert.equal(signed.headers['X-TC-Version'], '2023-04-18');
+  assert.equal(String(signed.headers['X-TC-Timestamp']).length, 10);
   assert.equal(signed.body, JSON.stringify({ Limit: 20, Offset: 0 }));
 });
 
 test('canonical request structure', async () => {
   const { _test } = await import('../src/tencent-bh.js');
 
-  const canonReq = _test.buildCanonicalRequest(
-    'POST',
-    '/',
-    '',
-    { 'content-type': 'application/json', host: 'bh.tencentcloudapi.com' },
-    ['content-type', 'host'],
-    'abc123',
+  const signed = _test.tc3Sign(
+    { test: 'value' },
+    'test-id',
+    'test-key',
+    'ap-guangzhou',
+    'bh.tencentcloudapi.com',
+    'TestAction',
   );
 
-  assert.ok(canonReq.startsWith('POST\n/'));
-  assert.ok(canonReq.endsWith('abc123'));
+  const auth = signed.headers['Authorization'];
+  assert.ok(auth.startsWith('TC3-HMAC-SHA256'));
+  assert.ok(auth.includes('Credential='));
+  assert.ok(auth.includes('SignedHeaders=content-type;host'));
+  assert.ok(auth.includes('Signature='));
+  assert.equal(signed.headers['Content-Type'], 'application/json');
 });
 
 // ── Credential resolution ─────────────────────────────────
@@ -220,8 +219,12 @@ test('ListSessions sends signed request and maps response', async () => {
 
   assert.ok(captured.url.includes('bh.tencentcloudapi.com'));
   assert.equal(captured.init.method, 'POST');
-  assert.equal(captured.init.headers['content-type'], 'application/json');
-  assert.equal(captured.init.headers['x-tc-action'], 'describesessions');
+  assert.equal(captured.init.headers['Content-Type'], 'application/json');
+  assert.equal(captured.init.headers['X-TC-Action'], 'DescribeSessions');
+  // Verify x-tc-action also works (lowercase)
+  const lowerHeaders = {};
+  Object.keys(captured.init.headers).forEach(k => { lowerHeaders[k.toLowerCase()] = captured.init.headers[k]; });
+  assert.equal(lowerHeaders['x-tc-action'], 'DescribeSessions');
   assert.equal(res.items.length, 1);
   assert.equal(res.items[0].id, 'session-1');
   assert.equal(res.items[0].user_name, 'admin');
@@ -323,7 +326,7 @@ test('KillSession sends correct API call', async () => {
 
   const handler = await loadHandler({ session_id: 'sess-123' }, killSessionPath);
   const res = await handler();
-  assert.ok(captured.init.headers['x-tc-action'], 'killsession');
+  assert.equal(captured.init.headers['X-TC-Action'], 'KillSession');
   const body = JSON.parse(captured.init.body);
   assert.equal(body.SessionId, 'sess-123');
 });
@@ -413,11 +416,11 @@ test('LockUser sends API call with correct param', async () => {
     };
   });
 
-  const handler = await loadHandler({ user_id: 'u-1' }, lockUserPath);
+  const handler = await loadHandler({ user_id: 1 }, lockUserPath);
   await handler();
   const body = JSON.parse(captured.init.body);
-  assert.equal(body.UserId, 'u-1');
-  assert.ok(captured.init.headers['x-tc-action'], 'lockuser');
+  assert.deepEqual(body.IdSet, [1]);
+  assert.equal(captured.init.headers['X-TC-Action'], 'LockUser');
 });
 
 test('UnlockUser requires user_id', async () => {
@@ -437,11 +440,11 @@ test('UnlockUser sends API call with correct param', async () => {
     };
   });
 
-  const handler = await loadHandler({ user_id: 'u-1' }, unlockUserPath);
+  const handler = await loadHandler({ user_id: 1 }, unlockUserPath);
   await handler();
   const body = JSON.parse(captured.init.body);
-  assert.equal(body.UserId, 'u-1');
-  assert.ok(captured.init.headers['x-tc-action'], 'unlockuser');
+  assert.deepEqual(body.IdSet, [1]);
+  assert.equal(captured.init.headers['X-TC-Action'], 'UnlockUser');
 });
 
 // ── SDK handlers ──────────────────────────────────────────
