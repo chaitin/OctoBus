@@ -259,7 +259,12 @@ const callAction = async (ctx, action, params) => {
 
   const text = await res.text();
 
-  if (res.status === 401 || res.status === 403) {
+  if (res.status === 401) {
+    logFlow(meta, `${action}:unauthenticated`, { status: res.status });
+    throw errorWithCode('UNAUTHENTICATED', `upstream http ${res.status}: ${text}`);
+  }
+
+  if (res.status === 403) {
     logFlow(meta, `${action}:auth-error`, { status: res.status });
     throw errorWithCode('PERMISSION_DENIED', `upstream http ${res.status}: ${text}`);
   }
@@ -288,7 +293,7 @@ const callAction = async (ctx, action, params) => {
   // Tencent Cloud API error
   if (json.Response?.Error) {
     const { Code, Message } = json.Response.Error;
-    const mappedCode = Code === 'AuthFailure' ? 'PERMISSION_DENIED' : 'FAILED_PRECONDITION';
+    const mappedCode = Code === 'AuthFailure' ? 'UNAUTHENTICATED' : (Code === 'AuthFailure.InvalidAuthorization' ? 'PERMISSION_DENIED' : 'FAILED_PRECONDITION');
     logFlow(meta, `${action}:api-error`, { code: Code, message: Message });
     throw errorWithCode(mappedCode, `Tencent API error: ${Code} - ${Message}`);
   }

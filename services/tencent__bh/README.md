@@ -133,10 +133,13 @@ octobus service import --id tencent-bh ./services//tencent__bh
 ## Behavior Notes
 
 - All API calls use **POST** to `bh.tencentcloudapi.com` with TC3-HMAC-SHA256 signing.
-- HTTP 401/403 maps to `PERMISSION_DENIED`.
+- HTTP 401 maps to `UNAUTHENTICATED`; HTTP 403 maps to `PERMISSION_DENIED`.
 - Other HTTP 4xx maps to `FAILED_PRECONDITION`.
 - HTTP 5xx and network errors map to `UNAVAILABLE`.
-- Tencent Cloud API-level errors (e.g., `AuthFailure`) map to `PERMISSION_DENIED` or `FAILED_PRECONDITION`.
+- Tencent Cloud API `AuthFailure` errors map to `UNAUTHENTICATED` or `PERMISSION_DENIED`.
+- Other HTTP 4xx maps to `FAILED_PRECONDITION`.
+- HTTP 5xx and network errors map to `UNAVAILABLE`.
+- Tencent Cloud API `AuthFailure` errors map to `UNAUTHENTICATED` or `PERMISSION_DENIED`.
 - Non-JSON responses map to `UNKNOWN`.
 - Missing credentials (secret_id/secret_key) map to `FAILED_PRECONDITION`.
 - Missing required request parameters (e.g., `session_id`, `user_id`) map to `INVALID_ARGUMENT`.
