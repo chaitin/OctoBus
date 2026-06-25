@@ -43,8 +43,7 @@ Advanced analysis APIs, URL intelligence, vulnerability intelligence, IP profile
   "endpoint": "https://xti.qq.com/api/v3/ti",
   "lang": "zh",
   "version": "3.0",
-  "timeoutMs": 30000,
-  "skipTlsVerify": false
+  "timeoutMs": 30000
 }
 ```
 
@@ -74,6 +73,7 @@ All methods return `http_status`, `return_code`, `return_msg`, `raw_body`, `raw_
 - `return_code=1006` and temporary file-analysis states map to `UNAVAILABLE`.
 - Parameter and upload-size errors map to `INVALID_ARGUMENT`.
 - HTTP 401 maps to `UNAUTHENTICATED`; HTTP 403 maps to `PERMISSION_DENIED`; HTTP 5xx and network errors map to `UNAVAILABLE`.
+- TLS certificate verification is not skipped by this service. Use a trusted TLS certificate for the Tencent TIX endpoint.
 
 ## Risk Boundary
 

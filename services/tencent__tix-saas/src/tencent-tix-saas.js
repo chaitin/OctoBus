@@ -120,14 +120,22 @@ const normalizeLang = (req = {}, bindings = {}) => {
   return lang === 'en' ? 'en' : DEFAULT_LANG;
 };
 
-const buildTlsOptions = (bindings = {}) => {
-  const enabled = Boolean(bindings.skipTlsVerify || bindings.tlsInsecureSkipVerify || bindings.insecureSkipVerify);
-  if (!enabled) return {};
-  return {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  };
+const tlsSkipRequested = (bindings = {}) => (
+  Boolean(bindings.skipTlsVerify || bindings.tlsInsecureSkipVerify || bindings.insecureSkipVerify)
+);
+
+const assertSupportedTlsConfig = (bindings = {}) => {
+  if (!tlsSkipRequested(bindings)) return;
+  throw errorWithCode(
+    'INVALID_ARGUMENT',
+    'skipTlsVerify is not supported by this service; use a trusted TLS certificate for the Tencent TIX endpoint',
+  );
+};
+
+const makeTimeoutSignal = (timeoutMs) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  return { signal: controller.signal, clear: () => clearTimeout(timeoutId) };
 };
 
 const requireEndpoint = (ctx = {}) => {
@@ -241,18 +249,19 @@ const mapReturnCodeToGrpcCode = (returnCode) => {
 const fetchUpstream = async (body, ctx = {}) => {
   const endpoint = requireEndpoint(ctx);
   const bindings = ctx.bindings || {};
+  assertSupportedTlsConfig(bindings);
   const headers = {
     'content-type': 'application/json',
     ...(bindings.headers ?? {}),
   };
+  const timeout = makeTimeoutSignal(resolveTimeoutMs(ctx));
   let res;
   try {
     res = await fetch(endpoint, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
-      timeoutMs: resolveTimeoutMs(ctx),
-      ...buildTlsOptions(bindings),
+      signal: timeout.signal,
     });
   } catch (err) {
     throwStructuredError('UNAVAILABLE', 'tencent tix upstream request failed', {
@@ -260,6 +269,8 @@ const fetchUpstream = async (body, ctx = {}) => {
       rawBody: '',
       reason: err?.cause?.message || err?.message || 'fetch failed',
     });
+  } finally {
+    timeout.clear();
   }
 
   const httpStatus = Number(res?.status || 0);
@@ -403,7 +414,7 @@ export const _test = {
   ACTIONS,
   assertTixSuccess,
   baseBody,
-  buildTlsOptions,
+  assertSupportedTlsConfig,
   errorWithCode,
   fetchUpstream,
   firstDefined,

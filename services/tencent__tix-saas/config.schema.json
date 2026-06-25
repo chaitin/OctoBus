@@ -29,21 +29,6 @@
       "default": 30000,
       "description": "HTTP timeout in milliseconds."
     },
-    "skipTlsVerify": {
-      "type": "boolean",
-      "default": false,
-      "description": "Skip TLS certificate verification for private testing only."
-    },
-    "tlsInsecureSkipVerify": {
-      "type": "boolean",
-      "default": false,
-      "description": "Legacy alias for skipTlsVerify."
-    },
-    "insecureSkipVerify": {
-      "type": "boolean",
-      "default": false,
-      "description": "Alias for skipTlsVerify."
-    },
     "headers": {
       "type": "object",
       "additionalProperties": {

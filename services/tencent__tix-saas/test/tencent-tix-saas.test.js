@@ -117,6 +117,11 @@ test('validates endpoint, appKey, key, option, and file hash type', async () => 
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /md5, sha1, or sha256/),
   );
+  await expectGrpcError(
+    () => handlers[METHOD_QUERY_IOC_FULL]({ key: '203.0.113.50' }, buildCtx({ bindings: { skipTlsVerify: true } })),
+    'INVALID_ARGUMENT',
+    (err) => assert.match(err.message, /skipTlsVerify is not supported/),
+  );
 });
 
 test('QueryIOC maps to TiInfo for compromise intelligence lookup', async () => {
@@ -144,13 +149,14 @@ test('QueryIOC maps to TiInfo for compromise intelligence lookup', async () => {
 
   const result = await handlers[METHOD_QUERY_IOC_FULL](
     { key: { value: ' 45.122.138.118,bellsyscdn.com ' }, lang: 'en' },
-    buildCtx({ bindings: { skipTlsVerify: true }, limits: { timeoutMs: 25 } }),
+    buildCtx({ limits: { timeoutMs: 25 } }),
   );
 
   assert.equal(captured.url, 'https://xti.qq.com/api/v3/ti');
   assert.equal(captured.init.method, 'POST');
-  assert.equal(captured.init.timeoutMs, 25);
-  assert.equal(captured.init.skipTlsVerify, true);
+  assert.equal(Object.hasOwn(captured.init, 'timeoutMs'), false);
+  assert.equal(Object.hasOwn(captured.init, 'skipTlsVerify'), false);
+  assert.ok(captured.init.signal instanceof AbortSignal);
   assert.equal(captured.body.c_version, '3.0');
   assert.equal(captured.body.c_action, 'TiInfo');
   assert.equal(captured.body.c_appkey, 'test_app_key');
@@ -311,6 +317,19 @@ test('maps HTTP, invalid JSON, missing return_code, and network failures', async
   await expectGrpcError(() => handlers[METHOD_QUERY_IOC_FULL]({ key: 'invalid-json' }, buildCtx()), 'UNKNOWN');
   await expectGrpcError(() => handlers[METHOD_QUERY_IOC_FULL]({ key: 'missing-code' }, buildCtx()), 'UNKNOWN');
   await expectGrpcError(() => handlers[METHOD_QUERY_IOC_FULL]({ key: 'network' }, buildCtx()), 'UNAVAILABLE');
+});
+
+test('applies upstream timeout through AbortController', async () => {
+  setFetch(async (url, init) => new Promise((resolve, reject) => {
+    assert.ok(init.signal instanceof AbortSignal);
+    init.signal.addEventListener('abort', () => reject(new Error('aborted by test timeout')), { once: true });
+  }));
+
+  await expectGrpcError(
+    () => handlers[METHOD_QUERY_IOC_FULL]({ key: 'timeout' }, buildCtx({ limits: { timeoutMs: 1 } })),
+    'UNAVAILABLE',
+    (err) => assert.match(parseStructuredError(err).reason, /aborted by test timeout/),
+  );
 });
 
 test('aliases and helpers remain compatible', async () => {
