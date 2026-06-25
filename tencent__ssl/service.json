@@ -1,0 +1,33 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "tencent-ssl",
+  "displayName": "Tencent SSL Certificate",
+  "description": "OctoBus package for Tencent Cloud SSL Certificate query APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/tencent_ssl.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Tencent_SSL.Tencent_SSL/ListCertificates": {
+          "name": "list-certificates",
+          "description": "List all SSL certificates in the account."
+        },
+        "Tencent_SSL.Tencent_SSL/GetCertificate": {
+          "name": "get-certificate",
+          "description": "Get detailed info for a specific certificate."
+        }
+      }
+    }
+  }
+}
