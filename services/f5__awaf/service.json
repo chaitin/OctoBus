@@ -1,0 +1,41 @@
+{
+  "schema": "octobus-service-1",
+  "name": "f5__awaf",
+  "displayName": "F5 AWAF",
+  "description": "F5 Advanced WAF IP 封禁/解封管理（通过 ASM 策略 IP Exception）",
+  "runtime": {
+    "mode": "stdio"
+  },
+  "proto": {
+    "roots": ["proto"],
+    "files": ["f5_awaf_v1.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": [
+        {
+          "name": "login",
+          "proto": "f5.awaf.v1.F5AWAF/Login",
+          "description": "登录 F5 AWAF，获取认证 Token"
+        },
+        {
+          "name": "block-ip",
+          "proto": "f5.awaf.v1.F5AWAF/BlockIP",
+          "description": "在 ASM 策略中封禁 IP（添加 blockRequests=always 的 IP Exception）"
+        },
+        {
+          "name": "unblock-ip",
+          "proto": "f5.awaf.v1.F5AWAF/UnblockIP",
+          "description": "解封 IP（删除对应 IP Exception）"
+        },
+        {
+          "name": "logout",
+          "proto": "f5.awaf.v1.F5AWAF/Logout",
+          "description": "释放 Token"
+        }
+      ]
+    }
+  }
+}

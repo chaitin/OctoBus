@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package f5.awaf.v1;
+
+// F5 Advanced WAF iControl REST 封禁管理
+// 认证流程：Login → BlockIP/UnblockIP → Logout
+service F5AWAF {
+  // 登录并获取 Token（凭据来自 Instance Secret）
+  rpc Login(LoginRequest) returns (LoginResponse) {}
+  // 在指定 ASM 策略中封禁 IP（添加 blockRequests=always 的 IP Exception）
+  rpc BlockIP(BlockIPRequest) returns (BlockIPResponse) {}
+  // 解封 IP（删除对应 IP Exception）
+  rpc UnblockIP(UnblockIPRequest) returns (UnblockIPResponse) {}
+  // 释放 Token（DELETE /mgmt/shared/authz/tokens/<token>）
+  rpc Logout(LogoutRequest) returns (LogoutResponse) {}
+}
+
+// Login ─────────────────────────────────────────────────────────────────────
+
+message LoginRequest {
+  // 无需输入，凭据从 Instance Secret (username/password) 读取
+}
+
+message LoginResponse {
+  // 0 = 成功，非 0 = 失败
+  int32 code = 1;
+  string message = 2;
+  // X-F5-Auth-Token，传给后续所有调用
+  string token = 3;
+  // Token 在 F5 侧的标识名（用于 Logout DELETE 路径）
+  string token_id = 4;
+}
+
+// BlockIP ───────────────────────────────────────────────────────────────────
+
+message BlockIPRequest {
+  // Login 返回的 token
+  string token = 1;
+  // 要封禁的 IP 地址列表（支持 IPv4/IPv6，可含 CIDR，如 "1.2.3.4" 或 "10.0.0.0/8"）
+  repeated string addresses = 2;
+  // ASM 策略名称；留空则使用 config.default_policy_name
+  string policy_name = 3;
+  // 可选备注，写入 IP Exception 的 description 字段
+  string description = 4;
+}
+
+message BlockIPResponse {
+  int32 code = 1;
+  string message = 2;
+  // 封禁成功的 IP 列表
+  repeated string blocked = 3;
+  // 封禁失败的 IP 列表（含原因见 message）
+  repeated string failed = 4;
+}
+
+// UnblockIP ─────────────────────────────────────────────────────────────────
+
+message UnblockIPRequest {
+  string token = 1;
+  repeated string addresses = 2;
+  string policy_name = 3;
+}
+
+message UnblockIPResponse {
+  int32 code = 1;
+  string message = 2;
+  repeated string unblocked = 3;
+  repeated string failed = 4;
+}
+
+// Logout ────────────────────────────────────────────────────────────────────
+
+message LogoutRequest {
+  string token = 1;
+}
+
+message LogoutResponse {
+  int32 code = 1;
+  string message = 2;
+}
