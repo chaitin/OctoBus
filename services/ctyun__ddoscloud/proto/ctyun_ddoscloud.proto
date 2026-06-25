@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package CTYun_DDoSCloud;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/CTYun_DDoSCloud";
+
+service CTYun_DDoSCloud {
+  rpc DomainQuery(CTYunRequest) returns (CTYunResponse) {}
+  rpc TopDomain(CTYunRequest) returns (CTYunResponse) {}
+  rpc DomainConfig(CTYunRequest) returns (CTYunResponse) {}
+  rpc DomainStatusQuery(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetCcAttackAddr(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetCcAttackEvent(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetCcAttackInfo(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetCcConfInfo(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetAccessControlInfo(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetFrequencyControlnfo(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetDdosAttackTrend(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetDdosAttackEvent(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetDdosAttackInfo(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetPortCnameList(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetPortList(CTYunRequest) returns (CTYunResponse) {}
+  rpc CertExpireCount(CTYunRequest) returns (CTYunResponse) {}
+  rpc CertList(CTYunRequest) returns (CTYunResponse) {}
+  rpc CertQuery(CTYunRequest) returns (CTYunResponse) {}
+  rpc QueryOperationalLog(CTYunRequest) returns (CTYunResponse) {}
+  rpc LogBsstimeFiles(CTYunRequest) returns (CTYunResponse) {}
+  rpc StatisticsanalysisQueryBandwidth(CTYunRequest) returns (CTYunResponse) {}
+  rpc StatisticsanalysisQueryHitFlowRateDataByDomain(CTYunRequest) returns (CTYunResponse) {}
+  rpc StatisticsanalysisQueryHttpStatusCodeData(CTYunRequest) returns (CTYunResponse) {}
+  rpc StatisticsanalysisQueryPeakBandwidthData(CTYunRequest) returns (CTYunResponse) {}
+  rpc StatisticsanalysisQueryQpsData(CTYunRequest) returns (CTYunResponse) {}
+  rpc StatisticsanalysisQueryRequestNumData(CTYunRequest) returns (CTYunResponse) {}
+  rpc InvokeReadOnlyApi(InvokeReadOnlyApiRequest) returns (CTYunResponse) {}
+}
+
+message CTYunRequest {
+  google.protobuf.Struct payload = 1;
+}
+
+message InvokeReadOnlyApiRequest {
+  string api = 1;
+  google.protobuf.Struct payload = 2;
+}
+
+message CTYunResponse {
+  google.protobuf.Value response = 1;
+}
