@@ -21,6 +21,10 @@ const services = {
     entryFile: "../das__tgfw_v6/bin/das-tgfw-v6.js",
     serviceModule: "../das__tgfw_v6/src/service.js",
   },
+  "defectdojo": {
+    entryFile: "../defectdojo__defectdojo/bin/defectdojo.js",
+    serviceModule: "../defectdojo__defectdojo/src/service.js",
+  },
   "dingtalk-group-robot": {
     entryFile: "../dingtalk__group-robot/bin/dingtalk-group-robot.js",
     serviceModule: "../dingtalk__group-robot/src/service.js",

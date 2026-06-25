@@ -1,0 +1,115 @@
+syntax = "proto3";
+
+package DefectDojo;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
+
+option go_package = "miner/grpc-service/DefectDojo";
+
+service DefectDojo {
+  // 获取产品列表，支持 DefectDojo API v2 常用分页和名称过滤参数。
+  rpc ListProducts(ListProductsRequest) returns (ListResponse) {}
+
+  // 获取 Engagement 列表，支持按产品 ID、名称和分页过滤。
+  rpc ListEngagements(ListEngagementsRequest) returns (ListResponse) {}
+
+  // 获取 Finding 列表，支持按产品/Engagement/Test、严重性和状态过滤。
+  rpc ListFindings(ListFindingsRequest) returns (ListResponse) {}
+
+  // 获取单个 Finding 详情。
+  rpc GetFinding(GetFindingRequest) returns (ObjectResponse) {}
+
+  // 导入扫描报告，创建新的 Test/Finding。
+  rpc ImportScan(ImportScanRequest) returns (ObjectResponse) {}
+
+  // 重新导入扫描报告，更新已有 Test 或按上下文自动选择 Test。
+  rpc ReimportScan(ReimportScanRequest) returns (ObjectResponse) {}
+}
+
+message ListProductsRequest {
+  google.protobuf.Int64Value limit = 1;
+  google.protobuf.Int64Value offset = 2;
+  string name = 3;
+  string name_contains = 4;
+}
+
+message ListEngagementsRequest {
+  google.protobuf.Int64Value limit = 1;
+  google.protobuf.Int64Value offset = 2;
+  google.protobuf.Int64Value product = 3;
+  string name = 4;
+  string name_contains = 5;
+  string status = 6;
+}
+
+message ListFindingsRequest {
+  google.protobuf.Int64Value limit = 1;
+  google.protobuf.Int64Value offset = 2;
+  google.protobuf.Int64Value product = 3;
+  google.protobuf.Int64Value engagement = 4;
+  google.protobuf.Int64Value test = 5;
+  string severity = 6;
+  google.protobuf.BoolValue active = 7;
+  google.protobuf.BoolValue verified = 8;
+  google.protobuf.BoolValue duplicate = 9;
+  string title = 10;
+  string title_contains = 11;
+}
+
+message GetFindingRequest {
+  int64 id = 1;
+}
+
+message ImportScanRequest {
+  string scan_type = 1;
+  string minimum_severity = 2;
+  google.protobuf.BoolValue active = 3;
+  google.protobuf.BoolValue verified = 4;
+  google.protobuf.Int64Value engagement = 5;
+  string test_title = 6;
+  string product_type_name = 7;
+  string product_name = 8;
+  string engagement_name = 9;
+  google.protobuf.BoolValue auto_create_context = 10;
+  google.protobuf.BoolValue close_old_findings = 11;
+  google.protobuf.BoolValue background_import = 12;
+  string file_name = 13;
+  string file_content = 14;
+  string file_content_type = 15;
+}
+
+message ReimportScanRequest {
+  string scan_type = 1;
+  string minimum_severity = 2;
+  google.protobuf.BoolValue active = 3;
+  google.protobuf.BoolValue verified = 4;
+  google.protobuf.Int64Value test = 5;
+  google.protobuf.Int64Value engagement = 6;
+  string test_title = 7;
+  string product_type_name = 8;
+  string product_name = 9;
+  string engagement_name = 10;
+  google.protobuf.BoolValue auto_create_context = 11;
+  google.protobuf.BoolValue do_not_reactivate = 12;
+  google.protobuf.BoolValue background_import = 13;
+  string file_name = 14;
+  string file_content = 15;
+  string file_content_type = 16;
+}
+
+message ListResponse {
+  int32 http_status = 1;
+  string raw_body = 2;
+  int64 count = 3;
+  string next = 4;
+  string previous = 5;
+  repeated google.protobuf.Value results = 6;
+  google.protobuf.Value raw_json = 7;
+}
+
+message ObjectResponse {
+  int32 http_status = 1;
+  string raw_body = 2;
+  google.protobuf.Value raw_json = 3;
+}

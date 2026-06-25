@@ -7,6 +7,7 @@
     "octobus-tentacles": "bin/octobus-tentacles.js",
     "das-gateway-v3": "bin/das-gateway-v3.js",
     "das-tgfw-v6": "bin/das-tgfw-v6.js",
+    "defectdojo": "bin/defectdojo.js",
     "dingtalk-group-robot": "bin/dingtalk-group-robot.js",
     "dptech-eds": "bin/dptech-eds.js",
     "dptech-fw-v4-6-10": "bin/dptech-fw-v4-6-10.js",
@@ -47,6 +48,7 @@
   "files": [
     "bin/das-gateway-v3.js",
     "bin/das-tgfw-v6.js",
+    "bin/defectdojo.js",
     "bin/dingtalk-group-robot.js",
     "bin/dptech-eds.js",
     "bin/dptech-fw-v4-6-10.js",
@@ -85,6 +87,7 @@
     "bin/wangsu-label-ip.js",
     "das__gateway_v3",
     "das__tgfw_v6",
+    "defectdojo__defectdojo",
     "dingtalk__group-robot",
     "dptech__eds",
     "dptech__fw_v4-6-10",

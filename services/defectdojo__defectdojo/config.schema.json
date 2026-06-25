@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "defectdojo_base_url": {
+      "type": "string",
+      "description": "DefectDojo base URL, for example http://localhost:8080."
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "Alias for defectdojo_base_url."
+    },
+    "restBaseUrl": {
+      "type": "string",
+      "description": "Legacy alias for defectdojo_base_url."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional extra HTTP headers sent to DefectDojo."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1500,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for private DefectDojo deployments."
+    },
+    "tlsInsecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Legacy alias for skipTlsVerify."
+    },
+    "insecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Alias for skipTlsVerify."
+    }
+  }
+}
