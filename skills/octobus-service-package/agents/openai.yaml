@@ -1,4 +1,0 @@
-interface:
-  display_name: "OctoBus Service Package"
-  short_description: "Build tested OctoBus JS service packages"
-  default_prompt: "Use $octobus-service-package to generate a tested OctoBus JavaScript service package from these API docs and examples."
