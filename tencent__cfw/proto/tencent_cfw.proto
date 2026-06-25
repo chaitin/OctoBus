@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package Tencent_CFW;
+
+import "google/protobuf/wrappers.proto";
+
+option go_package = "miner/grpc-service/Tencent_CFW";
+
+service Tencent_CFW {
+  rpc BlockIP(BlockIPRequest) returns (BlockIPResponse) {}
+  rpc UnblockIP(UnblockIPRequest) returns (UnblockIPResponse) {}
+  rpc ListRules(ListRulesRequest) returns (ListRulesResponse) {}
+}
+
+message BlockIPRequest {
+  repeated string ips = 1;
+  google.protobuf.StringValue comment = 2;
+}
+
+message BlockIPResponse {
+  int32 code = 1;
+  string message = 2;
+}
+
+message UnblockIPRequest {
+  repeated string ips = 1;
+}
+
+message UnblockIPResponse {
+  int32 code = 1;
+  string message = 2;
+}
+
+message ListRulesRequest {
+  google.protobuf.Int64Value limit = 1;
+  google.protobuf.Int64Value offset = 2;
+}
+
+message ListRulesResponse {
+  int32 code = 1;
+  string message = 2;
+  repeated RuleItem data = 3;
+  int32 total = 4;
+}
+
+message RuleItem {
+  string id = 1;
+  string source_ip = 2;
+  string target_ip = 3;
+  string rule_action = 4;
+  string description = 5;
+  string create_time = 6;
+}
