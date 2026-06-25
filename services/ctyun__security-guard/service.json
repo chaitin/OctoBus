@@ -1,0 +1,53 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "ctyun-security-guard",
+  "displayName": "CTYun Server Security Guard",
+  "description": "OctoBus package for CTYun Server Security Guard native edition read-only query APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/ctyun_security_guard.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "CTYun_SecurityGuard.CTYun_SecurityGuard/UntreatedRisk": {
+          "name": "untreated-risk",
+          "description": "Query CTYun Server Security Guard untreated risk statistics."
+        },
+        "CTYun_SecurityGuard.CTYun_SecurityGuard/GetHostStatus": {
+          "name": "get-host-status",
+          "description": "Query CTYun Server Security Guard agent protection status statistics."
+        },
+        "CTYun_SecurityGuard.CTYun_SecurityGuard/HostList": {
+          "name": "host-list",
+          "description": "Query CTYun Server Security Guard server list."
+        },
+        "CTYun_SecurityGuard.CTYun_SecurityGuard/GetVulnerabilityList": {
+          "name": "get-vulnerability-list",
+          "description": "Query CTYun Server Security Guard vulnerability announcement list."
+        },
+        "CTYun_SecurityGuard.CTYun_SecurityGuard/V1instrusioneventlist": {
+          "name": "v1instrusioneventlist",
+          "description": "Query CTYun Server Security Guard intrusion alarm list."
+        },
+        "CTYun_SecurityGuard.CTYun_SecurityGuard/GetVirusByPage": {
+          "name": "get-virus-by-page",
+          "description": "Query CTYun Server Security Guard virus event list."
+        },
+        "CTYun_SecurityGuard.CTYun_SecurityGuard/InvokeReadOnlyApi": {
+          "name": "invoke-read-only-api",
+          "description": "Invoke a built-in CTYun Server Security Guard read-only API."
+        }
+      }
+    }
+  }
+}

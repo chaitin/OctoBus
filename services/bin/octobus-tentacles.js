@@ -20,6 +20,9 @@ const services = {
   "cloudatlas": {
     entryFile: "../chaitin__cloudatlas/bin/cloudatlas.js",
     serviceModule: "../chaitin__cloudatlas/src/service.js",
+  "ctyun-security-guard": {
+    entryFile: "../ctyun__security-guard/bin/ctyun-security-guard.js",
+    serviceModule: "../ctyun__security-guard/src/service.js",
   },
   "das-gateway-v3": {
     entryFile: "../das__gateway_v3/bin/das-gateway-v3.js",
