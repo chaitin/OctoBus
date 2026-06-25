@@ -248,7 +248,7 @@ test('ListSessions validates and maps upstream errors', async () => {
     text: async () => 'Unauthorized',
   }));
   const handler = await loadHandler({}, listSessionsPath);
-  await assert.rejects(() => handler(), /PERMISSION_DENIED/);
+  await assert.rejects(() => handler(), /UNAUTHENTICATED/);
 
   setFetch(async () => ({
     ok: false,
@@ -276,7 +276,7 @@ test('ListSessions handles Tencent API error response', async () => {
     },
   });
   const handler = await loadHandler({}, listSessionsPath);
-  await assert.rejects(() => handler(), /PERMISSION_DENIED: Tencent API error: AuthFailure/);
+  await assert.rejects(() => handler(), /UNAUTHENTICATED: Tencent API error: AuthFailure/);
 });
 
 test('ListSessions handles non-JSON and empty body', async () => {
