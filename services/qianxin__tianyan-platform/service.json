@@ -1,0 +1,25 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "qianxin-tianyan-platform",
+  "displayName": "QIANXIN TianYan Platform",
+  "description": "OctoBus package for QIANXIN TianYan threat detection platform alarm query APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/qianxin_tianyan_platform.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "QIANXIN_TianYan_Platform.QIANXIN_TianYan_Platform/ListAlarms": {
+          "name": "list-alarms",
+          "description": "Query threat alarms with optional filters for level, time range, attacker/victim IP, IOC, and disposition status."
+        }
+      }
+    }
+  }
+}

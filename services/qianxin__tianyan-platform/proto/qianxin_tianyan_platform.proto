@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package QIANXIN_TianYan_Platform;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
+
+service QIANXIN_TianYan_Platform {
+  rpc ListAlarms (ListAlarmsRequest) returns (ListAlarmsResponse);
+}
+
+message ListAlarmsRequest {
+  int32 offset = 1;
+  int32 limit = 2;
+  google.protobuf.Int32Value hazard_level = 3;
+  google.protobuf.Int64Value start_time = 4;
+  google.protobuf.Int64Value end_time = 5;
+  google.protobuf.StringValue threat_name = 6;
+  google.protobuf.StringValue attack_sip = 7;
+  google.protobuf.StringValue alarm_sip = 8;
+  google.protobuf.StringValue status = 9;
+  google.protobuf.StringValue threat_type = 10;
+  google.protobuf.StringValue host_state = 11;
+  google.protobuf.StringValue data_source = 12;
+  google.protobuf.StringValue serial_num = 13;
+  google.protobuf.StringValue ioc = 14;
+}
+
+message ListAlarmsResponse {
+  int32 total = 1;
+  repeated google.protobuf.Value items = 2;
+}

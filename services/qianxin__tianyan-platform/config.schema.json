@@ -1,0 +1,11 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["restBaseUrl"],
+  "properties": {
+    "restBaseUrl": {"type": "string", "description": "TianYan base URL, e.g. https://tianyan.example.com:443"},
+    "timeoutMs": {"type": "integer", "default": 15000, "description": "HTTP timeout in ms."},
+    "tlsInsecureSkipVerify": {"type": "boolean", "default": false}
+  },
+  "additionalProperties": false
+}
