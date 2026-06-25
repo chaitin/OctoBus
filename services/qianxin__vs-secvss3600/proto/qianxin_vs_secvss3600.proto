@@ -2,159 +2,115 @@ syntax = "proto3";
 
 package QIANXIN_VS_SecVSS3600;
 
-import "google/protobuf/wrappers.proto";
 import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
 
 service QIANXIN_VS_SecVSS3600 {
-  rpc GetToken (GetTokenRequest) returns (GetTokenResponse);
+  rpc GetDeviceStatus (GetDeviceStatusRequest) returns (GetDeviceStatusResponse);
+  rpc ListTasks (ListTasksRequest) returns (ListTasksResponse);
+  rpc GetTaskStatus (GetTaskStatusRequest) returns (GetTaskStatusResponse);
   rpc SubmitScanTask (SubmitScanTaskRequest) returns (SubmitScanTaskResponse);
   rpc ControlTask (ControlTaskRequest) returns (ControlTaskResponse);
-  rpc GetTaskProgress (GetTaskProgressRequest) returns (GetTaskProgressResponse);
   rpc QuerySysScanResult (QuerySysScanResultRequest) returns (QuerySysScanResultResponse);
-  rpc ListTasks (ListTasksRequest) returns (ListTasksResponse);
   rpc QueryWebScanResult (QueryWebScanResultRequest) returns (QueryWebScanResultResponse);
   rpc QueryWeakPassResult (QueryWeakPassResultRequest) returns (QueryWeakPassResultResponse);
-  rpc GetDeviceStatus (GetDeviceStatusRequest) returns (GetDeviceStatusResponse);
-  rpc ListVulTemplates (ListVulTemplatesRequest) returns (ListVulTemplatesResponse);
 }
 
-message GetTokenRequest {
-  string user = 1;
-  string pwd = 2;
+message GetDeviceStatusRequest {}
+
+message GetDeviceStatusResponse {
+  string cpu_load = 1;
+  string disk_usage = 2;
+  string memory_usage = 3;
+  string system_version = 4;
+  repeated google.protobuf.Value engines = 5;
 }
 
-message GetTokenResponse {
-  bool success = 1;
-  string token = 2;
-  string errorcode = 3;
+message ListTasksRequest {
+  string token = 1;
+  google.protobuf.Int32Value status = 2;
+  google.protobuf.StringValue starttime = 3;
+  google.protobuf.StringValue endtime = 4;
+  google.protobuf.Int32Value page = 5;
+  google.protobuf.Int32Value page_size = 6;
+}
+
+message ListTasksResponse {
+  int32 total = 1;
+  repeated google.protobuf.Value tasks = 2;
+}
+
+message GetTaskStatusRequest {
+  string token = 1;
+  int32 task_id = 2;
+}
+
+message GetTaskStatusResponse {
+  int32 status = 1;
+  int32 progress = 2;
 }
 
 message SubmitScanTaskRequest {
   string token = 1;
   string target = 2;
-  google.protobuf.StringValue task_type = 3;
+  google.protobuf.Int32Value task_type = 3;
   google.protobuf.StringValue name = 4;
-  google.protobuf.StringValue schedule = 5;
-  google.protobuf.StringValue vul_plugin = 6;
-  google.protobuf.StringValue scan_plugin = 7;
+  google.protobuf.Int32Value vul_plugin = 5;
 }
 
 message SubmitScanTaskResponse {
-  bool success = 1;
-  google.protobuf.StringValue taskall_id = 2;
-  google.protobuf.StringValue sys_task_id = 3;
-  google.protobuf.StringValue web_task_id = 4;
-  google.protobuf.StringValue alive_task_id = 5;
-  google.protobuf.StringValue ret_crack_task_id = 6;
-  google.protobuf.StringValue errorcode = 7;
+  int32 task_id = 1;
+  int32 sys_task_id = 2;
+  int32 web_task_id = 3;
+  int32 alive_task_id = 4;
+  int32 crack_task_id = 5;
 }
 
 message ControlTaskRequest {
   string token = 1;
-  string controltype = 2;
-  string taskallid = 3;
+  int32 task_id = 2;
+  string action = 3;
 }
 
-message ControlTaskResponse {
-  bool success = 1;
-  google.protobuf.StringValue errorcode = 2;
-}
-
-message GetTaskProgressRequest {
-  string token = 1;
-  string taskallid = 2;
-}
-
-message GetTaskProgressResponse {
-  bool success = 1;
-  google.protobuf.StringValue status = 2;
-  google.protobuf.StringValue progress = 3;
-  google.protobuf.StringValue scheduletype = 4;
-  google.protobuf.StringValue errorcode = 5;
-}
+message ControlTaskResponse {}
 
 message QuerySysScanResultRequest {
   string token = 1;
-  string taskid = 2;
-  google.protobuf.StringValue jobid = 3;
-  google.protobuf.StringValue target = 4;
+  int32 task_id = 2;
+  google.protobuf.StringValue target = 3;
 }
 
 message QuerySysScanResultResponse {
-  bool success = 1;
-  google.protobuf.StringValue status = 2;
-  google.protobuf.StringValue hostscount = 3;
-  google.protobuf.StringValue vulnscount = 4;
-  google.protobuf.StringValue vulhigh = 5;
-  google.protobuf.StringValue vulmedium = 6;
-  google.protobuf.StringValue vullow = 7;
-  repeated google.protobuf.Value hosts = 8;
-  google.protobuf.StringValue errorcode = 9;
-}
-
-message ListTasksRequest {
-  string token = 1;
-  google.protobuf.StringValue page = 2;
-  google.protobuf.StringValue iDisplayLength = 3;
-  google.protobuf.StringValue status = 4;
-  google.protobuf.StringValue starttime = 5;
-  google.protobuf.StringValue endtime = 6;
-}
-
-message ListTasksResponse {
-  bool success = 1;
-  google.protobuf.StringValue iTotalRecords = 2;
-  repeated google.protobuf.Value aaData = 3;
-  google.protobuf.StringValue errorcode = 4;
+  string status = 1;
+  int32 hosts_count = 2;
+  int32 vul_high = 3;
+  int32 vul_medium = 4;
+  int32 vul_low = 5;
+  repeated google.protobuf.Value hosts = 6;
 }
 
 message QueryWebScanResultRequest {
   string token = 1;
-  string taskid = 2;
-  google.protobuf.StringValue jobid = 3;
-  google.protobuf.StringValue target = 4;
+  int32 task_id = 2;
+  google.protobuf.StringValue target = 3;
 }
 
 message QueryWebScanResultResponse {
-  bool success = 1;
-  google.protobuf.StringValue status = 2;
-  google.protobuf.StringValue hostscount = 3;
-  google.protobuf.StringValue total = 4;
-  repeated google.protobuf.Value hosts = 5;
-  google.protobuf.StringValue errorcode = 6;
+  string status = 1;
+  int32 hosts_count = 2;
+  int32 total_vulns = 3;
+  repeated google.protobuf.Value hosts = 4;
 }
 
 message QueryWeakPassResultRequest {
   string token = 1;
-  string taskid = 2;
-  google.protobuf.StringValue jobid = 3;
-  google.protobuf.StringValue target = 4;
+  int32 task_id = 2;
+  google.protobuf.StringValue target = 3;
 }
 
 message QueryWeakPassResultResponse {
-  bool success = 1;
-  google.protobuf.StringValue status = 2;
-  google.protobuf.StringValue hostscount = 3;
-  google.protobuf.StringValue total = 4;
-  repeated google.protobuf.Value hosts = 5;
-  google.protobuf.StringValue errorcode = 6;
-}
-
-message GetDeviceStatusRequest {
-}
-
-message GetDeviceStatusResponse {
-  bool success = 1;
-  google.protobuf.Value device_info = 2;
-}
-
-message ListVulTemplatesRequest {
-  string token = 1;
-  string type = 2;
-}
-
-message ListVulTemplatesResponse {
-  bool success = 1;
-  repeated google.protobuf.Value aaData = 2;
-  google.protobuf.StringValue errorcode = 3;
+  string status = 1;
+  int32 hosts_count = 2;
+  int32 total = 3;
+  repeated google.protobuf.Value hosts = 4;
 }

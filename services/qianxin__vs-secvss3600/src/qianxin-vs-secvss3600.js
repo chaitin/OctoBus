@@ -1,64 +1,71 @@
-// QIANXIN_VS_SecVSS3600 - 网神 SecVSS 3600 漏洞扫描系统
-// Auth: POST /async/login/token/ → token; pass token in HTTP header "token: <value>"
+// QIANXIN SecVSS 3600 vulnerability scanner REST proxy
+// Auth: POST /async/login/token/ (auto) or bindings.token (pre-obtained)
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
-const DEFAULT_TIMEOUT_MS = 10000;
-const PKG = 'QIANXIN_VS_SecVSS3600';
+const DEFAULT_TIMEOUT_MS = 15000;
 
-const METHODS = {
-  GET_TOKEN: `/${PKG}.${PKG}/GetToken`,
-  SUBMIT_SCAN_TASK: `/${PKG}.${PKG}/SubmitScanTask`,
-  CONTROL_TASK: `/${PKG}.${PKG}/ControlTask`,
-  GET_TASK_PROGRESS: `/${PKG}.${PKG}/GetTaskProgress`,
-  QUERY_SYS_SCAN_RESULT: `/${PKG}.${PKG}/QuerySysScanResult`,
-  LIST_TASKS: `/${PKG}.${PKG}/ListTasks`,
-  QUERY_WEB_SCAN_RESULT: `/${PKG}.${PKG}/QueryWebScanResult`,
-  QUERY_WEAK_PASS_RESULT: `/${PKG}.${PKG}/QueryWeakPassResult`,
-  GET_DEVICE_STATUS: `/${PKG}.${PKG}/GetDeviceStatus`,
-  LIST_VUL_TEMPLATES: `/${PKG}.${PKG}/ListVulTemplates`,
+const PKG = 'QIANXIN_VS_SecVSS3600';
+const P = `/${PKG}.${PKG}/`;
+
+const PATHS = {
+  GET_DEVICE_STATUS: `${P}GetDeviceStatus`,
+  LIST_TASKS: `${P}ListTasks`,
+  GET_TASK_STATUS: `${P}GetTaskStatus`,
+  SUBMIT_SCAN_TASK: `${P}SubmitScanTask`,
+  CONTROL_TASK: `${P}ControlTask`,
+  QUERY_SYS_SCAN_RESULT: `${P}QuerySysScanResult`,
+  QUERY_WEB_SCAN_RESULT: `${P}QueryWebScanResult`,
+  QUERY_WEAK_PASS_RESULT: `${P}QueryWeakPassResult`,
 };
+
+const VALID_ACTIONS = new Set(['start', 'stop', 'pause', 'continue', 'enable', 'disable', 'delete']);
 
 const grpcCodeFor = (code) => ({
   INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT,
-  FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
   PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED,
+  FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
   UNAVAILABLE: grpcStatus.UNAVAILABLE,
   UNKNOWN: grpcStatus.UNKNOWN,
 })[code] ?? grpcStatus.UNKNOWN;
 
-const errorWithCode = (code, message) => {
-  const err = new GrpcError(grpcCodeFor(code), `${code}: ${message}`);
-  err.legacyCode = code;
-  return err;
+const err = (code, msg) => {
+  const e = new GrpcError(grpcCodeFor(code), `${code}: ${msg}`);
+  e.legacyCode = code;
+  return e;
 };
 
-// Inner helper: converts JS value to protobuf Value structure (null → nullValue sentinel)
-const toValueInner = (val) => {
-  if (val === undefined || val === null) return { nullValue: 'NULL_VALUE' };
+const toValue = (val) => {
+  if (val === undefined || val === null) return undefined;
   if (typeof val === 'string') return { stringValue: val };
   if (typeof val === 'number') return { numberValue: val };
   if (typeof val === 'boolean') return { boolValue: val };
   if (Array.isArray(val)) {
-    return { listValue: { values: val.map(toValueInner) } };
+    return { listValue: { values: val.map(toValue).filter((v) => v !== undefined) } };
   }
   if (typeof val === 'object') {
     const fields = {};
     for (const [k, v] of Object.entries(val)) {
-      fields[k] = toValueInner(v);
+      const nv = toValue(v);
+      fields[k] = nv === undefined ? { nullValue: 'NULL_VALUE' } : nv;
     }
     return { structValue: { fields } };
   }
   return { stringValue: String(val) };
 };
 
-// Outer toValue: top-level null/undefined returns null (not the sentinel)
-const toValue = (val) => {
+const toInt = (val) => {
   if (val === undefined || val === null) return null;
-  return toValueInner(val);
+  if (typeof val === 'object' && 'value' in val) return toInt(val.value);
+  const n = Number(val);
+  return Number.isInteger(n) && !Number.isNaN(n) ? n : null;
 };
 
-const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj ?? {}, key);
+const unwrap = (val) => {
+  if (val === undefined || val === null) return undefined;
+  if (typeof val === 'object' && 'value' in val) return String(val.value ?? '');
+  return String(val);
+};
 
 const firstDefined = (...vals) => vals.find((v) => v !== undefined && v !== null);
 
@@ -69,387 +76,267 @@ const mergedBindings = (ctx = {}) => ({
 });
 
 const normalizeBaseUrl = (url) => {
-  const base = String(url || '').trim();
-  if (!/^https?:\/\//i.test(base)) return '';
-  return base.replace(/\/+$/, '');
+  const s = String(url || '').trim();
+  if (!/^https?:\/\//i.test(s)) return null;
+  return s.replace(/\/+$/, '');
 };
-
-const unwrapString = (source) => {
-  if (source === undefined || source === null) return '';
-  if (typeof source === 'object' && source !== null && 'value' in source) {
-    return String(source.value ?? '');
-  }
-  return String(source);
-};
-
-const mapErrorCode = (errorcode) => {
-  const code = String(errorcode ?? '');
-  if (code === '1001') return 'INVALID_ARGUMENT';
-  if (code === '1002' || code === '1013') return 'PERMISSION_DENIED';
-  return 'FAILED_PRECONDITION';
-};
-
-const VALID_CONTROL_TYPES = new Set(['start', 'stop', 'pause', 'continue', 'enable', 'disable', 'delete']);
 
 export function rpcdef(ctx) {
   const bindings = mergedBindings(ctx);
-  const rawBaseUrl = firstDefined(
-    bindings.restBaseUrl, bindings.rest_base_url,
-    bindings.baseUrl, bindings.base_url,
-    bindings.endpoint
-  );
   const timeoutMs = ctx.limits?.timeoutMs || DEFAULT_TIMEOUT_MS;
-  const skipTlsVerify = Boolean(
+  const skipTls = Boolean(
     bindings.tlsInsecureSkipVerify || bindings.skipTlsVerify ||
-    bindings.skip_tls_verify || bindings.tls_insecure_skip_verify
+    bindings.skip_tls_verify || bindings.tls_insecure_skip_verify,
   );
 
-  const tlsOptions = () => (skipTlsVerify ? { insecureSkipVerify: true, tlsInsecureSkipVerify: true } : {});
+  const tlsOpts = () => (skipTls ? { insecureSkipVerify: true, tlsInsecureSkipVerify: true } : {});
 
-  const requireBaseUrl = () => {
-    const base = normalizeBaseUrl(rawBaseUrl);
-    if (!base) throw errorWithCode('INVALID_ARGUMENT', 'restBaseUrl/baseUrl/endpoint is required (http/https)');
-    return base;
+  const baseUrl = () => {
+    const u = normalizeBaseUrl(firstDefined(
+      bindings.restBaseUrl, bindings.rest_base_url,
+      bindings.baseUrl, bindings.base_url, bindings.endpoint,
+    ));
+    if (!u) throw err('INVALID_ARGUMENT', 'restBaseUrl is required (http/https)');
+    return u;
   };
 
-  const fetchSecVSS = async (url, init) => {
+  const doFetch = async (url, init) => {
     try {
-      return await fetch(url, { ...init, timeoutMs, ...tlsOptions() });
+      return await fetch(url, { ...init, timeoutMs, ...tlsOpts() });
     } catch (e) {
-      const reason = e?.cause?.message || e?.message || 'fetch failed';
-      throw errorWithCode('UNAVAILABLE', reason);
+      throw err('UNAVAILABLE', e?.cause?.message || e?.message || 'fetch failed');
     }
   };
 
-  const readJsonResponse = async (res) => {
+  const readJson = async (res) => {
     const text = await res.text();
     if (!res.ok) {
-      const status = res.status;
-      if (status === 401 || status === 403) throw errorWithCode('PERMISSION_DENIED', `upstream http ${status}: ${text}`);
-      if (status >= 400 && status < 500) throw errorWithCode('FAILED_PRECONDITION', `upstream http ${status}: ${text}`);
-      throw errorWithCode('UNAVAILABLE', `upstream http ${status}: ${text}`);
+      const s = res.status;
+      if (s === 401 || s === 403) throw err('PERMISSION_DENIED', `http ${s}: ${text}`);
+      if (s >= 400 && s < 500) throw err('FAILED_PRECONDITION', `http ${s}: ${text}`);
+      throw err('UNAVAILABLE', `http ${s}: ${text}`);
     }
-    if (!text.trim()) throw errorWithCode('UNKNOWN', 'empty response body');
-    const ct = res.headers?.get?.('content-type') ?? '';
-    if (ct.includes('application/json')) return JSON.parse(text);
-    try {
-      return JSON.parse(text);
-    } catch {
-      throw errorWithCode('UNKNOWN', 'response is not valid JSON');
-    }
-  };
-
-  const requireToken = (req) => {
-    const tok = unwrapString(firstDefined(req?.token, req?.Token));
-    if (!tok) throw errorWithCode('INVALID_ARGUMENT', 'token is required');
-    return tok;
-  };
-
-  const requireField = (req, key, fallback) => {
-    const val = unwrapString(firstDefined(
-      hasOwn(req, key) ? req[key] : undefined,
-      fallback
-    ));
-    if (!val) throw errorWithCode('INVALID_ARGUMENT', `${key} is required`);
-    return val;
-  };
-
-  const optionalField = (req, key) => {
-    if (!hasOwn(req, key)) return undefined;
-    const raw = req[key];
-    if (raw === undefined || raw === null) return undefined;
-    return unwrapString(raw);
+    if (!text.trim()) throw err('UNKNOWN', 'empty response body');
+    try { return JSON.parse(text); } catch { throw err('UNKNOWN', 'response is not valid JSON'); }
   };
 
   const postJson = async (url, headers, body) => {
-    const res = await fetchSecVSS(url, {
+    const res = await doFetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...headers },
       body: JSON.stringify(body),
     });
-    return readJsonResponse(res);
+    return readJson(res);
   };
 
-  const checkUpstreamError = (json) => {
+  const checkError = (json) => {
     if (json?.success === false && json?.errorcode != null) {
-      const grpcCode = mapErrorCode(json.errorcode);
-      throw errorWithCode(grpcCode, `upstream errorcode ${json.errorcode}`);
+      const code = String(json.errorcode);
+      if (code === '1001') throw err('INVALID_ARGUMENT', `upstream errorcode ${code}`);
+      if (code === '1002' || code === '1013') throw err('PERMISSION_DENIED', `upstream errorcode ${code}`);
+      throw err('FAILED_PRECONDITION', `upstream errorcode ${code}`);
     }
   };
 
-  const callGetToken = async (req) => {
-    const base = requireBaseUrl();
-    const user = requireField(req, 'user', bindings.user);
-    const pwd = requireField(req, 'pwd', bindings.pwd);
-
+  const getToken = async (req) => {
+    const tok = String(firstDefined(req?.token, bindings.token) || '').trim();
+    if (tok) return tok;
+    const user = String(firstDefined(bindings.user, bindings.username) || '').trim();
+    const pwd = String(firstDefined(bindings.pwd, bindings.password) || '').trim();
+    if (!user || !pwd) throw err('INVALID_ARGUMENT', 'token or (user + pwd in secret) is required');
+    const base = baseUrl();
     const json = await postJson(`${base}/async/login/token/`, {}, { user, pwd });
-    checkUpstreamError(json);
-
-    return {
-      success: Boolean(json?.success),
-      token: String(json?.token ?? ''),
-      errorcode: String(json?.errorcode ?? ''),
-    };
+    checkError(json);
+    const token = String(json?.token || '').trim();
+    if (!token) throw err('UNKNOWN', 'login returned no token');
+    return token;
   };
 
-  const callSubmitScanTask = async (req) => {
-    const base = requireBaseUrl();
-    const token = requireToken(req);
-    const target = requireField(req, 'target');
-
-    const body = { target };
-    const task_type = optionalField(req, 'task_type');
-    if (task_type !== undefined) body.task_type = Number(task_type);
-    const name = optionalField(req, 'name');
-    if (name !== undefined) body.name = name;
-    const schedule = optionalField(req, 'schedule');
-    if (schedule !== undefined) body.schedule = Number(schedule);
-    const vul_plugin = optionalField(req, 'vul_plugin');
-    if (vul_plugin !== undefined) body.vul_plugin = Number(vul_plugin);
-    const scan_plugin = optionalField(req, 'scan_plugin');
-    if (scan_plugin !== undefined) body.scan_plugin = Number(scan_plugin);
-
-    const json = await postJson(`${base}/async/newtask/add/`, { token }, body);
-    checkUpstreamError(json);
-
+  const callGetDeviceStatus = async (_req) => {
+    const base = baseUrl();
+    const json = await postJson(`${base}/async/device/status/`, {}, {});
+    checkError(json);
     return {
-      success: Boolean(json?.success),
-      taskall_id: json?.taskall_id != null ? String(json.taskall_id) : undefined,
-      sys_task_id: json?.sys_task_id != null ? String(json.sys_task_id) : undefined,
-      web_task_id: json?.web_task_id != null ? String(json.web_task_id) : undefined,
-      alive_task_id: json?.alive_task_id != null ? String(json.alive_task_id) : undefined,
-      ret_crack_task_id: json?.ret_crack_task_id != null ? String(json.ret_crack_task_id) : undefined,
-      errorcode: json?.errorcode != null ? String(json.errorcode) : undefined,
-    };
-  };
-
-  const callControlTask = async (req) => {
-    const base = requireBaseUrl();
-    const token = requireToken(req);
-    const controltype = requireField(req, 'controltype');
-    if (!VALID_CONTROL_TYPES.has(controltype)) {
-      throw errorWithCode('INVALID_ARGUMENT', `controltype must be one of: ${[...VALID_CONTROL_TYPES].join(', ')}`);
-    }
-    const taskallid = requireField(req, 'taskallid');
-
-    const json = await postJson(`${base}/async/control/`, { token }, {
-      controltype,
-      taskallid: Number(taskallid),
-    });
-    checkUpstreamError(json);
-
-    return {
-      success: Boolean(json?.success),
-      errorcode: json?.errorcode != null ? String(json.errorcode) : undefined,
-    };
-  };
-
-  const callGetTaskProgress = async (req) => {
-    const base = requireBaseUrl();
-    const token = requireToken(req);
-    const taskallid = requireField(req, 'taskallid');
-
-    const json = await postJson(`${base}/async/status/`, { token }, {
-      taskallid: Number(taskallid),
-    });
-    checkUpstreamError(json);
-
-    return {
-      success: Boolean(json?.success),
-      status: json?.status != null ? String(json.status) : undefined,
-      progress: json?.progress != null ? Number(json.progress) : undefined,
-      scheduletype: json?.scheduletype != null ? Number(json.scheduletype) : undefined,
-      errorcode: json?.errorcode != null ? String(json.errorcode) : undefined,
-    };
-  };
-
-  const callQuerySysScanResult = async (req) => {
-    const base = requireBaseUrl();
-    const token = requireToken(req);
-    const taskid = requireField(req, 'taskid');
-
-    const body = { taskid: Number(taskid) };
-    const jobid = optionalField(req, 'jobid');
-    if (jobid !== undefined) body.jobid = Number(jobid);
-    const target = optionalField(req, 'target');
-    if (target !== undefined) body.target = target;
-
-    const json = await postJson(`${base}/async/sysscan/query/`, { token }, body);
-    checkUpstreamError(json);
-
-    const hostsArr = Array.isArray(json?.hosts) ? json.hosts : [];
-    return {
-      success: Boolean(json?.success),
-      status: json?.status != null ? String(json.status) : undefined,
-      hostscount: json?.hostscount != null ? Number(json.hostscount) : undefined,
-      vulnscount: json?.vulnscount != null ? Number(json.vulnscount) : undefined,
-      vulhigh: json?.vulhigh != null ? Number(json.vulhigh) : undefined,
-      vulmedium: json?.vulmedium != null ? Number(json.vulmedium) : undefined,
-      vullow: json?.vullow != null ? Number(json.vullow) : undefined,
-      hosts: hostsArr.map(toValue),
-      errorcode: json?.errorcode != null ? String(json.errorcode) : undefined,
+      cpu_load: String(json?.['CPU Load'] ?? json?.cpu_load ?? ''),
+      disk_usage: String(json?.['Disk Usage'] ?? json?.disk_usage ?? ''),
+      memory_usage: String(json?.['Memory Usage'] ?? json?.memory_usage ?? ''),
+      system_version: String(json?.System ?? json?.system_version ?? ''),
+      engines: Array.isArray(json?.engine) ? json.engine.map(toValue).filter(Boolean) : [],
     };
   };
 
   const callListTasks = async (req) => {
-    const base = requireBaseUrl();
-    const token = requireToken(req);
-
+    const base = baseUrl();
+    const token = await getToken(req);
     const body = {};
-    const page = optionalField(req, 'page');
-    if (page !== undefined) body.page = Number(page);
-    const iDisplayLength = optionalField(req, 'iDisplayLength');
-    if (iDisplayLength !== undefined) body.iDisplayLength = Number(iDisplayLength);
-    const status = optionalField(req, 'status');
-    if (status !== undefined) body.status = Number(status);
-    const starttime = optionalField(req, 'starttime');
-    if (starttime !== undefined) body.starttime = starttime;
-    const endtime = optionalField(req, 'endtime');
-    if (endtime !== undefined) body.endtime = endtime;
-
+    const status = toInt(firstDefined(req?.status));
+    if (status !== null) body.status = status;
+    const st = unwrap(firstDefined(req?.starttime));
+    if (st) body.starttime = st;
+    const et = unwrap(firstDefined(req?.endtime));
+    if (et) body.endtime = et;
+    const page = toInt(firstDefined(req?.page));
+    if (page !== null) body.page = page;
+    const pageSize = toInt(firstDefined(req?.page_size, req?.iDisplayLength));
+    if (pageSize !== null) body.iDisplayLength = pageSize;
     const json = await postJson(`${base}/async/tasklist/query/`, { token }, body);
-    checkUpstreamError(json);
-
-    const aaDataArr = Array.isArray(json?.aaData) ? json.aaData : [];
+    checkError(json);
+    const aaData = Array.isArray(json?.aaData) ? json.aaData : [];
     return {
-      success: Boolean(json?.success),
-      iTotalRecords: json?.iTotalRecords != null ? Number(json.iTotalRecords) : undefined,
-      aaData: aaDataArr.map(toValue),
-      errorcode: json?.errorcode != null ? String(json.errorcode) : undefined,
+      total: toInt(json?.iTotalRecords) ?? 0,
+      tasks: aaData.map(toValue).filter(Boolean),
+    };
+  };
+
+  const callGetTaskStatus = async (req) => {
+    const base = baseUrl();
+    const token = await getToken(req);
+    const taskId = toInt(firstDefined(req?.task_id, req?.taskId, req?.taskallid));
+    if (taskId === null) throw err('INVALID_ARGUMENT', 'task_id is required');
+    const json = await postJson(`${base}/async/status/`, { token }, { taskallid: taskId });
+    checkError(json);
+    return {
+      status: toInt(json?.status) ?? 0,
+      progress: toInt(json?.progress) ?? 0,
+    };
+  };
+
+  const callSubmitScanTask = async (req) => {
+    const base = baseUrl();
+    const token = await getToken(req);
+    const target = String(firstDefined(req?.target) || '').trim();
+    if (!target) throw err('INVALID_ARGUMENT', 'target is required');
+    const body = { target };
+    const taskType = toInt(firstDefined(req?.task_type, req?.taskType));
+    if (taskType !== null) body.task_type = taskType;
+    const name = unwrap(firstDefined(req?.name));
+    if (name) body.name = name;
+    const vulPlugin = toInt(firstDefined(req?.vul_plugin, req?.vulPlugin));
+    if (vulPlugin !== null) body.vul_plugin = vulPlugin;
+    const json = await postJson(`${base}/async/newtask/add/`, { token }, body);
+    checkError(json);
+    return {
+      task_id: toInt(json?.taskall_id) ?? 0,
+      sys_task_id: toInt(json?.sys_task_id) ?? 0,
+      web_task_id: toInt(json?.web_task_id) ?? 0,
+      alive_task_id: toInt(json?.alive_task_id) ?? 0,
+      crack_task_id: toInt(json?.ret_crack_task_id) ?? 0,
+    };
+  };
+
+  const callControlTask = async (req) => {
+    const base = baseUrl();
+    const token = await getToken(req);
+    const taskId = toInt(firstDefined(req?.task_id, req?.taskId, req?.taskallid));
+    if (taskId === null) throw err('INVALID_ARGUMENT', 'task_id is required');
+    const action = String(firstDefined(req?.action, req?.controltype) || '').trim().toLowerCase();
+    if (!VALID_ACTIONS.has(action)) {
+      throw err('INVALID_ARGUMENT', `action must be one of: ${[...VALID_ACTIONS].join(', ')}`);
+    }
+    const json = await postJson(`${base}/async/control/`, { token }, { controltype: action, taskallid: taskId });
+    checkError(json);
+    return {};
+  };
+
+  const callQuerySysScanResult = async (req) => {
+    const base = baseUrl();
+    const token = await getToken(req);
+    const taskId = toInt(firstDefined(req?.task_id, req?.taskId, req?.taskid));
+    if (taskId === null) throw err('INVALID_ARGUMENT', 'task_id is required');
+    const body = { taskid: taskId };
+    const target = unwrap(firstDefined(req?.target));
+    if (target) body.target = target;
+    const json = await postJson(`${base}/async/sysscan/query/`, { token }, body);
+    checkError(json);
+    const hosts = Array.isArray(json?.hosts) ? json.hosts : [];
+    return {
+      status: String(json?.status ?? ''),
+      hosts_count: toInt(json?.hostscount) ?? 0,
+      vul_high: toInt(json?.vulhigh) ?? 0,
+      vul_medium: toInt(json?.vulmedium) ?? 0,
+      vul_low: toInt(json?.vullow) ?? 0,
+      hosts: hosts.map(toValue).filter(Boolean),
     };
   };
 
   const callQueryWebScanResult = async (req) => {
-    const base = requireBaseUrl();
-    const token = requireToken(req);
-    const taskid = requireField(req, 'taskid');
-    const body = { taskid: Number(taskid) };
-    const jobid = optionalField(req, 'jobid');
-    if (jobid !== undefined) body.jobid = Number(jobid);
-    const target = optionalField(req, 'target');
-    if (target !== undefined) body.target = target;
+    const base = baseUrl();
+    const token = await getToken(req);
+    const taskId = toInt(firstDefined(req?.task_id, req?.taskId, req?.taskid));
+    if (taskId === null) throw err('INVALID_ARGUMENT', 'task_id is required');
+    const body = { taskid: taskId };
+    const target = unwrap(firstDefined(req?.target));
+    if (target) body.target = target;
     const json = await postJson(`${base}/async/webscan/query/`, { token }, body);
-    checkUpstreamError(json);
-    const hostsArr = Array.isArray(json?.hosts) ? json.hosts : [];
+    checkError(json);
+    const hosts = Array.isArray(json?.hosts) ? json.hosts : [];
     return {
-      success: Boolean(json?.success),
-      status: json?.status != null ? String(json.status) : undefined,
-      hostscount: json?.hostscount != null ? Number(json.hostscount) : undefined,
-      total: json?.total != null ? Number(json.total) : undefined,
-      hosts: hostsArr.map(toValue),
-      errorcode: json?.errorcode != null ? String(json.errorcode) : undefined,
+      status: String(json?.status ?? ''),
+      hosts_count: toInt(json?.hostscount) ?? 0,
+      total_vulns: toInt(json?.total) ?? 0,
+      hosts: hosts.map(toValue).filter(Boolean),
     };
   };
 
   const callQueryWeakPassResult = async (req) => {
-    const base = requireBaseUrl();
-    const token = requireToken(req);
-    const taskid = requireField(req, 'taskid');
-    const body = { taskid: Number(taskid) };
-    const jobid = optionalField(req, 'jobid');
-    if (jobid !== undefined) body.jobid = Number(jobid);
-    const target = optionalField(req, 'target');
-    if (target !== undefined) body.target = target;
+    const base = baseUrl();
+    const token = await getToken(req);
+    const taskId = toInt(firstDefined(req?.task_id, req?.taskId, req?.taskid));
+    if (taskId === null) throw err('INVALID_ARGUMENT', 'task_id is required');
+    const body = { taskid: taskId };
+    const target = unwrap(firstDefined(req?.target));
+    if (target) body.target = target;
     const json = await postJson(`${base}/async/crack/query/`, { token }, body);
-    checkUpstreamError(json);
-    const hostsArr = Array.isArray(json?.hosts) ? json.hosts : [];
+    checkError(json);
+    const hosts = Array.isArray(json?.hosts) ? json.hosts : [];
     return {
-      success: Boolean(json?.success),
-      status: json?.status != null ? String(json.status) : undefined,
-      hostscount: json?.hostscount != null ? Number(json.hostscount) : undefined,
-      total: json?.total != null ? Number(json.total) : undefined,
-      hosts: hostsArr.map(toValue),
-      errorcode: json?.errorcode != null ? String(json.errorcode) : undefined,
-    };
-  };
-
-  const callGetDeviceStatus = async (_req) => {
-    const base = requireBaseUrl();
-    const json = await postJson(`${base}/async/device/status/`, {}, {});
-    checkUpstreamError(json);
-    return {
-      success: Boolean(json?.success),
-      device_info: toValue(json),
-    };
-  };
-
-  const callListVulTemplates = async (req) => {
-    const base = requireBaseUrl();
-    const token = requireToken(req);
-    const type = requireField(req, 'type');
-    if (type !== 'sysscan' && type !== 'webscan') {
-      throw errorWithCode('INVALID_ARGUMENT', 'type must be sysscan or webscan');
-    }
-    const json = await postJson(`${base}/async/ruletemplate/query/`, { token }, { type });
-    checkUpstreamError(json);
-    const aaDataArr = Array.isArray(json?.aaData) ? json.aaData : [];
-    return {
-      success: Boolean(json?.success),
-      aaData: aaDataArr.map(toValue),
-      errorcode: json?.errorcode != null ? String(json.errorcode) : undefined,
+      status: String(json?.status ?? ''),
+      hosts_count: toInt(json?.hostscount) ?? 0,
+      total: toInt(json?.total) ?? 0,
+      hosts: hosts.map(toValue).filter(Boolean),
     };
   };
 
   return {
-    [METHODS.GET_TOKEN]: async () => callGetToken(ctx.req),
-    [METHODS.SUBMIT_SCAN_TASK]: async () => callSubmitScanTask(ctx.req),
-    [METHODS.CONTROL_TASK]: async () => callControlTask(ctx.req),
-    [METHODS.GET_TASK_PROGRESS]: async () => callGetTaskProgress(ctx.req),
-    [METHODS.QUERY_SYS_SCAN_RESULT]: async () => callQuerySysScanResult(ctx.req),
-    [METHODS.LIST_TASKS]: async () => callListTasks(ctx.req),
-    [METHODS.QUERY_WEB_SCAN_RESULT]: async () => callQueryWebScanResult(ctx.req),
-    [METHODS.QUERY_WEAK_PASS_RESULT]: async () => callQueryWeakPassResult(ctx.req),
-    [METHODS.GET_DEVICE_STATUS]: async () => callGetDeviceStatus(ctx.req),
-    [METHODS.LIST_VUL_TEMPLATES]: async () => callListVulTemplates(ctx.req),
+    [PATHS.GET_DEVICE_STATUS]: async () => callGetDeviceStatus(ctx.req),
+    [PATHS.LIST_TASKS]: async () => callListTasks(ctx.req),
+    [PATHS.GET_TASK_STATUS]: async () => callGetTaskStatus(ctx.req),
+    [PATHS.SUBMIT_SCAN_TASK]: async () => callSubmitScanTask(ctx.req),
+    [PATHS.CONTROL_TASK]: async () => callControlTask(ctx.req),
+    [PATHS.QUERY_SYS_SCAN_RESULT]: async () => callQuerySysScanResult(ctx.req),
+    [PATHS.QUERY_WEB_SCAN_RESULT]: async () => callQueryWebScanResult(ctx.req),
+    [PATHS.QUERY_WEAK_PASS_RESULT]: async () => callQueryWeakPassResult(ctx.req),
   };
 }
 
-const mergeCtx = (baseCtx, innerCtx) => ({
-  ...(baseCtx ?? {}),
-  ...(innerCtx ?? {}),
-  bindings: { ...(baseCtx?.bindings ?? {}), ...(innerCtx?.bindings ?? {}) },
-  config: { ...(baseCtx?.config ?? {}), ...(innerCtx?.config ?? {}) },
-  secret: { ...(baseCtx?.secret ?? {}), ...(innerCtx?.secret ?? {}) },
-  limits: innerCtx?.limits ?? baseCtx?.limits ?? {},
-  meta: innerCtx?.meta ?? baseCtx?.meta ?? {},
+const mergeCtx = (base, inner) => ({
+  ...(base ?? {}), ...(inner ?? {}),
+  bindings: { ...(base?.bindings ?? {}), ...(inner?.bindings ?? {}) },
+  config: { ...(base?.config ?? {}), ...(inner?.config ?? {}) },
+  secret: { ...(base?.secret ?? {}), ...(inner?.secret ?? {}) },
+  limits: inner?.limits ?? base?.limits ?? {},
+  meta: inner?.meta ?? base?.meta ?? {},
 });
 
-const resolveCallContext = (baseCtx, reqOrCtx, maybeInnerCtx) => {
-  if (maybeInnerCtx !== undefined) {
-    return { req: reqOrCtx ?? {}, ctx: mergeCtx(baseCtx, maybeInnerCtx) };
-  }
-  const innerCtx = reqOrCtx ?? {};
-  return {
-    req: innerCtx.request ?? innerCtx.req ?? {},
-    ctx: mergeCtx(baseCtx, innerCtx),
-  };
+const resolveCallContext = (baseCtx, reqOrCtx, maybeCtx) => {
+  if (maybeCtx !== undefined) return { req: reqOrCtx ?? {}, ctx: mergeCtx(baseCtx, maybeCtx) };
+  const inner = reqOrCtx ?? {};
+  return { req: inner.request ?? inner.req ?? {}, ctx: mergeCtx(baseCtx, inner) };
 };
 
-const wrapLegacyHandler = (baseCtx, methodPath) => async (reqOrCtx, maybeInnerCtx) => {
-  const call = resolveCallContext(baseCtx, reqOrCtx, maybeInnerCtx);
-  return rpcdef({ ...call.ctx, req: call.req })[methodPath]();
+const wrapHandler = (baseCtx, path) => async (reqOrCtx, maybeCtx) => {
+  const { req, ctx } = resolveCallContext(baseCtx, reqOrCtx, maybeCtx);
+  return rpcdef({ ...ctx, req })[path]();
 };
 
 const registerHandlers = (ctx = {}) => Object.fromEntries(
-  Object.values(METHODS).map((path) => [path, wrapLegacyHandler(ctx, path)])
+  Object.values(PATHS).map((p) => [p, wrapHandler(ctx, p)]),
 );
 
 const sdkHandlers = registerHandlers({});
 
-// handlers keys omit the leading '/' (SDK convention)
 export const handlers = Object.fromEntries(
-  Object.values(METHODS).map((path) => [path.replace(/^\//, ''), sdkHandlers[path]])
+  Object.values(PATHS).map((p) => [p.replace(/^\//, ''), sdkHandlers[p]]),
 );
 
-export const _test = {
-  errorWithCode,
-  firstDefined,
-  hasOwn,
-  mapErrorCode,
-  mergedBindings,
-  normalizeBaseUrl,
-  resolveCallContext,
-  toValue,
-  unwrapString,
-  METHODS,
-};
+export const _test = { err, firstDefined, mergedBindings, normalizeBaseUrl, toInt, toValue, unwrap };

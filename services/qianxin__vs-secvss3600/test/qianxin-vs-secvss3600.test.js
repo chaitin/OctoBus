@@ -1,724 +1,167 @@
-import { describe, it, beforeEach, afterEach } from 'node:test';
+import { describe, it, afterEach } from 'node:test';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { rpcdef, handlers, _test } from '../src/qianxin-vs-secvss3600.js';
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
 const PKG = 'QIANXIN_VS_SecVSS3600';
 const PREFIX = `/${PKG}.${PKG}/`;
 
-const PATH_GET_TOKEN           = `${PREFIX}GetToken`;
+const PATH_GET_DEVICE_STATUS   = `${PREFIX}GetDeviceStatus`;
+const PATH_LIST_TASKS          = `${PREFIX}ListTasks`;
+const PATH_GET_TASK_STATUS     = `${PREFIX}GetTaskStatus`;
 const PATH_SUBMIT_SCAN_TASK    = `${PREFIX}SubmitScanTask`;
 const PATH_CONTROL_TASK        = `${PREFIX}ControlTask`;
-const PATH_GET_TASK_PROGRESS   = `${PREFIX}GetTaskProgress`;
-const PATH_QUERY_SYS_SCAN      = `${PREFIX}QuerySysScanResult`;
-const PATH_LIST_TASKS             = `${PREFIX}ListTasks`;
-const PATH_QUERY_WEB_SCAN         = `${PREFIX}QueryWebScanResult`;
-const PATH_QUERY_WEAK_PASS        = `${PREFIX}QueryWeakPassResult`;
-const PATH_GET_DEVICE_STATUS      = `${PREFIX}GetDeviceStatus`;
-const PATH_LIST_VUL_TEMPLATES     = `${PREFIX}ListVulTemplates`;
+const PATH_QUERY_SYS           = `${PREFIX}QuerySysScanResult`;
+const PATH_QUERY_WEB           = `${PREFIX}QueryWebScanResult`;
+const PATH_QUERY_WEAK          = `${PREFIX}QueryWeakPassResult`;
 
-const METHOD_GET_TOKEN         = `${PKG}.${PKG}/GetToken`;
-const METHOD_SUBMIT_SCAN_TASK  = `${PKG}.${PKG}/SubmitScanTask`;
-const METHOD_CONTROL_TASK      = `${PKG}.${PKG}/ControlTask`;
-const METHOD_GET_TASK_PROGRESS = `${PKG}.${PKG}/GetTaskProgress`;
-const METHOD_QUERY_SYS_SCAN   = `${PKG}.${PKG}/QuerySysScanResult`;
-const METHOD_LIST_TASKS        = `${PKG}.${PKG}/ListTasks`;
+const KEY_GET_DEVICE_STATUS    = `${PKG}.${PKG}/GetDeviceStatus`;
+const KEY_LIST_TASKS           = `${PKG}.${PKG}/ListTasks`;
+const KEY_GET_TASK_STATUS      = `${PKG}.${PKG}/GetTaskStatus`;
+const KEY_SUBMIT_SCAN_TASK     = `${PKG}.${PKG}/SubmitScanTask`;
+const KEY_CONTROL_TASK         = `${PKG}.${PKG}/ControlTask`;
+const KEY_QUERY_SYS            = `${PKG}.${PKG}/QuerySysScanResult`;
+const KEY_QUERY_WEB            = `${PKG}.${PKG}/QueryWebScanResult`;
+const KEY_QUERY_WEAK           = `${PKG}.${PKG}/QueryWeakPassResult`;
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-const makeFetch = (body, status = 200) => async (_url, _init) => ({
+const makeFetch = (body, status = 200) => async () => ({
   ok: status >= 200 && status < 300,
   status,
-  headers: { get: (h) => (h === 'content-type' ? 'application/json' : null) },
   text: async () => JSON.stringify(body),
 });
 
-const makeTextFetch = (text, status = 200) => async (_url, _init) => ({
+const makeTextFetch = (text, status = 200) => async () => ({
   ok: status >= 200 && status < 300,
   status,
-  headers: { get: () => null },
   text: async () => text,
 });
 
 const networkErrorFetch = async () => { throw new Error('ECONNREFUSED'); };
 
+// Default ctx: token in bindings avoids auto-login overhead in most tests
 const buildCtx = (overrides = {}) => ({
-  bindings: { restBaseUrl: 'https://scanner.example.com', ...(overrides.bindings ?? {}) },
-  config:   overrides.config ?? {},
-  secret:   { user: 'admin', pwd: 'pass123', ...(overrides.secret ?? {}) },
-  limits:   { timeoutMs: 5000, ...(overrides.limits ?? {}) },
-  meta:     overrides.meta ?? {},
-  req:      overrides.req ?? {},
+  bindings: { restBaseUrl: 'https://scanner.example.com', token: 'tok123', ...(overrides.bindings ?? {}) },
+  config: overrides.config ?? {},
+  secret: overrides.secret ?? {},
+  limits: { timeoutMs: 5000, ...(overrides.limits ?? {}) },
+  meta: overrides.meta ?? {},
+  req: overrides.req ?? {},
 });
 
-// Captures the last intercepted fetch call for assertion
-let lastFetchArgs = null;
-const captureFetch = (impl) => async (url, init) => {
-  lastFetchArgs = { url: String(url), init };
-  return impl(url, init);
-};
+// No credentials at all: forces INVALID_ARGUMENT on any method needing auth
+const noTokenCtx = (req = {}) => ({
+  bindings: { restBaseUrl: 'https://scanner.example.com' },
+  config: {},
+  secret: {},
+  limits: { timeoutMs: 5000 },
+  meta: {},
+  req,
+});
 
 const originalFetch = globalThis.fetch;
-
-// ---------------------------------------------------------------------------
-// Restore fetch after each top-level test
-// ---------------------------------------------------------------------------
-test.afterEach(() => {
-  globalThis.fetch = originalFetch;
-  lastFetchArgs = null;
-});
+test.afterEach(() => { globalThis.fetch = originalFetch; });
 
 // ===========================================================================
-// rpcdef shape
+// Shape
 // ===========================================================================
-test('rpcdef exposes all six method paths', () => {
+test('rpcdef exposes all 8 method paths', () => {
   const def = rpcdef(buildCtx());
-  for (const method of ['GetToken', 'SubmitScanTask', 'ControlTask', 'GetTaskProgress', 'QuerySysScanResult', 'ListTasks']) {
-    assert.equal(typeof def[`${PREFIX}${method}`], 'function', `${method} missing from rpcdef`);
+  for (const p of [PATH_GET_DEVICE_STATUS, PATH_LIST_TASKS, PATH_GET_TASK_STATUS,
+    PATH_SUBMIT_SCAN_TASK, PATH_CONTROL_TASK, PATH_QUERY_SYS, PATH_QUERY_WEB, PATH_QUERY_WEAK]) {
+    assert.equal(typeof def[p], 'function', `${p} missing`);
   }
 });
 
-test('handlers exposes all six method keys', () => {
-  for (const key of [METHOD_GET_TOKEN, METHOD_SUBMIT_SCAN_TASK, METHOD_CONTROL_TASK, METHOD_GET_TASK_PROGRESS, METHOD_QUERY_SYS_SCAN, METHOD_LIST_TASKS]) {
-    assert.equal(typeof handlers[key], 'function', `${key} missing from handlers`);
+test('handlers exposes all 8 keys without leading slash', () => {
+  for (const k of [KEY_GET_DEVICE_STATUS, KEY_LIST_TASKS, KEY_GET_TASK_STATUS,
+    KEY_SUBMIT_SCAN_TASK, KEY_CONTROL_TASK, KEY_QUERY_SYS, KEY_QUERY_WEB, KEY_QUERY_WEAK]) {
+    assert.equal(typeof handlers[k], 'function', `${k} missing`);
   }
 });
 
 // ===========================================================================
-// GetToken
+// GetDeviceStatus
 // ===========================================================================
-describe('GetToken', () => {
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
-    lastFetchArgs = null;
+describe('GetDeviceStatus', () => {
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('success: returns structured fields', async () => {
+    globalThis.fetch = makeFetch({
+      'CPU Load': '1.5%', 'Disk Usage': '5G/100G',
+      'Memory Usage': '4G/8G', System: '3.5.3-R1',
+      engine: [{ ip: '127.0.0.1', name: 'local', status: 1 }],
+    });
+    const r = await rpcdef(buildCtx({ req: {} }))[PATH_GET_DEVICE_STATUS]();
+    assert.equal(r.cpu_load, '1.5%');
+    assert.equal(r.disk_usage, '5G/100G');
+    assert.equal(r.memory_usage, '4G/8G');
+    assert.equal(r.system_version, '3.5.3-R1');
+    assert.equal(r.engines.length, 1);
   });
 
-  it('success: returns token on valid credentials', async () => {
-    const body = { success: true, token: 'abc123token' };
-    globalThis.fetch = captureFetch(makeFetch(body));
-
-    const ctx = buildCtx({ req: { user: 'admin', pwd: 'pass' } });
-    const res = await rpcdef(ctx)[PATH_GET_TOKEN]();
-    assert.equal(res.success, true);
-    assert.equal(res.token, 'abc123token');
+  it('no engine array -> engines is []', async () => {
+    globalThis.fetch = makeFetch({ 'CPU Load': '5%' });
+    const r = await rpcdef(buildCtx())[PATH_GET_DEVICE_STATUS]();
+    assert.deepEqual(r.engines, []);
   });
 
-  it('success: sends credentials from secret when not in req', async () => {
-    const body = { success: true, token: 'secret-token' };
-    globalThis.fetch = captureFetch(makeFetch(body));
-
-    const ctx = buildCtx();
-    const res = await rpcdef(ctx)[PATH_GET_TOKEN]();
-    assert.equal(res.success, true);
-  });
-
-  it('missing user -> INVALID_ARGUMENT', async () => {
-    const ctx = buildCtx({ req: { pwd: 'pass' }, secret: { user: '', pwd: 'pass' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_GET_TOKEN](),
-      (err) => {
-        assert.match(err.message, /INVALID_ARGUMENT/);
-        return true;
-      },
-    );
-  });
-
-  it('missing pwd -> INVALID_ARGUMENT', async () => {
-    const ctx = buildCtx({ req: { user: 'admin' }, secret: { user: 'admin', pwd: '' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_GET_TOKEN](),
-      (err) => {
-        assert.match(err.message, /INVALID_ARGUMENT/);
-        return true;
-      },
-    );
-  });
-
-  it('upstream errorcode=1002 -> PERMISSION_DENIED', async () => {
-    globalThis.fetch = makeFetch({ success: false, errorcode: 1002, msg: 'permission denied' });
-    const ctx = buildCtx();
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_GET_TOKEN](),
-      (err) => {
-        assert.match(err.message, /PERMISSION_DENIED/);
-        return true;
-      },
-    );
-  });
-
-  it('upstream errorcode=1013 -> PERMISSION_DENIED (token timeout)', async () => {
-    globalThis.fetch = makeFetch({ success: false, errorcode: 1013, msg: 'token timeout' });
-    const ctx = buildCtx();
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_GET_TOKEN](),
-      (err) => {
-        assert.match(err.message, /PERMISSION_DENIED/);
-        return true;
-      },
-    );
+  it('missing baseUrl -> INVALID_ARGUMENT', async () => {
+    const ctx = buildCtx({ bindings: { restBaseUrl: '', token: 'tok123' } });
+    await assert.rejects(rpcdef(ctx)[PATH_GET_DEVICE_STATUS](), /INVALID_ARGUMENT/);
   });
 
   it('network error -> UNAVAILABLE', async () => {
     globalThis.fetch = networkErrorFetch;
-    const ctx = buildCtx();
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_GET_TOKEN](),
-      (err) => {
-        assert.match(err.message, /UNAVAILABLE/);
-        return true;
-      },
-    );
+    await assert.rejects(rpcdef(buildCtx())[PATH_GET_DEVICE_STATUS](), /UNAVAILABLE/);
   });
 
-  it('HTTP 5xx -> UNAVAILABLE', async () => {
-    globalThis.fetch = makeFetch({ error: 'server error' }, 500);
-    const ctx = buildCtx();
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_GET_TOKEN](),
-      (err) => {
-        assert.match(err.message, /UNAVAILABLE/);
-        return true;
-      },
-    );
+  it('HTTP 500 -> UNAVAILABLE', async () => {
+    globalThis.fetch = makeFetch({}, 500);
+    await assert.rejects(rpcdef(buildCtx())[PATH_GET_DEVICE_STATUS](), /UNAVAILABLE/);
+  });
+
+  it('HTTP 401 -> PERMISSION_DENIED', async () => {
+    globalThis.fetch = makeFetch({}, 401);
+    await assert.rejects(rpcdef(buildCtx())[PATH_GET_DEVICE_STATUS](), /PERMISSION_DENIED/);
+  });
+
+  it('HTTP 403 -> PERMISSION_DENIED', async () => {
+    globalThis.fetch = makeFetch({}, 403);
+    await assert.rejects(rpcdef(buildCtx())[PATH_GET_DEVICE_STATUS](), /PERMISSION_DENIED/);
+  });
+
+  it('HTTP 422 -> FAILED_PRECONDITION', async () => {
+    globalThis.fetch = makeFetch({}, 422);
+    await assert.rejects(rpcdef(buildCtx())[PATH_GET_DEVICE_STATUS](), /FAILED_PRECONDITION/);
   });
 
   it('non-JSON response -> UNKNOWN', async () => {
     globalThis.fetch = makeTextFetch('<html>error</html>');
-    const ctx = buildCtx();
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_GET_TOKEN](),
-      (err) => {
-        assert.match(err.message, /UNKNOWN/);
-        return true;
-      },
-    );
+    await assert.rejects(rpcdef(buildCtx())[PATH_GET_DEVICE_STATUS](), /UNKNOWN/);
   });
 
-  it('HTTP 401 -> PERMISSION_DENIED', async () => {
-    globalThis.fetch = makeFetch({ success: false, errorcode: 1002 }, 401);
-    const ctx = buildCtx();
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_GET_TOKEN](),
-      (err) => {
-        assert.match(err.message, /PERMISSION_DENIED/);
-        return true;
-      },
-    );
+  it('empty response body -> UNKNOWN', async () => {
+    globalThis.fetch = makeTextFetch('');
+    await assert.rejects(rpcdef(buildCtx())[PATH_GET_DEVICE_STATUS](), /UNKNOWN/);
   });
 
-  it('handlers[METHOD_GET_TOKEN] also works', async () => {
-    const body = { success: true, token: 'tok-via-handler' };
-    globalThis.fetch = makeFetch(body);
-    const res = await handlers[METHOD_GET_TOKEN]({ user: 'admin', pwd: 'pass' }, buildCtx());
-    assert.equal(res.success, true);
-  });
-});
-
-// ===========================================================================
-// SubmitScanTask
-// ===========================================================================
-describe('SubmitScanTask', () => {
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
-    lastFetchArgs = null;
+  it('upstream errorcode=1001 -> INVALID_ARGUMENT', async () => {
+    globalThis.fetch = makeFetch({ success: false, errorcode: '1001' });
+    await assert.rejects(rpcdef(buildCtx())[PATH_GET_DEVICE_STATUS](), /INVALID_ARGUMENT/);
   });
 
-  it('success: returns taskall_id and sys_task_id', async () => {
-    const body = { success: true, taskall_id: '5', sys_task_id: '4', web_task_id: '9', alive_task_id: '8', ret_crack_task_id: '11' };
-    globalThis.fetch = makeFetch(body);
-    const ctx = buildCtx({ req: { token: 'abc', target: '192.168.1.1' } });
-    const res = await rpcdef(ctx)[PATH_SUBMIT_SCAN_TASK]();
-    assert.equal(res.success, true);
-    assert.equal(res.taskall_id, '5');
-    assert.equal(res.sys_task_id, '4');
+  it('handlers key works', async () => {
+    globalThis.fetch = makeFetch({ 'CPU Load': '2%', engine: [] });
+    const r = await handlers[KEY_GET_DEVICE_STATUS]({}, buildCtx());
+    assert.equal(r.cpu_load, '2%');
   });
 
-  it('missing target -> INVALID_ARGUMENT', async () => {
-    const ctx = buildCtx({ req: { token: 'abc' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_SUBMIT_SCAN_TASK](),
-      (err) => {
-        assert.match(err.message, /INVALID_ARGUMENT/);
-        return true;
-      },
-    );
-  });
-
-  it('missing token -> INVALID_ARGUMENT', async () => {
-    const ctx = buildCtx({ req: { target: '192.168.1.1' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_SUBMIT_SCAN_TASK](),
-      (err) => {
-        assert.match(err.message, /INVALID_ARGUMENT/);
-        return true;
-      },
-    );
-  });
-
-  it('upstream errorcode=1002 -> PERMISSION_DENIED', async () => {
-    globalThis.fetch = makeFetch({ success: false, errorcode: 1002 });
-    const ctx = buildCtx({ req: { token: 'abc', target: '192.168.1.1' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_SUBMIT_SCAN_TASK](),
-      (err) => {
-        assert.match(err.message, /PERMISSION_DENIED/);
-        return true;
-      },
-    );
-  });
-
-  it('upstream errorcode=1013 -> PERMISSION_DENIED', async () => {
-    globalThis.fetch = makeFetch({ success: false, errorcode: 1013 });
-    const ctx = buildCtx({ req: { token: 'abc', target: '192.168.1.1' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_SUBMIT_SCAN_TASK](),
-      (err) => {
-        assert.match(err.message, /PERMISSION_DENIED/);
-        return true;
-      },
-    );
-  });
-
-  it('network error -> UNAVAILABLE', async () => {
-    globalThis.fetch = networkErrorFetch;
-    const ctx = buildCtx({ req: { token: 'abc', target: '192.168.1.1' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_SUBMIT_SCAN_TASK](),
-      (err) => {
-        assert.match(err.message, /UNAVAILABLE/);
-        return true;
-      },
-    );
-  });
-
-  it('HTTP 500 -> UNAVAILABLE', async () => {
-    globalThis.fetch = makeFetch({ error: 'internal' }, 500);
-    const ctx = buildCtx({ req: { token: 'abc', target: '192.168.1.1' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_SUBMIT_SCAN_TASK](),
-      (err) => {
-        assert.match(err.message, /UNAVAILABLE/);
-        return true;
-      },
-    );
-  });
-
-  it('non-JSON response -> UNKNOWN', async () => {
-    globalThis.fetch = makeTextFetch('not json at all');
-    const ctx = buildCtx({ req: { token: 'abc', target: '192.168.1.1' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_SUBMIT_SCAN_TASK](),
-      (err) => {
-        assert.match(err.message, /UNKNOWN/);
-        return true;
-      },
-    );
-  });
-
-  it('HTTP 401 -> PERMISSION_DENIED', async () => {
-    globalThis.fetch = makeFetch({ success: false, errorcode: 1002 }, 401);
-    const ctx = buildCtx({ req: { token: 'abc', target: '192.168.1.1' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_SUBMIT_SCAN_TASK](),
-      (err) => {
-        assert.match(err.message, /PERMISSION_DENIED/);
-        return true;
-      },
-    );
-  });
-
-  it('handlers[METHOD_SUBMIT_SCAN_TASK] also works', async () => {
-    const body = { success: true, taskall_id: '10', sys_task_id: '9' };
-    globalThis.fetch = makeFetch(body);
-    const res = await handlers[METHOD_SUBMIT_SCAN_TASK]({ token: 'abc', target: '10.0.0.1' }, buildCtx());
-    assert.equal(res.success, true);
-    assert.equal(res.taskall_id, '10');
-  });
-});
-
-// ===========================================================================
-// ControlTask
-// ===========================================================================
-describe('ControlTask', () => {
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
-    lastFetchArgs = null;
-  });
-
-  it('success: stop task returns {success:true}', async () => {
-    globalThis.fetch = makeFetch({ success: true });
-    const ctx = buildCtx({ req: { token: 'abc', controltype: 'stop', taskallid: '5' } });
-    const res = await rpcdef(ctx)[PATH_CONTROL_TASK]();
-    assert.equal(res.success, true);
-  });
-
-  it('missing controltype -> INVALID_ARGUMENT', async () => {
-    const ctx = buildCtx({ req: { token: 'abc', taskallid: '5' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_CONTROL_TASK](),
-      (err) => {
-        assert.match(err.message, /INVALID_ARGUMENT/);
-        return true;
-      },
-    );
-  });
-
-  it('missing taskallid -> INVALID_ARGUMENT', async () => {
-    const ctx = buildCtx({ req: { token: 'abc', controltype: 'stop' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_CONTROL_TASK](),
-      (err) => {
-        assert.match(err.message, /INVALID_ARGUMENT/);
-        return true;
-      },
-    );
-  });
-
-  it('missing token -> INVALID_ARGUMENT', async () => {
-    const ctx = buildCtx({ req: { controltype: 'stop', taskallid: '5' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_CONTROL_TASK](),
-      (err) => {
-        assert.match(err.message, /INVALID_ARGUMENT/);
-        return true;
-      },
-    );
-  });
-
-  it('upstream errorcode=1002 -> PERMISSION_DENIED', async () => {
-    globalThis.fetch = makeFetch({ success: false, errorcode: 1002 });
-    const ctx = buildCtx({ req: { token: 'abc', controltype: 'stop', taskallid: '5' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_CONTROL_TASK](),
-      (err) => {
-        assert.match(err.message, /PERMISSION_DENIED/);
-        return true;
-      },
-    );
-  });
-
-  it('upstream errorcode=1013 -> PERMISSION_DENIED', async () => {
-    globalThis.fetch = makeFetch({ success: false, errorcode: 1013 });
-    const ctx = buildCtx({ req: { token: 'abc', controltype: 'stop', taskallid: '5' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_CONTROL_TASK](),
-      (err) => {
-        assert.match(err.message, /PERMISSION_DENIED/);
-        return true;
-      },
-    );
-  });
-
-  it('network error -> UNAVAILABLE', async () => {
-    globalThis.fetch = networkErrorFetch;
-    const ctx = buildCtx({ req: { token: 'abc', controltype: 'stop', taskallid: '5' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_CONTROL_TASK](),
-      (err) => {
-        assert.match(err.message, /UNAVAILABLE/);
-        return true;
-      },
-    );
-  });
-
-  it('HTTP 500 -> UNAVAILABLE', async () => {
-    globalThis.fetch = makeFetch({ error: 'oops' }, 500);
-    const ctx = buildCtx({ req: { token: 'abc', controltype: 'stop', taskallid: '5' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_CONTROL_TASK](),
-      (err) => {
-        assert.match(err.message, /UNAVAILABLE/);
-        return true;
-      },
-    );
-  });
-
-  it('non-JSON response -> UNKNOWN', async () => {
-    globalThis.fetch = makeTextFetch('<error/>');
-    const ctx = buildCtx({ req: { token: 'abc', controltype: 'stop', taskallid: '5' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_CONTROL_TASK](),
-      (err) => {
-        assert.match(err.message, /UNKNOWN/);
-        return true;
-      },
-    );
-  });
-
-  it('HTTP 401 -> PERMISSION_DENIED', async () => {
-    globalThis.fetch = makeFetch({ success: false, errorcode: 1002 }, 401);
-    const ctx = buildCtx({ req: { token: 'abc', controltype: 'stop', taskallid: '5' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_CONTROL_TASK](),
-      (err) => {
-        assert.match(err.message, /PERMISSION_DENIED/);
-        return true;
-      },
-    );
-  });
-
-  it('handlers[METHOD_CONTROL_TASK] also works', async () => {
-    globalThis.fetch = makeFetch({ success: true });
-    const res = await handlers[METHOD_CONTROL_TASK]({ token: 'abc', controltype: 'pause', taskallid: '5' }, buildCtx());
-    assert.equal(res.success, true);
-  });
-});
-
-// ===========================================================================
-// GetTaskProgress
-// ===========================================================================
-describe('GetTaskProgress', () => {
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
-    lastFetchArgs = null;
-  });
-
-  it('success: returns status and progress', async () => {
-    const body = { success: true, status: '4', progress: '100', scheduletype: '0' };
-    globalThis.fetch = makeFetch(body);
-    const ctx = buildCtx({ req: { token: 'abc', taskallid: '5' } });
-    const res = await rpcdef(ctx)[PATH_GET_TASK_PROGRESS]();
-    assert.equal(res.success, true);
-    assert.equal(res.status, '4');
-    assert.equal(res.progress, 100);
-  });
-
-  it('missing taskallid -> INVALID_ARGUMENT', async () => {
-    const ctx = buildCtx({ req: { token: 'abc' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_GET_TASK_PROGRESS](),
-      (err) => {
-        assert.match(err.message, /INVALID_ARGUMENT/);
-        return true;
-      },
-    );
-  });
-
-  it('missing token -> INVALID_ARGUMENT', async () => {
-    const ctx = buildCtx({ req: { taskallid: '5' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_GET_TASK_PROGRESS](),
-      (err) => {
-        assert.match(err.message, /INVALID_ARGUMENT/);
-        return true;
-      },
-    );
-  });
-
-  it('upstream errorcode=1002 -> PERMISSION_DENIED', async () => {
-    globalThis.fetch = makeFetch({ success: false, errorcode: 1002 });
-    const ctx = buildCtx({ req: { token: 'abc', taskallid: '5' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_GET_TASK_PROGRESS](),
-      (err) => {
-        assert.match(err.message, /PERMISSION_DENIED/);
-        return true;
-      },
-    );
-  });
-
-  it('upstream errorcode=1013 -> PERMISSION_DENIED', async () => {
-    globalThis.fetch = makeFetch({ success: false, errorcode: 1013 });
-    const ctx = buildCtx({ req: { token: 'abc', taskallid: '5' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_GET_TASK_PROGRESS](),
-      (err) => {
-        assert.match(err.message, /PERMISSION_DENIED/);
-        return true;
-      },
-    );
-  });
-
-  it('network error -> UNAVAILABLE', async () => {
-    globalThis.fetch = networkErrorFetch;
-    const ctx = buildCtx({ req: { token: 'abc', taskallid: '5' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_GET_TASK_PROGRESS](),
-      (err) => {
-        assert.match(err.message, /UNAVAILABLE/);
-        return true;
-      },
-    );
-  });
-
-  it('HTTP 502 -> UNAVAILABLE', async () => {
-    globalThis.fetch = makeFetch({}, 502);
-    const ctx = buildCtx({ req: { token: 'abc', taskallid: '5' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_GET_TASK_PROGRESS](),
-      (err) => {
-        assert.match(err.message, /UNAVAILABLE/);
-        return true;
-      },
-    );
-  });
-
-  it('non-JSON response -> UNKNOWN', async () => {
-    globalThis.fetch = makeTextFetch('plain text');
-    const ctx = buildCtx({ req: { token: 'abc', taskallid: '5' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_GET_TASK_PROGRESS](),
-      (err) => {
-        assert.match(err.message, /UNKNOWN/);
-        return true;
-      },
-    );
-  });
-
-  it('HTTP 401 -> PERMISSION_DENIED', async () => {
-    globalThis.fetch = makeFetch({ success: false }, 401);
-    const ctx = buildCtx({ req: { token: 'abc', taskallid: '5' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_GET_TASK_PROGRESS](),
-      (err) => {
-        assert.match(err.message, /PERMISSION_DENIED/);
-        return true;
-      },
-    );
-  });
-
-  it('handlers[METHOD_GET_TASK_PROGRESS] also works', async () => {
-    globalThis.fetch = makeFetch({ success: true, status: '4', progress: '100' });
-    const res = await handlers[METHOD_GET_TASK_PROGRESS]({ token: 'abc', taskallid: '5' }, buildCtx());
-    assert.equal(res.success, true);
-    assert.equal(res.status, '4');
-  });
-});
-
-// ===========================================================================
-// QuerySysScanResult
-// ===========================================================================
-describe('QuerySysScanResult', () => {
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
-    lastFetchArgs = null;
-  });
-
-  it('success: returns scan result with hosts list', async () => {
-    const body = {
-      success: true,
-      status: 'completed',
-      hostscount: '1',
-      vulhigh: '2',
-      vulmedium: '1',
-      vullow: '3',
-      hosts: [{ ip: '192.168.1.1', vulhigh: '2', vulmedium: '1' }],
-    };
-    globalThis.fetch = makeFetch(body);
-    const ctx = buildCtx({ req: { token: 'abc', taskid: '4' } });
-    const res = await rpcdef(ctx)[PATH_QUERY_SYS_SCAN]();
-    assert.equal(res.success, true);
-    assert.equal(res.status, 'completed');
-    assert.equal(res.hostscount, 1);
-    assert.equal(res.vulhigh, 2);
-    assert.ok(Array.isArray(res.hosts));
-  });
-
-  it('missing taskid -> INVALID_ARGUMENT', async () => {
-    const ctx = buildCtx({ req: { token: 'abc' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_QUERY_SYS_SCAN](),
-      (err) => {
-        assert.match(err.message, /INVALID_ARGUMENT/);
-        return true;
-      },
-    );
-  });
-
-  it('missing token -> INVALID_ARGUMENT', async () => {
-    const ctx = buildCtx({ req: { taskid: '4' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_QUERY_SYS_SCAN](),
-      (err) => {
-        assert.match(err.message, /INVALID_ARGUMENT/);
-        return true;
-      },
-    );
-  });
-
-  it('upstream errorcode=1002 -> PERMISSION_DENIED', async () => {
-    globalThis.fetch = makeFetch({ success: false, errorcode: 1002 });
-    const ctx = buildCtx({ req: { token: 'abc', taskid: '4' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_QUERY_SYS_SCAN](),
-      (err) => {
-        assert.match(err.message, /PERMISSION_DENIED/);
-        return true;
-      },
-    );
-  });
-
-  it('upstream errorcode=1013 -> PERMISSION_DENIED', async () => {
-    globalThis.fetch = makeFetch({ success: false, errorcode: 1013 });
-    const ctx = buildCtx({ req: { token: 'abc', taskid: '4' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_QUERY_SYS_SCAN](),
-      (err) => {
-        assert.match(err.message, /PERMISSION_DENIED/);
-        return true;
-      },
-    );
-  });
-
-  it('network error -> UNAVAILABLE', async () => {
-    globalThis.fetch = networkErrorFetch;
-    const ctx = buildCtx({ req: { token: 'abc', taskid: '4' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_QUERY_SYS_SCAN](),
-      (err) => {
-        assert.match(err.message, /UNAVAILABLE/);
-        return true;
-      },
-    );
-  });
-
-  it('HTTP 503 -> UNAVAILABLE', async () => {
-    globalThis.fetch = makeFetch({ error: 'service unavailable' }, 503);
-    const ctx = buildCtx({ req: { token: 'abc', taskid: '4' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_QUERY_SYS_SCAN](),
-      (err) => {
-        assert.match(err.message, /UNAVAILABLE/);
-        return true;
-      },
-    );
-  });
-
-  it('non-JSON response -> UNKNOWN', async () => {
-    globalThis.fetch = makeTextFetch('{}broken');
-    const ctx = buildCtx({ req: { token: 'abc', taskid: '4' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_QUERY_SYS_SCAN](),
-      (err) => {
-        assert.match(err.message, /UNKNOWN/);
-        return true;
-      },
-    );
-  });
-
-  it('HTTP 401 -> PERMISSION_DENIED', async () => {
-    globalThis.fetch = makeFetch({ success: false, errorcode: 1002 }, 401);
-    const ctx = buildCtx({ req: { token: 'abc', taskid: '4' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_QUERY_SYS_SCAN](),
-      (err) => {
-        assert.match(err.message, /PERMISSION_DENIED/);
-        return true;
-      },
-    );
-  });
-
-  it('handlers[METHOD_QUERY_SYS_SCAN] also works', async () => {
-    const body = { success: true, status: 'completed', hostscount: '1', vulhigh: '0', hosts: [] };
-    globalThis.fetch = makeFetch(body);
-    const res = await handlers[METHOD_QUERY_SYS_SCAN]({ token: 'abc', taskid: '4' }, buildCtx());
-    assert.equal(res.success, true);
-    assert.equal(res.status, 'completed');
+  it('single ctx-object handler convention', async () => {
+    globalThis.fetch = makeFetch({ 'CPU Load': '3%', engine: [] });
+    const ctx = buildCtx({ req: {} });
+    const r = await handlers[KEY_GET_DEVICE_STATUS](ctx);
+    assert.equal(r.cpu_load, '3%');
   });
 });
 
@@ -726,610 +169,957 @@ describe('QuerySysScanResult', () => {
 // ListTasks
 // ===========================================================================
 describe('ListTasks', () => {
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
-    lastFetchArgs = null;
-  });
+  afterEach(() => { globalThis.fetch = originalFetch; });
 
-  it('success: returns task list', async () => {
-    const body = {
-      success: true,
-      iTotalRecords: '2',
-      aaData: [
-        { taskall_id: '5', taskname: 'scan-1', status: '4' },
-        { taskall_id: '6', taskname: 'scan-2', status: '2' },
-      ],
-    };
-    globalThis.fetch = makeFetch(body);
-    const ctx = buildCtx({ req: { token: 'abc' } });
-    const res = await rpcdef(ctx)[PATH_LIST_TASKS]();
-    assert.equal(res.success, true);
-    assert.equal(res.iTotalRecords, 2);
-    assert.ok(Array.isArray(res.aaData));
-    assert.equal(res.aaData.length, 2);
+  it('success: returns total and tasks', async () => {
+    globalThis.fetch = makeFetch({ iTotalRecords: 3, aaData: [{ id: 1 }, { id: 2 }, { id: 3 }] });
+    const r = await rpcdef(buildCtx({ req: {} }))[PATH_LIST_TASKS]();
+    assert.equal(r.total, 3);
+    assert.equal(r.tasks.length, 3);
   });
 
   it('missing token -> INVALID_ARGUMENT', async () => {
-    const ctx = buildCtx({ req: {} });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_LIST_TASKS](),
-      (err) => {
-        assert.match(err.message, /INVALID_ARGUMENT/);
-        return true;
-      },
-    );
+    await assert.rejects(rpcdef(noTokenCtx())[PATH_LIST_TASKS](), /INVALID_ARGUMENT/);
   });
 
-  it('success: with filter parameters status/page/iDisplayLength', async () => {
-    const body = { success: true, iTotalRecords: '1', aaData: [{ taskall_id: '5', status: '4' }] };
-    globalThis.fetch = captureFetch(makeFetch(body));
-    const ctx = buildCtx({ req: { token: 'abc', status: '4', page: '1', iDisplayLength: '10' } });
-    const res = await rpcdef(ctx)[PATH_LIST_TASKS]();
-    assert.equal(res.success, true);
-    assert.equal(res.iTotalRecords, 1);
+  it('optional filters: status, page, page_size, starttime, endtime', async () => {
+    globalThis.fetch = makeFetch({ iTotalRecords: 1, aaData: [{ id: 5 }] });
+    const ctx = buildCtx({ req: { status: 4, page: 1, page_size: 10, starttime: { value: '2024-01-01' }, endtime: { value: '2024-12-31' } } });
+    const r = await rpcdef(ctx)[PATH_LIST_TASKS]();
+    assert.equal(r.total, 1);
+  });
+
+  it('empty aaData -> tasks is []', async () => {
+    globalThis.fetch = makeFetch({ iTotalRecords: 0, aaData: [] });
+    const r = await rpcdef(buildCtx())[PATH_LIST_TASKS]();
+    assert.equal(r.total, 0);
+    assert.deepEqual(r.tasks, []);
   });
 
   it('upstream errorcode=1002 -> PERMISSION_DENIED', async () => {
-    globalThis.fetch = makeFetch({ success: false, errorcode: 1002 });
-    const ctx = buildCtx({ req: { token: 'abc' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_LIST_TASKS](),
-      (err) => {
-        assert.match(err.message, /PERMISSION_DENIED/);
-        return true;
-      },
-    );
+    globalThis.fetch = makeFetch({ success: false, errorcode: '1002' });
+    await assert.rejects(rpcdef(buildCtx())[PATH_LIST_TASKS](), /PERMISSION_DENIED/);
   });
 
   it('upstream errorcode=1013 -> PERMISSION_DENIED', async () => {
-    globalThis.fetch = makeFetch({ success: false, errorcode: 1013 });
-    const ctx = buildCtx({ req: { token: 'abc' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_LIST_TASKS](),
-      (err) => {
-        assert.match(err.message, /PERMISSION_DENIED/);
-        return true;
-      },
-    );
+    globalThis.fetch = makeFetch({ success: false, errorcode: '1013' });
+    await assert.rejects(rpcdef(buildCtx())[PATH_LIST_TASKS](), /PERMISSION_DENIED/);
+  });
+
+  it('upstream errorcode=1001 -> INVALID_ARGUMENT', async () => {
+    globalThis.fetch = makeFetch({ success: false, errorcode: '1001' });
+    await assert.rejects(rpcdef(buildCtx())[PATH_LIST_TASKS](), /INVALID_ARGUMENT/);
+  });
+
+  it('upstream errorcode=1006 -> FAILED_PRECONDITION', async () => {
+    globalThis.fetch = makeFetch({ success: false, errorcode: '1006' });
+    await assert.rejects(rpcdef(buildCtx())[PATH_LIST_TASKS](), /FAILED_PRECONDITION/);
   });
 
   it('network error -> UNAVAILABLE', async () => {
     globalThis.fetch = networkErrorFetch;
-    const ctx = buildCtx({ req: { token: 'abc' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_LIST_TASKS](),
-      (err) => {
-        assert.match(err.message, /UNAVAILABLE/);
-        return true;
-      },
-    );
-  });
-
-  it('HTTP 500 -> UNAVAILABLE', async () => {
-    globalThis.fetch = makeFetch({ error: 'internal' }, 500);
-    const ctx = buildCtx({ req: { token: 'abc' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_LIST_TASKS](),
-      (err) => {
-        assert.match(err.message, /UNAVAILABLE/);
-        return true;
-      },
-    );
-  });
-
-  it('non-JSON response -> UNKNOWN', async () => {
-    globalThis.fetch = makeTextFetch('Bad Gateway');
-    const ctx = buildCtx({ req: { token: 'abc' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_LIST_TASKS](),
-      (err) => {
-        assert.match(err.message, /UNKNOWN/);
-        return true;
-      },
-    );
+    await assert.rejects(rpcdef(buildCtx())[PATH_LIST_TASKS](), /UNAVAILABLE/);
   });
 
   it('HTTP 401 -> PERMISSION_DENIED', async () => {
-    globalThis.fetch = makeFetch({ success: false, errorcode: 1002 }, 401);
-    const ctx = buildCtx({ req: { token: 'abc' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_LIST_TASKS](),
-      (err) => {
-        assert.match(err.message, /PERMISSION_DENIED/);
-        return true;
-      },
-    );
+    globalThis.fetch = makeFetch({}, 401);
+    await assert.rejects(rpcdef(buildCtx())[PATH_LIST_TASKS](), /PERMISSION_DENIED/);
   });
 
-  it('handlers[METHOD_LIST_TASKS] also works', async () => {
-    const body = { success: true, iTotalRecords: '0', aaData: [] };
-    globalThis.fetch = makeFetch(body);
-    const res = await handlers[METHOD_LIST_TASKS]({ token: 'abc' }, buildCtx());
-    assert.equal(res.success, true);
-    assert.equal(res.iTotalRecords, 0);
+  it('HTTP 500 -> UNAVAILABLE', async () => {
+    globalThis.fetch = makeFetch({}, 500);
+    await assert.rejects(rpcdef(buildCtx())[PATH_LIST_TASKS](), /UNAVAILABLE/);
+  });
+
+  it('non-JSON -> UNKNOWN', async () => {
+    globalThis.fetch = makeTextFetch('Bad Gateway');
+    await assert.rejects(rpcdef(buildCtx())[PATH_LIST_TASKS](), /UNKNOWN/);
+  });
+
+  it('handlers key works', async () => {
+    globalThis.fetch = makeFetch({ iTotalRecords: 0, aaData: [] });
+    const r = await handlers[KEY_LIST_TASKS]({}, buildCtx());
+    assert.equal(r.total, 0);
   });
 });
 
 // ===========================================================================
-// _test utility functions
+// GetTaskStatus
 // ===========================================================================
-describe('_test.toValue', () => {
-  it('string input -> stringValue', () => {
-    assert.deepEqual(_test.toValue('hello'), { stringValue: 'hello' });
+describe('GetTaskStatus', () => {
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('success: returns status (int) and progress (int)', async () => {
+    globalThis.fetch = makeFetch({ status: 4, progress: 100 });
+    const r = await rpcdef(buildCtx({ req: { task_id: 5 } }))[PATH_GET_TASK_STATUS]();
+    assert.equal(r.status, 4);
+    assert.equal(r.progress, 100);
   });
 
-  it('number input -> numberValue', () => {
-    assert.deepEqual(_test.toValue(42), { numberValue: 42 });
+  it('string status/progress coerced to int', async () => {
+    globalThis.fetch = makeFetch({ status: '3', progress: '75' });
+    const r = await rpcdef(buildCtx({ req: { task_id: 5 } }))[PATH_GET_TASK_STATUS]();
+    assert.equal(r.status, 3);
+    assert.equal(r.progress, 75);
   });
 
-  it('boolean true -> boolValue', () => {
-    assert.deepEqual(_test.toValue(true), { boolValue: true });
+  it('missing task_id -> INVALID_ARGUMENT', async () => {
+    await assert.rejects(rpcdef(buildCtx({ req: {} }))[PATH_GET_TASK_STATUS](), /INVALID_ARGUMENT/);
   });
 
-  it('boolean false -> boolValue', () => {
-    assert.deepEqual(_test.toValue(false), { boolValue: false });
+  it('missing token -> INVALID_ARGUMENT', async () => {
+    await assert.rejects(rpcdef(noTokenCtx({ task_id: 5 }))[PATH_GET_TASK_STATUS](), /INVALID_ARGUMENT/);
   });
 
-  it('null -> null', () => {
-    assert.equal(_test.toValue(null), null);
+  it('taskId alias works', async () => {
+    globalThis.fetch = makeFetch({ status: 4, progress: 100 });
+    const r = await rpcdef(buildCtx({ req: { taskId: 5 } }))[PATH_GET_TASK_STATUS]();
+    assert.equal(r.status, 4);
   });
 
-  it('undefined -> null', () => {
-    assert.equal(_test.toValue(undefined), null);
+  it('upstream errorcode=1002 -> PERMISSION_DENIED', async () => {
+    globalThis.fetch = makeFetch({ success: false, errorcode: '1002' });
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 5 } }))[PATH_GET_TASK_STATUS](), /PERMISSION_DENIED/);
   });
 
-  it('array -> listValue', () => {
-    const result = _test.toValue([1, 'two']);
-    assert.ok(result.listValue);
-    assert.ok(Array.isArray(result.listValue.values));
-    assert.deepEqual(result.listValue.values[0], { numberValue: 1 });
-    assert.deepEqual(result.listValue.values[1], { stringValue: 'two' });
+  it('upstream errorcode=1013 -> PERMISSION_DENIED', async () => {
+    globalThis.fetch = makeFetch({ success: false, errorcode: '1013' });
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 5 } }))[PATH_GET_TASK_STATUS](), /PERMISSION_DENIED/);
   });
 
-  it('array containing null -> nullValue sentinel', () => {
-    const result = _test.toValue([null]);
-    assert.deepEqual(result.listValue.values[0], { nullValue: 'NULL_VALUE' });
+  it('network error -> UNAVAILABLE', async () => {
+    globalThis.fetch = networkErrorFetch;
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 5 } }))[PATH_GET_TASK_STATUS](), /UNAVAILABLE/);
   });
 
-  it('object -> structValue', () => {
-    const result = _test.toValue({ a: 'x', b: 2 });
-    assert.ok(result.structValue);
-    assert.deepEqual(result.structValue.fields.a, { stringValue: 'x' });
-    assert.deepEqual(result.structValue.fields.b, { numberValue: 2 });
+  it('HTTP 500 -> UNAVAILABLE', async () => {
+    globalThis.fetch = makeFetch({}, 500);
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 5 } }))[PATH_GET_TASK_STATUS](), /UNAVAILABLE/);
   });
 
-  it('nested object with null value -> nullValue sentinel in fields', () => {
-    const result = _test.toValue({ key: null });
-    assert.deepEqual(result.structValue.fields.key, { nullValue: 'NULL_VALUE' });
-  });
-});
-
-describe('_test.normalizeBaseUrl', () => {
-  it('valid https url -> normalized', () => {
-    assert.equal(_test.normalizeBaseUrl('https://scanner.example.com:8443'), 'https://scanner.example.com:8443');
+  it('HTTP 401 -> PERMISSION_DENIED', async () => {
+    globalThis.fetch = makeFetch({}, 401);
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 5 } }))[PATH_GET_TASK_STATUS](), /PERMISSION_DENIED/);
   });
 
-  it('trailing slash stripped', () => {
-    assert.equal(_test.normalizeBaseUrl('https://scanner.example.com:8443/'), 'https://scanner.example.com:8443');
+  it('non-JSON -> UNKNOWN', async () => {
+    globalThis.fetch = makeTextFetch('plain text');
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 5 } }))[PATH_GET_TASK_STATUS](), /UNKNOWN/);
   });
 
-  it('multiple trailing slashes stripped', () => {
-    assert.equal(_test.normalizeBaseUrl('HTTPS://scanner.example.com:8443///'), 'HTTPS://scanner.example.com:8443');
-  });
-
-  it('invalid url (no scheme) -> empty string', () => {
-    assert.equal(_test.normalizeBaseUrl('scanner.example.com:8443'), '');
-  });
-
-  it('empty string -> empty string', () => {
-    assert.equal(_test.normalizeBaseUrl(''), '');
-  });
-
-  it('url with path -> path preserved (no stripping of mid-path segments)', () => {
-    assert.equal(_test.normalizeBaseUrl('https://scanner.example.com:8443/api'), 'https://scanner.example.com:8443/api');
-  });
-
-  it('http scheme also valid', () => {
-    assert.equal(_test.normalizeBaseUrl('http://192.168.1.1:8080'), 'http://192.168.1.1:8080');
+  it('handlers key works', async () => {
+    globalThis.fetch = makeFetch({ status: 3, progress: 50 });
+    const r = await handlers[KEY_GET_TASK_STATUS]({ task_id: 5 }, buildCtx());
+    assert.equal(r.status, 3);
   });
 });
 
-describe('_test.mergedBindings', () => {
-  it('merges config, secret, bindings with bindings winning', () => {
-    const ctx = {
-      config:   { restBaseUrl: 'from-config', extra: 'cfg' },
-      secret:   { user: 'secret-user', pwd: 'secret-pass' },
-      bindings: { restBaseUrl: 'from-bindings' },
-    };
-    const merged = _test.mergedBindings(ctx);
-    assert.equal(merged.restBaseUrl, 'from-bindings');
-    assert.equal(merged.extra, 'cfg');
-    assert.equal(merged.user, 'secret-user');
-    assert.equal(merged.pwd, 'secret-pass');
+// ===========================================================================
+// SubmitScanTask
+// ===========================================================================
+describe('SubmitScanTask', () => {
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('success: returns int32 task IDs', async () => {
+    globalThis.fetch = makeFetch({ taskall_id: 10, sys_task_id: 4, web_task_id: 9, alive_task_id: 8, ret_crack_task_id: 11 });
+    const r = await rpcdef(buildCtx({ req: { target: '192.168.1.1' } }))[PATH_SUBMIT_SCAN_TASK]();
+    assert.equal(r.task_id, 10);
+    assert.equal(r.sys_task_id, 4);
+    assert.equal(r.web_task_id, 9);
+    assert.equal(r.alive_task_id, 8);
+    assert.equal(r.crack_task_id, 11);
   });
 
-  it('empty ctx returns empty-ish object', () => {
-    const merged = _test.mergedBindings({});
-    assert.equal(typeof merged, 'object');
+  it('with optional fields: task_type, name, vul_plugin', async () => {
+    globalThis.fetch = makeFetch({ taskall_id: 5, sys_task_id: 1, web_task_id: 2, alive_task_id: 3, ret_crack_task_id: 4 });
+    const ctx = buildCtx({ req: { target: '10.0.0.1', task_type: 1, name: { value: 'my-scan' }, vul_plugin: 2 } });
+    const r = await rpcdef(ctx)[PATH_SUBMIT_SCAN_TASK]();
+    assert.equal(r.task_id, 5);
   });
 
-  it('config values available when no bindings override', () => {
-    const ctx = { config: { timeout: 3000 }, secret: {}, bindings: {} };
-    const merged = _test.mergedBindings(ctx);
-    assert.equal(merged.timeout, 3000);
+  it('missing target -> INVALID_ARGUMENT', async () => {
+    await assert.rejects(rpcdef(buildCtx({ req: {} }))[PATH_SUBMIT_SCAN_TASK](), /INVALID_ARGUMENT/);
   });
 
-  it('secret values available when not overridden', () => {
-    const ctx = { config: {}, secret: { apiKey: 'key123' }, bindings: {} };
-    const merged = _test.mergedBindings(ctx);
-    assert.equal(merged.apiKey, 'key123');
+  it('missing token -> INVALID_ARGUMENT', async () => {
+    await assert.rejects(rpcdef(noTokenCtx({ target: '192.168.1.1' }))[PATH_SUBMIT_SCAN_TASK](), /INVALID_ARGUMENT/);
+  });
+
+  it('upstream errorcode=1002 -> PERMISSION_DENIED', async () => {
+    globalThis.fetch = makeFetch({ success: false, errorcode: '1002' });
+    await assert.rejects(rpcdef(buildCtx({ req: { target: '192.168.1.1' } }))[PATH_SUBMIT_SCAN_TASK](), /PERMISSION_DENIED/);
+  });
+
+  it('upstream errorcode=1013 -> PERMISSION_DENIED', async () => {
+    globalThis.fetch = makeFetch({ success: false, errorcode: '1013' });
+    await assert.rejects(rpcdef(buildCtx({ req: { target: '192.168.1.1' } }))[PATH_SUBMIT_SCAN_TASK](), /PERMISSION_DENIED/);
+  });
+
+  it('network error -> UNAVAILABLE', async () => {
+    globalThis.fetch = networkErrorFetch;
+    await assert.rejects(rpcdef(buildCtx({ req: { target: '192.168.1.1' } }))[PATH_SUBMIT_SCAN_TASK](), /UNAVAILABLE/);
+  });
+
+  it('HTTP 401 -> PERMISSION_DENIED', async () => {
+    globalThis.fetch = makeFetch({}, 401);
+    await assert.rejects(rpcdef(buildCtx({ req: { target: '192.168.1.1' } }))[PATH_SUBMIT_SCAN_TASK](), /PERMISSION_DENIED/);
+  });
+
+  it('HTTP 500 -> UNAVAILABLE', async () => {
+    globalThis.fetch = makeFetch({}, 500);
+    await assert.rejects(rpcdef(buildCtx({ req: { target: '192.168.1.1' } }))[PATH_SUBMIT_SCAN_TASK](), /UNAVAILABLE/);
+  });
+
+  it('non-JSON -> UNKNOWN', async () => {
+    globalThis.fetch = makeTextFetch('not json');
+    await assert.rejects(rpcdef(buildCtx({ req: { target: '192.168.1.1' } }))[PATH_SUBMIT_SCAN_TASK](), /UNKNOWN/);
+  });
+
+  it('handlers key works', async () => {
+    globalThis.fetch = makeFetch({ taskall_id: 99, sys_task_id: 1, web_task_id: 2, alive_task_id: 3, ret_crack_task_id: 4 });
+    const r = await handlers[KEY_SUBMIT_SCAN_TASK]({ target: '10.0.0.1' }, buildCtx());
+    assert.equal(r.task_id, 99);
   });
 });
 
-// ---------------------------------------------------------------------------
-// Extra branch-coverage tests
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// ControlTask
+// ===========================================================================
+describe('ControlTask', () => {
+  afterEach(() => { globalThis.fetch = originalFetch; });
 
-describe('ControlTask: invalid controltype', () => {
-  beforeEach(() => { lastFetchArgs = null; });
-  afterEach(() => { globalThis.fetch = undefined; });
-
-  it('unknown controltype -> INVALID_ARGUMENT', async () => {
-    const ctx = buildCtx({ req: { token: 'tok', controltype: 'NOOP', taskallid: '5' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_CONTROL_TASK](),
-      (err) => { assert.match(err.message, /INVALID_ARGUMENT/); return true; },
-    );
+  it('success: stop returns {}', async () => {
+    globalThis.fetch = makeFetch({ success: true });
+    const r = await rpcdef(buildCtx({ req: { task_id: 5, action: 'stop' } }))[PATH_CONTROL_TASK]();
+    assert.deepEqual(r, {});
   });
-});
 
-describe('upstream FAILED_PRECONDITION path', () => {
-  beforeEach(() => { lastFetchArgs = null; });
-  afterEach(() => { globalThis.fetch = undefined; });
+  it('all valid actions accepted', async () => {
+    for (const action of ['start', 'stop', 'pause', 'continue', 'enable', 'disable', 'delete']) {
+      globalThis.fetch = makeFetch({ success: true });
+      const r = await rpcdef(buildCtx({ req: { task_id: 5, action } }))[PATH_CONTROL_TASK]();
+      assert.deepEqual(r, {});
+    }
+  });
 
-  it('upstream errorcode 1006 -> FAILED_PRECONDITION', async () => {
-    globalThis.fetch = makeFetch({ success: false, errorcode: 1006 });
-    const ctx = buildCtx({ req: { token: 'tok', controltype: 'stop', taskallid: '5' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_CONTROL_TASK](),
-      (err) => { assert.match(err.message, /FAILED_PRECONDITION/); return true; },
-    );
+  it('missing task_id -> INVALID_ARGUMENT', async () => {
+    await assert.rejects(rpcdef(buildCtx({ req: { action: 'stop' } }))[PATH_CONTROL_TASK](), /INVALID_ARGUMENT/);
+  });
+
+  it('missing action -> INVALID_ARGUMENT', async () => {
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 5 } }))[PATH_CONTROL_TASK](), /INVALID_ARGUMENT/);
+  });
+
+  it('invalid action -> INVALID_ARGUMENT', async () => {
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 5, action: 'NOOP' } }))[PATH_CONTROL_TASK](), /INVALID_ARGUMENT/);
+  });
+
+  it('missing token -> INVALID_ARGUMENT', async () => {
+    await assert.rejects(rpcdef(noTokenCtx({ task_id: 5, action: 'stop' }))[PATH_CONTROL_TASK](), /INVALID_ARGUMENT/);
+  });
+
+  it('controltype alias works', async () => {
+    globalThis.fetch = makeFetch({ success: true });
+    const r = await rpcdef(buildCtx({ req: { task_id: 5, controltype: 'pause' } }))[PATH_CONTROL_TASK]();
+    assert.deepEqual(r, {});
+  });
+
+  it('taskId alias works', async () => {
+    globalThis.fetch = makeFetch({ success: true });
+    const r = await rpcdef(buildCtx({ req: { taskId: 5, action: 'stop' } }))[PATH_CONTROL_TASK]();
+    assert.deepEqual(r, {});
+  });
+
+  it('upstream errorcode=1002 -> PERMISSION_DENIED', async () => {
+    globalThis.fetch = makeFetch({ success: false, errorcode: '1002' });
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 5, action: 'stop' } }))[PATH_CONTROL_TASK](), /PERMISSION_DENIED/);
+  });
+
+  it('upstream errorcode=1006 -> FAILED_PRECONDITION', async () => {
+    globalThis.fetch = makeFetch({ success: false, errorcode: '1006' });
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 5, action: 'stop' } }))[PATH_CONTROL_TASK](), /FAILED_PRECONDITION/);
+  });
+
+  it('network error -> UNAVAILABLE', async () => {
+    globalThis.fetch = networkErrorFetch;
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 5, action: 'stop' } }))[PATH_CONTROL_TASK](), /UNAVAILABLE/);
+  });
+
+  it('HTTP 401 -> PERMISSION_DENIED', async () => {
+    globalThis.fetch = makeFetch({}, 401);
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 5, action: 'stop' } }))[PATH_CONTROL_TASK](), /PERMISSION_DENIED/);
+  });
+
+  it('HTTP 403 -> PERMISSION_DENIED', async () => {
+    globalThis.fetch = makeFetch({}, 403);
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 5, action: 'stop' } }))[PATH_CONTROL_TASK](), /PERMISSION_DENIED/);
   });
 
   it('HTTP 422 -> FAILED_PRECONDITION', async () => {
     globalThis.fetch = makeFetch({}, 422);
-    const ctx = buildCtx({ req: { token: 'tok', controltype: 'stop', taskallid: '5' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_CONTROL_TASK](),
-      (err) => { assert.match(err.message, /FAILED_PRECONDITION/); return true; },
-    );
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 5, action: 'stop' } }))[PATH_CONTROL_TASK](), /FAILED_PRECONDITION/);
+  });
+
+  it('HTTP 500 -> UNAVAILABLE', async () => {
+    globalThis.fetch = makeFetch({}, 500);
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 5, action: 'stop' } }))[PATH_CONTROL_TASK](), /UNAVAILABLE/);
+  });
+
+  it('non-JSON -> UNKNOWN', async () => {
+    globalThis.fetch = makeTextFetch('<error/>');
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 5, action: 'stop' } }))[PATH_CONTROL_TASK](), /UNKNOWN/);
+  });
+
+  it('handlers key works', async () => {
+    globalThis.fetch = makeFetch({ success: true });
+    const r = await handlers[KEY_CONTROL_TASK]({ task_id: 5, action: 'pause' }, buildCtx());
+    assert.deepEqual(r, {});
   });
 });
 
-describe('alternative URL aliases', () => {
-  beforeEach(() => { lastFetchArgs = null; });
-  afterEach(() => { globalThis.fetch = undefined; });
+// ===========================================================================
+// QuerySysScanResult
+// ===========================================================================
+describe('QuerySysScanResult', () => {
+  afterEach(() => { globalThis.fetch = originalFetch; });
 
-  it('baseUrl alias is accepted', async () => {
-    globalThis.fetch = makeFetch({ success: true, token: 'tok' });
-    const ctx = {
-      bindings: { baseUrl: 'https://scanner.example.com' },
-      config: {},
-      secret: { user: 'admin', pwd: 'pass123' },
-      limits: { timeoutMs: 5000 },
-      meta: {},
-      req: {},
-    };
-    const res = await rpcdef(ctx)[PATH_GET_TOKEN]();
-    assert.equal(res.token, 'tok');
-  });
-
-  it('rest_base_url alias is accepted', async () => {
-    globalThis.fetch = makeFetch({ success: true, token: 'tok' });
-    const ctx = {
-      bindings: { rest_base_url: 'https://scanner.example.com' },
-      config: {},
-      secret: { user: 'admin', pwd: 'pass123' },
-      limits: { timeoutMs: 5000 },
-      meta: {},
-      req: {},
-    };
-    const res = await rpcdef(ctx)[PATH_GET_TOKEN]();
-    assert.equal(res.token, 'tok');
-  });
-});
-
-describe('TLS skip verify', () => {
-  beforeEach(() => { lastFetchArgs = null; });
-  afterEach(() => { globalThis.fetch = undefined; });
-
-  it('tlsInsecureSkipVerify: true still calls fetch successfully', async () => {
-    globalThis.fetch = makeFetch({ success: true, token: 'tok' });
-    const ctx = buildCtx({ bindings: { tlsInsecureSkipVerify: true } });
-    const res = await rpcdef(ctx)[PATH_GET_TOKEN]();
-    assert.equal(res.token, 'tok');
-  });
-});
-
-describe('_test.unwrapString', () => {
-  it('plain string -> same string', () => {
-    assert.equal(_test.unwrapString('hello'), 'hello');
-  });
-
-  it('object with value -> extracts value as string', () => {
-    assert.equal(_test.unwrapString({ value: 'abc' }), 'abc');
-  });
-
-  it('object with null value -> empty string', () => {
-    assert.equal(_test.unwrapString({ value: null }), '');
-  });
-
-  it('null -> empty string', () => {
-    assert.equal(_test.unwrapString(null), '');
-  });
-
-  it('undefined -> empty string', () => {
-    assert.equal(_test.unwrapString(undefined), '');
-  });
-
-  it('number input -> coerced to string', () => {
-    assert.equal(_test.unwrapString(42), '42');
-  });
-});
-
-describe('unwrapString via field wrapper in request', () => {
-  beforeEach(() => { lastFetchArgs = null; });
-  afterEach(() => { globalThis.fetch = undefined; });
-
-  it('token as {value: string} is unwrapped correctly', async () => {
-    globalThis.fetch = makeFetch({ success: false, errorcode: 1002 });
-    const ctx = buildCtx({ req: { token: { value: 'abc-tok' }, controltype: 'stop', taskallid: '5' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_CONTROL_TASK](),
-      (err) => { assert.match(err.message, /PERMISSION_DENIED/); return true; },
-    );
-  });
-});
-
-describe('HTTP 403 -> PERMISSION_DENIED', () => {
-  beforeEach(() => { lastFetchArgs = null; });
-  afterEach(() => { globalThis.fetch = undefined; });
-
-  it('HTTP 403 -> PERMISSION_DENIED', async () => {
-    globalThis.fetch = makeFetch({}, 403);
-    const ctx = buildCtx({ req: { token: 'tok', controltype: 'stop', taskallid: '5' } });
-    await assert.rejects(
-      () => rpcdef(ctx)[PATH_CONTROL_TASK](),
-      (err) => { assert.match(err.message, /PERMISSION_DENIED/); return true; },
-    );
-  });
-});
-
-describe('endpoint alias', () => {
-  beforeEach(() => { lastFetchArgs = null; });
-  afterEach(() => { globalThis.fetch = undefined; });
-
-  it('endpoint alias is accepted', async () => {
-    globalThis.fetch = makeFetch({ success: true, token: 'tok' });
-    const ctx = {
-      bindings: { endpoint: 'https://scanner.example.com' },
-      config: {},
-      secret: { user: 'admin', pwd: 'pass123' },
-      limits: { timeoutMs: 5000 },
-      meta: {},
-      req: {},
-    };
-    const res = await rpcdef(ctx)[PATH_GET_TOKEN]();
-    assert.equal(res.token, 'tok');
-  });
-});
-
-describe('_test.toValue exotic types', () => {
-  it('function value -> stringValue fallback (line 48)', () => {
-    const fn = function myFn() {};
-    const result = _test.toValue(fn);
-    assert.ok(result !== null && typeof result.stringValue === 'string');
-  });
-});
-
-describe('timeoutMs edge cases', () => {
-  beforeEach(() => { lastFetchArgs = null; });
-  afterEach(() => { globalThis.fetch = undefined; });
-
-  it('timeoutMs=0 -> no AbortSignal added', async () => {
-    globalThis.fetch = makeFetch({ success: true, token: 'tok' });
-    const ctx = buildCtx({ limits: { timeoutMs: 0 } });
-    const res = await rpcdef(ctx)[PATH_GET_TOKEN]();
-    assert.equal(res.token, 'tok');
-  });
-});
-
-describe('handler legacy single-arg mode', () => {
-  beforeEach(() => { lastFetchArgs = null; });
-  afterEach(() => { globalThis.fetch = undefined; });
-
-  it('single ctx-object arg works (legacy call convention)', async () => {
-    globalThis.fetch = makeFetch({ success: true, token: 'tok' });
-    // Pass the full ctx object as the only argument (no separate req)
-    const ctx = buildCtx({ req: { user: 'admin', pwd: 'pass' } });
-    const res = await handlers[METHOD_GET_TOKEN](ctx);
-    assert.equal(res.token, 'tok');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// QueryWebScanResult
-// ---------------------------------------------------------------------------
-describe('QueryWebScanResult', () => {
-  it('returns web scan result on success', async () => {
-    const mockBody = {
-      success: true,
-      status: 'completed',
-      hostscount: 1,
-      total: 5,
-      hosts: [{ id: 1, progress: 100 }],
-    };
-    global.fetch = makeFetch(mockBody);
-    const ctx = buildCtx();
-    const def = rpcdef({ ...ctx, req: { token: 'tok', taskid: '9' } });
-    const r = await def[PREFIX + 'QueryWebScanResult']();
-    assert.equal(r.success, true);
+  it('success: returns counts and hosts', async () => {
+    globalThis.fetch = makeFetch({
+      status: 'completed', hostscount: 2,
+      vulhigh: 5, vulmedium: 10, vullow: 20,
+      hosts: [{ ip: '192.168.1.1', vulcount: 35 }],
+    });
+    const r = await rpcdef(buildCtx({ req: { task_id: 4 } }))[PATH_QUERY_SYS]();
     assert.equal(r.status, 'completed');
-    assert.equal(r.hostscount, 1);
-    assert.equal(r.total, 5);
-    assert.ok(Array.isArray(r.hosts));
+    assert.equal(r.hosts_count, 2);
+    assert.equal(r.vul_high, 5);
+    assert.equal(r.vul_medium, 10);
+    assert.equal(r.vul_low, 20);
+    assert.equal(r.hosts.length, 1);
   });
 
-  it('rejects when token missing', async () => {
-    global.fetch = makeFetch({ success: true });
-    const ctx = buildCtx();
-    const def = rpcdef({ ...ctx, req: { taskid: '9' } });
-    await assert.rejects(def[PREFIX + 'QueryWebScanResult'](), /INVALID_ARGUMENT/);
+  it('no hosts -> hosts is []', async () => {
+    globalThis.fetch = makeFetch({ status: 'running', hostscount: 0, vulhigh: 0, vulmedium: 0, vullow: 0 });
+    const r = await rpcdef(buildCtx({ req: { task_id: 4 } }))[PATH_QUERY_SYS]();
+    assert.deepEqual(r.hosts, []);
   });
 
-  it('rejects when taskid missing', async () => {
-    global.fetch = makeFetch({ success: true });
-    const ctx = buildCtx();
-    const def = rpcdef({ ...ctx, req: { token: 'tok' } });
-    await assert.rejects(def[PREFIX + 'QueryWebScanResult'](), /INVALID_ARGUMENT/);
+  it('optional target filter', async () => {
+    globalThis.fetch = makeFetch({ status: 'completed', hostscount: 0, vulhigh: 0, vulmedium: 0, vullow: 0, hosts: [] });
+    const ctx = buildCtx({ req: { task_id: 4, target: { value: '192.168.1.1' } } });
+    const r = await rpcdef(ctx)[PATH_QUERY_SYS]();
+    assert.equal(r.status, 'completed');
   });
 
-  it('propagates upstream error', async () => {
-    global.fetch = makeFetch({ success: false, errorcode: 1006 });
-    const ctx = buildCtx();
-    const def = rpcdef({ ...ctx, req: { token: 'tok', taskid: '9' } });
-    await assert.rejects(def[PREFIX + 'QueryWebScanResult'](), /FAILED_PRECONDITION/);
+  it('missing task_id -> INVALID_ARGUMENT', async () => {
+    await assert.rejects(rpcdef(buildCtx({ req: {} }))[PATH_QUERY_SYS](), /INVALID_ARGUMENT/);
   });
 
-  it('throws UNAVAILABLE on network error', async () => {
-    global.fetch = networkErrorFetch;
-    const ctx = buildCtx();
-    const def = rpcdef({ ...ctx, req: { token: 'tok', taskid: '9' } });
-    await assert.rejects(def[PREFIX + 'QueryWebScanResult'](), /UNAVAILABLE/);
+  it('missing token -> INVALID_ARGUMENT', async () => {
+    await assert.rejects(rpcdef(noTokenCtx({ task_id: 4 }))[PATH_QUERY_SYS](), /INVALID_ARGUMENT/);
+  });
+
+  it('taskid alias works', async () => {
+    globalThis.fetch = makeFetch({ status: 'completed', hostscount: 0, vulhigh: 0, vulmedium: 0, vullow: 0, hosts: [] });
+    const r = await rpcdef(buildCtx({ req: { taskid: 4 } }))[PATH_QUERY_SYS]();
+    assert.equal(r.status, 'completed');
+  });
+
+  it('upstream errorcode=1002 -> PERMISSION_DENIED', async () => {
+    globalThis.fetch = makeFetch({ success: false, errorcode: '1002' });
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 4 } }))[PATH_QUERY_SYS](), /PERMISSION_DENIED/);
+  });
+
+  it('upstream errorcode=1013 -> PERMISSION_DENIED', async () => {
+    globalThis.fetch = makeFetch({ success: false, errorcode: '1013' });
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 4 } }))[PATH_QUERY_SYS](), /PERMISSION_DENIED/);
+  });
+
+  it('network error -> UNAVAILABLE', async () => {
+    globalThis.fetch = networkErrorFetch;
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 4 } }))[PATH_QUERY_SYS](), /UNAVAILABLE/);
+  });
+
+  it('HTTP 503 -> UNAVAILABLE', async () => {
+    globalThis.fetch = makeFetch({}, 503);
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 4 } }))[PATH_QUERY_SYS](), /UNAVAILABLE/);
+  });
+
+  it('HTTP 401 -> PERMISSION_DENIED', async () => {
+    globalThis.fetch = makeFetch({}, 401);
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 4 } }))[PATH_QUERY_SYS](), /PERMISSION_DENIED/);
+  });
+
+  it('non-JSON -> UNKNOWN', async () => {
+    globalThis.fetch = makeTextFetch('{}broken');
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 4 } }))[PATH_QUERY_SYS](), /UNKNOWN/);
+  });
+
+  it('handlers key works', async () => {
+    globalThis.fetch = makeFetch({ status: 'completed', hostscount: 0, vulhigh: 0, vulmedium: 0, vullow: 0, hosts: [] });
+    const r = await handlers[KEY_QUERY_SYS]({ task_id: 4 }, buildCtx());
+    assert.equal(r.status, 'completed');
   });
 });
 
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// QueryWebScanResult
+// ===========================================================================
+describe('QueryWebScanResult', () => {
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('success: returns status, counts, hosts', async () => {
+    globalThis.fetch = makeFetch({ status: 'completed', hostscount: 1, total: 5, hosts: [{ url: 'http://test.com', high: 1 }] });
+    const r = await rpcdef(buildCtx({ req: { task_id: 9 } }))[PATH_QUERY_WEB]();
+    assert.equal(r.status, 'completed');
+    assert.equal(r.hosts_count, 1);
+    assert.equal(r.total_vulns, 5);
+    assert.equal(r.hosts.length, 1);
+  });
+
+  it('missing task_id -> INVALID_ARGUMENT', async () => {
+    await assert.rejects(rpcdef(buildCtx({ req: {} }))[PATH_QUERY_WEB](), /INVALID_ARGUMENT/);
+  });
+
+  it('missing token -> INVALID_ARGUMENT', async () => {
+    await assert.rejects(rpcdef(noTokenCtx({ task_id: 9 }))[PATH_QUERY_WEB](), /INVALID_ARGUMENT/);
+  });
+
+  it('upstream errorcode=1013 -> PERMISSION_DENIED', async () => {
+    globalThis.fetch = makeFetch({ success: false, errorcode: '1013' });
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 9 } }))[PATH_QUERY_WEB](), /PERMISSION_DENIED/);
+  });
+
+  it('upstream errorcode=1006 -> FAILED_PRECONDITION', async () => {
+    globalThis.fetch = makeFetch({ success: false, errorcode: '1006' });
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 9 } }))[PATH_QUERY_WEB](), /FAILED_PRECONDITION/);
+  });
+
+  it('network error -> UNAVAILABLE', async () => {
+    globalThis.fetch = networkErrorFetch;
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 9 } }))[PATH_QUERY_WEB](), /UNAVAILABLE/);
+  });
+
+  it('HTTP 401 -> PERMISSION_DENIED', async () => {
+    globalThis.fetch = makeFetch({}, 401);
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 9 } }))[PATH_QUERY_WEB](), /PERMISSION_DENIED/);
+  });
+
+  it('non-JSON -> UNKNOWN', async () => {
+    globalThis.fetch = makeTextFetch('bad json');
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 9 } }))[PATH_QUERY_WEB](), /UNKNOWN/);
+  });
+
+  it('handlers key works', async () => {
+    globalThis.fetch = makeFetch({ status: 'completed', hostscount: 0, total: 0, hosts: [] });
+    const r = await handlers[KEY_QUERY_WEB]({ task_id: 9 }, buildCtx());
+    assert.equal(r.total_vulns, 0);
+  });
+});
+
+// ===========================================================================
 // QueryWeakPassResult
-// ---------------------------------------------------------------------------
+// ===========================================================================
 describe('QueryWeakPassResult', () => {
-  it('returns cracked credentials on success', async () => {
-    const mockBody = {
-      success: true,
-      status: 'completed',
-      hostscount: 1,
-      total: 2,
-      hosts: [{ id: 1, results: [{ host: '1.2.3.4', login: 'admin', password: '1234', service: 'ssh' }] }],
-    };
-    global.fetch = makeFetch(mockBody);
-    const ctx = buildCtx();
-    const def = rpcdef({ ...ctx, req: { token: 'tok', taskid: '11' } });
-    const r = await def[PREFIX + 'QueryWeakPassResult']();
-    assert.equal(r.success, true);
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('success: returns total and hosts', async () => {
+    globalThis.fetch = makeFetch({
+      status: 'completed', hostscount: 1, total: 2,
+      hosts: [{ results: [{ host: '1.2.3.4', login: 'root', password: 'root123', service: 'ssh' }] }],
+    });
+    const r = await rpcdef(buildCtx({ req: { task_id: 11 } }))[PATH_QUERY_WEAK]();
+    assert.equal(r.status, 'completed');
+    assert.equal(r.hosts_count, 1);
     assert.equal(r.total, 2);
-    assert.ok(Array.isArray(r.hosts));
+    assert.equal(r.hosts.length, 1);
   });
 
-  it('rejects when token missing', async () => {
-    global.fetch = makeFetch({ success: true });
-    const ctx = buildCtx();
-    const def = rpcdef({ ...ctx, req: { taskid: '11' } });
-    await assert.rejects(def[PREFIX + 'QueryWeakPassResult'](), /INVALID_ARGUMENT/);
+  it('missing task_id -> INVALID_ARGUMENT', async () => {
+    await assert.rejects(rpcdef(buildCtx({ req: {} }))[PATH_QUERY_WEAK](), /INVALID_ARGUMENT/);
   });
 
-  it('rejects when taskid missing', async () => {
-    global.fetch = makeFetch({ success: true });
-    const ctx = buildCtx();
-    const def = rpcdef({ ...ctx, req: { token: 'tok' } });
-    await assert.rejects(def[PREFIX + 'QueryWeakPassResult'](), /INVALID_ARGUMENT/);
+  it('missing token -> INVALID_ARGUMENT', async () => {
+    await assert.rejects(rpcdef(noTokenCtx({ task_id: 11 }))[PATH_QUERY_WEAK](), /INVALID_ARGUMENT/);
   });
 
-  it('throws UNAVAILABLE on network error', async () => {
-    global.fetch = networkErrorFetch;
-    const ctx = buildCtx();
-    const def = rpcdef({ ...ctx, req: { token: 'tok', taskid: '11' } });
-    await assert.rejects(def[PREFIX + 'QueryWeakPassResult'](), /UNAVAILABLE/);
+  it('upstream errorcode=1002 -> PERMISSION_DENIED', async () => {
+    globalThis.fetch = makeFetch({ success: false, errorcode: '1002' });
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 11 } }))[PATH_QUERY_WEAK](), /PERMISSION_DENIED/);
+  });
+
+  it('network error -> UNAVAILABLE', async () => {
+    globalThis.fetch = networkErrorFetch;
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 11 } }))[PATH_QUERY_WEAK](), /UNAVAILABLE/);
+  });
+
+  it('HTTP 500 -> UNAVAILABLE', async () => {
+    globalThis.fetch = makeFetch({}, 500);
+    await assert.rejects(rpcdef(buildCtx({ req: { task_id: 11 } }))[PATH_QUERY_WEAK](), /UNAVAILABLE/);
+  });
+
+  it('handlers key works', async () => {
+    globalThis.fetch = makeFetch({ status: 'completed', hostscount: 0, total: 0, hosts: [] });
+    const r = await handlers[KEY_QUERY_WEAK]({ task_id: 11 }, buildCtx());
+    assert.equal(r.total, 0);
   });
 });
 
-// ---------------------------------------------------------------------------
-// GetDeviceStatus
-// ---------------------------------------------------------------------------
-describe('GetDeviceStatus', () => {
-  it('returns device status object on success', async () => {
-    const mockBody = {
-      success: true,
-      'CPU Load': '5%',
-      'Disk Usage': '10G/100G (10%)',
-      'Memory Usage': '4G/8G, 50%',
-      System: '3.5.3-R1',
-      engine: [{ ip: '127.0.0.1', name: 'local', status: 1, type: 'sysscan' }],
+// ===========================================================================
+// Auto-login flow
+// ===========================================================================
+describe('auto-login', () => {
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('uses user+pwd to fetch token then calls API', async () => {
+    let callCount = 0;
+    globalThis.fetch = async () => {
+      callCount++;
+      if (callCount === 1) return { ok: true, status: 200, text: async () => JSON.stringify({ token: 'auto-tok' }) };
+      return { ok: true, status: 200, text: async () => JSON.stringify({ iTotalRecords: 0, aaData: [] }) };
     };
-    global.fetch = makeFetch(mockBody);
-    const ctx = buildCtx();
-    const def = rpcdef({ ...ctx, req: {} });
-    const r = await def[PREFIX + 'GetDeviceStatus']();
-    assert.equal(r.success, true);
-    assert.ok(r.device_info != null);
+    const ctx = { bindings: { restBaseUrl: 'https://scanner.example.com' }, config: {}, secret: { user: 'admin', pwd: 'pass' }, limits: { timeoutMs: 5000 }, meta: {}, req: {} };
+    const r = await rpcdef(ctx)[PATH_LIST_TASKS]();
+    assert.equal(callCount, 2);
+    assert.equal(r.total, 0);
   });
 
-  it('throws when no baseUrl', async () => {
-    global.fetch = makeFetch({ success: true });
-    const ctx = buildCtx({ bindings: { restBaseUrl: '' } });
-    const def = rpcdef({ ...ctx, req: {} });
-    await assert.rejects(def[PREFIX + 'GetDeviceStatus'](), /INVALID_ARGUMENT/);
+  it('upstream errorcode during login -> PERMISSION_DENIED', async () => {
+    globalThis.fetch = makeFetch({ success: false, errorcode: '1002' });
+    const ctx = { bindings: { restBaseUrl: 'https://scanner.example.com' }, config: {}, secret: { user: 'admin', pwd: 'wrong' }, limits: { timeoutMs: 5000 }, meta: {}, req: {} };
+    await assert.rejects(rpcdef(ctx)[PATH_LIST_TASKS](), /PERMISSION_DENIED/);
   });
 
-  it('throws UNAVAILABLE on network error', async () => {
-    global.fetch = networkErrorFetch;
-    const ctx = buildCtx();
-    const def = rpcdef({ ...ctx, req: {} });
-    await assert.rejects(def[PREFIX + 'GetDeviceStatus'](), /UNAVAILABLE/);
+  it('login returns no token field -> UNKNOWN', async () => {
+    globalThis.fetch = makeFetch({ success: true });
+    const ctx = { bindings: { restBaseUrl: 'https://scanner.example.com' }, config: {}, secret: { user: 'admin', pwd: 'pass' }, limits: { timeoutMs: 5000 }, meta: {}, req: {} };
+    await assert.rejects(rpcdef(ctx)[PATH_LIST_TASKS](), /UNKNOWN/);
+  });
+
+  it('no credentials at all -> INVALID_ARGUMENT', async () => {
+    const ctx = { bindings: { restBaseUrl: 'https://scanner.example.com' }, config: {}, secret: {}, limits: { timeoutMs: 5000 }, meta: {}, req: {} };
+    await assert.rejects(rpcdef(ctx)[PATH_LIST_TASKS](), /INVALID_ARGUMENT/);
+  });
+
+  it('bindings.token used when present (no login fetch)', async () => {
+    let fetchCalled = false;
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      return { ok: true, status: 200, text: async () => JSON.stringify({ iTotalRecords: 0, aaData: [] }) };
+    };
+    const ctx = { bindings: { restBaseUrl: 'https://scanner.example.com', token: 'pre-tok' }, config: {}, secret: {}, limits: { timeoutMs: 5000 }, meta: {}, req: {} };
+    await rpcdef(ctx)[PATH_LIST_TASKS]();
+    assert.ok(fetchCalled);
   });
 });
 
-// ---------------------------------------------------------------------------
-// ListVulTemplates
-// ---------------------------------------------------------------------------
-describe('ListVulTemplates', () => {
-  it('returns template list for sysscan', async () => {
-    const mockBody = { success: true, aaData: [{ id: 1, name: '全部漏洞扫描' }, { id: 2, name: 'Linux漏洞' }] };
-    global.fetch = makeFetch(mockBody);
-    const ctx = buildCtx();
-    const def = rpcdef({ ...ctx, req: { token: 'tok', type: 'sysscan' } });
-    const r = await def[PREFIX + 'ListVulTemplates']();
-    assert.equal(r.success, true);
-    assert.equal(r.aaData.length, 2);
+// ===========================================================================
+// URL aliases
+// ===========================================================================
+describe('URL aliases', () => {
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('baseUrl accepted', async () => {
+    globalThis.fetch = makeFetch({ 'CPU Load': '1%', engine: [] });
+    const ctx = { bindings: { baseUrl: 'https://scanner.example.com' }, config: {}, secret: {}, limits: { timeoutMs: 5000 }, meta: {}, req: {} };
+    const r = await rpcdef(ctx)[PATH_GET_DEVICE_STATUS]();
+    assert.equal(r.cpu_load, '1%');
   });
 
-  it('returns template list for webscan', async () => {
-    const mockBody = { success: true, aaData: [{ id: 70, name: '全部WEB漏洞' }] };
-    global.fetch = makeFetch(mockBody);
-    const ctx = buildCtx();
-    const def = rpcdef({ ...ctx, req: { token: 'tok', type: 'webscan' } });
-    const r = await def[PREFIX + 'ListVulTemplates']();
-    assert.equal(r.success, true);
-    assert.equal(r.aaData.length, 1);
+  it('rest_base_url accepted', async () => {
+    globalThis.fetch = makeFetch({ 'CPU Load': '2%', engine: [] });
+    const ctx = { bindings: { rest_base_url: 'https://scanner.example.com' }, config: {}, secret: {}, limits: { timeoutMs: 5000 }, meta: {}, req: {} };
+    const r = await rpcdef(ctx)[PATH_GET_DEVICE_STATUS]();
+    assert.equal(r.cpu_load, '2%');
   });
 
-  it('rejects invalid type', async () => {
-    global.fetch = makeFetch({ success: true });
-    const ctx = buildCtx();
-    const def = rpcdef({ ...ctx, req: { token: 'tok', type: 'invalid' } });
-    await assert.rejects(def[PREFIX + 'ListVulTemplates'](), /INVALID_ARGUMENT/);
+  it('endpoint accepted', async () => {
+    globalThis.fetch = makeFetch({ 'CPU Load': '3%', engine: [] });
+    const ctx = { bindings: { endpoint: 'https://scanner.example.com' }, config: {}, secret: {}, limits: { timeoutMs: 5000 }, meta: {}, req: {} };
+    const r = await rpcdef(ctx)[PATH_GET_DEVICE_STATUS]();
+    assert.equal(r.cpu_load, '3%');
+  });
+});
+
+// ===========================================================================
+// TLS
+// ===========================================================================
+describe('TLS skip verify', () => {
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('tlsInsecureSkipVerify: true still calls fetch', async () => {
+    globalThis.fetch = makeFetch({ 'CPU Load': '1%', engine: [] });
+    const ctx = buildCtx({ bindings: { restBaseUrl: 'https://scanner.example.com', token: 'tok', tlsInsecureSkipVerify: true } });
+    const r = await rpcdef(ctx)[PATH_GET_DEVICE_STATUS]();
+    assert.equal(r.cpu_load, '1%');
   });
 
-  it('rejects when token missing', async () => {
-    global.fetch = makeFetch({ success: true });
-    const ctx = buildCtx();
-    const def = rpcdef({ ...ctx, req: { type: 'sysscan' } });
-    await assert.rejects(def[PREFIX + 'ListVulTemplates'](), /INVALID_ARGUMENT/);
+  it('skipTlsVerify alias works', async () => {
+    globalThis.fetch = makeFetch({ 'CPU Load': '2%', engine: [] });
+    const ctx = buildCtx({ bindings: { restBaseUrl: 'https://scanner.example.com', token: 'tok', skipTlsVerify: true } });
+    const r = await rpcdef(ctx)[PATH_GET_DEVICE_STATUS]();
+    assert.equal(r.cpu_load, '2%');
+  });
+});
+
+// ===========================================================================
+// timeoutMs
+// ===========================================================================
+describe('timeoutMs', () => {
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('timeoutMs=0 falls back to default', async () => {
+    globalThis.fetch = makeFetch({ 'CPU Load': '1%', engine: [] });
+    const ctx = buildCtx({ limits: { timeoutMs: 0 } });
+    const r = await rpcdef(ctx)[PATH_GET_DEVICE_STATUS]();
+    assert.equal(r.cpu_load, '1%');
+  });
+});
+
+// ===========================================================================
+// _test.toValue
+// ===========================================================================
+describe('_test.toValue', () => {
+  it('null -> undefined', () => assert.equal(_test.toValue(null), undefined));
+  it('undefined -> undefined', () => assert.equal(_test.toValue(undefined), undefined));
+  it('string -> stringValue', () => assert.deepEqual(_test.toValue('hi'), { stringValue: 'hi' }));
+  it('number -> numberValue', () => assert.deepEqual(_test.toValue(42), { numberValue: 42 }));
+  it('true -> boolValue', () => assert.deepEqual(_test.toValue(true), { boolValue: true }));
+  it('false -> boolValue', () => assert.deepEqual(_test.toValue(false), { boolValue: false }));
+  it('array -> listValue', () => {
+    const r = _test.toValue([1, 'x']);
+    assert.ok(r.listValue);
+    assert.equal(r.listValue.values.length, 2);
+  });
+  it('null in array -> filtered out', () => {
+    const r = _test.toValue([null, 'a']);
+    assert.equal(r.listValue.values.length, 1);
+    assert.deepEqual(r.listValue.values[0], { stringValue: 'a' });
+  });
+  it('object -> structValue', () => {
+    const r = _test.toValue({ a: 'x', b: 2 });
+    assert.ok(r.structValue);
+    assert.deepEqual(r.structValue.fields.a, { stringValue: 'x' });
+    assert.deepEqual(r.structValue.fields.b, { numberValue: 2 });
+  });
+  it('null in object field -> nullValue sentinel', () => {
+    const r = _test.toValue({ key: null });
+    assert.deepEqual(r.structValue.fields.key, { nullValue: 'NULL_VALUE' });
+  });
+  it('nested object with undefined -> nullValue sentinel', () => {
+    const r = _test.toValue({ k: undefined });
+    assert.deepEqual(r.structValue.fields.k, { nullValue: 'NULL_VALUE' });
+  });
+  it('function -> stringValue fallback', () => {
+    const r = _test.toValue(function myFn() {});
+    assert.ok(typeof r.stringValue === 'string');
+  });
+});
+
+// ===========================================================================
+// _test.normalizeBaseUrl
+// ===========================================================================
+describe('_test.normalizeBaseUrl', () => {
+  it('valid https -> normalized', () => assert.equal(_test.normalizeBaseUrl('https://host:8443'), 'https://host:8443'));
+  it('trailing slash stripped', () => assert.equal(_test.normalizeBaseUrl('https://host:8443/'), 'https://host:8443'));
+  it('multiple trailing slashes stripped', () => assert.equal(_test.normalizeBaseUrl('HTTPS://host:8443///'), 'HTTPS://host:8443'));
+  it('http scheme valid', () => assert.equal(_test.normalizeBaseUrl('http://192.168.1.1:8080'), 'http://192.168.1.1:8080'));
+  it('path preserved', () => assert.equal(_test.normalizeBaseUrl('https://host:8443/api'), 'https://host:8443/api'));
+  it('no scheme -> null', () => assert.equal(_test.normalizeBaseUrl('host:8443'), null));
+  it('empty string -> null', () => assert.equal(_test.normalizeBaseUrl(''), null));
+});
+
+// ===========================================================================
+// _test.toInt
+// ===========================================================================
+describe('_test.toInt', () => {
+  it('integer -> same', () => assert.equal(_test.toInt(5), 5));
+  it('0 is valid', () => assert.equal(_test.toInt(0), 0));
+  it('string integer -> number', () => assert.equal(_test.toInt('42'), 42));
+  it('float -> null', () => assert.equal(_test.toInt(1.5), null));
+  it('null -> null', () => assert.equal(_test.toInt(null), null));
+  it('undefined -> null', () => assert.equal(_test.toInt(undefined), null));
+  it('NaN string -> null', () => assert.equal(_test.toInt('abc'), null));
+  it('wrapper {value} -> extracts', () => assert.equal(_test.toInt({ value: 7 }), 7));
+  it('nested wrapper -> extracts', () => assert.equal(_test.toInt({ value: '99' }), 99));
+});
+
+// ===========================================================================
+// _test.unwrap
+// ===========================================================================
+describe('_test.unwrap', () => {
+  it('null -> undefined', () => assert.equal(_test.unwrap(null), undefined));
+  it('undefined -> undefined', () => assert.equal(_test.unwrap(undefined), undefined));
+  it('string -> same', () => assert.equal(_test.unwrap('hello'), 'hello'));
+  it('{value: str} -> extracts', () => assert.equal(_test.unwrap({ value: 'abc' }), 'abc'));
+  it('{value: null} -> empty string', () => assert.equal(_test.unwrap({ value: null }), ''));
+  it('number -> string', () => assert.equal(_test.unwrap(42), '42'));
+});
+
+// ===========================================================================
+// _test.mergedBindings
+// ===========================================================================
+describe('_test.mergedBindings', () => {
+  it('bindings wins over config and secret', () => {
+    const ctx = { config: { restBaseUrl: 'from-config' }, secret: { user: 'u' }, bindings: { restBaseUrl: 'from-bindings' } };
+    const merged = _test.mergedBindings(ctx);
+    assert.equal(merged.restBaseUrl, 'from-bindings');
+    assert.equal(merged.user, 'u');
   });
 
-  it('throws UNAVAILABLE on network error', async () => {
-    global.fetch = networkErrorFetch;
-    const ctx = buildCtx();
-    const def = rpcdef({ ...ctx, req: { token: 'tok', type: 'sysscan' } });
-    await assert.rejects(def[PREFIX + 'ListVulTemplates'](), /UNAVAILABLE/);
+  it('empty ctx -> returns object', () => assert.equal(typeof _test.mergedBindings({}), 'object'));
+
+  it('config values available when not overridden', () => {
+    const ctx = { config: { timeout: 3000 }, secret: {}, bindings: {} };
+    assert.equal(_test.mergedBindings(ctx).timeout, 3000);
+  });
+});
+
+// ===========================================================================
+// Additional branch coverage
+// ===========================================================================
+describe('req.token field used when present', () => {
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('req.token takes precedence over bindings.token', async () => {
+    globalThis.fetch = makeFetch({ iTotalRecords: 0, aaData: [] });
+    // bindings has no token; req provides it explicitly
+    const ctx = {
+      bindings: { restBaseUrl: 'https://scanner.example.com' },
+      config: {}, secret: {}, limits: { timeoutMs: 5000 }, meta: {},
+      req: { token: 'from-req' },
+    };
+    const r = await rpcdef(ctx)[PATH_LIST_TASKS]();
+    assert.equal(r.total, 0);
+  });
+
+  it('req.token for GetTaskStatus', async () => {
+    globalThis.fetch = makeFetch({ status: 4, progress: 100 });
+    const ctx = {
+      bindings: { restBaseUrl: 'https://scanner.example.com' },
+      config: {}, secret: {}, limits: { timeoutMs: 5000 }, meta: {},
+      req: { token: 'from-req', task_id: 5 },
+    };
+    const r = await rpcdef(ctx)[PATH_GET_TASK_STATUS]();
+    assert.equal(r.status, 4);
+  });
+});
+
+describe('additional URL aliases', () => {
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('base_url alias accepted', async () => {
+    globalThis.fetch = makeFetch({ 'CPU Load': '4%', engine: [] });
+    const ctx = { bindings: { base_url: 'https://scanner.example.com' }, config: {}, secret: {}, limits: { timeoutMs: 5000 }, meta: {}, req: {} };
+    const r = await rpcdef(ctx)[PATH_GET_DEVICE_STATUS]();
+    assert.equal(r.cpu_load, '4%');
+  });
+});
+
+describe('additional TLS aliases', () => {
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('skip_tls_verify alias works', async () => {
+    globalThis.fetch = makeFetch({ 'CPU Load': '3%', engine: [] });
+    const ctx = buildCtx({ bindings: { restBaseUrl: 'https://scanner.example.com', token: 'tok', skip_tls_verify: true } });
+    const r = await rpcdef(ctx)[PATH_GET_DEVICE_STATUS]();
+    assert.equal(r.cpu_load, '3%');
+  });
+
+  it('tls_insecure_skip_verify alias works', async () => {
+    globalThis.fetch = makeFetch({ 'CPU Load': '4%', engine: [] });
+    const ctx = buildCtx({ bindings: { restBaseUrl: 'https://scanner.example.com', token: 'tok', tls_insecure_skip_verify: true } });
+    const r = await rpcdef(ctx)[PATH_GET_DEVICE_STATUS]();
+    assert.equal(r.cpu_load, '4%');
+  });
+});
+
+describe('network error with cause.message', () => {
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('e.cause.message is used when available', async () => {
+    globalThis.fetch = async () => {
+      const e = new Error('wrapper');
+      e.cause = new Error('cause message here');
+      throw e;
+    };
+    await assert.rejects(rpcdef(buildCtx())[PATH_GET_DEVICE_STATUS](), /UNAVAILABLE/);
+  });
+});
+
+describe('checkError: success=false with null errorcode (no-op)', () => {
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('success=false but no errorcode -> does not throw', async () => {
+    // API returns success=false but no errorcode — checkError treats it as non-error
+    globalThis.fetch = makeFetch({ success: false, status: 'running', hostscount: 0, vulhigh: 0, vulmedium: 0, vullow: 0 });
+    const r = await rpcdef(buildCtx({ req: { task_id: 4 } }))[PATH_QUERY_SYS]();
+    assert.equal(r.hosts_count, 0);
+  });
+});
+
+describe('auto-login: username/password aliases', () => {
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('bindings.username and bindings.password aliases work', async () => {
+    let callCount = 0;
+    globalThis.fetch = async () => {
+      callCount++;
+      if (callCount === 1) return { ok: true, status: 200, text: async () => JSON.stringify({ token: 'tok-alias' }) };
+      return { ok: true, status: 200, text: async () => JSON.stringify({ iTotalRecords: 0, aaData: [] }) };
+    };
+    const ctx = {
+      bindings: { restBaseUrl: 'https://scanner.example.com' },
+      config: {}, secret: { username: 'admin', password: 'pass' },
+      limits: { timeoutMs: 5000 }, meta: {}, req: {},
+    };
+    const r = await rpcdef(ctx)[PATH_LIST_TASKS]();
+    assert.equal(r.total, 0);
+  });
+});
+
+describe('ListTasks: iDisplayLength alias for page_size', () => {
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('iDisplayLength alias works for page_size', async () => {
+    globalThis.fetch = makeFetch({ iTotalRecords: 5, aaData: [] });
+    const ctx = buildCtx({ req: { iDisplayLength: 20 } });
+    const r = await rpcdef(ctx)[PATH_LIST_TASKS]();
+    assert.equal(r.total, 5);
+  });
+});
+
+describe('GetTaskStatus: taskallid alias', () => {
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('taskallid alias works', async () => {
+    globalThis.fetch = makeFetch({ status: 4, progress: 100 });
+    const r = await rpcdef(buildCtx({ req: { taskallid: 5 } }))[PATH_GET_TASK_STATUS]();
+    assert.equal(r.status, 4);
+  });
+});
+
+describe('SubmitScanTask: taskType alias', () => {
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('taskType alias for task_type', async () => {
+    globalThis.fetch = makeFetch({ taskall_id: 5, sys_task_id: 1, web_task_id: 2, alive_task_id: 3, ret_crack_task_id: 4 });
+    const r = await rpcdef(buildCtx({ req: { target: '10.0.0.0', taskType: 0 } }))[PATH_SUBMIT_SCAN_TASK]();
+    assert.equal(r.task_id, 5);
+  });
+
+  it('vulPlugin alias for vul_plugin', async () => {
+    globalThis.fetch = makeFetch({ taskall_id: 6, sys_task_id: 1, web_task_id: 2, alive_task_id: 3, ret_crack_task_id: 4 });
+    const r = await rpcdef(buildCtx({ req: { target: '10.0.0.0', vulPlugin: 1 } }))[PATH_SUBMIT_SCAN_TASK]();
+    assert.equal(r.task_id, 6);
+  });
+});
+
+describe('QuerySysScanResult: taskId alias', () => {
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('taskId alias works', async () => {
+    globalThis.fetch = makeFetch({ status: 'completed', hostscount: 0, vulhigh: 0, vulmedium: 0, vullow: 0, hosts: [] });
+    const r = await rpcdef(buildCtx({ req: { taskId: 4 } }))[PATH_QUERY_SYS]();
+    assert.equal(r.status, 'completed');
+  });
+});
+
+describe('?? 0 fallback when numeric fields absent', () => {
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('GetTaskStatus: missing status/progress -> 0', async () => {
+    globalThis.fetch = makeFetch({});
+    const r = await rpcdef(buildCtx({ req: { task_id: 5 } }))[PATH_GET_TASK_STATUS]();
+    assert.equal(r.status, 0);
+    assert.equal(r.progress, 0);
+  });
+
+  it('SubmitScanTask: missing IDs -> 0', async () => {
+    globalThis.fetch = makeFetch({});
+    const r = await rpcdef(buildCtx({ req: { target: '10.0.0.1' } }))[PATH_SUBMIT_SCAN_TASK]();
+    assert.equal(r.task_id, 0);
+    assert.equal(r.crack_task_id, 0);
+  });
+
+  it('ListTasks: missing iTotalRecords -> 0', async () => {
+    globalThis.fetch = makeFetch({ aaData: [] });
+    const r = await rpcdef(buildCtx())[PATH_LIST_TASKS]();
+    assert.equal(r.total, 0);
+  });
+
+  it('QuerySysScanResult: missing counts -> 0', async () => {
+    globalThis.fetch = makeFetch({ status: 'running' });
+    const r = await rpcdef(buildCtx({ req: { task_id: 4 } }))[PATH_QUERY_SYS]();
+    assert.equal(r.hosts_count, 0);
+    assert.equal(r.vul_high, 0);
+  });
+
+  it('QueryWebScanResult: missing counts -> 0', async () => {
+    globalThis.fetch = makeFetch({ status: 'running' });
+    const r = await rpcdef(buildCtx({ req: { task_id: 9 } }))[PATH_QUERY_WEB]();
+    assert.equal(r.hosts_count, 0);
+    assert.equal(r.total_vulns, 0);
+  });
+
+  it('QueryWeakPassResult: missing counts -> 0', async () => {
+    globalThis.fetch = makeFetch({ status: 'running' });
+    const r = await rpcdef(buildCtx({ req: { task_id: 11 } }))[PATH_QUERY_WEAK]();
+    assert.equal(r.hosts_count, 0);
+    assert.equal(r.total, 0);
+  });
+});
+
+describe('GetDeviceStatus: snake_case and fallback field names', () => {
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('cpu_load / disk_usage / memory_usage / system_version snake_case fields', async () => {
+    globalThis.fetch = makeFetch({
+      cpu_load: '2%', disk_usage: '5G/100G',
+      memory_usage: '2G/8G', system_version: '3.6',
+      engine: [],
+    });
+    const r = await rpcdef(buildCtx())[PATH_GET_DEVICE_STATUS]();
+    assert.equal(r.cpu_load, '2%');
+    assert.equal(r.disk_usage, '5G/100G');
+    assert.equal(r.memory_usage, '2G/8G');
+    assert.equal(r.system_version, '3.6');
+  });
+
+  it('missing all fields -> empty strings', async () => {
+    globalThis.fetch = makeFetch({ engine: [] });
+    const r = await rpcdef(buildCtx())[PATH_GET_DEVICE_STATUS]();
+    assert.equal(r.cpu_load, '');
+    assert.equal(r.disk_usage, '');
+    assert.equal(r.memory_usage, '');
+    assert.equal(r.system_version, '');
+  });
+});
+
+describe('QueryWebScanResult and QueryWeakPassResult: taskId and taskid aliases', () => {
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('QueryWebScanResult: taskId alias works', async () => {
+    globalThis.fetch = makeFetch({ status: 'completed', hostscount: 0, total: 0, hosts: [] });
+    const r = await rpcdef(buildCtx({ req: { taskId: 9 } }))[PATH_QUERY_WEB]();
+    assert.equal(r.status, 'completed');
+  });
+
+  it('QueryWeakPassResult: taskid alias works', async () => {
+    globalThis.fetch = makeFetch({ status: 'completed', hostscount: 0, total: 0, hosts: [] });
+    const r = await rpcdef(buildCtx({ req: { taskid: 11 } }))[PATH_QUERY_WEAK]();
+    assert.equal(r.status, 'completed');
+  });
+
+  it('QueryWebScanResult: target filter', async () => {
+    globalThis.fetch = makeFetch({ status: 'completed', hostscount: 0, total: 0, hosts: [] });
+    const r = await rpcdef(buildCtx({ req: { task_id: 9, target: { value: 'http://test.com' } } }))[PATH_QUERY_WEB]();
+    assert.equal(r.status, 'completed');
+  });
+
+  it('QueryWeakPassResult: target filter', async () => {
+    globalThis.fetch = makeFetch({ status: 'completed', hostscount: 0, total: 0, hosts: [] });
+    const r = await rpcdef(buildCtx({ req: { task_id: 11, target: { value: '192.168.1.1' } } }))[PATH_QUERY_WEAK]();
+    assert.equal(r.status, 'completed');
   });
 });

@@ -1,30 +1,22 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
-  "additionalProperties": true,
+  "required": ["restBaseUrl"],
   "properties": {
     "restBaseUrl": {
       "type": "string",
-      "description": "SecVSS 3600 设备 HTTPS 基础 URL，例如 https://172.18.0.33"
-    },
-    "baseUrl": {
-      "type": "string",
-      "description": "restBaseUrl 的别名"
-    },
-    "endpoint": {
-      "type": "string",
-      "description": "restBaseUrl 的别名"
+      "description": "SecVSS 3600 base URL, e.g. https://secvss.example.com"
     },
     "timeoutMs": {
       "type": "integer",
-      "minimum": 1,
-      "default": 10000,
-      "description": "HTTP 请求超时毫秒数"
+      "default": 15000,
+      "description": "HTTP request timeout in milliseconds."
     },
     "tlsInsecureSkipVerify": {
       "type": "boolean",
       "default": false,
-      "description": "是否跳过 TLS 证书校验（设备使用自签证书时设为 true）"
+      "description": "Skip TLS certificate verification (for self-signed certs)."
     }
-  }
+  },
+  "additionalProperties": false
 }
