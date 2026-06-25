@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package Volcengine_Seccenter;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Volcengine_Seccenter";
+
+service Volcengine_Seccenter {
+  rpc ListAssetCenterHosts(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListHostsBasicInfos(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListHostsAgentIDs(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetHostBasicInfo(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetHostAssetOverview(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAssetGroups(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListHostRegion(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListHostPlatform(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListTagsDetail(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListVulns(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListVulnHosts(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetVulnInfo(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetHostVulnInfo(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetVulnStatistics(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetVulnCheckStatus(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetVulnScanConfig(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListHidsAlarms(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetHidsAlarmSummaryInfo(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetHidsAlarmInfo(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetHidsAlarmStatistics(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAlarmNameList(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAlarmTags(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListEndpointHandleMethods(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetIntrusionRealTimeUpdates(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetIntrusionRiskTrends(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListBaselineCheckItems(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListBaselineCheckRes(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListBaselines(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListBaselineGroups(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListVirusAlarms(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetVirusAlarmSummaryInfo(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListIsolationFiles(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListScanTasks(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAutoDefenseRules(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListCloudEnvs(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListCloudPlatforms(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc MultiCloudAccessStatistics(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc MultiCloudAccessSyncStatus(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListRegistryImages(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListRegistries(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetRepoRegistrySummary(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetK8sAssetStatistic(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAssetClusters(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetSOCAssetVulnStats(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetSOCAssetAlarmStats(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetSOCAssetInstanceProtectStatus(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListFileMonitorAlarms(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc InvokeReadOnlyAction(InvokeReadOnlyActionRequest) returns (VolcengineResponse) {}
+}
+
+message VolcengineRequest {
+  google.protobuf.Struct payload = 1;
+}
+
+message InvokeReadOnlyActionRequest {
+  string action = 1;
+  string service_code = 2;
+  string version = 3;
+  string method = 4;
+  string endpoint = 5;
+  google.protobuf.Struct payload = 6;
+}
+
+message VolcengineResponse {
+  google.protobuf.Value response = 1;
+}

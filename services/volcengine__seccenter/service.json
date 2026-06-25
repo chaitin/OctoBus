@@ -1,0 +1,53 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "volcengine-seccenter",
+  "displayName": "Volcengine Cloud Security Center",
+  "description": "OctoBus package for Volcengine Cloud Security Center read-only query APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/volcengine_seccenter.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Volcengine_Seccenter.Volcengine_Seccenter/ListAssetCenterHosts": {
+          "name": "list-asset-center-hosts",
+          "description": "Query Volcengine Cloud Security Center host assets."
+        },
+        "Volcengine_Seccenter.Volcengine_Seccenter/ListHostsBasicInfos": {
+          "name": "list-hosts-basic-infos",
+          "description": "Query Volcengine Cloud Security Center host basic information."
+        },
+        "Volcengine_Seccenter.Volcengine_Seccenter/GetHostAssetOverview": {
+          "name": "get-host-asset-overview",
+          "description": "Query Volcengine Cloud Security Center host asset overview."
+        },
+        "Volcengine_Seccenter.Volcengine_Seccenter/ListVulns": {
+          "name": "list-vulns",
+          "description": "Query Volcengine Cloud Security Center vulnerabilities."
+        },
+        "Volcengine_Seccenter.Volcengine_Seccenter/ListHidsAlarms": {
+          "name": "list-hids-alarms",
+          "description": "Query Volcengine Cloud Security Center security alarms."
+        },
+        "Volcengine_Seccenter.Volcengine_Seccenter/ListBaselineCheckRes": {
+          "name": "list-baseline-check-res",
+          "description": "Query Volcengine Cloud Security Center baseline check results."
+        },
+        "Volcengine_Seccenter.Volcengine_Seccenter/InvokeReadOnlyAction": {
+          "name": "invoke-read-only-action",
+          "description": "Invoke an allowed Volcengine Cloud Security Center read-only action."
+        }
+      }
+    }
+  }
+}
