@@ -1,0 +1,65 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "h3c-secpath",
+  "displayName": "H3C SecPath",
+  "description": "OctoBus package for H3C SecPath (Comware 7 RESTCONF): manage security zones, firewall policies, object groups, sessions, interfaces, ACL, and NAT via the Comware 7 REST API.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/h3c_secpath.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "H3C_SECPATH.H3C_SECPATH/GetDeviceBase": {
+          "name": "get-device-base",
+          "description": "Retrieve H3C SecPath device basic information."
+        },
+        "H3C_SECPATH.H3C_SECPATH/GetSecurityZones": {
+          "name": "get-security-zones",
+          "description": "List all security zones on the H3C SecPath firewall."
+        },
+        "H3C_SECPATH.H3C_SECPATH/GetZonePairs": {
+          "name": "get-zone-pairs",
+          "description": "List all security zone pairs (inter-zone policy bindings)."
+        },
+        "H3C_SECPATH.H3C_SECPATH/GetIPv4SecurityPolicies": {
+          "name": "get-ipv4-security-policies",
+          "description": "List IPv4 security policy rules (firewall rules)."
+        },
+        "H3C_SECPATH.H3C_SECPATH/GetIPv4ObjectGroups": {
+          "name": "get-ipv4-object-groups",
+          "description": "List IPv4 address object groups."
+        },
+        "H3C_SECPATH.H3C_SECPATH/GetServiceGroups": {
+          "name": "get-service-groups",
+          "description": "List service object groups."
+        },
+        "H3C_SECPATH.H3C_SECPATH/GetSessions": {
+          "name": "get-sessions",
+          "description": "List active network sessions on the H3C SecPath firewall."
+        },
+        "H3C_SECPATH.H3C_SECPATH/GetInterfaces": {
+          "name": "get-interfaces",
+          "description": "List all interfaces and their status."
+        },
+        "H3C_SECPATH.H3C_SECPATH/GetACLGroups": {
+          "name": "get-acl-groups",
+          "description": "List ACL groups and their rules."
+        },
+        "H3C_SECPATH.H3C_SECPATH/GetNATStaticMappings": {
+          "name": "get-nat-static-mappings",
+          "description": "List NAT static mapping entries."
+        }
+      }
+    }
+  }
+}

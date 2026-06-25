@@ -309,6 +309,10 @@ const services = {
     entryFile: "../sangfor__sip/bin/sangfor-sip.js",
     serviceModule: "../sangfor__sip/src/service.js",
   },
+  "h3c-secpath": {
+    entryFile: "../h3c__secpath/bin/h3c-secpath.js",
+    serviceModule: "../h3c__secpath/src/service.js",
+  },
   "sangfor-atrust-openapi-v3": {
     entryFile: "../sangfor__atrust-openapi_v3/bin/sangfor-atrust-openapi-v3.js",
     serviceModule: "../sangfor__atrust-openapi_v3/src/service.js",
