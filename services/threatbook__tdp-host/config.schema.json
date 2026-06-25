@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "restBaseUrl": {
+      "type": "string",
+      "description": "ThreatBook TDP web console base URL, e.g. https://192.0.2.13"
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "Alias for restBaseUrl."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for private deployments / self-signed certs."
+    },
+    "tlsInsecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Legacy alias for skipTlsVerify."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional additional HTTP headers (e.g. Referer)."
+    }
+  }
+}
