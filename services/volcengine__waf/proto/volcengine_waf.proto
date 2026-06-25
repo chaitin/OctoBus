@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package Volcengine_WAF;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Volcengine_WAF";
+
+service Volcengine_WAF {
+  rpc ListDomain(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListLoadBalancer(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc QueryAttackAnalysisTermsAggLb(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc QueryAttackAnalysisWithRuleAggLb(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc QueryAttackSecurityEvent(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc QueryFlowOverviewLb(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc QueryProtectionOverviewLb(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetReqQPSAnalysis(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAclRule(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListCustomPage(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAreaBlockRule(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetAreaBlockInfo(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListCCRule(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListCCRulePriorityAvailable(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetSmartCCConfig(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListVulnerabilityRule(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetVulnerabilityConfig(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListVulWhiteField(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListCustomBotConfig(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListBotAnalyseProtectRule(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListBotAnalyseProtectRulePriorityAvailable(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetDynamicTokenConfig(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListProhibition(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetTLSConfig(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc SearchLogs(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListWafServiceCertificate(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAllIpGroups(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListIpGroup(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListHostGroup(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc InvokeReadOnlyAction(InvokeReadOnlyActionRequest) returns (VolcengineResponse) {}
+}
+
+message VolcengineRequest {
+  google.protobuf.Struct payload = 1;
+}
+
+message InvokeReadOnlyActionRequest {
+  string action = 1;
+  string service_code = 2;
+  string version = 3;
+  string method = 4;
+  string endpoint = 5;
+  google.protobuf.Struct payload = 6;
+}
+
+message VolcengineResponse {
+  google.protobuf.Value response = 1;
+}
