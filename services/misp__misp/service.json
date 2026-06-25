@@ -1,0 +1,49 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "misp",
+  "displayName": "MISP Threat Intelligence Platform",
+  "description": "OctoBus package for MISP (Malware Information Sharing Platform) threat intelligence: event/IoC search, creation, and tag management.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/misp.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "MISP.MISP/SearchEvents": {
+          "name": "search-events",
+          "description": "Search MISP threat events."
+        },
+        "MISP.MISP/GetEvent": {
+          "name": "get-event",
+          "description": "Get MISP event details."
+        },
+        "MISP.MISP/CreateEvent": {
+          "name": "create-event",
+          "description": "Create a new MISP threat event."
+        },
+        "MISP.MISP/SearchAttributes": {
+          "name": "search-attributes",
+          "description": "Search MISP attributes/IoCs."
+        },
+        "MISP.MISP/AddAttribute": {
+          "name": "add-attribute",
+          "description": "Add an attribute/IoC to an event."
+        },
+        "MISP.MISP/SearchTags": {
+          "name": "search-tags",
+          "description": "Search MISP tags."
+        }
+      }
+    }
+  }
+}
