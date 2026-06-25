@@ -1,0 +1,53 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "ctyun-cloud-firewall-c100",
+  "displayName": "CTYun Cloud Firewall C100",
+  "description": "OctoBus package for CTYun Cloud Firewall native edition C100 read-only query APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/ctyun_cloud_firewall_c100.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "CTYun_CloudFirewallC100.CTYun_CloudFirewallC100/AcPolicyOverviewC": {
+          "name": "ac-policy-overview-c",
+          "description": "Query CTYun Cloud Firewall C100 access control policy overview."
+        },
+        "CTYun_CloudFirewallC100.CTYun_CloudFirewallC100/FirewallOverviewC": {
+          "name": "firewall-overview-c",
+          "description": "Query CTYun Cloud Firewall C100 firewall instance overview."
+        },
+        "CTYun_CloudFirewallC100.CTYun_CloudFirewallC100/QueryFirewallInfo": {
+          "name": "query-firewall-info",
+          "description": "Query CTYun Cloud Firewall C100 firewall details."
+        },
+        "CTYun_CloudFirewallC100.CTYun_CloudFirewallC100/QuerySystemVrfbind": {
+          "name": "query-system-vrfbind",
+          "description": "Query CTYun Cloud Firewall C100 protected assets."
+        },
+        "CTYun_CloudFirewallC100.CTYun_CloudFirewallC100/QuerySecPolicyRules": {
+          "name": "query-sec-policy-rules",
+          "description": "Query CTYun Cloud Firewall C100 protection rules."
+        },
+        "CTYun_CloudFirewallC100.CTYun_CloudFirewallC100/AlarmQuery": {
+          "name": "alarm-query",
+          "description": "Query CTYun Cloud Firewall C100 alarm list."
+        },
+        "CTYun_CloudFirewallC100.CTYun_CloudFirewallC100/InvokeReadOnlyApi": {
+          "name": "invoke-read-only-api",
+          "description": "Invoke a built-in CTYun Cloud Firewall C100 read-only API."
+        }
+      }
+    }
+  }
+}

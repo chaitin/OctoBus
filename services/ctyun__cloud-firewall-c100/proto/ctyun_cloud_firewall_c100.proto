@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package CTYun_CloudFirewallC100;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/CTYun_CloudFirewallC100";
+
+service CTYun_CloudFirewallC100 {
+  rpc QueryBlackWhitePolicyInfo(CTYunRequest) returns (CTYunResponse) {}
+  rpc JudgeAbilityUpgrade(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetSystemVrfbindInfo(CTYunRequest) returns (CTYunResponse) {}
+  rpc AcPolicyOverviewC(CTYunRequest) returns (CTYunResponse) {}
+  rpc ProtectionStatisticsC(CTYunRequest) returns (CTYunResponse) {}
+  rpc AssetProtectionOverviewC(CTYunRequest) returns (CTYunResponse) {}
+  rpc FirewallOverviewC(CTYunRequest) returns (CTYunResponse) {}
+  rpc QueryVfwFlowLog(CTYunRequest) returns (CTYunResponse) {}
+  rpc QueryRegionMaximumsC(CTYunRequest) returns (CTYunResponse) {}
+  rpc CanDowngradeC(CTYunRequest) returns (CTYunResponse) {}
+  rpc MinQuotaC(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetSystemVrfbindSyncStatus(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetSystemVrfbindSynctime(CTYunRequest) returns (CTYunResponse) {}
+  rpc RandomFirewallName(CTYunRequest) returns (CTYunResponse) {}
+  rpc QueryFirewallSimpleInfo(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetVpcSubnetList(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetUserVpcList(CTYunRequest) returns (CTYunResponse) {}
+  rpc QueryFirewallInfo(CTYunRequest) returns (CTYunResponse) {}
+  rpc CheckCidrC(CTYunRequest) returns (CTYunResponse) {}
+  rpc AssertExpressConnectQueryC(CTYunRequest) returns (CTYunResponse) {}
+  rpc AssertCdaQueryC(CTYunRequest) returns (CTYunResponse) {}
+  rpc AssertVpcPeerQueryC(CTYunRequest) returns (CTYunResponse) {}
+  rpc AssertStatisticsCC(CTYunRequest) returns (CTYunResponse) {}
+  rpc AssetAllC(CTYunRequest) returns (CTYunResponse) {}
+  rpc AssertNatQueryC(CTYunRequest) returns (CTYunResponse) {}
+  rpc QuerySystemVrfbindStatistics(CTYunRequest) returns (CTYunResponse) {}
+  rpc QuerySystemVrfbind(CTYunRequest) returns (CTYunResponse) {}
+  rpc QueryBlackWhitePolicy(CTYunRequest) returns (CTYunResponse) {}
+  rpc QuerySecPolicyRules(CTYunRequest) returns (CTYunResponse) {}
+  rpc QuerySecPolicyRuleInfo(CTYunRequest) returns (CTYunResponse) {}
+  rpc QuerySecpolicyStatistics(CTYunRequest) returns (CTYunResponse) {}
+  rpc QueryAppWithParent(CTYunRequest) returns (CTYunResponse) {}
+  rpc IpsRuleQueryAll(CTYunRequest) returns (CTYunResponse) {}
+  rpc QueryIpsRule(CTYunRequest) returns (CTYunResponse) {}
+  rpc QueryIpsRuleTypeList(CTYunRequest) returns (CTYunResponse) {}
+  rpc QueryDpiInfo(CTYunRequest) returns (CTYunResponse) {}
+  rpc QueryAllApp(CTYunRequest) returns (CTYunResponse) {}
+  rpc LogQueryDeliverInfoC(CTYunRequest) returns (CTYunResponse) {}
+  rpc LogQueryDeliverTimeC(CTYunRequest) returns (CTYunResponse) {}
+  rpc LogQueryDeliverListC(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetRawLogAh(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetRawLogC(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetLogCountC(CTYunRequest) returns (CTYunResponse) {}
+  rpc LogSaveStatisticsLogC(CTYunRequest) returns (CTYunResponse) {}
+  rpc QueryOperationLog(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetLogSettingInfo(CTYunRequest) returns (CTYunResponse) {}
+  rpc AlarmStatics(CTYunRequest) returns (CTYunResponse) {}
+  rpc AlarmQuery(CTYunRequest) returns (CTYunResponse) {}
+  rpc AlarmLogList(CTYunRequest) returns (CTYunResponse) {}
+  rpc AlarmDetail(CTYunRequest) returns (CTYunResponse) {}
+  rpc ReportSubscribe(CTYunRequest) returns (CTYunResponse) {}
+  rpc ReportStatistics(CTYunRequest) returns (CTYunResponse) {}
+  rpc ReportList(CTYunRequest) returns (CTYunResponse) {}
+  rpc StatisticAddressGroup(CTYunRequest) returns (CTYunResponse) {}
+  rpc QueryAddressGroup(CTYunRequest) returns (CTYunResponse) {}
+  rpc ItemsAddressGroup(CTYunRequest) returns (CTYunResponse) {}
+  rpc QueryNewPurchaseOrderPrice(CTYunRequest) returns (CTYunResponse) {}
+  rpc QueryOrderPrice(CTYunRequest) returns (CTYunResponse) {}
+  rpc InvokeReadOnlyApi(InvokeReadOnlyApiRequest) returns (CTYunResponse) {}
+}
+
+message CTYunRequest {
+  google.protobuf.Struct payload = 1;
+}
+
+message InvokeReadOnlyApiRequest {
+  string api = 1;
+  google.protobuf.Struct payload = 2;
+}
+
+message CTYunResponse {
+  google.protobuf.Value response = 1;
+}
