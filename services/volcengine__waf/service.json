@@ -1,0 +1,53 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "volcengine-waf",
+  "displayName": "Volcengine WAF",
+  "description": "OctoBus package for Volcengine Web Application Firewall read-only query APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/volcengine_waf.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Volcengine_WAF.Volcengine_WAF/ListDomain": {
+          "name": "list-domain",
+          "description": "Query Volcengine WAF protected domain settings."
+        },
+        "Volcengine_WAF.Volcengine_WAF/QueryProtectionOverviewLb": {
+          "name": "query-protection-overview-lb",
+          "description": "Query Volcengine WAF protection overview metrics."
+        },
+        "Volcengine_WAF.Volcengine_WAF/QueryAttackSecurityEvent": {
+          "name": "query-attack-security-event",
+          "description": "Query Volcengine WAF attack security events."
+        },
+        "Volcengine_WAF.Volcengine_WAF/ListAclRule": {
+          "name": "list-acl-rule",
+          "description": "Query Volcengine WAF access control rules."
+        },
+        "Volcengine_WAF.Volcengine_WAF/ListCCRule": {
+          "name": "list-cc-rule",
+          "description": "Query Volcengine WAF CC protection rules."
+        },
+        "Volcengine_WAF.Volcengine_WAF/SearchLogs": {
+          "name": "search-logs",
+          "description": "Search Volcengine WAF access and attack logs."
+        },
+        "Volcengine_WAF.Volcengine_WAF/InvokeReadOnlyAction": {
+          "name": "invoke-read-only-action",
+          "description": "Invoke an allowed Volcengine WAF read-only action."
+        }
+      }
+    }
+  }
+}
