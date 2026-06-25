@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package Tencent_SSL;
+
+import "google/protobuf/wrappers.proto";
+
+option go_package = "miner/grpc-service/Tencent_SSL";
+
+service Tencent_SSL {
+  rpc ListCertificates(ListCertificatesRequest) returns (ListCertificatesResponse) {}
+  rpc GetCertificate(GetCertificateRequest) returns (GetCertificateResponse) {}
+}
+
+message ListCertificatesRequest {
+  google.protobuf.Int64Value limit = 1;
+  google.protobuf.Int64Value offset = 2;
+}
+
+message ListCertificatesResponse {
+  int32 code = 1;
+  string message = 2;
+  repeated CertificateItem data = 3;
+  int32 total = 4;
+}
+
+message CertificateItem {
+  string id = 1;
+  string domain = 2;
+  string cert_type = 3;
+  string status = 4;
+  string create_time = 5;
+  string expire_time = 6;
+}
+
+message GetCertificateRequest {
+  string certificate_id = 1;
+}
+
+message GetCertificateResponse {
+  int32 code = 1;
+  string message = 2;
+  string id = 3;
+  string domain = 4;
+  string cert_type = 5;
+  string status = 6;
+  string create_time = 7;
+  string expire_time = 8;
+  string subject = 9;
+  repeated string san = 10;
+}
