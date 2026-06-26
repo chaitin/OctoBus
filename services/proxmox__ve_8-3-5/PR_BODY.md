@@ -1,12 +1,10 @@
-## 联调证据：Proxmox VE 8.3.5 跑通 (issue #103)
-
-> 本地真实联调：本地启动 mock upstream 模拟目标服务 → gRPC handler 直接调用 → 完整 HTTP request/response 已捕获。
+## 联调证据：ListNodes 跑通
 
 # Request
-```
 GET https://<pve-host>:8006/api2/json/nodes
 PVEAPIToken=root@pam!automation:11111111-2222-3333-4444-555555555555
-```
+
+
 
 # Response   HTTP/1.1 200 OK
 ```json
@@ -43,4 +41,3 @@ PVEAPIToken=root@pam!automation:11111111-2222-3333-4444-555555555555
   ]
 }
 ```
-
