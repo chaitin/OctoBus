@@ -1,0 +1,9 @@
+{
+  "config": {
+    "baseUrl": "http://prometheus.example.com:9090",
+    "timeoutMs": 10000
+  },
+  "secret": {
+    "bearerToken": "PROMETHEUS_BEARER_TOKEN"
+  }
+}

@@ -1,0 +1,228 @@
+syntax = "proto3";
+
+package CNCF_Prometheus_3_0_1;
+
+option go_package = "miner/grpc-service/CNCF_Prometheus_3_0_1";
+
+service CNCF_Prometheus_3_0_1 {
+  rpc InstantQuery(InstantQueryRequest) returns (QueryResponse);
+  rpc RangeQuery(RangeQueryRequest) returns (QueryResponse);
+  rpc ListTargets(ListTargetsRequest) returns (ListTargetsResponse);
+  rpc ListRules(ListRulesRequest) returns (ListRulesResponse);
+  rpc ListAlerts(ListAlertsRequest) returns (ListAlertsResponse);
+  rpc ListSeries(ListSeriesRequest) returns (ListSeriesResponse);
+  rpc ListLabels(ListLabelsRequest) returns (ListLabelsResponse);
+  rpc GetLabelValues(GetLabelValuesRequest) returns (GetLabelValuesResponse);
+  rpc GetStatusConfig(GetStatusConfigRequest) returns (GetStatusConfigResponse);
+  rpc GetStatusBuildinfo(GetStatusBuildinfoRequest) returns (GetStatusBuildinfoResponse);
+}
+
+message InstantQueryRequest {
+  string query = 1;
+  string time = 2;
+  string timeout = 3;
+  int32 limit = 4;
+  string lookback_delta = 5;
+  bool stats = 6;
+}
+
+message RangeQueryRequest {
+  string query = 1;
+  string start = 2;
+  string end = 3;
+  string step = 4;
+  string timeout = 5;
+  int32 limit = 6;
+  string lookback_delta = 7;
+  bool stats = 8;
+}
+
+message MetricLabel {
+  string name = 1;
+  string value = 2;
+}
+
+message Sample {
+  double timestamp = 1;
+  string value = 2;
+}
+
+message QuerySeries {
+  repeated MetricLabel metric = 1;
+  repeated Sample values = 2;
+}
+
+message QueryResponse {
+  string status = 1;
+  string result_type = 2;
+  repeated QuerySeries result = 3;
+  string raw_body = 4;
+  string error_type = 5;
+  string error = 6;
+  repeated string warnings = 7;
+  repeated string infos = 8;
+}
+
+message ListTargetsRequest {
+  string state = 1;
+  bool scrape_pool = 2;
+}
+
+message TargetLabel {
+  string name = 1;
+  string value = 2;
+}
+
+message TargetInfo {
+  string scrape_pool = 1;
+  string scrape_url = 2;
+  string global_url = 3;
+  string last_error = 4;
+  string last_scrape = 5;
+  double last_scrape_duration = 6;
+  string health = 7;
+  repeated TargetLabel labels = 8;
+  string raw_json = 9;
+}
+
+message ListTargetsResponse {
+  string status = 1;
+  repeated TargetInfo active_targets = 2;
+  repeated TargetInfo dropped_targets = 3;
+  string raw_body = 4;
+}
+
+message ListRulesRequest {
+  string type = 1;
+  string rule_name = 2;
+  repeated string rule_group = 3;
+  repeated string file = 4;
+}
+
+message RuleAlert {
+  string state = 1;
+  string name = 2;
+  string query = 3;
+  string duration = 4;
+  string keep_firing_for = 5;
+  string severity = 6;
+  repeated MetricLabel labels = 7;
+  repeated MetricLabel annotations = 8;
+  string active_at = 9;
+  string value = 10;
+  double health = 11;
+  string raw_json = 12;
+}
+
+message RuleRecording {
+  string name = 1;
+  string query = 2;
+  string raw_json = 3;
+  double health = 4;
+}
+
+message RuleGroup {
+  string name = 1;
+  string file = 2;
+  string interval = 3;
+  string limit = 4;
+  string evaluation_time = 5;
+  string last_evaluation = 6;
+  repeated RuleAlert rules = 7;
+  string raw_json = 8;
+}
+
+message ListRulesResponse {
+  string status = 1;
+  repeated RuleGroup groups = 2;
+  string raw_body = 3;
+}
+
+message ListAlertsRequest {
+  string state = 1;
+}
+
+message AlertInfo {
+  string state = 1;
+  string active_at = 2;
+  string value = 3;
+  repeated MetricLabel labels = 4;
+  repeated MetricLabel annotations = 5;
+  string raw_json = 6;
+}
+
+message ListAlertsResponse {
+  string status = 1;
+  repeated AlertInfo alerts = 2;
+  string raw_body = 3;
+}
+
+message ListSeriesRequest {
+  repeated string match = 1;
+  string start = 2;
+  string end = 3;
+  int32 limit = 4;
+}
+
+message SeriesLabels {
+  repeated MetricLabel labels = 1;
+}
+
+message ListSeriesResponse {
+  string status = 1;
+  repeated SeriesLabels data = 2;
+  string raw_body = 3;
+}
+
+message GetStatusConfigRequest {}
+
+message GetStatusConfigResponse {
+  string status = 1;
+  string config_yaml = 2;
+  string raw_body = 3;
+}
+
+message ListLabelsRequest {
+  repeated string match = 1;
+  string start = 2;
+  string end = 3;
+  int32 limit = 4;
+}
+
+message ListLabelsResponse {
+  string status = 1;
+  repeated string data = 2;
+  string raw_body = 3;
+}
+
+message GetLabelValuesRequest {
+  string label = 1;
+  repeated string match = 2;
+  string start = 3;
+  string end = 4;
+  int32 limit = 5;
+}
+
+message GetLabelValuesResponse {
+  string status = 1;
+  repeated string data = 2;
+  string raw_body = 3;
+}
+
+message GetStatusBuildinfoRequest {}
+
+message BuildInfo {
+  string version = 1;
+  string revision = 2;
+  string branch = 3;
+  string build_user = 4;
+  string build_date = 5;
+  string go_version = 6;
+  string raw_json = 7;
+}
+
+message GetStatusBuildinfoResponse {
+  string status = 1;
+  BuildInfo build_info = 2;
+  string raw_body = 3;
+}

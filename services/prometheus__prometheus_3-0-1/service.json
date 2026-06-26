@@ -1,0 +1,65 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "prometheus-3-0-1",
+  "displayName": "CNCF Prometheus 3.0.1",
+  "description": "OctoBus package for Prometheus 3.0.1 read-only HTTP API (instant/range queries, targets, rules, alerts, series, labels, config, buildinfo).",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/cncf_prometheus_3_0_1.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/InstantQuery": {
+          "name": "instant-query",
+          "description": "Evaluate an instant PromQL query at a single point in time."
+        },
+        "CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/RangeQuery": {
+          "name": "range-query",
+          "description": "Evaluate a PromQL expression query over a range of time."
+        },
+        "CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/ListTargets": {
+          "name": "list-targets",
+          "description": "List Prometheus scrape targets and their health."
+        },
+        "CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/ListRules": {
+          "name": "list-rules",
+          "description": "List Prometheus recording and alerting rules."
+        },
+        "CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/ListAlerts": {
+          "name": "list-alerts",
+          "description": "List current active and pending Prometheus alerts."
+        },
+        "CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/ListSeries": {
+          "name": "list-series",
+          "description": "Find time series matching label matchers."
+        },
+        "CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/ListLabels": {
+          "name": "list-labels",
+          "description": "List all label names known to Prometheus."
+        },
+        "CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/GetLabelValues": {
+          "name": "get-label-values",
+          "description": "Get all values for a given label name."
+        },
+        "CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/GetStatusConfig": {
+          "name": "get-status-config",
+          "description": "Get Prometheus server configuration YAML."
+        },
+        "CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/GetStatusBuildinfo": {
+          "name": "get-status-buildinfo",
+          "description": "Get Prometheus server build information."
+        }
+      }
+    }
+  }
+}

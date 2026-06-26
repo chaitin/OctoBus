@@ -5,6 +5,10 @@ import { runServiceMain } from "@chaitin-ai/octobus-sdk";
 import { Command } from "commander";
 
 const services = {
+  "prometheus-3-0-1": {
+    entryFile: "../prometheus__prometheus_3-0-1/bin/prometheus-3-0-1.js",
+    serviceModule: "../prometheus__prometheus_3-0-1/src/service.js",
+  },
   "huawei-ccm": {
     entryFile: "../huawei__ccm/bin/huawei-ccm.js",
     serviceModule: "../huawei__ccm/src/service.js",
