@@ -334,6 +334,7 @@ export const handlers = {
 
 export const _test = {
   sha256hex, hmacSha256, signHuawei, buildCanonicalQueryString, iso8601Basic,
+  ensureTrailingSlash,
   errorWithCode, firstDefined, hasOwn, logInfo, logError, makeRuntime, mapHttpError,
   mergedBindings, optionalUint32, parseJson, resolveCallContext, resolveTimeoutMs, toBoolean, unwrapString,
 };
