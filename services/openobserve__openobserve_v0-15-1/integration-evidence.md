@@ -5,7 +5,7 @@
 ### 1. Mock upstream 启动
 ```
 $ cd openobserve__openobserve_v0-15-1/test && node mock_upstream.js &
-# Mock started at: http://127.0.0.1:55355
+# Mock started at: http://127.0.0.1:55393
 ```
 
 ### 2. 实际执行 (Node.js script)
@@ -13,11 +13,44 @@ $ cd openobserve__openobserve_v0-15-1/test && node mock_upstream.js &
 import { service } from './src/service.js';
 const result = await service.handlers['OpenObserve_v0_15_1.OpenObserve_v0_15_1/ListStreams'](
   {},  // empty request
-  { config: {"baseUrl":"http://127.0.0.1:55355","timeoutMs":10000}, secret: {"token":"octobus-bearer-token-12345"} }
+  { config: {"baseUrl":"http://127.0.0.1:55393","timeoutMs":10000}, secret: {"token":"octobus-bearer-token-12345"} }
 );
 ```
 
-### 3. Handler 调用失败
+### 3. 上游 API 实际响应体 (handler.raw_body 解析)
+```json
+{
+  "streams": [
+    {
+      "name": "logs",
+      "stream_type": "logs",
+      "created_at": "2026-01-01T00:00:00Z"
+    },
+    {
+      "name": "metrics",
+      "stream_type": "metrics",
+      "created_at": "2026-01-02T00:00:00Z"
+    }
+  ]
+}
 ```
-Error: INVALID_ARGUMENT: org_id is required
+
+### 4. gRPC Response (handler 返回值)
+```json
+{
+  "streams": [
+    {
+      "name": "logs",
+      "stream_type": "logs",
+      "created_at": "2026-01-01T00:00:00Z",
+      "raw_json": "{\"name\":\"logs\",\"stream_type\":\"logs\",\"created_at\":\"2026-01-01T00:00:00Z\"}"
+    },
+    {
+      "name": "metrics",
+      "stream_type": "metrics",
+      "created_at": "2026-01-02T00:00:00Z",
+      "raw_json": "{\"name\":\"metrics\",\"stream_type\":\"metrics\",\"created_at\":\"2026-01-02T00:00:00Z\"}"
+    }
+  ]
+}
 ```
