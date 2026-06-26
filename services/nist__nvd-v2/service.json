@@ -1,0 +1,1 @@
+{"schema":"chaitin.octobus.service.v1","name":"nist-nvd-v2","displayName":"NIST NVD 2.0","description":"NIST National Vulnerability Database API 2.0 wrapper — CVE detail lookup and keyword/severity search","runtime":{"mode":"on-demand"},"proto":{"roots":["proto"],"files":["proto/nvd.proto"]},"configSchema":"config.schema.json","secretSchema":"secret.schema.json"}

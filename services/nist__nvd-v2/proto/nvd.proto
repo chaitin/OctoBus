@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package nist.nvd.v2;
+
+service NvdService {
+  rpc LookupCve(LookupCveRequest) returns (CveRecord);
+  rpc SearchCves(SearchCvesRequest) returns (SearchCvesResponse);
+}
+
+message LookupCveRequest {
+  string cve_id = 1 [json_name = "cveId"];
+}
+
+message CveRecord {
+  string cve_id = 1 [json_name = "cveId"];
+  string description = 2;
+  double cvss_v31_score = 3 [json_name = "cvssV31Score"];
+  string cvss_v31_vector = 4 [json_name = "cvssV31Vector"];
+  double cvss_v30_score = 5 [json_name = "cvssV30Score"];
+  double cvss_v2_score = 6 [json_name = "cvssV2Score"];
+  string severity = 7;
+  string published_date = 8 [json_name = "publishedDate"];
+  string last_modified_date = 9 [json_name = "lastModifiedDate"];
+  repeated string cwe_ids = 10 [json_name = "cweIds"];
+  repeated Reference references = 11;
+  repeated AffectedProduct affected_products = 12 [json_name = "affectedProducts"];
+}
+
+message Reference {
+  string url = 1;
+  string source = 2;
+  repeated string tags = 3;
+}
+
+message AffectedProduct {
+  string vendor = 1;
+  string product = 2;
+  string version = 3;
+}
+
+message SearchCvesRequest {
+  string keyword = 1;
+  string severity = 2;
+  int32 skip = 3;
+  int32 limit = 4;
+  string pub_start_date = 5 [json_name = "pubStartDate"];
+  string pub_end_date = 6 [json_name = "pubEndDate"];
+}
+
+message SearchCvesResponse {
+  int32 total = 1;
+  repeated CveRecord data = 2;
+}
