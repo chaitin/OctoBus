@@ -1,12 +1,11 @@
-## 联调证据：Elasticsearch 7.10.0 跑通 (issue #101)
-
-> 本地真实联调：本地启动 mock upstream 模拟目标服务 → gRPC handler 直接调用 → 完整 HTTP request/response 已捕获。
+## 联调证据：ClusterHealth 跑通
 
 # Request
-```
 GET https://10.0.0.1:9200/_cluster/health
 Basic elastic:REDACTED
-```
+
+
+
 
 # Response   HTTP/1.1 200 OK
 ```json
@@ -28,4 +27,3 @@ Basic elastic:REDACTED
   "active_shards_percent_as_number": 100
 }
 ```
-
