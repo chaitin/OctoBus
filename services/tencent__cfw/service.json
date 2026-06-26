@@ -1,0 +1,37 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "tencent-cfw",
+  "displayName": "Tencent Cloud Firewall",
+  "description": "OctoBus package for Tencent Cloud Firewall (CFW) ACL-based IP block/unblock and rule list APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/tencent_cfw.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Tencent_CFW.Tencent_CFW/BlockIP": {
+          "name": "block-ip",
+          "description": "Block IP addresses via CFW access control rules."
+        },
+        "Tencent_CFW.Tencent_CFW/UnblockIP": {
+          "name": "unblock-ip",
+          "description": "Unblock IP addresses via CFW access control rule deletion."
+        },
+        "Tencent_CFW.Tencent_CFW/ListRules": {
+          "name": "list-rules",
+          "description": "List CFW access control rules."
+        }
+      }
+    }
+  }
+}
