@@ -274,4 +274,21 @@ test('maps CTYun business and transport errors', async () => {
     'DEADLINE_EXCEEDED',
     (err) => assert.match(err.message, /timed out after 25ms/),
   );
+
+  setFetch(async (_url, init) => ({
+    status: 200,
+    text: () => new Promise((_resolve, reject) => {
+      init.signal.addEventListener('abort', () => {
+        const err = new Error('body stream timeout');
+        err.name = 'AbortError';
+        reject(err);
+      }, { once: true });
+      setTimeout(() => reject(new Error('signal was not aborted')), 100);
+    }),
+  }));
+  await expectGrpcError(
+    () => handlers[`${SERVICE_PACKAGE}/UntreatedRisk`]({}, buildCtx({ limits: { timeoutMs: 5 } })),
+    'DEADLINE_EXCEEDED',
+    (err) => assert.match(err.message, /timed out after 5ms/),
+  );
 });
