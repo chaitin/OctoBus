@@ -1,0 +1,45 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "alertmanager-0-27-0",
+  "displayName": "Prometheus Alertmanager 0.27.0",
+  "description": "OctoBus package for Prometheus Alertmanager 0.27.0 read-only HTTP API v2 (alerts, alert groups, silences, status).",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/alertmanager_0_27_0.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Prometheus_Alertmanager_0_27_0.Prometheus_Alertmanager_0_27_0/ListAlerts": {
+          "name": "list-alerts",
+          "description": "List Alertmanager alerts with optional filters."
+        },
+        "Prometheus_Alertmanager_0_27_0.Prometheus_Alertmanager_0_27_0/GetAlertGroups": {
+          "name": "get-alert-groups",
+          "description": "Get alert groups from Alertmanager."
+        },
+        "Prometheus_Alertmanager_0_27_0.Prometheus_Alertmanager_0_27_0/ListSilences": {
+          "name": "list-silences",
+          "description": "List Alertmanager silences."
+        },
+        "Prometheus_Alertmanager_0_27_0.Prometheus_Alertmanager_0_27_0/GetSilence": {
+          "name": "get-silence",
+          "description": "Get a single Alertmanager silence by ID."
+        },
+        "Prometheus_Alertmanager_0_27_0.Prometheus_Alertmanager_0_27_0/GetStatus": {
+          "name": "get-status",
+          "description": "Get Alertmanager runtime status."
+        }
+      }
+    }
+  }
+}

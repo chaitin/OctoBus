@@ -1,0 +1,9 @@
+{
+  "config": {
+    "baseUrl": "http://alertmanager.example.com:9093",
+    "timeoutMs": 10000
+  },
+  "secret": {
+    "bearerToken": "ALERTMANAGER_BEARER_TOKEN"
+  }
+}

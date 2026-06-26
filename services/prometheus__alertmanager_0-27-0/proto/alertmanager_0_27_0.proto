@@ -1,0 +1,147 @@
+syntax = "proto3";
+
+package Prometheus_Alertmanager_0_27_0;
+
+option go_package = "miner/grpc-service/Prometheus_Alertmanager_0_27_0";
+
+service Prometheus_Alertmanager_0_27_0 {
+  rpc ListAlerts(ListAlertsRequest) returns (ListAlertsResponse);
+  rpc GetAlertGroups(GetAlertGroupsRequest) returns (GetAlertGroupsResponse);
+  rpc ListSilences(ListSilencesRequest) returns (ListSilencesResponse);
+  rpc GetSilence(GetSilenceRequest) returns (GetSilenceResponse);
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+  rpc ListReceivers(ListReceiversRequest) returns (ListReceiversResponse);
+}
+
+message ListAlertsRequest {
+  bool silenced = 1;
+  bool inhibited = 2;
+  bool active = 3;
+  string filter = 4;
+  string receiver = 5;
+}
+
+message AlertLabel {
+  string name = 1;
+  string value = 2;
+}
+
+message AlertInfo {
+  string fingerprint = 1;
+  string starts_at = 2;
+  string ends_at = 3;
+  string updated_at = 4;
+  string generator_url = 5;
+  repeated AlertLabel labels = 6;
+  repeated AlertLabel annotations = 7;
+  repeated string status_state = 8;
+  string raw_json = 9;
+}
+
+message ListAlertsResponse {
+  string status = 1;
+  repeated AlertInfo alerts = 2;
+  string raw_body = 3;
+}
+
+message GetAlertGroupsRequest {
+  bool silenced = 1;
+  bool inhibited = 2;
+  bool active = 3;
+  string filter = 4;
+  string receiver = 5;
+}
+
+message AlertGroupInfo {
+  repeated AlertLabel labels = 1;
+  string receiver_name = 2;
+  repeated AlertInfo alerts = 3;
+  string raw_json = 4;
+}
+
+message GetAlertGroupsResponse {
+  string status = 1;
+  repeated AlertGroupInfo groups = 2;
+  string raw_body = 3;
+}
+
+message ListSilencesRequest {
+  string filter = 1;
+}
+
+message SilenceMatcher {
+  string name = 1;
+  string value = 2;
+  bool is_regex = 3;
+  bool is_equal = 4;
+}
+
+message SilenceInfo {
+  string id = 1;
+  string created_by = 2;
+  string comment = 3;
+  string starts_at = 4;
+  string ends_at = 5;
+  string updated_at = 6;
+  repeated SilenceMatcher matchers = 7;
+  string status_state = 8;
+  string raw_json = 9;
+}
+
+message ListSilencesResponse {
+  string status = 1;
+  repeated SilenceInfo silences = 2;
+  string raw_body = 3;
+}
+
+message GetSilenceRequest {
+  string silence_id = 1;
+}
+
+message GetSilenceResponse {
+  string status = 1;
+  SilenceInfo silence = 2;
+  string raw_body = 3;
+}
+
+message GetStatusRequest {}
+
+message ClusterPeer {
+  string name = 1;
+  string address = 2;
+}
+
+message ClusterStatus {
+  string name = 1;
+  string status = 2;
+  repeated ClusterPeer peers = 3;
+  string raw_json = 4;
+}
+
+message GetStatusResponse {
+  string status = 1;
+  ClusterStatus cluster = 2;
+  string version_info_json = 3;
+  string raw_body = 4;
+}
+
+message ListReceiversRequest {}
+
+message ReceiverIntegration {
+  string name = 1;
+  string type = 2;
+  bool active = 3;
+  string raw_json = 4;
+}
+
+message ReceiverInfo {
+  string name = 1;
+  repeated ReceiverIntegration integrations = 2;
+  string raw_json = 3;
+}
+
+message ListReceiversResponse {
+  string status = 1;
+  repeated ReceiverInfo receivers = 2;
+  string raw_body = 3;
+}

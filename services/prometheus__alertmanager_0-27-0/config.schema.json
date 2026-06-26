@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "description": "Alertmanager base URL, for example https://alertmanager.example.com:9093."
+    },
+    "domain": {
+      "type": "string",
+      "description": "Alias for baseUrl."
+    },
+    "url": {
+      "type": "string",
+      "description": "Alias for baseUrl."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 10000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification."
+    }
+  }
+}
