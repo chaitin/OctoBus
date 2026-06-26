@@ -1,0 +1,19 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "sangfor-af-v8-0-106",
+  "displayName": "Sangfor AF 8.0.106",
+  "description": "Sangfor AF 8.0.106 REST API wrapper with login, keepalive, and generic resource calls.",
+  "runtime": {
+    "mode": "on-demand"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/sangfor_af_v8_0_106.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json"
+}

@@ -1,0 +1,64 @@
+syntax = "proto3";
+package sangfor.af.v8_0_106;
+
+service SangforAfService {
+  rpc Login(LoginRequest) returns (ApiResponse);
+  rpc KeepAlive(TokenRequest) returns (ApiResponse);
+  rpc Logout(TokenRequest) returns (ApiResponse);
+  rpc GetPasswordPolicy(NamespaceTokenRequest) returns (ApiResponse);
+  rpc AddIpGroup(NamedPayloadRequest) returns (ApiResponse);
+  rpc DeleteIpGroup(NamedPayloadRequest) returns (ApiResponse);
+  rpc GenericRequest(GenericAfRequest) returns (ApiResponse);
+}
+
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+  string namespace = 3;
+}
+
+message TokenRequest {
+  string token = 1;
+  string namespace = 2;
+}
+
+message NamespaceTokenRequest {
+  string token = 1;
+  string namespace = 2;
+}
+
+message ResourceRequest {
+  string token = 1;
+  string path = 2;
+  string namespace = 3;
+  map<string, string> query = 4;
+}
+
+message ResourcePayloadRequest {
+  string token = 1;
+  string path = 2;
+  string namespace = 3;
+  string payload_json = 4 [json_name = "payloadJson"];
+}
+
+message NamedPayloadRequest {
+  string token = 1;
+  string namespace_name = 2 [json_name = "namespaceName"];
+  string payload_json = 3 [json_name = "payloadJson"];
+  string namespace = 4;
+}
+
+message GenericAfRequest {
+  string method = 1;
+  string path = 2;
+  string token = 3;
+  string payload_json = 4 [json_name = "payloadJson"];
+  map<string, string> query = 5;
+  string namespace = 6;
+}
+
+message ApiResponse {
+  uint32 status = 1;
+  string message = 2;
+  string body = 3;
+}
