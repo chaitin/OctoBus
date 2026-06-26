@@ -155,6 +155,12 @@ const parseStringList = (value) => {
   return [];
 };
 
+const assertSupportedTlsConfig = (bindings = {}) => {
+  if (asBool(firstDefined(bindings.skipTlsVerify, bindings.tlsInsecureSkipVerify, bindings.insecureSkipVerify))) {
+    throw errorWithCode('INVALID_ARGUMENT', 'TLS certificate verification bypass is not supported by this Node.js fetch adapter');
+  }
+};
+
 const mergedBindings = (ctx = {}) => ({
   ...(ctx.config ?? {}),
   ...(ctx.secret ?? {}),
@@ -163,6 +169,7 @@ const mergedBindings = (ctx = {}) => ({
 
 const resolveRuntime = (ctx = {}) => {
   const bindings = mergedBindings(ctx);
+  assertSupportedTlsConfig(bindings);
   const endpoint = normalizeEndpoint(firstDefined(bindings.endpoint, bindings.host, bindings.baseUrl, DEFAULT_ENDPOINT));
   if (!endpoint) throw errorWithCode('INVALID_ARGUMENT', 'endpoint/host must include http or https');
   const secretId = asOptionalString(firstDefined(bindings.secretId, bindings.secret_id));
@@ -180,7 +187,6 @@ const resolveRuntime = (ctx = {}) => {
     headers: parseHeaders(bindings.headers),
     allowActions: parseStringList(bindings.allowActions),
     allowAllDescribeActions: asBool(bindings.allowAllDescribeActions),
-    skipTlsVerify: asBool(firstDefined(bindings.skipTlsVerify, bindings.tlsInsecureSkipVerify, bindings.insecureSkipVerify)),
   };
 };
 
@@ -222,9 +228,6 @@ const buildAuthorization = ({ secretId, secretKey, host, payload, timestamp }) =
   };
 };
 
-const buildTlsOptions = (skipTlsVerify) => (skipTlsVerify
-  ? { skipTlsVerify: true, tlsInsecureSkipVerify: true, insecureSkipVerify: true }
-  : {});
 
 const mergeRequestParams = (req = {}) => {
   const params = fromProtoStruct(req.params ?? {});
@@ -283,7 +286,6 @@ const requestTencentCloud = async (runtime, action, params, { timestamp = Math.f
       headers,
       body: payload,
       signal: controller.signal,
-      ...buildTlsOptions(runtime.skipTlsVerify),
     });
     const text = await response.text();
     if (!response.ok) {
@@ -394,7 +396,7 @@ export const handlers = {
 export const _test = {
   buildAuthorization,
   buildCanonicalRequest,
-  buildTlsOptions,
+  assertSupportedTlsConfig,
   ensureReadOnlyActionAllowed,
   extractItems,
   fromProtoStruct,

@@ -23,7 +23,7 @@ Instance config example:
 }
 ```
 
-Aliases `host` and `baseUrl` are accepted for `endpoint`.
+Aliases `host` and `baseUrl` are accepted for `endpoint`. TLS certificate verification bypass is not supported by this Node.js fetch adapter.
 
 Instance secret example:
 

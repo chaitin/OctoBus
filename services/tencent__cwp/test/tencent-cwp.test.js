@@ -216,7 +216,7 @@ test('Tencent Cloud API errors and HTTP failures map to gRPC-style errors', asyn
   );
 });
 
-test('config aliases, temporary token, TLS flags, and Struct inputs are supported', async () => {
+test('config aliases, temporary token, and Struct inputs are supported', async () => {
   let captured;
   mockJSON((url, init) => {
     captured = { url, init, body: JSON.parse(init.body) };
@@ -243,7 +243,6 @@ test('config aliases, temporary token, TLS flags, and Struct inputs are supporte
   }, buildCtx({
     config: {
       host: 'https://cwp.tencentcloudapi.com/',
-      skipTlsVerify: true,
       headers: { 'X-Extra': 'demo' },
     },
     secret: {
@@ -256,12 +255,27 @@ test('config aliases, temporary token, TLS flags, and Struct inputs are supporte
   assert.equal(captured.url, 'https://cwp.tencentcloudapi.com');
   assert.equal(captured.init.headers['X-TC-Token'], 'SESSION');
   assert.equal(captured.init.headers['X-Extra'], 'demo');
-  assert.equal(captured.init.skipTlsVerify, true);
-  assert.equal(captured.init.tlsInsecureSkipVerify, true);
-  assert.equal(captured.init.insecureSkipVerify, true);
+  assert.equal(Object.hasOwn(captured.init, 'skipTlsVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'tlsInsecureSkipVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'insecureSkipVerify'), false);
   assert.deepEqual(captured.body, {
     Filters: [{ Name: 'Risk', Values: ['yes'] }],
   });
+});
+
+test('configuration validation rejects unsupported TLS bypass flags', async () => {
+  await assert.rejects(
+    () => handlers[METHOD_DESCRIBE_MACHINES]({}, buildCtx({ config: { skipTlsVerify: true } })),
+    /TLS certificate verification bypass is not supported/,
+  );
+  await assert.rejects(
+    () => handlers[METHOD_DESCRIBE_MACHINES]({}, buildCtx({ bindings: { tlsInsecureSkipVerify: true } })),
+    /TLS certificate verification bypass is not supported/,
+  );
+  assert.throws(
+    () => _test.assertSupportedTlsConfig({ insecureSkipVerify: 'yes' }),
+    /TLS certificate verification bypass is not supported/,
+  );
 });
 
 test('configuration validation rejects missing endpoint and credentials', async () => {
