@@ -154,6 +154,22 @@ const tc3Sign = (params, secretId, secretKey, region, endpoint, action) => {
   };
 };
 
+// ── Invocation adapter ──────────────────────────────────────
+
+// Supports both SDK single-arg (ctx) and test/CLI two-arg (req, ctx) calls.
+// When maybeContext is provided, requestOrContext is the request and maybeContext is the context.
+// When only one arg is passed and it has a "request" property, it is treated as the full context.
+// Otherwise requestOrContext is the request and context is empty (fallback for plain call).
+const resolveInvocation = (requestOrContext, maybeContext) => {
+  if (maybeContext !== undefined) {
+    return { request: requestOrContext ?? {}, context: maybeContext ?? {} };
+  }
+  if (hasOwn(requestOrContext, 'request')) {
+    return { request: requestOrContext.request ?? {}, context: requestOrContext };
+  }
+  return { request: requestOrContext ?? {}, context: {} };
+};
+
 // ── Binding and context resolution ─────────────────────────
 
 const mergedBindings = (ctx = {}) => ({
@@ -297,7 +313,9 @@ const callAction = async (ctx, action, params) => {
     const { Code, Message } = json.Response.Error;
     const mappedCode = Code === 'AuthFailure' ? 'UNAUTHENTICATED' : (Code === 'AuthFailure.InvalidAuthorization' ? 'PERMISSION_DENIED' : 'FAILED_PRECONDITION');
     logFlow(meta, `${action}:api-error`, { code: Code, message: Message });
-    throw errorWithCode(mappedCode, `Tencent API error: ${Code} - ${Message}`);
+    const err = errorWithCode(mappedCode, `Tencent API error: ${Code} - ${Message}`);
+    err.tencentCode = Code;
+    throw err;
   }
 
   logFlow(meta, `${action}:done`, {});
@@ -453,10 +471,11 @@ const mapUserRecord = (item) => ({
 
 // ── API method implementations ─────────────────────────────
 
-const listSessions = async (req = {}, ctx = {}) => {
-  const params = buildListSessionsParams(req);
+const listSessions = async (requestOrContext = {}, maybeContext) => {
+  const { request, context } = resolveInvocation(requestOrContext, maybeContext);
+  const params = buildListSessionsParams(request);
   try {
-    const response = await callAction(ctx, 'SearchSession', params);
+    const response = await callAction(context, 'SearchSession', params);
     return {
       items: (response?.SessionSet ?? response?.sessionSet ?? []).map(mapSessionRecord),
       total_count: toInt64(response?.TotalCount ?? response?.totalCount) ?? 0,
@@ -465,67 +484,72 @@ const listSessions = async (req = {}, ctx = {}) => {
     // Some BH instances (e.g. basic/free tier) do not support SearchSession and return
     // InvalidParameterValue regardless of parameters. Return an empty list instead of
     // failing, so the method remains usable on all instance types.
-    if (e.legacyCode === 'FAILED_PRECONDITION' && /InvalidParameterValue/.test(e.message)) {
-      logFlow(ctx.meta || {}, 'SearchSession:unavailable', { note: 'instance may not support session search, returning empty' });
+    if (e.legacyCode === 'FAILED_PRECONDITION' && e.tencentCode === 'InvalidParameterValue') {
+      logFlow(context.meta || {}, 'SearchSession:unavailable', { note: 'instance may not support session search, returning empty' });
       return { items: [], total_count: 0 };
     }
     throw e;
   }
 };
 
-const killSession = async (req = {}, ctx = {}) => {
-  const sessionId = toTrimmedString(firstDefined(req.session_id, req.sessionId));
+const killSession = async (requestOrContext = {}, maybeContext) => {
+  const { request, context } = resolveInvocation(requestOrContext, maybeContext);
+  const sessionId = toTrimmedString(firstDefined(request.session_id, request.sessionId));
   if (!sessionId) {
     throw errorWithCode('INVALID_ARGUMENT', 'session_id is required');
   }
   const params = { SessionId: sessionId };
-  const response = await callAction(ctx, 'KillSession', params);
+  const response = await callAction(context, 'KillSession', params);
   return {
     err: toValue(response?.err ?? null),
     msg: toValue(response?.msg ?? 'ok'),
   };
 };
 
-const listDevices = async (req = {}, ctx = {}) => {
-  const params = buildListDevicesParams(req);
-  const response = await callAction(ctx, 'DescribeDevices', params);
+const listDevices = async (requestOrContext = {}, maybeContext) => {
+  const { request, context } = resolveInvocation(requestOrContext, maybeContext);
+  const params = buildListDevicesParams(request);
+  const response = await callAction(context, 'DescribeDevices', params);
   return {
     items: (response?.DeviceSet ?? response?.deviceSet ?? []).map(mapDeviceRecord),
     total_count: toInt64(response?.TotalCount ?? response?.totalCount) ?? 0,
   };
 };
 
-const listUsers = async (req = {}, ctx = {}) => {
-  const params = buildListUsersParams(req);
-  const response = await callAction(ctx, 'DescribeUsers', params);
+const listUsers = async (requestOrContext = {}, maybeContext) => {
+  const { request, context } = resolveInvocation(requestOrContext, maybeContext);
+  const params = buildListUsersParams(request);
+  const response = await callAction(context, 'DescribeUsers', params);
   return {
     items: (response?.UserSet ?? response?.userSet ?? []).map(mapUserRecord),
     total_count: toInt64(response?.TotalCount ?? response?.totalCount) ?? 0,
   };
 };
 
-const lockUser = async (req = {}, ctx = {}) => {
-  const rawId = firstDefined(req.user_id, req.userId);
+const lockUser = async (requestOrContext = {}, maybeContext) => {
+  const { request, context } = resolveInvocation(requestOrContext, maybeContext);
+  const rawId = firstDefined(request.user_id, request.userId);
   const idNum = toInt64(rawId);
   if (idNum === null) {
     throw errorWithCode('INVALID_ARGUMENT', 'user_id is required and must be an integer');
   }
   const params = { IdSet: [idNum] };
-  const response = await callAction(ctx, 'LockUser', params);
+  const response = await callAction(context, 'LockUser', params);
   return {
     err: toValue(response?.err ?? null),
     msg: toValue(response?.msg ?? 'ok'),
   };
 };
 
-const unlockUser = async (req = {}, ctx = {}) => {
-  const rawId = firstDefined(req.user_id, req.userId);
+const unlockUser = async (requestOrContext = {}, maybeContext) => {
+  const { request, context } = resolveInvocation(requestOrContext, maybeContext);
+  const rawId = firstDefined(request.user_id, request.userId);
   const idNum = toInt64(rawId);
   if (idNum === null) {
     throw errorWithCode('INVALID_ARGUMENT', 'user_id is required and must be an integer');
   }
   const params = { IdSet: [idNum] };
-  const response = await callAction(ctx, 'UnlockUser', params);
+  const response = await callAction(context, 'UnlockUser', params);
   return {
     err: toValue(response?.err ?? null),
     msg: toValue(response?.msg ?? 'ok'),
@@ -546,15 +570,15 @@ export function rpcdef(ctx = {}) {
   };
 }
 
-// ── SDK handlers (two-arg style) ───────────────────────────
+// ── SDK handlers (resolveInvocation compatible) ────────────
 
 export const handlers = {
-  [LIST_SESSIONS_FULL]: (req, ctx = {}) => listSessions(req, ctx),
-  [KILL_SESSION_FULL]: (req, ctx = {}) => killSession(req, ctx),
-  [LIST_DEVICES_FULL]: (req, ctx = {}) => listDevices(req, ctx),
-  [LIST_USERS_FULL]: (req, ctx = {}) => listUsers(req, ctx),
-  [LOCK_USER_FULL]: (req, ctx = {}) => lockUser(req, ctx),
-  [UNLOCK_USER_FULL]: (req, ctx = {}) => unlockUser(req, ctx),
+  [LIST_SESSIONS_FULL]: (requestOrContext, maybeContext) => listSessions(requestOrContext, maybeContext),
+  [KILL_SESSION_FULL]: (requestOrContext, maybeContext) => killSession(requestOrContext, maybeContext),
+  [LIST_DEVICES_FULL]: (requestOrContext, maybeContext) => listDevices(requestOrContext, maybeContext),
+  [LIST_USERS_FULL]: (requestOrContext, maybeContext) => listUsers(requestOrContext, maybeContext),
+  [LOCK_USER_FULL]: (requestOrContext, maybeContext) => lockUser(requestOrContext, maybeContext),
+  [UNLOCK_USER_FULL]: (requestOrContext, maybeContext) => unlockUser(requestOrContext, maybeContext),
 };
 
 // ── Test exports ───────────────────────────────────────────
@@ -569,6 +593,7 @@ export const _test = {
   mergedBindings,
   resolveCallContext,
   resolveCredentials,
+  resolveInvocation,
   resolveRegion,
   resolveEndpoint,
   resolveTimeoutMs,
