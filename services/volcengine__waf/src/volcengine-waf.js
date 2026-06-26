@@ -141,6 +141,17 @@ const mergedBindings = (ctx = {}) => ({
   ...(ctx.bindings ?? {}),
 });
 
+const isSdkHandlerContext = (value) => value && typeof value === 'object'
+  && Object.prototype.hasOwnProperty.call(value, 'request')
+  && (
+    Object.prototype.hasOwnProperty.call(value, 'config')
+    || Object.prototype.hasOwnProperty.call(value, 'secret')
+    || Object.prototype.hasOwnProperty.call(value, 'method')
+  );
+
+const handlerRequest = (req, ctx) => (ctx === undefined && isSdkHandlerContext(req) ? (req.request ?? {}) : (req ?? {}));
+const handlerContext = (req, ctx) => (ctx === undefined && isSdkHandlerContext(req) ? req : (ctx ?? {}));
+
 const resolveCallContext = (ctx = {}) => ({
   ...ctx,
   bindings: mergedBindings(ctx),
@@ -376,17 +387,24 @@ const invokeVolcengine = async (spec, payload, ctx = {}) => {
   return { response: toValue(body) };
 };
 
-const buildActionHandler = (spec) => async (req = {}, ctx = {}) => invokeVolcengine(spec, payloadFromRequest(req), ctx);
+const buildActionHandler = (spec) => async (req, ctx) => invokeVolcengine(
+  spec,
+  payloadFromRequest(handlerRequest(req, ctx)),
+  handlerContext(req, ctx),
+);
 
 export const handlers = Object.fromEntries([
   ...READ_ONLY_ACTIONS.map((entry) => [`${SERVICE_PACKAGE}/${entry.methodName}`, buildActionHandler(entry)]),
-  [METHOD_INVOKE_READ_ONLY_ACTION_FULL, async (req = {}, ctx = {}) => invokeVolcengine({
-    action: req.action,
-    serviceCode: req.service_code || req.serviceCode,
-    version: req.version,
-    method: req.method,
-    endpoint: req.endpoint,
-  }, normalizeStruct(req.payload ?? {}), ctx)],
+  [METHOD_INVOKE_READ_ONLY_ACTION_FULL, async (req, ctx) => {
+    const request = handlerRequest(req, ctx);
+    return invokeVolcengine({
+      action: request.action,
+      serviceCode: request.service_code || request.serviceCode,
+      version: request.version,
+      method: request.method,
+      endpoint: request.endpoint,
+    }, normalizeStruct(request.payload ?? {}), handlerContext(req, ctx));
+  }],
 ]);
 
 export const rpcdef = () => Object.fromEntries([
