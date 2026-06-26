@@ -62,6 +62,7 @@ const expectGrpcError = async (fn, legacyCode, checker = () => {}) => {
     INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT,
     PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED,
     UNAVAILABLE: grpcStatus.UNAVAILABLE,
+    DEADLINE_EXCEEDED: grpcStatus.DEADLINE_EXCEEDED,
     UNKNOWN: grpcStatus.UNKNOWN,
   })[legacyCode]);
   checker(caught);
@@ -112,6 +113,8 @@ test('normalizes protobuf Struct payloads', () => {
 test('builds CTYun EOP dates, query strings, and signatures', () => {
   assert.equal(_test.eopDateFromDate(new Date('2024-01-16T08:00:00Z')), '20240116T160000Z');
   assert.equal(_test.queryParamsToString({ b: 'x y', a: '2021-04-04T06:01:46Z' }), 'a=2021-04-04T06%3A01%3A46Z&b=x%20y');
+  assert.throws(() => _test.queryParamsToString({ filter: { name: 'asset' } }), /nested object/);
+  assert.throws(() => _test.queryParamsToString({ filter: ['ok', { name: 'asset' }] }), /nested object/);
 
   const signed = _test.signRequest({
     query: { firewallType: 'NorthSouth', page: 1 },
@@ -159,7 +162,8 @@ test('sends signed GET overview request with CFW headers', async () => {
   assert.equal(url.searchParams.get('firewallType'), 'NorthSouth');
   assert.equal(captured.init.method, 'GET');
   assert.equal(captured.init.body, undefined);
-  assert.equal(captured.init.timeoutMs, 25);
+  assert.equal(Object.hasOwn(captured.init, 'timeoutMs'), false);
+  assert.equal(typeof captured.init.signal?.aborted, 'boolean');
   assert.equal(captured.init.headers['X-Custom'], 'trace');
   assert.equal(captured.init.headers['Content-Type'], 'application/json');
   assert.equal(captured.init.headers.urlType, 'CTAPI');
@@ -256,5 +260,16 @@ test('maps CTYun business and transport errors', async () => {
     () => handlers[`${SERVICE_PACKAGE}/AcPolicyOverviewC`]({}, buildCtx()),
     'UNKNOWN',
     (err) => assert.match(err.message, /non-JSON/),
+  );
+
+  setFetch(async () => {
+    const err = new Error('timeout');
+    err.name = 'AbortError';
+    throw err;
+  });
+  await expectGrpcError(
+    () => handlers[`${SERVICE_PACKAGE}/AcPolicyOverviewC`]({}, buildCtx({ limits: { timeoutMs: 25 } })),
+    'DEADLINE_EXCEEDED',
+    (err) => assert.match(err.message, /timed out after 25ms/),
   );
 });
