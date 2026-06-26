@@ -92,6 +92,7 @@ test('validates required credentials and supported actions', () => {
   assert.equal(_test.validateActionName('ListAssetCenterHosts'), 'ListAssetCenterHosts');
   assert.equal(_test.validateActionName('GetHostAssetOverview'), 'GetHostAssetOverview');
   assert.equal(_test.validateActionName('ListHidsAlarms'), 'ListHidsAlarms');
+  assert.equal(_test.validateActionName('GetSecurityOverview'), 'GetSecurityOverview');
   assert.throws(() => _test.validateActionName('UpdateInstance'), /read-only/);
   assert.throws(() => _test.validateActionSpec({ action: 'ListAssetCenterHosts', serviceCode: 'ecs' }), /unsupported/);
 });
