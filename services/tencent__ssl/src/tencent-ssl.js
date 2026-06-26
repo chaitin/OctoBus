@@ -132,11 +132,15 @@ const buildTlsOptions = (bindings = {}) => {
 
 const fetchJson = async (url, init, { bindings = {}, timeoutMs }) => {
   let res;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs || DEFAULT_TIMEOUT_MS);
   try {
-    res = await fetch(url, { ...init, timeoutMs, ...buildTlsOptions(bindings) });
+    res = await fetch(url, { ...init, signal: controller.signal, ...buildTlsOptions(bindings) });
   } catch (err) {
     const reason = err?.cause?.message || err?.message || 'fetch failed';
     throw errorWithCode('UNAVAILABLE', reason);
+  } finally {
+    clearTimeout(timer);
   }
   const text = await res.text();
   if (!res.ok) mapHttpError(res, text);
