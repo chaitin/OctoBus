@@ -1,0 +1,12 @@
+{
+  "name": "@chaitin-ai/octobus-service-ctyun-cloud-firewall-c100",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "ctyun-cloud-firewall-c100": "bin/ctyun-cloud-firewall-c100.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.5.0"
+  }
+}
