@@ -6,6 +6,7 @@
   "bin": {
     "octobus-tentacles": "bin/octobus-tentacles.js",
     "alibaba-cloud-simple-application-server-firewall": "bin/alibaba-cloud-simple-application-server-firewall.js",
+    "ctyun-accessone": "bin/ctyun-accessone.js",
     "das-gateway-v3": "bin/das-gateway-v3.js",
     "das-tgfw-v6": "bin/das-tgfw-v6.js",
     "defectdojo": "bin/defectdojo.js",
@@ -54,6 +55,7 @@
   },
   "files": [
     "bin/alibaba-cloud-simple-application-server-firewall.js",
+    "bin/ctyun-accessone.js",
     "bin/das-gateway-v3.js",
     "bin/das-tgfw-v6.js",
     "bin/defectdojo.js",
@@ -100,6 +102,7 @@
     "bin/wd-k01.js",
     "bin/wangsu-label-ip.js",
     "alibaba-cloud__simple-application-server-firewall",
+    "ctyun__accessone",
     "das__gateway_v3",
     "das__tgfw_v6",
     "defectdojo__defectdojo",

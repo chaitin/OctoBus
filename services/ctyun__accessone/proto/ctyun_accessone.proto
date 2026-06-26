@@ -1,0 +1,117 @@
+syntax = "proto3";
+
+package Ctyun_AccessOne;
+
+import "google/protobuf/wrappers.proto";
+
+option go_package = "miner/grpc-service/Ctyun_AccessOne";
+
+// Ctyun_AccessOne wraps 天翼云 AccessOne (边缘安全加速平台 ESA) CTAPI 操作.
+// Stateless service — EOP HMAC-SHA256 signing on every call, no login/logout.
+// 8 只读 + 2 写 (新增访问控制规则 / 域名级开关启停), 覆盖 6 个产品域: 域名管理 / 防护规则引擎 / WAF / 访问控制 / 资源包 / IPv6检测
+service Ctyun_AccessOne {
+
+  // ── 域名管理 (2) ──
+  rpc QueryDomainList(QueryDomainListRequest) returns (QueryDomainListResponse) {}
+  rpc QueryServiceDetail(QueryServiceDetailRequest) returns (QueryServiceDetailResponse) {}
+
+  // ── 防护规则引擎 (2) ──
+  rpc QueryDomainRuleAct(QueryDomainRuleRequest) returns (QueryDomainRuleActResponse) {}
+  rpc QueryDomainRuleConfig(QueryDomainRuleRequest) returns (QueryDomainRuleConfigResponse) {}
+
+  // ── WAF 配置 (1) ──
+  rpc QueryWafConfig(QueryWafConfigRequest) returns (QueryWafConfigResponse) {}
+
+  // ── 访问控制 (3: 1读+2写) ──
+  rpc QueryAccessControlSwitch(QueryAccessControlSwitchRequest) returns (QueryAccessControlSwitchResponse) {}
+  rpc InsertAccessControl(InsertAccessControlRequest) returns (InsertAccessControlResponse) {}
+  rpc UpdateAccessControlSwitch(UpdateAccessControlSwitchRequest) returns (UpdateAccessControlSwitchResponse) {}
+
+  // ── 资源包 (1) ──
+  rpc QueryResourcePackages(QueryResourcePackagesRequest) returns (QueryResourcePackagesResponse) {}
+
+  // ── IPv6支持度检测 (1) ──
+  rpc QueryIPv6NoSupLink(QueryIPv6NoSupLinkRequest) returns (QueryIPv6NoSupLinkResponse) {}
+}
+
+// ── 域名列表查询 (GET /ctapi/v2/domain/query) ──
+// 全部字段可选；不填则查询所有产品所有状态的域名
+message QueryDomainListRequest {
+  google.protobuf.StringValue domain = 1;       // 域名过滤
+  google.protobuf.StringValue product_code = 2; // 产品类型: 020=边缘安全加速
+  google.protobuf.Int32Value status = 3;        // 域名状态: 4=已启用
+  google.protobuf.Int32Value area_scope = 4;    // 加速范围: 1=国内 2=海外 3=全球
+  google.protobuf.Int32Value page = 5;          // 页码, 默认1
+  google.protobuf.Int32Value page_size = 6;     // 每页条数, 默认50 最大100
+}
+
+// ── 服务基本信息 (POST /ctapi/v1/sevice_detail) ──
+message QueryServiceDetailRequest {
+  repeated string product_code = 1;  // e.g. ["010"]
+}
+
+// ── 防护规则引擎 (POST /ctapi/v1/domainRule/getDomainRuleAct | /get) ──
+message QueryDomainRuleRequest {
+  string domain = 1;
+  string product_code = 2;
+}
+
+// ── WAF 配置 (POST /ctapi/v1/scdn/domain/wafConfigQuery) ──
+message QueryWafConfigRequest {
+  string domain = 1;
+  string product_code = 2;
+}
+
+// ── 访问控制总开关 (POST /ctapi/v1/scdn/domain/queryAccessControlAct) ──
+message QueryAccessControlSwitchRequest {
+  string domain = 1;
+  string product_code = 2;
+}
+
+// ── 新增访问控制规则 (POST /ctapi/v1/scdn/domain/accessControlInsert) ──
+message InsertAccessControlRequest {
+  repeated string domains = 1;              // 域名列表
+  string product_code = 2;                  // 产品代码, e.g. "020"
+  repeated AccessControlConfig configs = 3; // 规则配置列表
+}
+message AccessControlConfig {
+  string mod = 1;             // 规则开关: "ON" | "OFF"
+  string act = 2;             // 处置动作: "LOG" | "DENY" | ...
+  string rule_name = 3;       // 规则名称
+  repeated PublicRangeGroup public_range = 4; // IP/区域条件 (双重嵌套)
+}
+message PublicRangeGroup {
+  repeated PublicRangeItem items = 1;  // 同一组内的 AND 关系
+}
+message PublicRangeItem {
+  string zone = 1;           // "IP" | "AREA"
+  string equal = 2;          // "true" | "false"
+  string public_content = 3; // IP地址或区域代码
+}
+
+// ── 更新访问控制域级开关 (POST /ctapi/v1/scdn/domain/updateAccessControlAct) ──
+message UpdateAccessControlSwitchRequest {
+  string domain = 1;
+  string product_code = 2;
+  string mod = 3;  // "ON" 开启, "CLOSE" 关闭
+}
+
+// ── 资源包列表 (POST /ctapi/v1/accessone/purchase/queryResourcePackages) ──
+message QueryResourcePackagesRequest {}
+
+// ── IPv6检测不支持链接 (POST /ctapi/v1/ipv6/checkResult/getNoSupLink) ──
+message QueryIPv6NoSupLinkRequest {
+  int32 request_id = 1;  // 检测任务 ID (必填)
+}
+
+// ── 统一响应 (CTAPI 原始 JSON 透传) ──
+message QueryDomainListResponse { int32 http_status = 1; string http_body = 2; }
+message QueryServiceDetailResponse { int32 http_status = 1; string http_body = 2; }
+message QueryDomainRuleActResponse { int32 http_status = 1; string http_body = 2; }
+message QueryDomainRuleConfigResponse { int32 http_status = 1; string http_body = 2; }
+message QueryWafConfigResponse { int32 http_status = 1; string http_body = 2; }
+message QueryAccessControlSwitchResponse { int32 http_status = 1; string http_body = 2; }
+message InsertAccessControlResponse { int32 http_status = 1; string http_body = 2; }
+message UpdateAccessControlSwitchResponse { int32 http_status = 1; string http_body = 2; }
+message QueryResourcePackagesResponse { int32 http_status = 1; string http_body = 2; }
+message QueryIPv6NoSupLinkResponse { int32 http_status = 1; string http_body = 2; }
