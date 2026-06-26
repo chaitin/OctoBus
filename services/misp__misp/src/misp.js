@@ -176,6 +176,9 @@ const callMisp = async (ctx, method, path, body, queryParams) => {
   };
 
   const skipVerify = toBoolean(bindings.skipTlsVerify) || toBoolean(bindings.tlsInsecureSkipVerify);
+  // OctoBus runtime wraps globalThis.fetch to recognize insecureSkipVerify/tlsInsecureSkipVerify
+  // as TLS skip options. Standard Node.js fetch (undici) silently ignores these, so when running
+  // outside OctoBus (e.g. direct node invocation), set NODE_TLS_REJECT_UNAUTHORIZED=0 instead.
   const tlsOptions = skipVerify ? { insecureSkipVerify: true, tlsInsecureSkipVerify: true } : {};
 
   logFlow(meta, method + ':start', { path, body: body ? '(body)' : undefined });
