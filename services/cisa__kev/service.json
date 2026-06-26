@@ -1,0 +1,1 @@
+{"schema":"chaitin.octobus.service.v1","name":"cisa-kev","displayName":"CISA KEV","description":"CISA Known Exploited Vulnerabilities catalog wrapper — check active exploitation status, ransomware association, and remediation deadlines","runtime":{"mode":"on-demand"},"proto":{"roots":["proto"],"files":["proto/kev.proto"]},"configSchema":"config.schema.json"}
