@@ -259,6 +259,10 @@ test('configuration validation rejects unsupported TLS bypass flags', async () =
     () => _test.assertSupportedTlsConfig({ insecureSkipVerify: 'yes' }),
     /TLS certificate verification bypass is not supported/,
   );
+  assert.throws(
+    () => _test.assertSupportedTlsConfig({ skipTlsVerify: false, tlsInsecureSkipVerify: true }),
+    /TLS certificate verification bypass is not supported/,
+  );
 });
 
 test('configuration validation rejects missing endpoint and credentials', async () => {
