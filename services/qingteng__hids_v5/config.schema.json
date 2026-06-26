@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "description": "Qingteng CWPP/HIDS base URL, for example https://hids.example.com."
+    },
+    "base_url": {
+      "type": "string",
+      "description": "Alias for baseUrl."
+    },
+    "host": {
+      "type": "string",
+      "description": "Alias for baseUrl."
+    },
+    "endpoint": {
+      "type": "string",
+      "description": "Alias for baseUrl."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 10000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "timeout_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Alias for timeoutMs."
+    },
+    "verifyTLS": {
+      "type": "boolean",
+      "default": true,
+      "description": "Verify TLS certificates."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for private deployments."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional additional HTTP headers."
+    }
+  }
+}

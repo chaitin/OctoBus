@@ -1,0 +1,475 @@
+syntax = "proto3";
+
+package qingteng.hids.v5;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "octobus/services/qingteng/hids/v5";
+
+service QingtengHIDSService {
+  rpc ListHosts(ListHostsRequest) returns (ListHostsResponse) {}
+  rpc GetHost(GetHostRequest) returns (GetHostResponse) {}
+  rpc CountHosts(CountHostsRequest) returns (CountHostsResponse) {}
+
+  rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse) {}
+  rpc CountAgents(CountAgentsRequest) returns (CountAgentsResponse) {}
+
+  rpc ListDetections(ListDetectionsRequest) returns (ListDetectionsResponse) {}
+  rpc GetDetection(GetDetectionRequest) returns (GetDetectionResponse) {}
+
+  rpc ListResponseResults(ListResponseResultsRequest) returns (ListResponseResultsResponse) {}
+  rpc ListResponseHistory(ListResponseHistoryRequest) returns (ListResponseHistoryResponse) {}
+  rpc GetElementOperationInfos(GetElementOperationInfosRequest) returns (GetElementOperationInfosResponse) {}
+
+  rpc ListBaselines(ListBaselinesRequest) returns (ListBaselinesResponse) {}
+  rpc GetBaseline(GetBaselineRequest) returns (GetBaselineResponse) {}
+  rpc ListBaselineTasks(ListBaselineTasksRequest) returns (ListBaselineTasksResponse) {}
+  rpc GetBaselineTaskStatus(GetBaselineTaskStatusRequest) returns (GetBaselineTaskStatusResponse) {}
+  rpc ListBaselineTaskResults(ListBaselineTaskResultsRequest) returns (ListBaselineTaskResultsResponse) {}
+}
+
+message PageRequest {
+  int32 page = 1;
+  int32 size = 2;
+  repeated string sort = 3;
+}
+
+message RawEnvelope {
+  int32 http_status = 1;
+  string raw_body = 2;
+  google.protobuf.Value raw_json = 3;
+}
+
+message TimeRange {
+  string started_at = 1;
+  string ended_at = 2;
+}
+
+message Host {
+  string id = 1;
+  string name = 2;
+  string main_ip = 3;
+  string agent_id = 4;
+  string agent_status = 5;
+  string os_type = 6;
+  string os_arch = 7;
+  string os_dist = 8;
+  string os_version = 9;
+  string kernel_version = 10;
+  string group_id = 11;
+  string group_name = 12;
+  string location = 13;
+  string charger_name = 14;
+  string charger_email = 15;
+  repeated string internal_ips = 16;
+  repeated string external_ips = 17;
+  string first_seen = 18;
+  string last_seen = 19;
+  string last_online_at = 20;
+  string last_offline_at = 21;
+  string agent_run_mode = 22;
+  string agent_version = 23;
+  string host_type = 24;
+  string run_level = 25;
+  string client_ip = 26;
+  google.protobuf.Value raw_json = 27;
+}
+
+message HostQuery {
+  string name_like = 1;
+  string ip_like = 2;
+  repeated string ids = 3;
+  repeated string agent_ids = 4;
+  string agent_id = 5;
+  repeated string agent_status = 6;
+  repeated string group_ids = 7;
+  repeated string tag_ids = 8;
+  repeated string os_types = 9;
+  repeated string host_type = 10;
+  string kernel_version = 11;
+  string raw_query_json = 100;
+  google.protobuf.Struct raw_query = 101;
+}
+
+message ListHostsRequest {
+  PageRequest page = 1;
+  HostQuery query = 2;
+}
+
+message ListHostsResponse {
+  repeated Host hosts = 1;
+  RawEnvelope raw = 2;
+}
+
+message GetHostRequest {
+  string id = 1;
+}
+
+message GetHostResponse {
+  Host host = 1;
+  RawEnvelope raw = 2;
+}
+
+message CountHostsRequest {
+  HostQuery query = 1;
+}
+
+message CountHostsResponse {
+  int64 total = 1;
+  RawEnvelope raw = 2;
+}
+
+message Agent {
+  string agent_id = 1;
+  string state = 2;
+  string run_mode = 3;
+  string hostname = 4;
+  string ip = 5;
+  string version = 6;
+  string run_level = 7;
+  string log_level = 8;
+  string created_at = 9;
+  string last_online_at = 10;
+  string last_offline_at = 11;
+  string last_offline_reason = 12;
+  string driver_state = 13;
+  string driver_run_state = 14;
+  string os_type = 15;
+  string os_dist = 16;
+  string os_version = 17;
+  string os_arch = 18;
+  string mo_id = 19;
+  string connection_type = 20;
+  string connection_host = 21;
+  string proxy_ip = 22;
+  string license_status = 23;
+  string host_type = 24;
+  google.protobuf.Value raw_json = 25;
+}
+
+message AgentQuery {
+  string agent_id = 1;
+  repeated string agent_ids = 2;
+  repeated string status = 3;
+  string hostname = 4;
+  string ip = 5;
+  repeated string version = 6;
+  repeated string run_mode = 7;
+  repeated string run_level = 8;
+  repeated string os_types = 9;
+  repeated string os_arches = 10;
+  string host_type = 11;
+  string raw_query_json = 100;
+  google.protobuf.Struct raw_query = 101;
+}
+
+message ListAgentsRequest {
+  PageRequest page = 1;
+  AgentQuery query = 2;
+  repeated string select_fields = 3;
+}
+
+message ListAgentsResponse {
+  repeated Agent agents = 1;
+  RawEnvelope raw = 2;
+}
+
+message CountAgentsRequest {
+  AgentQuery query = 1;
+}
+
+message CountAgentsResponse {
+  int64 total = 1;
+  RawEnvelope raw = 2;
+}
+
+message Detection {
+  string detection_id = 1;
+  string detection_code = 2;
+  string severity = 3;
+  string status = 4;
+  string detection_type = 5;
+  string detection_type_code = 6;
+  string detection_title = 7;
+  string detection_time = 8;
+  string last_detection_time = 9;
+  string host_ip = 10;
+  string hostname = 11;
+  string agent_id = 12;
+  string group_name = 13;
+  string container_id = 14;
+  string container_name = 15;
+  string cluster_id = 16;
+  string cluster_name = 17;
+  string namespace = 18;
+  int64 dup_count = 19;
+  string handle_suggestion = 20;
+  string action_desc = 21;
+  string operation_process_element_id = 22;
+  string operation_file_element_id = 23;
+  google.protobuf.Value raw_json = 24;
+}
+
+message DetectionQuery {
+  int64 start_time = 1;
+  int64 end_time = 2;
+  repeated string severities = 3;
+  repeated string statuses = 4;
+  repeated string detection_types = 5;
+  string detection_title = 6;
+  repeated string tactics = 7;
+  repeated string techniques = 8;
+  repeated string element_types = 9;
+  string agent_id = 10;
+  string host_ip = 11;
+  string hostname = 12;
+  repeated string group_ids = 13;
+  repeated string os_types = 14;
+  string container_id = 15;
+  string container_name = 16;
+  string cluster_name = 17;
+  string pod_name = 18;
+  string namespace = 19;
+  string detection_code = 20;
+  string rule_id = 21;
+  string keyword = 22;
+  repeated string detection_ids = 23;
+  repeated string tag_ids = 24;
+  repeated string detection_type_codes = 25;
+  string raw_query_json = 100;
+  google.protobuf.Struct raw_query = 101;
+}
+
+message ListDetectionsRequest {
+  PageRequest page = 1;
+  DetectionQuery query = 2;
+  bool show_detail = 3;
+}
+
+message ListDetectionsResponse {
+  int64 total = 1;
+  repeated Detection detections = 2;
+  RawEnvelope raw = 3;
+}
+
+message GetDetectionRequest {
+  string detection_id = 1;
+  string detection_code = 2;
+}
+
+message GetDetectionResponse {
+  Detection detection = 1;
+  RawEnvelope raw = 2;
+}
+
+message ResponseResult {
+  string result_id = 1;
+  string element_id = 2;
+  string element_type = 3;
+  string agent_id = 4;
+  string host_id = 5;
+  string host_ip = 6;
+  string hostname = 7;
+  string group_name = 8;
+  string operation_method = 9;
+  string operation_type = 10;
+  string operation_status = 11;
+  string operator = 12;
+  string reason = 13;
+  string error = 14;
+  string create_time = 15;
+  string detection_code = 16;
+  string detection_id = 17;
+  string source = 18;
+  google.protobuf.Value raw_json = 19;
+}
+
+message ResponseQuery {
+  repeated string operation_methods = 1;
+  repeated string operation_types = 2;
+  repeated string operation_statuses = 3;
+  string element_type = 4;
+  string host_ip = 5;
+  string hostname = 6;
+  repeated string group_ids = 7;
+  string operator = 8;
+  int64 start_time = 9;
+  int64 end_time = 10;
+  repeated string element_ids = 11;
+  string detection_code = 12;
+  string source = 13;
+  string raw_query_json = 100;
+  google.protobuf.Struct raw_query = 101;
+}
+
+message ListResponseResultsRequest {
+  PageRequest page = 1;
+  ResponseQuery query = 2;
+}
+
+message ListResponseResultsResponse {
+  int64 total = 1;
+  repeated ResponseResult results = 2;
+  RawEnvelope raw = 3;
+}
+
+message ListResponseHistoryRequest {
+  PageRequest page = 1;
+  ResponseQuery query = 2;
+}
+
+message ListResponseHistoryResponse {
+  int64 total = 1;
+  repeated ResponseResult history = 2;
+  RawEnvelope raw = 3;
+}
+
+message GetElementOperationInfosRequest {
+  repeated string element_ids = 1;
+  string element_type = 2;
+  string detection_code = 3;
+  bool show_detail = 4;
+}
+
+message GetElementOperationInfosResponse {
+  int64 total = 1;
+  repeated ResponseResult infos = 2;
+  RawEnvelope raw = 3;
+}
+
+message Baseline {
+  string uuid = 1;
+  string name = 2;
+  string category_id = 3;
+  string category = 4;
+  string cpu_arch = 5;
+  bool active = 6;
+  string created_at = 7;
+  string updated_at = 8;
+  repeated string check_item_ids = 9;
+  google.protobuf.Value raw_json = 10;
+}
+
+message BaselineQuery {
+  string name_like = 1;
+  repeated string category_ids = 2;
+  string platform_like = 3;
+  string app_name_like = 4;
+  bool is_builtin = 5;
+  bool is_builtin_set = 6;
+  string raw_query_json = 100;
+  google.protobuf.Struct raw_query = 101;
+}
+
+message ListBaselinesRequest {
+  PageRequest page = 1;
+  BaselineQuery query = 2;
+}
+
+message ListBaselinesResponse {
+  int64 total = 1;
+  repeated Baseline baselines = 2;
+  RawEnvelope raw = 3;
+}
+
+message GetBaselineRequest {
+  string baseline_id = 1;
+}
+
+message GetBaselineResponse {
+  Baseline baseline = 1;
+  RawEnvelope raw = 2;
+}
+
+message BaselineTask {
+  string task_id = 1;
+  string name = 2;
+  repeated string baseline_name = 3;
+  double passed = 4;
+  string last_executed_at = 5;
+  string next_executed_at = 6;
+  string created_at = 7;
+  bool is_executing = 8;
+  string cron = 9;
+  bool editable = 10;
+  google.protobuf.Value raw_json = 11;
+}
+
+message BaselineTaskQuery {
+  repeated string baseline_id = 1;
+  string ip_like = 2;
+  string host_name_like = 3;
+  string agent_id_like = 4;
+  string name_like = 5;
+  repeated string category_ids = 6;
+  string raw_query_json = 100;
+  google.protobuf.Struct raw_query = 101;
+}
+
+message ListBaselineTasksRequest {
+  PageRequest page = 1;
+  BaselineTaskQuery query = 2;
+}
+
+message ListBaselineTasksResponse {
+  repeated BaselineTask tasks = 1;
+  RawEnvelope raw = 2;
+}
+
+message GetBaselineTaskStatusRequest {
+  string task_id = 1;
+}
+
+message BaselineTaskStatus {
+  string task_id = 1;
+  bool is_executing = 2;
+  string last_executed_at = 3;
+  double passed = 4;
+  string next_executed_at = 5;
+  string task_status = 6;
+  string task_status_description_key = 7;
+  string last_execute_record_id = 8;
+  google.protobuf.Value raw_json = 9;
+}
+
+message GetBaselineTaskStatusResponse {
+  repeated BaselineTaskStatus statuses = 1;
+  RawEnvelope raw = 2;
+}
+
+message BaselineTaskResult {
+  string uuid = 1;
+  string task_id = 2;
+  string baseline_id = 3;
+  string execute_record_id = 4;
+  string agent_id = 5;
+  string check_id = 6;
+  int32 code = 7;
+  int32 flag = 8;
+  string error = 9;
+  string data = 10;
+  string check_object_id = 11;
+  string created_at = 12;
+  google.protobuf.Value raw_json = 13;
+}
+
+message BaselineTaskResultQuery {
+  repeated string check_ids = 1;
+  repeated string agent_ids = 2;
+  repeated int32 code = 3;
+  repeated int32 flag = 4;
+  string raw_query_json = 100;
+  google.protobuf.Struct raw_query = 101;
+}
+
+message ListBaselineTaskResultsRequest {
+  string task_id = 1;
+  string baseline_id = 2;
+  PageRequest page = 3;
+  BaselineTaskResultQuery query = 4;
+}
+
+message ListBaselineTaskResultsResponse {
+  repeated BaselineTaskResult results = 1;
+  RawEnvelope raw = 2;
+}
