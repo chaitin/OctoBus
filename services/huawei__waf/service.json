@@ -1,0 +1,45 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "huawei-waf",
+  "displayName": "Huawei WAF",
+  "description": "OctoBus package for Huawei Cloud WAF (Web Application Firewall) IP blacklist/whitelist management APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/huawei_waf.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Huawei_WAF.Huawei_WAF/BlockIP": {
+          "name": "block-ip",
+          "description": "Block an IP via WAF blacklist rule."
+        },
+        "Huawei_WAF.Huawei_WAF/UnblockIP": {
+          "name": "unblock-ip",
+          "description": "Remove a blacklist rule to unblock an IP."
+        },
+        "Huawei_WAF.Huawei_WAF/ListRules": {
+          "name": "list-rules",
+          "description": "List all blacklist/whitelist rules for the WAF policy."
+        },
+        "Huawei_WAF.Huawei_WAF/ListInstances": {
+          "name": "list-instances",
+          "description": "List all protected domain instances."
+        },
+        "Huawei_WAF.Huawei_WAF/ListPolicies": {
+          "name": "list-policies",
+          "description": "List all WAF protection policies."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+package Huawei_WAF;
+
+import "google/protobuf/wrappers.proto";
+
+option go_package = "miner/grpc-service/Huawei_WAF";
+
+service Huawei_WAF {
+  rpc BlockIP(BlockIPRequest) returns (BlockIPResponse) {}
+  rpc UnblockIP(UnblockIPRequest) returns (UnblockIPResponse) {}
+  rpc ListRules(ListRulesRequest) returns (ListRulesResponse) {}
+  rpc ListInstances(ListInstancesRequest) returns (ListInstancesResponse) {}
+  rpc ListPolicies(ListPoliciesRequest) returns (ListPoliciesResponse) {}
+}
+
+message BlockIPRequest {
+  string ip = 1;
+  google.protobuf.StringValue comment = 2;
+}
+
+message BlockIPResponse {
+  int32 code = 1;
+  string message = 2;
+  string rule_id = 3;
+}
+
+message UnblockIPRequest {
+  string rule_id = 1;
+}
+
+message UnblockIPResponse {
+  int32 code = 1;
+  string message = 2;
+}
+
+message ListRulesRequest {
+  google.protobuf.Int64Value limit = 1;
+  google.protobuf.Int64Value offset = 2;
+}
+
+message ListRulesResponse {
+  int32 code = 1;
+  string message = 2;
+  repeated RuleItem data = 3;
+  int32 total = 4;
+}
+
+message RuleItem {
+  string id = 1;
+  string ip = 2;
+  string name = 3;
+  int32 action = 4;  // 0=block, 1=allow, 2=record
+  string description = 5;
+  string create_time = 6;
+}
+
+message ListInstancesRequest {
+  google.protobuf.Int64Value limit = 1;
+  google.protobuf.Int64Value offset = 2;
+}
+
+message ListInstancesResponse {
+  int32 code = 1;
+  string message = 2;
+  repeated InstanceItem data = 3;
+  int32 total = 4;
+}
+
+message InstanceItem {
+  string id = 1;
+  string hostname = 2;
+  string policy_id = 3;
+  string access_code = 4;
+  string protect_status = 5;
+  string create_time = 6;
+}
+
+message ListPoliciesRequest {
+  google.protobuf.Int64Value limit = 1;
+  google.protobuf.Int64Value offset = 2;
+}
+
+message ListPoliciesResponse {
+  int32 code = 1;
+  string message = 2;
+  repeated PolicyItem data = 3;
+  int32 total = 4;
+}
+
+message PolicyItem {
+  string id = 1;
+  string name = 2;
+  int32 level = 3;
+  string action_mode = 4;
+  string create_time = 5;
+}

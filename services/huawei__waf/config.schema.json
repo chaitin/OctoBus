@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "region": {
+      "type": "string",
+      "description": "Huawei Cloud region (default: cn-north-4)."
+    },
+    "project_id": {
+      "type": "string",
+      "description": "Huawei Cloud project ID (required)."
+    },
+    "policy_id": {
+      "type": "string",
+      "description": "WAF policy ID to manage blacklist/whitelist rules (required)."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 10000,
+      "description": "HTTP timeout in milliseconds."
+    }
+  },
+  "required": ["project_id", "policy_id"]
+}
