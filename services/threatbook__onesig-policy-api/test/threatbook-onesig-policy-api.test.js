@@ -22,10 +22,11 @@ const rejectsWithMessage = async (fn, pattern) => {
 };
 
 test('exports expected handlers', () => {
+  assert.equal(Object.keys(_test.operationMap).length, 7);
   for (const name of Object.keys(_test.operationMap)) {
     assert.equal(typeof handlers[`${PREFIX}/${name}`], 'function', name);
   }
-  assert.equal(typeof handlers[`${PREFIX}/GenericSignedRequest`], 'function');
+  assert.equal(handlers[`${PREFIX}/GenericSignedRequest`], undefined);
 });
 
 test('signs and sends global blacklist requests to mock upstream', async () => {
@@ -47,7 +48,7 @@ test('signs and sends global blacklist requests to mock upstream', async () => {
   }
 });
 
-test('supports list and generic signed requests', async () => {
+test('supports retained list requests', async () => {
   const upstream = createMockUpstream();
   const baseUrl = await upstream.start();
   try {
@@ -57,11 +58,11 @@ test('supports list and generic signed requests', async () => {
     });
     assert.equal(list.status, 200);
 
-    const generic = await handlers[`${PREFIX}/GenericSignedRequest`]({
+    const whitelist = await handlers[`${PREFIX}/ListGlobalWhitelist`]({
       ...ctx(baseUrl),
-      request: { method: 'POST', path: '/api/v3/device/platformStatus', payloadJson: '{}' },
+      request: { query: { pageNo: '1', pageSize: '20' } },
     });
-    assert.equal(generic.status, 200);
+    assert.equal(whitelist.status, 200);
   } finally {
     await upstream.close();
   }
@@ -69,27 +70,19 @@ test('supports list and generic signed requests', async () => {
 
 test('maps validation, permission, business, and network errors', async () => {
   await rejectsWithMessage(
-    () => handlers[`${PREFIX}/GenericSignedRequest`]({ ...ctx('http://127.0.0.1'), request: { method: '', path: '/x' } }),
-    /method is required/,
-  );
-  await rejectsWithMessage(
-    () => handlers[`${PREFIX}/GenericSignedRequest`]({ ...ctx('http://127.0.0.1'), request: { method: 'POST', path: 'x' } }),
-    /path must start/,
-  );
-  await rejectsWithMessage(
-    () => handlers[`${PREFIX}/GenericSignedRequest`]({ ...ctx('http://127.0.0.1'), request: { method: 'POST', path: '/x', payloadJson: '[' } }),
+    () => handlers[`${PREFIX}/CreateGlobalBlacklist`]({ ...ctx('http://127.0.0.1'), request: { payloadJson: '[' } }),
     /payloadJson/,
   );
   await rejectsWithMessage(
-    () => handlers[`${PREFIX}/GenericSignedRequest`]({ config: { baseUrl: 'http://127.0.0.1', allowInsecureHttp: true }, secret: { apiKey: '', secret: 's' }, request: { method: 'POST', path: '/x' } }),
+    () => handlers[`${PREFIX}/CreateGlobalBlacklist`]({ config: { baseUrl: 'http://127.0.0.1', allowInsecureHttp: true }, secret: { apiKey: '', secret: 's' }, request: { payloadJson: '{}' } }),
     /apiKey/,
   );
 
   const upstream = createMockUpstream();
-  const baseUrl = await upstream.start();
+    const baseUrl = await upstream.start();
   try {
     await rejectsWithMessage(
-      () => handlers[`${PREFIX}/EnableHttpBlacklist`]({ ...ctx(baseUrl), request: { payloadJson: '{}' } }),
+      () => handlers[`${PREFIX}/CreateHttpBlacklist`]({ ...ctx(baseUrl), request: { payloadJson: '{}' } }),
       /business failed/,
     );
   } finally {

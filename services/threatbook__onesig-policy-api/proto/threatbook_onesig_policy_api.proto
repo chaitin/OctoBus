@@ -3,30 +3,14 @@ syntax = "proto3";
 package threatbook.onesig.policy.v1;
 
 service OneSigPolicyService {
-  rpc DevicePlatformStatus(EmptyRequest) returns (ApiResponse);
-  rpc DeviceSystemStatus(EmptyRequest) returns (ApiResponse);
-  rpc DeviceNetworkStatus(EmptyRequest) returns (ApiResponse);
   rpc ListAssetGroups(QueryRequest) returns (ApiResponse);
   rpc ListAssets(JsonPayloadRequest) returns (ApiResponse);
   rpc ListGlobalWhitelist(QueryRequest) returns (ApiResponse);
-  rpc CreateGlobalWhitelist(JsonPayloadRequest) returns (ApiResponse);
-  rpc UpdateGlobalWhitelist(JsonPayloadRequest) returns (ApiResponse);
-  rpc DeleteGlobalWhitelist(JsonPayloadRequest) returns (ApiResponse);
-  rpc RemoveGlobalWhitelist(JsonPayloadRequest) returns (ApiResponse);
   rpc ListGlobalBlacklist(QueryRequest) returns (ApiResponse);
   rpc CreateGlobalBlacklist(JsonPayloadRequest) returns (ApiResponse);
-  rpc UpdateGlobalBlacklist(JsonPayloadRequest) returns (ApiResponse);
-  rpc DeleteGlobalBlacklist(JsonPayloadRequest) returns (ApiResponse);
-  rpc RemoveGlobalBlacklist(JsonPayloadRequest) returns (ApiResponse);
   rpc ListHttpBlacklist(QueryRequest) returns (ApiResponse);
   rpc CreateHttpBlacklist(JsonPayloadRequest) returns (ApiResponse);
-  rpc UpdateHttpBlacklist(JsonPayloadRequest) returns (ApiResponse);
-  rpc EnableHttpBlacklist(JsonPayloadRequest) returns (ApiResponse);
-  rpc DeleteHttpBlacklist(JsonPayloadRequest) returns (ApiResponse);
-  rpc GenericSignedRequest(SignedRequest) returns (ApiResponse);
 }
-
-message EmptyRequest {}
 
 message QueryRequest {
   map<string, string> query = 1;
@@ -35,13 +19,6 @@ message QueryRequest {
 message JsonPayloadRequest {
   string payload_json = 1 [json_name = "payloadJson"];
   map<string, string> query = 2;
-}
-
-message SignedRequest {
-  string method = 1;
-  string path = 2;
-  string payload_json = 3 [json_name = "payloadJson"];
-  map<string, string> query = 4;
 }
 
 message ApiResponse {

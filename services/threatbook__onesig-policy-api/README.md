@@ -10,12 +10,17 @@ octobus service import --id threatbook-onesig-policy-api ./services/threatbook__
 
 ## Covered Capabilities
 
-- Device status APIs.
-- Asset list and asset group query APIs.
-- Global whitelist create, list, update, delete, and remove APIs.
-- Global blacklist create, list, update, delete, and remove APIs.
-- HTTP blacklist create, list, update, enable, and delete APIs.
-- Generic signed request for additional documented `/api/v3/*` endpoints.
+This package intentionally exposes a small security-operations surface:
+
+- `ListAssetGroups`
+- `ListAssets`
+- `ListGlobalWhitelist`
+- `ListGlobalBlacklist`
+- `CreateGlobalBlacklist`
+- `ListHttpBlacklist`
+- `CreateHttpBlacklist`
+
+Update, delete, remove, enable, generic signed request, and device status methods are not exposed by this package to keep the default operational surface narrow.
 
 ## Customer-Site Offline Test
 
@@ -37,7 +42,7 @@ npm run pack:check
 octobus service import --offline --id threatbook-onesig-policy-api ./services/threatbook__onesig-policy-api
 ```
 
-5. Create an instance with the customer's OneSIG address, API key, and signing secret. Run a list/status method first before create, update, delete, remove, or enable methods.
+5. Create an instance with the customer's OneSIG address, API key, and signing secret. Run list methods first. Only run create methods in a customer-approved test environment.
 
 ## Configuration
 
