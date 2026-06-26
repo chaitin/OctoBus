@@ -61,8 +61,6 @@ service CTYun_SecurityGuard {
   rpc InstrusionWhitelistAllList(CTYunRequest) returns (CTYunResponse) {}
   rpc FileQuarantineList(CTYunRequest) returns (CTYunResponse) {}
   rpc IpBlockQueryList(CTYunRequest) returns (CTYunResponse) {}
-  rpc TamperproofQuotaQuery(CTYunRequest) returns (CTYunResponse) {}
-  rpc TamperproofQuotaOverview2(CTYunRequest) returns (CTYunResponse) {}
   rpc TamperproofConfigQuery(CTYunRequest) returns (CTYunResponse) {}
   rpc TamperProofAlarmLogAlarmList(CTYunRequest) returns (CTYunResponse) {}
   rpc TamperproofStatistics(CTYunRequest) returns (CTYunResponse) {}
@@ -81,14 +79,9 @@ service CTYun_SecurityGuard {
   rpc ApiIntegrityProtectionStatistics(CTYunRequest) returns (CTYunResponse) {}
   rpc ApiIntegrityProtectionFileChangeList(CTYunRequest) returns (CTYunResponse) {}
   rpc ApiIntegrityProtectionChangeStatistics(CTYunRequest) returns (CTYunResponse) {}
-  rpc QuotaList(CTYunRequest) returns (CTYunResponse) {}
-  rpc GetUnBindQuotaVersionList(CTYunRequest) returns (CTYunResponse) {}
-  rpc GetPayQuotaHostsByAz(CTYunRequest) returns (CTYunResponse) {}
-  rpc GetQuotaVersionHostList(CTYunRequest) returns (CTYunResponse) {}
   rpc SafetyReportEventList(CTYunRequest) returns (CTYunResponse) {}
   rpc SafetyReportConfigUserConfList(CTYunRequest) returns (CTYunResponse) {}
   rpc ApiSafetyReportEventStatistics(CTYunRequest) returns (CTYunResponse) {}
-  rpc V1indexisSign(CTYunRequest) returns (CTYunResponse) {}
   rpc GetSyncUser(CTYunRequest) returns (CTYunResponse) {}
   rpc SecurityDataQueryTask(CTYunRequest) returns (CTYunResponse) {}
   rpc SelectCountry(CTYunRequest) returns (CTYunResponse) {}

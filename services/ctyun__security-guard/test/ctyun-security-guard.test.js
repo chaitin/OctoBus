@@ -89,6 +89,8 @@ test('validates credentials and read-only API names', () => {
   assert.equal(_test.validateApiSpec('hostList').httpMethod, 'POST');
   assert.throws(() => _test.validateApiSpec('openStatus'), /unsupported/);
   assert.throws(() => _test.validateApiSpec('v1hostdelete'), /unsupported/);
+  assert.throws(() => _test.validateApiSpec('quotaList'), /unsupported/);
+  assert.throws(() => _test.validateApiSpec('v1indexisSign'), /unsupported/);
 });
 
 test('normalizes protobuf Struct payloads', () => {
