@@ -32,6 +32,7 @@ export const READ_ONLY_APIS = [
   { methodName: 'StatisticsanalysisQueryPeakBandwidthData', api: 'statisticsanalysisQueryPeakBandwidthData', httpMethod: 'POST', path: '/ctapi/v2/statisticsanalysis/query_peak_bandwidth_data' },
   { methodName: 'StatisticsanalysisQueryQpsData', api: 'statisticsanalysisQueryQpsData', httpMethod: 'POST', path: '/ctapi/v2/statisticsanalysis/query_qps_data' },
   { methodName: 'StatisticsanalysisQueryRequestNumData', api: 'statisticsanalysisQueryRequestNumData', httpMethod: 'POST', path: '/ctapi/v2/statisticsanalysis/query_request_num_data' },
+  { methodName: 'VerifyDomainOwnershipContent', api: 'verifyDomainOwnershipContent', httpMethod: 'GET', path: '/ctapi/v1/verify_domain_ownership/verify_content' },
 ];
 
 export const METHOD_INVOKE_READ_ONLY_API_FULL = `${SERVICE_PACKAGE}/InvokeReadOnlyApi`;

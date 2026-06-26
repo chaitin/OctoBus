@@ -32,6 +32,7 @@ service CTYun_DDoSCloud {
   rpc StatisticsanalysisQueryPeakBandwidthData(CTYunRequest) returns (CTYunResponse) {}
   rpc StatisticsanalysisQueryQpsData(CTYunRequest) returns (CTYunResponse) {}
   rpc StatisticsanalysisQueryRequestNumData(CTYunRequest) returns (CTYunResponse) {}
+  rpc VerifyDomainOwnershipContent(CTYunRequest) returns (CTYunResponse) {}
   rpc InvokeReadOnlyApi(InvokeReadOnlyApiRequest) returns (CTYunResponse) {}
 }
 

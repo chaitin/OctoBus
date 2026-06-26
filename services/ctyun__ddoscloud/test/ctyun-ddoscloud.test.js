@@ -87,6 +87,7 @@ test('validates required credentials and supported read-only APIs', () => {
   assert.throws(() => _test.validateBindings({ ak: 'id' }), /secretAccessKey/);
   assert.equal(_test.validateApiSpec('domainQuery').path, '/ctapi/v2/domain/query');
   assert.equal(_test.validateApiSpec('getDdosAttackTrend').httpMethod, 'POST');
+  assert.equal(_test.validateApiSpec('verifyDomainOwnershipContent').path, '/ctapi/v1/verify_domain_ownership/verify_content');
   assert.throws(() => _test.validateApiSpec('domainAdd'), /unsupported/);
   assert.throws(() => _test.validateApiSpec('deletePort'), /unsupported/);
   assert.throws(() => _test.validateApiSpec('topDomain'), /unsupported/);
