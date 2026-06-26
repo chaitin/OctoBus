@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "host": {
+      "type": "string",
+      "description": "TopSec WAF base URL with https scheme, e.g. https://192.168.1.254:8443"
+    },
+    "endpoint": {
+      "type": "string",
+      "description": "Alias for host."
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "Legacy alias for host."
+    },
+    "base_url": {
+      "type": "string",
+      "description": "Legacy alias for host."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "timeout_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Legacy alias for timeoutMs."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for private WAF deployments."
+    },
+    "skip_tls_verify": {
+      "type": "boolean",
+      "description": "Legacy alias for skipTlsVerify."
+    },
+    "insecureSkipVerify": {
+      "type": "boolean",
+      "description": "Legacy alias for skipTlsVerify."
+    }
+  }
+}

@@ -1,0 +1,119 @@
+syntax = "proto3";
+
+package TopSec_WAF;
+
+option go_package = "miner/grpc-service/TopSec_WAF";
+
+service TopSec_WAF {
+  rpc AddBlacklistIP(AddBlacklistIPRequest) returns (AddBlacklistIPResponse) {}
+  rpc DeleteBlacklistIP(DeleteBlacklistIPRequest) returns (DeleteBlacklistIPResponse) {}
+  rpc ListBlacklistIPs(ListBlacklistIPsRequest) returns (ListBlacklistIPsResponse) {}
+  rpc AddUrlBlock(AddUrlBlockRequest) returns (AddUrlBlockResponse) {}
+  rpc DeleteUrlBlock(DeleteUrlBlockRequest) returns (DeleteUrlBlockResponse) {}
+  rpc ListUrlBlocks(ListUrlBlocksRequest) returns (ListUrlBlocksResponse) {}
+  rpc SetUrlBlockStatus(SetUrlBlockStatusRequest) returns (SetUrlBlockStatusResponse) {}
+}
+
+message AddBlacklistIPRequest {
+  // 黑名单组名称
+  string name = 1;
+  // IP 地址列表，格式为 "IP,black" 或 "IP/掩码,black"，如 "192.168.1.1,black"
+  repeated string ip_addresses = 2;
+}
+
+message AddBlacklistIPResponse {
+  string result = 1;
+  string info = 2;
+}
+
+message DeleteBlacklistIPRequest {
+  // 要删除的黑名单组名称
+  string name = 1;
+}
+
+message DeleteBlacklistIPResponse {
+  string result = 1;
+  string info = 2;
+}
+
+message ListBlacklistIPsRequest {
+  // 可选，按名称过滤；为空则列出全部
+  string name = 1;
+  // 页码，从 1 开始，默认 1
+  int32 page = 2;
+  // 每页条数，默认 20
+  int32 rows = 3;
+}
+
+message IPGroupEntry {
+  string name = 1;
+  string group_value = 2;
+  string ip_group_members = 3;
+  string m_type = 4;
+}
+
+message ListBlacklistIPsResponse {
+  repeated IPGroupEntry rows = 1;
+  string total = 2;
+}
+
+message AddUrlBlockRequest {
+  string security_policy = 1;
+  string name = 2;
+  string url = 3;
+  string operator = 4;
+  string action = 5;
+  string phase = 6;
+  string log_message = 7;
+  string action_data = 8;
+}
+
+message AddUrlBlockResponse {
+  string result = 1;
+  string info = 2;
+}
+
+message DeleteUrlBlockRequest {
+  string security_policy = 1;
+  string name = 2;
+}
+
+message DeleteUrlBlockResponse {
+  string result = 1;
+  string info = 2;
+}
+
+message ListUrlBlocksRequest {
+  string security_policy = 1;
+  string name = 2;
+  // 页码，从 1 开始，默认 1
+  int32 page = 3;
+  // 每页条数，默认 20
+  int32 rows = 4;
+}
+
+message UrlBlockEntry {
+  string id = 1;
+  string name = 2;
+  string action = 3;
+  string enable = 4;
+  string phase = 5;
+  string log_message = 6;
+  string conditions = 7;
+}
+
+message ListUrlBlocksResponse {
+  repeated UrlBlockEntry rows = 1;
+  string total = 2;
+}
+
+message SetUrlBlockStatusRequest {
+  string security_policy = 1;
+  string name = 2;
+  string enable = 3;
+}
+
+message SetUrlBlockStatusResponse {
+  string result = 1;
+  string info = 2;
+}

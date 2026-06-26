@@ -6,6 +6,12 @@
   <a href="https://github.com/chaitin/OctoBus/actions/workflows/ci.yml">
     <img src="https://github.com/chaitin/OctoBus/actions/workflows/ci.yml/badge.svg?branch=main" alt="ci">
   </a>
+  <a href="./CONTRIBUTING.md">
+    <img src="https://img.shields.io/badge/Contributing-Guide-blue" alt="contributing">
+  </a>
+  <a href="./SECURITY.md">
+    <img src="https://img.shields.io/badge/Security-Feedback-blue" alt="security">
+  </a>
 </p>
 
 ---
@@ -200,7 +206,7 @@ curl -X POST \
 
 Additional notes:
 
-- In addition to local directories, `service import` supports `.tgz`, `.zip`, `npm:` sources, and HTTPS Git sources. Every source can append `//service-dir` to select a service root inside the distribution package, for example `npm:@scope/tentacle@1.0.0//Hanqing_Ticket` or `https://github.com/acme/tentacle.git//Hanqing_Ticket@v1.0.0`. See `./bin/octobus service import --help` for offline import, forced dependency reinstall, and other options.
+- In addition to local directories, `service import` supports local and remote HTTP(S) `.tgz` / `.tar.gz` / `.zip` archives, `npm:` sources, and HTTPS Git sources. Package sources except remote HTTP(S) archive URLs can append `//service-dir` to select a service root inside the distribution package, for example `npm:@scope/tentacle@1.0.0//Hanqing_Ticket` or `https://github.com/acme/tentacle.git//Hanqing_Ticket@v1.0.0`. Remote archive URLs use the package root as the service root; use recursive import for multi-service archives. See `./bin/octobus service import --help` for offline import, forced dependency reinstall, and other options.
 - Use `service import --recursive SOURCE` to import every service root discovered in a multi-service distribution package, for example `./bin/octobus service import --recursive npm:@chaitin-ai/octobus-tentacles`. In recursive mode, `SOURCE//some-dir` limits discovery to that scan root while still importing each discovered service with the id from its `service.json.name`.
 - `instance` supports `list/get/update/delete/update-config/update-secret/start/stop/restart`. For `long-running` services, `create` starts the instance by default. Config can come from `--config`, `--config-json`, or stdin; secrets can come from `--secret`, `--secret-json`, or stdin.
 - `on-demand` instances keep the logical `enabled/running` state, but `start/stop/restart` and config updates with `--restart` return an error because the runtime mode does not support persistent runtime control.
@@ -488,3 +494,9 @@ go test ./tests/e2e -count=1
 End-to-end tests build the real `octobus` binary, start a real daemon, call the admin API through the CLI, and then verify the gRPC, Connect RPC, MCP, OpenAPI, and reflection endpoints.
 
 The default GitHub Actions CI is a lightweight validation: it checks public traces, Go formatting and vet, runs `go test ./cmd/... ./internal/...`, builds the binary, checks the OctoBus npm binary packages, and runs npm test/build/pack dry-run under `sdk`. Full `task test` and e2e remain local gates. OctoBus binary package publishing is triggered only by `v<version>` tag push builds, and the tag version must match `npm/octobus/package.json.version`. SDK publishing is triggered only by `sdk-v<version>` tag push builds, and the tag version must match `sdk/package.json.version`. Both npm publishing paths require the repository secret `NPM_TOKEN`.
+
+## Security And Compliance
+
+If you believe this repository contains a security vulnerability, infringing content, or another compliance risk, please report it privately to `octobus-opensource@chaitin.com`.
+
+For the full reporting process and required details, see [SECURITY.md](SECURITY.md).
