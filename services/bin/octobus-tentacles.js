@@ -153,6 +153,10 @@ const services = {
     entryFile: "../threatbook__onesig/bin/threatbook-onesig.js",
     serviceModule: "../threatbook__onesig/src/service.js",
   },
+  "threatbook-onesig-policy-api": {
+    entryFile: "../threatbook__onesig-policy-api/bin/threatbook-onesig-policy-api.js",
+    serviceModule: "../threatbook__onesig-policy-api/src/service.js",
+  },
   "threatbook-tdp": {
     entryFile: "../threatbook__tdp/bin/threatbook-tdp.js",
     serviceModule: "../threatbook__tdp/src/service.js",

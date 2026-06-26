@@ -1,0 +1,19 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "threatbook-onesig-policy-api",
+  "displayName": "ThreatBook OneSIG Policy API",
+  "description": "ThreatBook OneSIG policy API wrapper for selected asset, whitelist, blacklist, and HTTP blacklist operations.",
+  "runtime": {
+    "mode": "on-demand"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/threatbook_onesig_policy_api.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json"
+}

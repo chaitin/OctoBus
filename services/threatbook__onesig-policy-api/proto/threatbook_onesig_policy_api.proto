@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package threatbook.onesig.policy.v1;
+
+service OneSigPolicyService {
+  rpc ListAssetGroups(QueryRequest) returns (ApiResponse);
+  rpc ListAssets(JsonPayloadRequest) returns (ApiResponse);
+  rpc ListGlobalWhitelist(QueryRequest) returns (ApiResponse);
+  rpc ListGlobalBlacklist(QueryRequest) returns (ApiResponse);
+  rpc CreateGlobalBlacklist(JsonPayloadRequest) returns (ApiResponse);
+  rpc ListHttpBlacklist(QueryRequest) returns (ApiResponse);
+  rpc CreateHttpBlacklist(JsonPayloadRequest) returns (ApiResponse);
+}
+
+message QueryRequest {
+  map<string, string> query = 1;
+}
+
+message JsonPayloadRequest {
+  string payload_json = 1 [json_name = "payloadJson"];
+  map<string, string> query = 2;
+}
+
+message ApiResponse {
+  uint32 status = 1;
+  string message = 2;
+  string body = 3;
+}
