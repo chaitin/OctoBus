@@ -274,3 +274,30 @@ test('maps Volcengine and transport errors', async () => {
     (err) => assert.match(err.message, /timed out after 5ms/),
   );
 });
+
+test('handler accepts OctoBus SDK single-argument context', async () => {
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url: String(url), init };
+    return response(200, { ResponseMetadata: { RequestId: 'req-sdk' }, Result: { Total: 0 } });
+  });
+
+  await handlers[`${SERVICE_PACKAGE}/AdvDefenceDescInstanceList`]({
+    request: {
+      payload: { fields: { Page: { numberValue: 1 }, PageSize: { numberValue: 5 } } },
+    },
+    config: { region: 'cn-shanghai' },
+    secret: {
+      accessKeyId: 'SDKID',
+      secretAccessKey: 'SDKKEY',
+    },
+    limits: { timeoutMs: 10_000 },
+    meta: { date: new Date('2024-01-16T08:00:00Z') },
+  });
+
+  const url = new URL(captured.url);
+  assert.equal(url.searchParams.get('Action'), 'DescInstanceList');
+  assert.equal(url.searchParams.get('PageSize'), '5');
+  assert.match(captured.init.headers.Authorization, /^HMAC-SHA256 Credential=SDKID\//);
+  assert.match(captured.init.headers.Authorization, /\/cn-shanghai\/AdvDefence\/request,/);
+});
