@@ -55,16 +55,6 @@
       "type": "boolean",
       "default": false,
       "description": "Alias for allowAllReadOnlyActions."
-    },
-    "skipTlsVerify": {
-      "type": "boolean",
-      "default": false,
-      "description": "Skip TLS certificate verification for private endpoints."
-    },
-    "tlsInsecureSkipVerify": {
-      "type": "boolean",
-      "default": false,
-      "description": "Alias for skipTlsVerify."
     }
   }
 }

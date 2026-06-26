@@ -197,7 +197,7 @@ test('Tencent Cloud API errors and HTTP failures map to gRPC-style errors', asyn
   );
 });
 
-test('config aliases, language, temporary token, TLS flags, and Struct inputs are supported', async () => {
+test('config aliases, language, temporary token, and Struct inputs are supported', async () => {
   let captured;
   mockJSON((url, init) => {
     captured = { url, init, body: JSON.parse(init.body) };
@@ -224,7 +224,6 @@ test('config aliases, language, temporary token, TLS flags, and Struct inputs ar
   }, buildCtx({
     config: {
       host: 'https://dsgc.tencentcloudapi.com/',
-      skipTlsVerify: true,
       language: 'zh-CN',
       headers: { 'X-Extra': 'demo' },
     },
@@ -239,12 +238,27 @@ test('config aliases, language, temporary token, TLS flags, and Struct inputs ar
   assert.equal(captured.init.headers['X-TC-Token'], 'SESSION');
   assert.equal(captured.init.headers['X-TC-Language'], 'zh-CN');
   assert.equal(captured.init.headers['X-Extra'], 'demo');
-  assert.equal(captured.init.skipTlsVerify, true);
-  assert.equal(captured.init.tlsInsecureSkipVerify, true);
-  assert.equal(captured.init.insecureSkipVerify, true);
+  assert.equal(Object.hasOwn(captured.init, 'skipTlsVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'tlsInsecureSkipVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'insecureSkipVerify'), false);
   assert.deepEqual(captured.body, {
     Filters: [{ Name: 'DspaId', Values: ['dspa-abcd'] }],
   });
+});
+
+test('configuration validation rejects unsupported TLS bypass flags', async () => {
+  await assert.rejects(
+    () => handlers[METHOD_DESCRIBE_ASSET_OVERVIEW]({}, buildCtx({ config: { skipTlsVerify: true } })),
+    /TLS certificate verification bypass is not supported/,
+  );
+  await assert.rejects(
+    () => handlers[METHOD_DESCRIBE_ASSET_OVERVIEW]({}, buildCtx({ bindings: { tlsInsecureSkipVerify: true } })),
+    /TLS certificate verification bypass is not supported/,
+  );
+  assert.throws(
+    () => _test.assertSupportedTlsConfig({ insecureSkipVerify: 'yes' }),
+    /TLS certificate verification bypass is not supported/,
+  );
 });
 
 test('configuration validation rejects missing endpoint and credentials', async () => {
