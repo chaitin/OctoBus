@@ -176,9 +176,6 @@ const callMisp = async (ctx, method, path, body, queryParams) => {
   };
 
   const skipVerify = toBoolean(bindings.skipTlsVerify) || toBoolean(bindings.tlsInsecureSkipVerify);
-  // OctoBus runtime wraps globalThis.fetch to recognize insecureSkipVerify/tlsInsecureSkipVerify
-  // as TLS skip options. Standard Node.js fetch (undici) silently ignores these, so when running
-  // outside OctoBus (e.g. direct node invocation), set NODE_TLS_REJECT_UNAUTHORIZED=0 instead.
   const tlsOptions = skipVerify ? { insecureSkipVerify: true, tlsInsecureSkipVerify: true } : {};
 
   logFlow(meta, method + ':start', { path, body: body ? '(body)' : undefined });
@@ -396,15 +393,52 @@ export function rpcdef(ctx = {}) {
   };
 }
 
-// ── SDK handlers (two-arg style) ───────────────────────────
+// ── SDK handlers (single-ctx style, compatible with OctoBus SDK) ─
+
+const mergeSdkCtx = (baseCtx, innerCtx) => ({
+  ...(baseCtx ?? {}),
+  ...(innerCtx ?? {}),
+  bindings: { ...(baseCtx?.bindings ?? {}), ...(innerCtx?.bindings ?? {}) },
+  config: { ...(baseCtx?.config ?? {}), ...(innerCtx?.config ?? {}) },
+  secret: { ...(baseCtx?.secret ?? {}), ...(innerCtx?.secret ?? {}) },
+  limits: innerCtx?.limits ?? baseCtx?.limits ?? {},
+  meta: innerCtx?.meta ?? baseCtx?.meta ?? {},
+  metadata: innerCtx?.metadata ?? baseCtx?.metadata ?? {},
+  getMetadata: innerCtx?.getMetadata ?? baseCtx?.getMetadata,
+});
+
+const resolveSdkCallContext = (baseCtx, reqOrCtx, maybeInnerCtx) => {
+  if (maybeInnerCtx !== undefined) {
+    return { req: reqOrCtx ?? {}, ctx: mergeSdkCtx(baseCtx, maybeInnerCtx) };
+  }
+  const innerCtx = reqOrCtx ?? {};
+  return {
+    req: innerCtx.request ?? innerCtx.req ?? {},
+    ctx: mergeSdkCtx(baseCtx, innerCtx),
+  };
+};
+
+const wrapLegacyHandler = (baseCtx, methodFn) => async (reqOrCtx, maybeInnerCtx) => {
+  const call = resolveSdkCallContext(baseCtx, reqOrCtx, maybeInnerCtx);
+  const legacyCtx = { ...call.ctx, req: call.req };
+  return methodFn(call.req, legacyCtx);
+};
+
+const sdkHandlers = {};
+sdkHandlers[SEARCH_EVENTS_FULL] = wrapLegacyHandler({}, searchEvents);
+sdkHandlers[GET_EVENT_FULL] = wrapLegacyHandler({}, getEvent);
+sdkHandlers[CREATE_EVENT_FULL] = wrapLegacyHandler({}, createEvent);
+sdkHandlers[SEARCH_ATTRIBUTES_FULL] = wrapLegacyHandler({}, searchAttributes);
+sdkHandlers[ADD_ATTRIBUTE_FULL] = wrapLegacyHandler({}, addAttribute);
+sdkHandlers[SEARCH_TAGS_FULL] = wrapLegacyHandler({}, searchTags);
 
 export const handlers = {
-  [SEARCH_EVENTS_FULL]: (req, ctx = {}) => searchEvents(req, ctx),
-  [GET_EVENT_FULL]: (req, ctx = {}) => getEvent(req, ctx),
-  [CREATE_EVENT_FULL]: (req, ctx = {}) => createEvent(req, ctx),
-  [SEARCH_ATTRIBUTES_FULL]: (req, ctx = {}) => searchAttributes(req, ctx),
-  [ADD_ATTRIBUTE_FULL]: (req, ctx = {}) => addAttribute(req, ctx),
-  [SEARCH_TAGS_FULL]: (req, ctx = {}) => searchTags(req, ctx),
+  [SEARCH_EVENTS_FULL]: (ctx) => sdkHandlers[SEARCH_EVENTS_FULL](ctx),
+  [GET_EVENT_FULL]: (ctx) => sdkHandlers[GET_EVENT_FULL](ctx),
+  [CREATE_EVENT_FULL]: (ctx) => sdkHandlers[CREATE_EVENT_FULL](ctx),
+  [SEARCH_ATTRIBUTES_FULL]: (ctx) => sdkHandlers[SEARCH_ATTRIBUTES_FULL](ctx),
+  [ADD_ATTRIBUTE_FULL]: (ctx) => sdkHandlers[ADD_ATTRIBUTE_FULL](ctx),
+  [SEARCH_TAGS_FULL]: (ctx) => sdkHandlers[SEARCH_TAGS_FULL](ctx),
 };
 
 // ── Test exports ───────────────────────────────────────────
