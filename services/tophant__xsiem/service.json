@@ -1,0 +1,1 @@
+{"schema":"chaitin.octobus.service.v1","name":"tophant-xsiem","displayName":"斗象科技-XSIEM 元数据融合安全管理平台-v1.28","description":"斗象科技 XSIEM 元数据融合安全管理平台 REST API wrapper — 告警查询/详情/聚合统计/状态更新、设备与采集器管理","runtime":{"mode":"on-demand"},"proto":{"roots":["proto"],"files":["proto/xsiem.proto"]},"configSchema":"config.schema.json","secretSchema":"secret.schema.json"}
