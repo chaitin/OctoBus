@@ -87,6 +87,8 @@ test('validates credentials and read-only API names', () => {
   assert.throws(() => _test.validateBindings({ ak: 'id' }), /secretAccessKey/);
   assert.equal(_test.validateApiSpec('untreatedRisk').path, '/v1/index/untreated');
   assert.equal(_test.validateApiSpec('hostList').httpMethod, 'POST');
+  assert.equal(_test.validateApiSpec('getAgentKey').path, '/v1/host/getAgentKey');
+  assert.equal(_test.validateApiSpec('scaCheckWhiteList').path, '/v1/sca/check/whiteList/*/*');
   assert.throws(() => _test.validateApiSpec('openStatus'), /unsupported/);
   assert.throws(() => _test.validateApiSpec('v1hostdelete'), /unsupported/);
   assert.throws(() => _test.validateApiSpec('quotaList'), /unsupported/);
