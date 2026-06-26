@@ -5,7 +5,6 @@
 // Endpoint: bh.tencentcloudapi.com
 
 import crypto from 'node:crypto';
-import https from 'node:https';
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
 // ── Constants ──────────────────────────────────────────────
@@ -240,7 +239,7 @@ const callAction = async (ctx, action, params) => {
   };
 
   const skipVerify = toBoolean(bindings.skipTlsVerify) || toBoolean(bindings.tlsInsecureSkipVerify);
-  const agent = skipVerify ? new https.Agent({ rejectUnauthorized: false }) : undefined;
+  const tlsOptions = skipVerify ? { insecureSkipVerify: true, tlsInsecureSkipVerify: true } : {};
 
   logFlow(meta, `${action}:start`, { region, endpoint });
 
@@ -250,8 +249,8 @@ const callAction = async (ctx, action, params) => {
       method: 'POST',
       headers: requestHeaders,
       body: signed.body,
+      ...tlsOptions,
       signal: AbortSignal.timeout(timeoutMs),
-      agent,
     });
   } catch (err) {
     const isTimeout = err?.name === 'TimeoutError' || err?.name === 'AbortError';
