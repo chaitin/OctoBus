@@ -1,0 +1,61 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "ctyun-accessone",
+  "displayName": "Ctyun AccessOne (ESA)",
+  "description": "OctoBus package for 天翼云 AccessOne 边缘安全加速平台 — 8只读查询 + 2写 (新增访问控制规则 / 域名级开关启停) via CTAPI EOP signing. 覆盖6个产品域.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/ctyun_accessone.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Ctyun_AccessOne.Ctyun_AccessOne/QueryDomainList": {
+          "name": "query-domain-list",
+          "description": "查询域名列表及基础信息。支持按产品类型/状态/加速范围过滤。"
+        },
+        "Ctyun_AccessOne.Ctyun_AccessOne/QueryServiceDetail": {
+          "name": "query-service-detail",
+          "description": "查询账号下开通的 AccessOne 服务基本信息。"
+        },
+        "Ctyun_AccessOne.Ctyun_AccessOne/QueryDomainRuleAct": {
+          "name": "query-domain-rule-act",
+          "description": "查询指定域名的防护规则引擎总开关状态。"
+        },
+        "Ctyun_AccessOne.Ctyun_AccessOne/QueryDomainRuleConfig": {
+          "name": "query-domain-rule-config",
+          "description": "查询指定域名的防护规则引擎配置详情。"
+        },
+        "Ctyun_AccessOne.Ctyun_AccessOne/QueryWafConfig": {
+          "name": "query-waf-config",
+          "description": "查询指定域名的 Web 应用防火墙基础配置。"
+        },
+        "Ctyun_AccessOne.Ctyun_AccessOne/QueryAccessControlSwitch": {
+          "name": "query-access-control-switch",
+          "description": "查询指定域名的访问控制/限流总开关状态。"
+        },
+        "Ctyun_AccessOne.Ctyun_AccessOne/InsertAccessControl": {
+          "name": "insert-access-control",
+          "description": "[写] 新增域名访问控制/限流规则。支持批量 (domains≤50, configs≤20)。需 AKSK 具备 scdn/domain 权限。"
+        },
+        "Ctyun_AccessOne.Ctyun_AccessOne/UpdateAccessControlSwitch": {
+          "name": "update-access-control-switch",
+          "description": "[写] 开启或关闭域名级访问控制总开关 (mod=ON 开启, mod=CLOSE 关闭)。"
+        },
+        "Ctyun_AccessOne.Ctyun_AccessOne/QueryResourcePackages": {
+          "name": "query-resource-packages",
+          "description": "查询安全与加速资源包列表。"
+        },
+        "Ctyun_AccessOne.Ctyun_AccessOne/QueryIPv6NoSupLink": {
+          "name": "query-ipv6-nosup-link",
+          "description": "查询指定 IPv6 检测任务中不支持的链接详情。需要提供检测任务 ID。"
+        }
+      }
+    }
+  }
+}
