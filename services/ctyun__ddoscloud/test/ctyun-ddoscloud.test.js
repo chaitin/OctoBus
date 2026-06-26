@@ -314,3 +314,33 @@ test('handler accepts OctoBus SDK single-argument context', async () => {
   assert.equal(url.searchParams.get('page_size'), '5');
   assert.match(captured.init.headers['Eop-Authorization'], /^SDKAK Headers=ctyun-eop-request-id;eop-date Signature=/);
 });
+
+test('InvokeReadOnlyApi accepts OctoBus SDK single-argument context', async () => {
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url: String(url), init };
+    return response(200, { statusCode: 100000, returnObj: { result: [] } });
+  });
+
+  await handlers[METHOD_INVOKE_READ_ONLY_API_FULL]({
+    request: {
+      api: 'certList',
+      payload: { fields: { page: { numberValue: 1 }, per_page: { numberValue: 20 } } },
+    },
+    config: {},
+    secret: {
+      accessKeyId: 'SDKAK',
+      secretAccessKey: 'SDKSK',
+    },
+    limits: { timeoutMs: 10_000 },
+    meta: {
+      date: new Date('2024-01-16T08:00:00Z'),
+      request_id: '27cfe4dc-e640-45f6-92ca-492ca73e8680',
+    },
+  });
+
+  const url = new URL(captured.url);
+  assert.equal(url.pathname, '/ctapi/v1/cert/list');
+  assert.equal(url.searchParams.get('per_page'), '20');
+  assert.match(captured.init.headers['Eop-Authorization'], /^SDKAK Headers=ctyun-eop-request-id;eop-date Signature=/);
+});
