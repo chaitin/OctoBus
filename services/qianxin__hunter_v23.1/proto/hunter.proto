@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+package qianxin.hunter.v1;
+
+import "google/protobuf/wrappers.proto";
+
+option go_package = "miner/grpc-service/qianxin_hunter_v1";
+
+service HunterService {
+  // Search the Hunter network space engine with query syntax.
+  // Supports IP lookup, domain search, component identification, certificate search,
+  // geo filtering, and combined logical expressions.
+  rpc Search(SearchRequest) returns (SearchResponse) {}
+}
+
+message SearchRequest {
+  // Hunter search query string (required).
+  // Syntax: field="value", supports = (fuzzy), == (exact), != (fuzzy exclude), !== (exact exclude).
+  // Logical operators: && (AND), || (OR).
+  // Example: domain="example.com" && port="443"
+  string query = 1;
+
+  // Page number, starting from 1. Default: 1.
+  google.protobuf.Int32Value page = 2;
+
+  // Results per page. Valid values: 10, 50, 100. Default: 10.
+  google.protobuf.Int32Value page_size = 3;
+
+  // Asset type filter:
+  //   1 = web assets only
+  //   2 = non-web assets only
+  //   3 = all assets (default)
+  google.protobuf.Int32Value is_web = 4;
+
+  // Filter by HTTP status codes, comma-separated. Example: "200,301".
+  string status_code = 5;
+
+  // Comma-separated list of fields to return.
+  // Available: ip, port, domain, url, web_title, protocol, status_code, os, company,
+  // country, province, city, isp, as_org, cert_sha256, component, header, banner, updated_at.
+  // When empty, all fields are returned.
+  string fields = 6;
+
+  // Start time in YYYY-MM-DD format. Queries beyond 30 days consume extra credits.
+  string start_time = 7;
+
+  // End time in YYYY-MM-DD format.
+  string end_time = 8;
+}
+
+// A single search result from Hunter.
+message SearchResult {
+  string ip = 1;
+  int32 port = 2;
+  string domain = 3;
+  string url = 4;
+  string web_title = 5;
+  string protocol = 6;
+  int32 status_code = 7;
+  string os = 8;
+  string company = 9;
+  string country = 10;
+  string province = 11;
+  string city = 12;
+  string isp = 13;
+  string as_org = 14;
+  string cert_sha256 = 15;
+  string component = 16;
+  string header = 17;
+  string banner = 18;
+  string updated_at = 19;
+  // Raw JSON object for fields not covered above.
+  string raw_json = 20;
+}
+
+message SearchResponse {
+  // Array of search results.
+  repeated SearchResult results = 1;
+
+  // Total number of results available.
+  int32 total = 2;
+
+  // Current page number.
+  int32 page = 3;
+
+  // Results per page.
+  int32 page_size = 4;
+
+  // Total available pages.
+  int32 total_pages = 5;
+
+  // Whether the query consumed extra credits (beyond 30-day range).
+  bool extra_credits_consumed = 6;
+
+  // Error message from upstream, if any.
+  string error = 7;
+}
