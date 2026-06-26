@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "endpoint": {
+      "type": "string",
+      "default": "https://api.cloudflare.com/client/v4",
+      "description": "Cloudflare API base URL. Defaults to https://api.cloudflare.com/client/v4."
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "Legacy alias for endpoint."
+    },
+    "zoneId": {
+      "type": "string",
+      "description": "Default Cloudflare Zone ID used when a request omits zone_id."
+    },
+    "accountId": {
+      "type": "string",
+      "description": "Default Cloudflare Account ID used for account-scoped access rules when a request omits account_id."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional extra HTTP headers sent to Cloudflare."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1500,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification (only for private/proxied gateways; not recommended for api.cloudflare.com)."
+    }
+  }
+}

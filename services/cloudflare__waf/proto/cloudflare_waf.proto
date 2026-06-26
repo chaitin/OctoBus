@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+package Cloudflare_WAF;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
+
+option go_package = "miner/grpc-service/Cloudflare_WAF";
+
+service Cloudflare_WAF {
+  // 封禁 IP：在 IP Access Rules 中创建 mode=block 规则；已存在相同 target+mode 的规则则幂等返回，不重复创建
+  rpc BlockIP(BlockIPRequest) returns (BlockIPResponse) {}
+
+  // 解封 IP：查找该 IP 对应的 Access Rule 并删除；未找到视为已解封（幂等，deleted_count=0）
+  rpc UnblockIP(UnblockIPRequest) returns (UnblockIPResponse) {}
+
+  // 查询 IP Access Rules，支持按 IP/模式过滤与分页
+  rpc ListAccessRules(ListAccessRulesRequest) returns (ListAccessRulesResponse) {}
+
+  // 查询 Zone 安全等级（security_level）
+  rpc GetSecurityLevel(GetSecurityLevelRequest) returns (GetSecurityLevelResponse) {}
+
+  // 设置 Zone 安全等级（幂等：重复设置同一值无副作用）
+  rpc SetSecurityLevel(SetSecurityLevelRequest) returns (SetSecurityLevelResponse) {}
+}
+
+// 单条 IP Access Rule 的统一映射
+message AccessRule {
+  string id = 1;     // 规则 ID
+  string mode = 2;   // 规则模式：block / challenge / whitelist / js_challenge / managed_challenge
+  string target = 3; // 匹配目标类型：ip / ip_range / asn / country
+  string value = 4;  // 匹配值，例如 1.2.3.4 或 1.2.3.0/24
+  string notes = 5;  // 备注
+  string scope = 6;  // 作用域：zone 或 account
+}
+
+message BlockIPRequest {
+  string zone_id = 1;             // Zone ID，可选；缺省时使用配置中的 zoneId
+  string account_id = 2;          // Account ID，可选；提供则使用 account 维度（优先于 zone）
+  repeated string targets = 3;    // 待封禁的 IP/CIDR 列表，必填且非空
+  string mode = 4;                // 规则模式，可选，默认 block；允许 block/challenge/whitelist/js_challenge/managed_challenge
+  string notes = 5;               // 备注，可选，仅在创建新规则时写入
+}
+
+message BlockIPResponse {
+  repeated AccessRule rules = 1;  // 创建或已存在的规则列表，与 targets 一一对应
+  int64 created_count = 2;        // 实际新建的规则数（已存在的不计入）
+}
+
+message UnblockIPRequest {
+  string zone_id = 1;             // Zone ID，可选；缺省时使用配置中的 zoneId
+  string account_id = 2;          // Account ID，可选；提供则使用 account 维度（优先于 zone）
+  repeated string targets = 3;    // 待解封的 IP/CIDR 列表，必填且非空
+  string mode = 4;                // 可选，仅删除指定模式的规则；缺省删除匹配该 IP 的任意模式规则
+}
+
+message UnblockIPResponse {
+  repeated string deleted_ids = 1; // 实际删除的规则 ID 列表
+  int64 deleted_count = 2;         // 删除数量；0 表示无匹配（幂等）
+}
+
+message ListAccessRulesRequest {
+  string zone_id = 1;                       // Zone ID，可选；缺省时使用配置中的 zoneId
+  string account_id = 2;                    // Account ID，可选；提供则使用 account 维度
+  string value = 3;                         // 可选，按 IP/值精确匹配
+  string mode = 4;                          // 可选，按模式过滤
+  google.protobuf.Int64Value page = 5;      // 可选，页码，>=1
+  google.protobuf.Int64Value per_page = 6;  // 可选，每页条数，1~1000
+}
+
+message ListAccessRulesResponse {
+  repeated AccessRule rules = 1;  // 规则列表
+  int64 total_count = 2;          // Cloudflare result_info.total_count，可选
+}
+
+message GetSecurityLevelRequest {
+  string zone_id = 1; // Zone ID，可选；缺省时使用配置中的 zoneId
+}
+
+message GetSecurityLevelResponse {
+  string value = 1;              // off / essentially_off / low / medium / high / under_attack
+  google.protobuf.Struct raw = 2; // Cloudflare result 字段原样透传
+}
+
+message SetSecurityLevelRequest {
+  string zone_id = 1; // Zone ID，可选；缺省时使用配置中的 zoneId
+  string value = 2;   // 必填，安全等级：off/essentially_off/low/medium/high/under_attack
+}
+
+message SetSecurityLevelResponse {
+  string value = 1;              // 设置后的安全等级
+  google.protobuf.Struct raw = 2; // Cloudflare result 字段原样透传
+}
