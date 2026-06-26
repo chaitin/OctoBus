@@ -14,7 +14,8 @@ This package adapts Tencent Cloud Data Security Governance Center (DSGC) API 3.0
 - `headers`: optional extra HTTP headers.
 - `allowActions`: extra read-only `Describe*`, `List*`, or `Get*` actions allowed by `InvokeReadOnlyAction`.
 - `allowAllReadOnlyActions`: allow every `Describe*`, `List*`, or `Get*` action.
-- `skipTlsVerify` / `tlsInsecureSkipVerify`: TLS verification bypass for private endpoints.
+
+TLS certificate verification bypass is not supported by this Node.js fetch adapter.
 
 `secret.schema.json` accepts:
 
