@@ -47,7 +47,7 @@ const resolveBaseUrl = (bindings = {}) => normalizeBaseUrl(firstDefined(bindings
 const resolveUsername = (bindings = {}) => toTrimmedString(firstDefined(bindings.username, bindings.user));
 const resolvePassword = (bindings = {}) => toTrimmedString(firstDefined(bindings.password, bindings.passwd));
 const resolveTimeoutMs = (ctx = {}) => { const r = Number(firstDefined(ctx.limits?.timeoutMs, ctx.bindings?.timeoutMs, DEFAULT_TIMEOUT_MS)); return Number.isFinite(r) && r > 0 ? r : DEFAULT_TIMEOUT_MS; };
-const buildTlsOptions = (bindings = {}) => bindings.skipTlsVerify ? { skipTlsVerify: true } : {};
+const buildTlsOptions = (bindings = {}) => bindings.skipTlsVerify || bindings.tlsInsecureSkipVerify || bindings.insecureSkipVerify ? { skipTlsVerify: true } : {};
 
 const requireBaseUrl = (ctx = {}) => { const u = resolveBaseUrl(ctx.bindings || {}); if (!u) throw errorWithCode('INVALID_ARGUMENT', 'baseUrl is required'); return u; };
 const requireOrgId = (req = {}) => { const id = toTrimmedString(req.org_id); if (!id) throw errorWithCode('INVALID_ARGUMENT', 'org_id is required'); return id; };
