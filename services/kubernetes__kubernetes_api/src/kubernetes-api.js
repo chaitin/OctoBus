@@ -33,7 +33,7 @@ const mergedBindings = (ctx = {}) => ({ ...(ctx.config ?? {}), ...(ctx.secret ??
 const resolveCallContext = (ctx = {}) => ({ ...ctx, bindings: mergedBindings(ctx), limits: ctx.limits ?? {}, meta: ctx.meta ?? {}, req: ctx.req ?? ctx.request ?? {} });
 const resolveBaseUrl = (bindings = {}) => normalizeBaseUrl(firstDefined(bindings.baseUrl, bindings.domain, bindings.url));
 const resolveTimeoutMs = (ctx = {}) => { const r = Number(firstDefined(ctx.limits?.timeoutMs, ctx.bindings?.timeoutMs, DEFAULT_TIMEOUT_MS)); return Number.isFinite(r) && r > 0 ? r : DEFAULT_TIMEOUT_MS; };
-const buildTlsOptions = (bindings = {}) => { const opts = {}; if (bindings.skipTlsVerify) { opts.skipTlsVerify = true; } return opts; };
+const buildTlsOptions = (bindings = {}) => { const opts = {}; if (bindings.skipTlsVerify || bindings.tlsInsecureSkipVerify || bindings.insecureSkipVerify) { opts.skipTlsVerify = true; } return opts; };
 
 const requireBaseUrl = (ctx = {}) => { const u = resolveBaseUrl(ctx.bindings || {}); if (!u) throw errorWithCode('INVALID_ARGUMENT', 'baseUrl is required'); return u; };
 
