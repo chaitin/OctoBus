@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "description": "Proxmox VE API base URL (scheme + host[:port]), for example https://pve.example.com:8006."
+    },
+    "base_url": {
+      "type": "string",
+      "description": "Alias for baseUrl."
+    },
+    "host": {
+      "type": "string",
+      "description": "Legacy alias for baseUrl."
+    },
+    "restBaseUrl": {
+      "type": "string",
+      "description": "Alias for baseUrl."
+    },
+    "url": {
+      "type": "string",
+      "description": "Alias for baseUrl."
+    },
+    "defaultNode": {
+      "type": "string",
+      "description": "Default Proxmox node name when callers do not provide one in the request."
+    },
+    "default_node": {
+      "type": "string",
+      "description": "Alias for defaultNode."
+    },
+    "node": {
+      "type": "string",
+      "description": "Alias for defaultNode."
+    },
+    "allowInsecureHttp": {
+      "type": "boolean",
+      "default": false,
+      "description": "Allow plain HTTP baseUrl for Proxmox deployments without TLS."
+    },
+    "allow_insecure_http": {
+      "type": "boolean",
+      "default": false,
+      "description": "Alias for allowInsecureHttp."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for private deployments with self-signed certs."
+    },
+    "tlsInsecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Alias for skipTlsVerify."
+    },
+    "insecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Alias for skipTlsVerify."
+    },
+    "tls_skip_verify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Alias for skipTlsVerify."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "timeout_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Alias for timeoutMs."
+    },
+    "timeout": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Alias for timeoutMs."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional additional HTTP headers."
+    }
+  }
+}
