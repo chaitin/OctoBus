@@ -268,6 +268,7 @@ const invokeTencentCloud = async (action, payload, ctx = {}) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let res;
+  let body;
   try {
     res = await fetch(bindings.endpoint, {
       method: 'POST',
@@ -275,7 +276,9 @@ const invokeTencentCloud = async (action, payload, ctx = {}) => {
       body: payloadText,
       signal: controller.signal,
     });
+    body = await parseTencentResponse(res);
   } catch (err) {
+    if (err.legacyCode) throw err;
     if (err.name === 'AbortError' || err.name === 'TimeoutError') {
       throw errorWithCode('DEADLINE_EXCEEDED', `Tencent Cloud CSIP API request timed out after ${timeoutMs}ms`);
     }
@@ -283,8 +286,6 @@ const invokeTencentCloud = async (action, payload, ctx = {}) => {
   } finally {
     clearTimeout(timeout);
   }
-
-  const body = await parseTencentResponse(res);
   if (res.status < 200 || res.status >= 300) {
     throw errorWithCode('UNAVAILABLE', `Tencent Cloud CSIP API HTTP ${res.status}: ${JSON.stringify(safeErrorBody(body)).slice(0, 500)}`);
   }
