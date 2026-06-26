@@ -149,6 +149,10 @@ const services = {
     entryFile: "../topsec__fw_v3-7-6/bin/topsec-fw-v3-7-6.js",
     serviceModule: "../topsec__fw_v3-7-6/src/service.js",
   },
+  "venus-ips": {
+    entryFile: "../venus__ips/bin/venus-ips.js",
+    serviceModule: "../venus__ips/src/service.js",
+  },
   "venus-ads-v3-6": {
     entryFile: "../venus__ads_v3-6/bin/venus-ads-v3-6.js",
     serviceModule: "../venus__ads_v3-6/src/service.js",
