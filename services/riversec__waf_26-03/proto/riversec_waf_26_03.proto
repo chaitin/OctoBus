@@ -1,0 +1,549 @@
+syntax = "proto3";
+
+package Riversec_Botgate_WAF;
+
+option go_package = "miner/grpc-service/Riversec_Botgate_WAF";
+
+// Riversec Botgate / Safeplus dynamic protection system (REST API v1).
+
+// -----------------------------------------------------------
+// IP 黑名单管理服务
+// -----------------------------------------------------------
+service IPBlacklistService {
+  // 查询 IP 黑名单是否启用
+  rpc GetBlacklistStatus(GetBlacklistStatusRequest) returns (GetBlacklistStatusResponse);
+
+  // 启用/禁用 IP 黑名单
+  rpc SetBlacklistStatus(SetBlacklistStatusRequest) returns (SetBlacklistStatusResponse);
+
+  // 查询当前 IP 黑名单
+  rpc GetBlacklist(GetBlacklistRequest) returns (GetBlacklistResponse);
+
+  // 覆盖更新 IP 黑名单 (会用新列表完全替换旧列表)
+  rpc SetBlacklist(SetBlacklistRequest) returns (SetBlacklistResponse);
+
+  // 增量添加 IP 到黑名单 (追加模式，不影响已有条目)
+  rpc AddBlacklistItems(AddBlacklistItemsRequest) returns (AddBlacklistItemsResponse);
+
+  // 清空 IP 黑名单
+  rpc ClearBlacklist(ClearBlacklistRequest) returns (ClearBlacklistResponse);
+
+  // OctoBus convenience: incremental block via AddBlacklistItems
+  rpc BlockIP(BlockIPRequest) returns (BlockIPResponse);
+
+  // OctoBus convenience: remove IPs by rewriting blacklist
+  rpc UnblockIP(UnblockIPRequest) returns (UnblockIPResponse);
+}
+
+// -----------------------------------------------------------
+// 保护站点管理服务
+// -----------------------------------------------------------
+service ProtectedSiteService {
+  // 查询所有保护站点列表
+  rpc ListProtectedSites(ListProtectedSitesRequest) returns (ListProtectedSitesResponse);
+
+  // 新增保护站点
+  rpc CreateProtectedSite(CreateProtectedSiteRequest) returns (CreateProtectedSiteResponse);
+
+  // 查询指定保护站点详细配置
+  rpc GetProtectedSite(GetProtectedSiteRequest) returns (GetProtectedSiteResponse);
+
+  // 修改单个保护站点配置
+  rpc UpdateProtectedSite(UpdateProtectedSiteRequest) returns (UpdateProtectedSiteResponse);
+
+  // 删除指定保护站点
+  rpc DeleteProtectedSite(DeleteProtectedSiteRequest) returns (DeleteProtectedSiteResponse);
+
+  // 批量修改保护站点配置
+  rpc BatchUpdateProtectedSites(BatchUpdateProtectedSitesRequest) returns (BatchUpdateProtectedSitesResponse);
+}
+
+// -----------------------------------------------------------
+// 集群管理服务
+// -----------------------------------------------------------
+service ClusterService {
+  // 获取免密登录管理界面 URL (一次性，10秒有效)
+  rpc GetSSOToken(GetSSOTokenRequest) returns (GetSSOTokenResponse);
+
+  // 获取集群和节点信息
+  rpc GetClusterInfo(GetClusterInfoRequest) returns (GetClusterInfoResponse);
+
+  // 升级集群
+  rpc UpgradeCluster(UpgradeClusterRequest) returns (UpgradeClusterResponse);
+
+  // 回滚集群
+  rpc RollbackCluster(RollbackClusterRequest) returns (RollbackClusterResponse);
+}
+
+// -----------------------------------------------------------
+// 可编程对抗规则管理服务
+// -----------------------------------------------------------
+service ProgrammableRuleService {
+  // 查询可编程对抗规则编辑器是否启用
+  rpc GetEditorStatus(GetEditorStatusRequest) returns (GetEditorStatusResponse);
+
+  // 启用/禁用可编程对抗规则编辑器
+  rpc SetEditorStatus(SetEditorStatusRequest) returns (SetEditorStatusResponse);
+
+  // 更新 Web 高级对抗规则
+  rpc UpdateWebRule(UpdateWebRuleRequest) returns (UpdateWebRuleResponse);
+
+  // 更新 APP 高级对抗规则
+  rpc UpdateAppRule(UpdateAppRuleRequest) returns (UpdateAppRuleResponse);
+
+  // 查询指定规则是否启用
+  rpc GetRuleStatus(GetRuleStatusRequest) returns (GetRuleStatusResponse);
+
+  // 启用/禁用指定规则
+  rpc SetRuleStatus(SetRuleStatusRequest) returns (SetRuleStatusResponse);
+
+  // 上传资源文件
+  rpc UploadResourceFile(UploadResourceFileRequest) returns (UploadResourceFileResponse);
+}
+
+// -----------------------------------------------------------
+// API 资产管理服务
+// -----------------------------------------------------------
+service APIManagementService {
+  // 获取当前 API 列表
+  rpc ListAPIs(ListAPIsRequest) returns (ListAPIsResponse);
+
+  // 添加 API
+  rpc AddAPI(AddAPIRequest) returns (AddAPIResponse);
+
+  // 删除 API
+  rpc DeleteAPI(DeleteAPIRequest) returns (DeleteAPIResponse);
+
+  // 从 API 列表忽略 API
+  rpc IgnoreAPI(IgnoreAPIRequest) returns (IgnoreAPIResponse);
+
+  // 上/下线 API
+  rpc SetAPIOnlineStatus(SetAPIOnlineStatusRequest) returns (SetAPIOnlineStatusResponse);
+}
+
+// ============================================================
+// IP 黑名单消息定义
+// ============================================================
+
+message GetBlacklistStatusRequest {}
+
+message GetBlacklistStatusResponse {
+  string status = 1;  // "on" 或 "off"
+}
+
+message SetBlacklistStatusRequest {
+  string status = 1;  // "on"(启用) 或 "off"(禁用)
+}
+
+message SetBlacklistStatusResponse {}
+
+message GetBlacklistRequest {}
+
+message GetBlacklistResponse {
+  repeated string items = 1;  // IP/掩码条目列表
+}
+
+message SetBlacklistRequest {
+  // 覆盖更新：新列表完全替换旧黑名单，最大 100,000 条
+  repeated string items = 1;  // IP/掩码条目，支持 CIDR 表示法
+}
+
+message SetBlacklistResponse {}
+
+message AddBlacklistItemsRequest {
+  // 增量更新：追加到现有黑名单，总数不能超过 100,000 条
+  repeated string items = 1;
+}
+
+message AddBlacklistItemsResponse {
+  int32 added_number = 1;    // 本次添加成功数量
+  int32 total_number = 2;    // 黑名单总数量
+  repeated string invalid_ip = 3;  // 无效 IP 列表
+}
+
+message ClearBlacklistRequest {}
+
+message ClearBlacklistResponse {}
+
+message BlockIPRequest {
+  repeated string ip_list = 1;
+  string remark = 2;
+  int32 duration_seconds = 3;
+}
+
+message BlockIPResponse {
+  bool success = 1;
+  string message = 2;
+  repeated string blocked_ips = 3;
+  int32 added_number = 4;
+  int32 total_number = 5;
+  repeated string invalid_ip = 6;
+  string raw_json = 7;
+}
+
+message UnblockIPRequest {
+  repeated string ip_list = 1;
+}
+
+message UnblockIPResponse {
+  bool success = 1;
+  string message = 2;
+  repeated string unblocked_ips = 3;
+  string raw_json = 4;
+}
+
+// ============================================================
+// 保护站点消息定义
+// ============================================================
+
+message ListProtectedSitesRequest {}
+
+message ListProtectedSitesResponse {
+  repeated ProtectedSiteSummary sites = 1;
+}
+
+message ProtectedSiteSummary {
+  string id = 1;              // 站点 ID
+  string protocol = 2;        // http / https
+  int32 port = 3;             // 监听端口
+  string type = 4;            // domain / ipv4 / ipv6 / regex
+  string site = 5;            // 站点名称
+  string name = 6;            // 自定义名称
+  string protection_mode = 7; // intercept / monitor / passthrough
+  WAFStrategy waf_strategy = 8;
+}
+
+message WAFStrategy {
+  bool enable = 1;
+  bool monitor_only = 2;
+  string type = 3;  // basic / standard / strict / customized / unknown
+}
+
+message CreateProtectedSiteRequest {
+  string type = 1;              // domain / ipv4 / ipv6 / regex
+  string site = 2;              // 站点名称
+  string protocol = 3;          // http / https
+  int32 port = 4;               // 1~65535
+  string protection_mode = 5;   // intercept / monitor / passthrough
+  UpstreamConfig upstream = 6;
+  optional string name = 7;     // 自定义名称，最长26字符
+  optional string invalid_action = 8;       // reject / blank / redirect
+  optional string invalid_action_redirect_path = 9;
+  optional IPStrategy ip_strategy = 10;
+  optional WebEssentialStrategy web_essential_strategy = 11;
+  optional WebPowerStrategy web_power_strategy = 12;
+  optional WAFStrategyConfig waf_strategy = 13;
+  optional AIWAFStrategyConfig ai_waf_strategy = 14;
+  optional string static_resource_list = 15;
+}
+
+message UpstreamConfig {
+  string protocol = 1;  // http / https
+  repeated UpstreamServer upstream_list = 2;
+  string load_balance = 3;  // ip_hash / round_robin / cookie_sticky
+  HealthCheckConfig health_check = 4;
+}
+
+message UpstreamServer {
+  bool enable = 1;
+  string ip = 2;
+  int32 port = 3;
+}
+
+message HealthCheckConfig {
+  string type = 1;       // disable / tcp / http
+  int32 interval = 2;    // 秒
+  int32 retry_times = 3;
+  int32 timeout = 4;     // 秒
+}
+
+message IPStrategy {
+  string type = 1;  // all_ip / ip_white_list / ip_protection_list
+  repeated IPRange ip_white_list = 2;
+  repeated IPRange ip_protection_list = 3;
+}
+
+message IPRange {
+  string ip = 1;
+  string mask = 2;
+  string comments = 3;
+  string format = 4;  // mask / segment
+}
+
+message WebEssentialStrategy {
+  bool enable = 1;
+  bool automated_tool_interception = 2;
+  bool crack_behavior_interception = 3;
+  bool prevent_scanner = 4;
+  repeated WhitelistEntry request_white_list = 5;
+  repeated ResponseWhitelistEntry response_white_list = 6;
+}
+
+message WhitelistEntry {
+  string url = 1;
+  string comments = 2;
+  string method = 3;
+  bool case_sensitive = 4;
+}
+
+message ResponseWhitelistEntry {
+  string url = 1;
+  string comments = 2;
+  bool case_sensitive = 3;
+}
+
+message WebPowerStrategy {
+  bool enable = 1;
+  bool form_encryption = 2;
+  bool cookie_encryption = 3;
+  repeated WhitelistEntry verification_list = 4;
+  repeated ResponseWhitelistEntry encapsulation_list = 5;
+}
+
+message WAFStrategyConfig {
+  bool enable = 1;
+  bool monitor_only = 2;
+  string type = 3;  // basic / standard / strict
+  repeated WAFWhitelistEntry white_list = 4;
+}
+
+message WAFWhitelistEntry {
+  string url = 1;
+  string rule_id = 2;
+  string comments = 3;
+}
+
+message AIWAFStrategyConfig {
+  bool enable = 1;
+  bool monitor_only = 2;
+  repeated AIWAFWhitelistEntry white_list = 3;
+}
+
+message AIWAFWhitelistEntry {
+  string url = 1;
+  string comments = 2;
+  bool case_sensitive = 3;
+}
+
+message CreateProtectedSiteResponse {
+  string id = 1;  // 自动生成的站点 ID
+}
+
+message GetProtectedSiteRequest {
+  string id = 1;
+}
+
+message GetProtectedSiteResponse {
+  string id = 1;
+  string type = 2;
+  string site = 3;
+  string protocol = 4;
+  int32 port = 5;
+  string protection_mode = 6;
+  UpstreamConfig upstream = 7;
+  string name = 8;
+  string invalid_action = 9;
+  string invalid_action_redirect_path = 10;
+  IPStrategy ip_strategy = 11;
+  WebEssentialStrategy web_essential_strategy = 12;
+  WebPowerStrategy web_power_strategy = 13;
+  WAFStrategyConfig waf_strategy = 14;
+  AIWAFStrategyConfig ai_waf_strategy = 15;
+  string static_resource_list = 16;
+}
+
+message UpdateProtectedSiteRequest {
+  string id = 1;
+  optional string protection_mode = 2;
+  optional UpstreamConfig upstream = 3;
+  optional string name = 4;
+  optional string invalid_action = 5;
+  optional string invalid_action_redirect_path = 6;
+  optional IPStrategy ip_strategy = 7;
+  optional WebEssentialStrategy web_essential_strategy = 8;
+  optional WebPowerStrategy web_power_strategy = 9;
+  optional WAFStrategyConfig waf_strategy = 10;
+  optional AIWAFStrategyConfig ai_waf_strategy = 11;
+  optional string static_resource_list = 12;
+}
+
+message UpdateProtectedSiteResponse {}
+
+message DeleteProtectedSiteRequest {
+  string id = 1;
+}
+
+message DeleteProtectedSiteResponse {}
+
+message BatchUpdateProtectedSitesRequest {
+  repeated string site_list = 1;
+  BatchSiteConfig config = 2;
+}
+
+message BatchSiteConfig {
+  optional string protection_mode = 1;
+  optional UpstreamConfig upstream = 2;
+  optional WebEssentialStrategy web_essential_strategy = 3;
+}
+
+message BatchUpdateProtectedSitesResponse {}
+
+// ============================================================
+// 集群管理消息定义
+// ============================================================
+
+message GetSSOTokenRequest {
+  string username = 1;  // 默认 admin
+}
+
+message GetSSOTokenResponse {
+  string url = 1;  // 一次性登录 URL，10秒有效
+}
+
+message GetClusterInfoRequest {}
+
+message GetClusterInfoResponse {
+  string pre_version = 1;     // 可回滚版本
+  string product_type = 2;    // Botgate / Safeplus
+  string cluster_name = 3;    // 集群名称
+  repeated ClusterNode nodes = 4;
+}
+
+message ClusterNode {
+  string ip = 1;
+  string status = 2;    // online / offline
+  string version = 3;
+  repeated string role = 4;  // api_gateway, log_archive_server 等
+}
+
+message UpgradeClusterRequest {
+  bytes upgrade_package = 1;  // 升级包二进制数据
+}
+
+message UpgradeClusterResponse {}
+
+message RollbackClusterRequest {}
+
+message RollbackClusterResponse {}
+
+// ============================================================
+// 可编程对抗规则消息定义
+// ============================================================
+
+message GetEditorStatusRequest {}
+
+message GetEditorStatusResponse {
+  string status = 1;  // "on" 或 "off"
+}
+
+message SetEditorStatusRequest {
+  string status = 1;  // "on"(启用) 或 "off"(禁用)
+}
+
+message SetEditorStatusResponse {}
+
+message UpdateWebRuleRequest {
+  string manual_rule = 1;  // Web 规则文件内容
+}
+
+message UpdateWebRuleResponse {}
+
+message UpdateAppRuleRequest {
+  string manual_rule = 1;  // APP 规则文件��容
+}
+
+message UpdateAppRuleResponse {}
+
+message GetRuleStatusRequest {
+  string id = 1;  // 规则 ID
+}
+
+message GetRuleStatusResponse {
+  string status = 1;  // "on" 或 "off"
+}
+
+message SetRuleStatusRequest {
+  string id = 1;
+  string status = 2;  // "on" 或 "off"
+}
+
+message SetRuleStatusResponse {}
+
+message UploadResourceFileRequest {
+  string file_name = 1;     // 文件名
+  string type = 2;          // list / js / html
+  string file_content = 3;  // 文件内容
+}
+
+message UploadResourceFileResponse {}
+
+// ============================================================
+// API 资产管理消息定义
+// ============================================================
+
+message ListAPIsRequest {}
+
+message ListAPIsResponse {
+  repeated APIItem api_list = 1;
+}
+
+message APIItem {
+  string id = 1;
+  string api_name = 2;
+  string host = 3;
+  int32 port = 4;
+  string path = 5;
+  string method = 6;       // GET / POST / ANY 等
+  string protocol = 7;     // ANY / HTTP / HTTPS
+  bool online_status = 8;
+  string group_id = 9;
+  string group_name = 10;
+  string api_manager = 11;
+  string auto_tag = 12;
+  repeated string manual_tags = 13;
+  int64 update_time = 14;
+  bool match_sub_path = 15;
+  bool enable_args = 16;
+  int32 api_max_body_size = 17;
+  int32 api_max_body_args_cnt = 18;
+  int32 api_max_query_args_cnt = 19;
+  repeated string pii_type = 20;
+}
+
+message AddAPIRequest {
+  string api_name = 1;
+  string group_name = 2;     // 分组名称，如 "default"
+  string method = 3;         // GET / POST / HEAD / PUT / DELETE / PATCH / OPTIONS
+  int32 port = 4;
+  string host = 5;
+  string api_endpoint = 6;   // API 路径
+  string match_sub_path = 7; // "true" 或 "false"
+  optional string enable_args = 8;
+  optional int32 api_max_body_args_cnt = 9;
+  optional int32 api_max_query_args_cnt = 10;
+  optional int32 api_max_body_size = 11;
+  optional string missing_header = 12;
+  optional string forbidden_header = 13;
+  repeated string manual_tags = 14;
+}
+
+message AddAPIResponse {}
+
+message DeleteAPIRequest {
+  string api_id = 1;
+}
+
+message DeleteAPIResponse {}
+
+message IgnoreAPIRequest {
+  string api_id = 1;
+}
+
+message IgnoreAPIResponse {}
+
+message SetAPIOnlineStatusRequest {
+  string id = 1;
+  string status = 2;  // "on"(上线) 或 "off"(下线)
+}
+
+message SetAPIOnlineStatusResponse {}

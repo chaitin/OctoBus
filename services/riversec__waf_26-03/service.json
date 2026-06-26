@@ -1,0 +1,145 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "riversec-waf-26-03",
+  "displayName": "Riversec Botgate WAF 26.03",
+  "description": "OctoBus package for Riversec Botgate dynamic protection: IP blacklist, protected sites, cluster info, programmable rules, and API asset management.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/riversec_waf_26_03.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Riversec_Botgate_WAF.IPBlacklistService/GetBlacklistStatus": {
+          "name": "get-blacklist-status",
+          "description": "Query IP blacklist switch status"
+        },
+        "Riversec_Botgate_WAF.IPBlacklistService/SetBlacklistStatus": {
+          "name": "set-blacklist-status",
+          "description": "Enable or disable IP blacklist"
+        },
+        "Riversec_Botgate_WAF.IPBlacklistService/GetBlacklist": {
+          "name": "get-blacklist",
+          "description": "Query current IP blacklist"
+        },
+        "Riversec_Botgate_WAF.IPBlacklistService/SetBlacklist": {
+          "name": "set-blacklist",
+          "description": "Overwrite IP blacklist"
+        },
+        "Riversec_Botgate_WAF.IPBlacklistService/AddBlacklistItems": {
+          "name": "add-blacklist-items",
+          "description": "Incrementally add IPs to blacklist"
+        },
+        "Riversec_Botgate_WAF.IPBlacklistService/ClearBlacklist": {
+          "name": "clear-blacklist",
+          "description": "Clear all IP blacklist entries"
+        },
+        "Riversec_Botgate_WAF.IPBlacklistService/BlockIP": {
+          "name": "block-ip",
+          "description": "Block IPs via incremental blacklist update"
+        },
+        "Riversec_Botgate_WAF.IPBlacklistService/UnblockIP": {
+          "name": "unblock-ip",
+          "description": "Unblock IPs by rewriting blacklist"
+        },
+        "Riversec_Botgate_WAF.ProtectedSiteService/ListProtectedSites": {
+          "name": "list-protected-sites",
+          "description": "List protected sites"
+        },
+        "Riversec_Botgate_WAF.ProtectedSiteService/CreateProtectedSite": {
+          "name": "create-protected-site",
+          "description": "Create a protected site"
+        },
+        "Riversec_Botgate_WAF.ProtectedSiteService/GetProtectedSite": {
+          "name": "get-protected-site",
+          "description": "Get protected site details"
+        },
+        "Riversec_Botgate_WAF.ProtectedSiteService/UpdateProtectedSite": {
+          "name": "update-protected-site",
+          "description": "Update a protected site"
+        },
+        "Riversec_Botgate_WAF.ProtectedSiteService/DeleteProtectedSite": {
+          "name": "delete-protected-site",
+          "description": "Delete a protected site"
+        },
+        "Riversec_Botgate_WAF.ProtectedSiteService/BatchUpdateProtectedSites": {
+          "name": "batch-update-protected-sites",
+          "description": "Batch update protected sites"
+        },
+        "Riversec_Botgate_WAF.ClusterService/GetSSOToken": {
+          "name": "get-sso-token",
+          "description": "Get passwordless admin console URL"
+        },
+        "Riversec_Botgate_WAF.ClusterService/GetClusterInfo": {
+          "name": "get-cluster-info",
+          "description": "Get cluster and node information"
+        },
+        "Riversec_Botgate_WAF.ClusterService/UpgradeCluster": {
+          "name": "upgrade-cluster",
+          "description": "Upgrade cluster"
+        },
+        "Riversec_Botgate_WAF.ClusterService/RollbackCluster": {
+          "name": "rollback-cluster",
+          "description": "Rollback cluster"
+        },
+        "Riversec_Botgate_WAF.ProgrammableRuleService/GetEditorStatus": {
+          "name": "get-editor-status",
+          "description": "Get programmable rule editor status"
+        },
+        "Riversec_Botgate_WAF.ProgrammableRuleService/SetEditorStatus": {
+          "name": "set-editor-status",
+          "description": "Enable or disable rule editor"
+        },
+        "Riversec_Botgate_WAF.ProgrammableRuleService/UpdateWebRule": {
+          "name": "update-web-rule",
+          "description": "Update Web programmable rule"
+        },
+        "Riversec_Botgate_WAF.ProgrammableRuleService/UpdateAppRule": {
+          "name": "update-app-rule",
+          "description": "Update APP programmable rule"
+        },
+        "Riversec_Botgate_WAF.ProgrammableRuleService/GetRuleStatus": {
+          "name": "get-rule-status",
+          "description": "Get programmable rule status"
+        },
+        "Riversec_Botgate_WAF.ProgrammableRuleService/SetRuleStatus": {
+          "name": "set-rule-status",
+          "description": "Set programmable rule status"
+        },
+        "Riversec_Botgate_WAF.ProgrammableRuleService/UploadResourceFile": {
+          "name": "upload-resource-file",
+          "description": "Upload programmable rule resource file"
+        },
+        "Riversec_Botgate_WAF.APIManagementService/ListAPIs": {
+          "name": "list-apis",
+          "description": "List managed APIs"
+        },
+        "Riversec_Botgate_WAF.APIManagementService/AddAPI": {
+          "name": "add-api",
+          "description": "Add managed API"
+        },
+        "Riversec_Botgate_WAF.APIManagementService/DeleteAPI": {
+          "name": "delete-api",
+          "description": "Delete managed API"
+        },
+        "Riversec_Botgate_WAF.APIManagementService/IgnoreAPI": {
+          "name": "ignore-api",
+          "description": "Ignore managed API"
+        },
+        "Riversec_Botgate_WAF.APIManagementService/SetAPIOnlineStatus": {
+          "name": "set-api-online-status",
+          "description": "Set API online/offline status"
+        }
+      }
+    }
+  }
+}
