@@ -1,56 +1,49 @@
 {
-  "schema": "octobus-service-1",
+  "schema": "chaitin.octobus.service.v1",
   "name": "f5__awaf",
   "displayName": "F5 AWAF",
-  "description": "F5 Advanced WAF IP 封禁/解封管理（通过 ASM 策略 IP Exception）",
+  "description": "OctoBus package for F5 Advanced WAF IP management and policy control via iControl REST API.",
   "runtime": {
-    "mode": "stdio"
+    "mode": "long-running"
   },
   "proto": {
     "roots": ["proto"],
-    "files": ["f5_awaf_v1.proto"]
+    "files": ["proto/f5_awaf_v1.proto"]
   },
   "configSchema": "config.schema.json",
   "secretSchema": "secret.schema.json",
   "sdk": {
     "cli": {
-      "commands": [
-        {
+      "commands": {
+        "f5.awaf.v1.F5AWAF/Login": {
           "name": "login",
-          "proto": "f5.awaf.v1.F5AWAF/Login",
           "description": "登录 F5 AWAF，获取认证 Token"
         },
-        {
+        "f5.awaf.v1.F5AWAF/BlockIP": {
           "name": "block-ip",
-          "proto": "f5.awaf.v1.F5AWAF/BlockIP",
           "description": "在 ASM 策略中封禁 IP（添加 blockRequests=always 的 IP Exception）"
         },
-        {
+        "f5.awaf.v1.F5AWAF/UnblockIP": {
           "name": "unblock-ip",
-          "proto": "f5.awaf.v1.F5AWAF/UnblockIP",
           "description": "解封 IP（删除对应 IP Exception）"
         },
-        {
+        "f5.awaf.v1.F5AWAF/AllowIP": {
           "name": "allow-ip",
-          "proto": "f5.awaf.v1.F5AWAF/AllowIP",
           "description": "将 IP 加入白名单（添加 blockRequests=never 的 IP Exception）"
         },
-        {
+        "f5.awaf.v1.F5AWAF/SetEnforcementMode": {
           "name": "set-enforcement-mode",
-          "proto": "f5.awaf.v1.F5AWAF/SetEnforcementMode",
           "description": "切换 ASM 策略执行模式（blocking / transparent）"
         },
-        {
+        "f5.awaf.v1.F5AWAF/ListPolicies": {
           "name": "list-policies",
-          "proto": "f5.awaf.v1.F5AWAF/ListPolicies",
           "description": "列出所有 ASM 策略及其执行模式"
         },
-        {
+        "f5.awaf.v1.F5AWAF/Logout": {
           "name": "logout",
-          "proto": "f5.awaf.v1.F5AWAF/Logout",
           "description": "释放 Token"
         }
-      ]
+      }
     }
   }
 }
