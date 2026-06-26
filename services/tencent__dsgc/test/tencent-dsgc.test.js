@@ -161,16 +161,16 @@ test('InvokeReadOnlyAction enforces read-only action allow list', async () => {
   assert.equal(res.action, 'DescribeDSPAComplianceGroups');
 
   mockJSON((url, init) => {
-    assert.equal(init.headers['X-TC-Action'], 'GetDSPACustomAllowedAction');
+    assert.equal(init.headers['X-TC-Action'], 'FetchDSPACustomAllowedAction');
     assert.deepEqual(JSON.parse(init.body), { DspaId: 'dspa-abcd' });
     return { Response: { RequestId: 'custom-allow-1', Items: [] } };
   });
 
   const customAllowed = await handlers[METHOD_INVOKE_READ_ONLY_ACTION]({
-    action: 'GetDSPACustomAllowedAction',
+    action: 'FetchDSPACustomAllowedAction',
     params: { DspaId: 'dspa-abcd' },
-  }, buildCtx({ config: { allowActions: ['GetDSPACustomAllowedAction'] } }));
-  assert.equal(customAllowed.action, 'GetDSPACustomAllowedAction');
+  }, buildCtx({ config: { allowActions: ['FetchDSPACustomAllowedAction'] } }));
+  assert.equal(customAllowed.action, 'FetchDSPACustomAllowedAction');
 
   await assert.rejects(
     () => handlers[METHOD_INVOKE_READ_ONLY_ACTION]({ action: 'CreateDSPADiscoveryTask', params: {} }, buildCtx()),

@@ -395,10 +395,11 @@ const normalizeAction = (value) => {
 };
 
 const ensureReadOnlyActionAllowed = (runtime, action) => {
+  if (runtime.allowActions.includes(action)) return;
   if (!READ_ONLY_PREFIXES.some((prefix) => action.startsWith(prefix))) {
     throw errorWithCode('INVALID_ARGUMENT', 'InvokeReadOnlyAction only allows Describe*, List*, or Get* actions');
   }
-  if (FIXED_ACTIONS.has(action) || runtime.allowActions.includes(action) || runtime.allowAllReadOnlyActions) return;
+  if (FIXED_ACTIONS.has(action) || runtime.allowAllReadOnlyActions) return;
   throw errorWithCode('PERMISSION_DENIED', `${action} is not allowed; add it to allowActions or use a dedicated method`);
 };
 
