@@ -13,6 +13,10 @@ const services = {
     entryFile: "../chaitin__safeline-waf-eliminate-false-positive/bin/safeline-waf-eliminate-false-positive.js",
     serviceModule: "../chaitin__safeline-waf-eliminate-false-positive/src/service.js",
   },
+  "ctdsg-dpdk-v3": {
+    entryFile: "../ctdsg__dpdk_v3/bin/ctdsg-dpdk-v3.js",
+    serviceModule: "../ctdsg__dpdk_v3/src/service.js",
+  },
   "das-gateway-v3": {
     entryFile: "../das__gateway_v3/bin/das-gateway-v3.js",
     serviceModule: "../das__gateway_v3/src/service.js",

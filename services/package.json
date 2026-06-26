@@ -5,6 +5,7 @@
   "type": "module",
   "bin": {
     "octobus-tentacles": "bin/octobus-tentacles.js",
+    "ctdsg-dpdk-v3": "bin/ctdsg-dpdk-v3.js",
     "das-gateway-v3": "bin/das-gateway-v3.js",
     "das-tgfw-v6": "bin/das-tgfw-v6.js",
     "dingtalk-group-robot": "bin/dingtalk-group-robot.js",
@@ -45,6 +46,7 @@
     "wd-k01": "bin/wd-k01.js"
   },
   "files": [
+    "bin/ctdsg-dpdk-v3.js",
     "bin/das-gateway-v3.js",
     "bin/das-tgfw-v6.js",
     "bin/dingtalk-group-robot.js",
@@ -83,6 +85,7 @@
     "bin/venus-ads-v3-6.js",
     "bin/wd-k01.js",
     "bin/wangsu-label-ip.js",
+    "ctdsg__dpdk_v3",
     "das__gateway_v3",
     "das__tgfw_v6",
     "dingtalk__group-robot",
