@@ -4,8 +4,8 @@
 
 # Request
 ```
-GET https://10.0.0.1:9200/_cluster/health
-Basic elastic:REDACTED
+GET https://<es-host>:9200/_cluster/health
+Authorization: Basic elastic:REDACTED
 ```
 
 # Response   HTTP/1.1 200 OK
