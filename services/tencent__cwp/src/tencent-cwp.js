@@ -596,8 +596,8 @@ const normalizeAction = (value) => {
 };
 
 const ensureReadOnlyActionAllowed = (runtime, action) => {
-  if (!action.startsWith('Describe')) {
-    throw errorWithCode('INVALID_ARGUMENT', 'InvokeReadOnlyAction only allows Describe* actions');
+  if (!action.startsWith('Describe') && !FIXED_ACTIONS.has(action)) {
+    throw errorWithCode('INVALID_ARGUMENT', 'InvokeReadOnlyAction only allows read-only actions');
   }
   if (FIXED_ACTIONS.has(action) || runtime.allowActions.includes(action) || runtime.allowAllDescribeActions) return;
   throw errorWithCode('PERMISSION_DENIED', `${action} is not allowed; add it to allowActions or use a dedicated method`);

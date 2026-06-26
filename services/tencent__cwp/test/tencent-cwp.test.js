@@ -179,9 +179,21 @@ test('InvokeReadOnlyAction enforces Describe action allow list', async () => {
   }, buildCtx());
   assert.equal(res.action, 'DescribeAssetAppList');
 
+  mockJSON((url, init) => {
+    assert.equal(init.headers['X-TC-Action'], 'SearchLog');
+    assert.deepEqual(JSON.parse(init.body), { Limit: 10 });
+    return { Response: { RequestId: 'search-log-1', Data: [] } };
+  });
+
+  const search = await handlers[METHOD_INVOKE_READ_ONLY_ACTION]({
+    action: 'SearchLog',
+    params: { Limit: 10 },
+  }, buildCtx());
+  assert.equal(search.action, 'SearchLog');
+
   await assert.rejects(
     () => handlers[METHOD_INVOKE_READ_ONLY_ACTION]({ action: 'DeleteMalwares', params: {} }, buildCtx()),
-    /InvokeReadOnlyAction only allows Describe\* actions/,
+    /InvokeReadOnlyAction only allows read-only actions/,
   );
   await assert.rejects(
     () => handlers[METHOD_INVOKE_READ_ONLY_ACTION]({ action: 'DescribeAESKey', params: {} }, buildCtx()),
