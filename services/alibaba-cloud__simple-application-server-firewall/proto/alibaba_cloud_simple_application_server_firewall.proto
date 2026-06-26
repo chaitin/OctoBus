@@ -1,0 +1,173 @@
+syntax = "proto3";
+
+package AlibabaCloud_SWAS_Firewall;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/AlibabaCloud_SWAS_Firewall";
+
+service SimpleApplicationServerFirewallService {
+  rpc CreateFirewallRule(CreateFirewallRuleRequest) returns (CreateFirewallRuleResponse) {}
+  rpc CreateFirewallRules(CreateFirewallRulesRequest) returns (CreateFirewallRulesResponse) {}
+  rpc ListFirewallRules(ListFirewallRulesRequest) returns (ListFirewallRulesResponse) {}
+  rpc ModifyFirewallRule(ModifyFirewallRuleRequest) returns (ModifyFirewallRuleResponse) {}
+  rpc DeleteFirewallRule(DeleteFirewallRuleRequest) returns (DeleteFirewallRuleResponse) {}
+  rpc DeleteFirewallRules(DeleteFirewallRulesRequest) returns (DeleteFirewallRulesResponse) {}
+  rpc EnableFirewallRule(EnableFirewallRuleRequest) returns (EnableFirewallRuleResponse) {}
+  rpc DisableFirewallRule(DisableFirewallRuleRequest) returns (DisableFirewallRuleResponse) {}
+}
+
+message FirewallRuleInput {
+  string rule_protocol = 1; // TCP, UDP, TCP+UDP, or ICMP.
+  string port = 2; // Port or port range. ICMP uses -1/-1.
+  string source_cidr_ip = 3; // Source IP address or CIDR block.
+  string remark = 4; // Rule remark.
+}
+
+message FirewallRule {
+  string firewall_rule_id = 1;
+  string rule_id = 2;
+  string firewall_id = 3;
+  string rule_protocol = 4;
+  string port = 5;
+  string source_cidr_ip = 6;
+  string remark = 7;
+  string status = 8;
+  string policy = 9;
+  repeated Tag tags = 10;
+  google.protobuf.Value raw_json = 11;
+}
+
+message Tag {
+  string key = 1;
+  string value = 2;
+}
+
+message CreateFirewallRuleRequest {
+  string region_id = 1;
+  string instance_id = 2;
+  string rule_protocol = 3;
+  string port = 4;
+  string source_cidr_ip = 5;
+  string remark = 6;
+  string client_token = 7;
+}
+
+message CreateFirewallRuleResponse {
+  bool success = 1;
+  string request_id = 2;
+  string firewall_rule_id = 3;
+  repeated string firewall_rule_ids = 4;
+  google.protobuf.Value raw_json = 5;
+}
+
+message CreateFirewallRulesRequest {
+  string region_id = 1;
+  string instance_id = 2;
+  repeated FirewallRuleInput firewall_rules = 3;
+  string client_token = 4;
+  repeated Tag tags = 5;
+}
+
+message CreateFirewallRulesResponse {
+  bool success = 1;
+  string request_id = 2;
+  repeated string firewall_rule_ids = 3;
+  google.protobuf.Value raw_json = 4;
+}
+
+message ListFirewallRulesRequest {
+  string region_id = 1;
+  string instance_id = 2;
+  string firewall_rule_id = 3;
+  int32 page_number = 4;
+  int32 page_size = 5;
+  repeated Tag tags = 6;
+}
+
+message ListFirewallRulesResponse {
+  bool success = 1;
+  string request_id = 2;
+  int32 page_number = 3;
+  int32 page_size = 4;
+  int32 total_count = 5;
+  repeated FirewallRule firewall_rules = 6;
+  google.protobuf.Value raw_json = 7;
+}
+
+message ModifyFirewallRuleRequest {
+  string region_id = 1;
+  string instance_id = 2;
+  string rule_id = 3;
+  string firewall_rule_id = 4;
+  string rule_protocol = 5;
+  string port = 6;
+  string source_cidr_ip = 7;
+  string remark = 8;
+  string client_token = 9;
+}
+
+message ModifyFirewallRuleResponse {
+  bool success = 1;
+  string request_id = 2;
+  google.protobuf.Value raw_json = 3;
+}
+
+message DeleteFirewallRuleRequest {
+  string region_id = 1;
+  string instance_id = 2;
+  string rule_id = 3;
+  string firewall_rule_id = 4;
+  string client_token = 5;
+}
+
+message DeleteFirewallRuleResponse {
+  bool success = 1;
+  string request_id = 2;
+  google.protobuf.Value raw_json = 3;
+}
+
+message DeleteFirewallRulesRequest {
+  string region_id = 1;
+  string instance_id = 2;
+  repeated string rule_ids = 3;
+  repeated string firewall_rule_ids = 4;
+  string client_token = 5;
+}
+
+message DeleteFirewallRulesResponse {
+  bool success = 1;
+  string request_id = 2;
+  google.protobuf.Value raw_json = 3;
+}
+
+message EnableFirewallRuleRequest {
+  string region_id = 1;
+  string instance_id = 2;
+  string rule_id = 3;
+  string firewall_rule_id = 4;
+  string source_cidr_ip = 5;
+  string remark = 6;
+  string client_token = 7;
+}
+
+message EnableFirewallRuleResponse {
+  bool success = 1;
+  string request_id = 2;
+  google.protobuf.Value raw_json = 3;
+}
+
+message DisableFirewallRuleRequest {
+  string region_id = 1;
+  string instance_id = 2;
+  string rule_id = 3;
+  string firewall_rule_id = 4;
+  string remark = 5;
+  string client_token = 6;
+}
+
+message DisableFirewallRuleResponse {
+  bool success = 1;
+  string request_id = 2;
+  google.protobuf.Value raw_json = 3;
+}

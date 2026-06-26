@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package Slack_GroupRobot;
+
+option go_package = "miner/grpc-service/Slack_GroupRobot";
+
+// Slack_GroupRobot 提供 Slack Incoming Webhooks 消息推送能力，通过统一 Engine gRPC service 封装 Slack Webhook 接口。
+service Slack_GroupRobot {
+  // SendTextMessage 通过 Slack Incoming Webhook 发送一条文本消息。
+  // 请求体格式: {"text": "<message>"}
+  // 成功条件: HTTP 200 OK
+  rpc SendTextMessage(SendTextMessageRequest) returns (SendTextMessageResponse) {}
+}
+
+// SendTextMessageRequest 描述发送文本消息的请求参数。
+message SendTextMessageRequest {
+  // message 为要发送的文本内容，必填，对应 Slack 侧 text 字段。
+  // Slack 支持基本 markdown（*bold*, _italic_, `code`, ```block```, >quote, •list）。
+  string message = 1;
+}
+
+// SendTextMessageResponse 返回消息发送结果，完整透出下游 HTTP 调用信息。
+message SendTextMessageResponse {
+  // http_status 为下游 Slack Webhook 返回的 HTTP 状态码。
+  // 当网络错误或请求未发出时，该值为 0。
+  int32 http_status = 1;
+
+  // http_body 为下游 Slack Webhook 返回的响应体原始内容。
+  // Slack 成功时返回 "ok"，失败时返回具体错误信息（如 "invalid_payload"、"channel_not_found"）。
+  string http_body = 2;
+}
