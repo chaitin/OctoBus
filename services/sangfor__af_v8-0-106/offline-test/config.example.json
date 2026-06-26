@@ -1,0 +1,11 @@
+{
+  "deviceType": "Sangfor AF",
+  "deviceVersion": "8.0.106",
+  "baseUrl": "https://device.example",
+  "namespace": "public",
+  "username": "api-user",
+  "password": "api-password",
+  "allowInsecureTls": true,
+  "timeoutSeconds": 15,
+  "readOnlyPath": "/api/v1/namespaces/public/password_policy"
+}

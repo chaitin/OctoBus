@@ -117,6 +117,10 @@ const services = {
     entryFile: "../riversafe__waf/bin/riversafe-waf.js",
     serviceModule: "../riversafe__waf/src/service.js",
   },
+  "sangfor-af-v8-0-106": {
+    entryFile: "../sangfor__af_v8-0-106/bin/sangfor-af-v8-0-106.js",
+    serviceModule: "../sangfor__af_v8-0-106/src/service.js",
+  },
   "sangfor-fw-v8-0-45": {
     entryFile: "../sangfor__fw_v8-0-45/bin/sangfor-fw-v8-0-45.js",
     serviceModule: "../sangfor__fw_v8-0-45/src/service.js",
