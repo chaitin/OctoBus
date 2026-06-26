@@ -443,6 +443,17 @@ const mergedBindings = (ctx = {}) => ({
   ...(ctx.bindings ?? {}),
 });
 
+const isSdkHandlerContext = (value) => value && typeof value === 'object'
+  && Object.prototype.hasOwnProperty.call(value, 'request')
+  && (
+    Object.prototype.hasOwnProperty.call(value, 'config')
+    || Object.prototype.hasOwnProperty.call(value, 'secret')
+    || Object.prototype.hasOwnProperty.call(value, 'method')
+  );
+
+const handlerRequest = (req, ctx) => (ctx === undefined && isSdkHandlerContext(req) ? (req.request ?? {}) : (req ?? {}));
+const handlerContext = (req, ctx) => (ctx === undefined && isSdkHandlerContext(req) ? req : (ctx ?? {}));
+
 const resolveRuntime = (ctx = {}) => {
   const bindings = mergedBindings(ctx);
   assertSupportedTlsConfig(bindings);
@@ -509,8 +520,10 @@ const mergeRequestParams = (req = {}) => {
   const params = fromProtoStruct(req.params ?? {});
   const offset = asPositiveInt(req.offset, 'offset');
   const limit = asPositiveInt(req.limit, 'limit');
-  if (offset !== undefined && !hasOwn(params, 'Offset')) params.Offset = offset;
-  if (limit !== undefined && !hasOwn(params, 'Limit')) params.Limit = limit;
+  const hasLimit = limit !== undefined && limit > 0;
+  const hasOffset = offset !== undefined && offset > 0;
+  if ((hasLimit || hasOffset) && offset !== undefined && !hasOwn(params, 'Offset')) params.Offset = offset;
+  if (hasLimit && !hasOwn(params, 'Limit')) params.Limit = limit;
   return params;
 };
 
@@ -644,17 +657,19 @@ const listResponse = (action, json) => {
 };
 
 const callAction = (action, { list = false } = {}) => async (req, ctx) => {
-  const runtime = resolveRuntime(ctx);
-  const params = mergeRequestParams(req);
+  const request = handlerRequest(req, ctx);
+  const runtime = resolveRuntime(handlerContext(req, ctx));
+  const params = mergeRequestParams(request);
   const json = await requestTencentCloud(runtime, action, params);
   return list ? listResponse(action, json) : actionResponse(action, json);
 };
 
 const invokeReadOnlyAction = async (req, ctx) => {
-  const runtime = resolveRuntime(ctx);
-  const action = normalizeAction(req.action);
+  const request = handlerRequest(req, ctx);
+  const runtime = resolveRuntime(handlerContext(req, ctx));
+  const action = normalizeAction(request.action);
   ensureReadOnlyActionAllowed(runtime, action);
-  const params = fromProtoStruct(req.params ?? {});
+  const params = fromProtoStruct(request.params ?? {});
   const json = await requestTencentCloud(runtime, action, params);
   return actionResponse(action, json);
 };
