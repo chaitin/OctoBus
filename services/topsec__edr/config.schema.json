@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "host": {
+      "type": "string",
+      "description": "TopSec EDR management center base URL, e.g. https://192.168.8.201."
+    },
+    "endpoint": {
+      "type": "string",
+      "description": "Alias for host."
+    },
+    "restBaseUrl": {
+      "type": "string",
+      "description": "Alias for host."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for private EDR deployments with self-signed certificates. Enable only when you understand the MITM risk."
+    },
+    "tlsInsecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Legacy alias for skipTlsVerify."
+    }
+  }
+}
