@@ -21,12 +21,6 @@ if (!endpoint || !apiKey) {
   process.exit(1);
 }
 
-// Node.js native fetch (undici) ignores `insecureSkipVerify` / `tlsInsecureSkipVerify`
-// options in fetch(). For self-signed or expired certs, set the env var instead.
-if (skipTls && endpoint.startsWith('https://')) {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-}
-
 const ctx = {
   bindings: { endpoint, skipTlsVerify: skipTls },
   secret: { apiKey },
