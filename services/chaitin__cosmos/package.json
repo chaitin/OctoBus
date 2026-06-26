@@ -1,0 +1,17 @@
+{
+  "name": "@chaitin-ai/octobus-service-cosmos",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/service.js",
+  "bin": {
+    "cosmos": "bin/cosmos.js"
+  },
+  "scripts": {
+    "start": "node bin/cosmos.js",
+    "test": "node --test test/cosmos.test.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.5.0"
+  }
+}
