@@ -92,6 +92,8 @@ test('validates credentials, region, and read-only API names', () => {
   assert.equal(_test.validateApiSpec('logQueryDeliverTimeC').httpMethod, 'POST');
   assert.throws(() => _test.validateApiSpec('addSecpolicy'), /unsupported/);
   assert.throws(() => _test.validateApiSpec('switchSystemVrfbindProtectStatus'), /unsupported/);
+  assert.throws(() => _test.validateApiSpec('queryOrderPrice'), /unsupported/);
+  assert.throws(() => _test.validateApiSpec('judgeAbilityUpgrade'), /unsupported/);
 });
 
 test('normalizes protobuf Struct payloads', () => {

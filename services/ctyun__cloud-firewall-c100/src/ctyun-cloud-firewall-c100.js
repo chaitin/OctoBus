@@ -9,7 +9,6 @@ export const DEFAULT_TIMEOUT_MS = 5000;
 
 export const READ_ONLY_APIS = [
   { methodName: 'QueryBlackWhitePolicyInfo', api: 'queryBlackWhitePolicyInfo', httpMethod: 'GET', path: '/vfw/v2_black_white_policy_info' },
-  { methodName: 'JudgeAbilityUpgrade', api: 'judgeAbilityUpgrade', httpMethod: 'GET', path: '/vfw/v2_firewall_judge_ability_upgrade' },
   { methodName: 'GetSystemVrfbindInfo', api: 'getSystemVrfbindInfo', httpMethod: 'GET', path: '/vfw/v2_system_vrf_bind_info' },
   { methodName: 'AcPolicyOverviewC', api: 'acPolicyOverviewC', httpMethod: 'GET', path: '/vfw/v2_ac_policy_overview' },
   { methodName: 'ProtectionStatisticsC', api: 'protectionStatisticsC', httpMethod: 'GET', path: '/vfw/v2_protection_statistics' },
@@ -17,8 +16,6 @@ export const READ_ONLY_APIS = [
   { methodName: 'FirewallOverviewC', api: 'firewallOverviewC', httpMethod: 'GET', path: '/vfw/v2_firewall_overview' },
   { methodName: 'QueryVfwFlowLog', api: 'queryVfwFlowLog', httpMethod: 'GET', path: '/vfw/v2_flow_log_query' },
   { methodName: 'QueryRegionMaximumsC', api: 'queryRegionMaximumsC', httpMethod: 'GET', path: '/vfw/v2_query_region_maximums' },
-  { methodName: 'CanDowngradeC', api: 'canDowngradeC', httpMethod: 'GET', path: '/vfw/v2_can_downgrade' },
-  { methodName: 'MinQuotaC', api: 'minQuotaC', httpMethod: 'GET', path: '/vfw/v2_min_quota' },
   { methodName: 'GetSystemVrfbindSyncStatus', api: 'getSystemVrfbindSyncStatus', httpMethod: 'GET', path: '/vfw/v2_system_vrf_bind_sync_status' },
   { methodName: 'GetSystemVrfbindSynctime', api: 'getSystemVrfbindSynctime', httpMethod: 'GET', path: '/vfw/v2_system_vrf_bind_sync_time' },
   { methodName: 'RandomFirewallName', api: 'randomFirewallName', httpMethod: 'GET', path: '/vfw/v2_firewall_random_firewall_name' },
@@ -64,8 +61,6 @@ export const READ_ONLY_APIS = [
   { methodName: 'StatisticAddressGroup', api: 'statisticAddressGroup', httpMethod: 'GET', path: '/vfw/v2_address_group_statistic' },
   { methodName: 'QueryAddressGroup', api: 'queryAddressGroup', httpMethod: 'GET', path: '/vfw/v2_address_group_query' },
   { methodName: 'ItemsAddressGroup', api: 'itemsAddressGroup', httpMethod: 'GET', path: '/vfw/v2_address_group_items' },
-  { methodName: 'QueryNewPurchaseOrderPrice', api: 'queryNewPurchaseOrderPrice', httpMethod: 'POST', path: '/v1/cngfw/order/query_newPurchase_price' },
-  { methodName: 'QueryOrderPrice', api: 'queryOrderPrice', httpMethod: 'GET', path: '/vfw/v2_userControl_query_order_price' },
 ];
 
 export const METHOD_INVOKE_READ_ONLY_API_FULL = `${SERVICE_PACKAGE}/InvokeReadOnlyApi`;

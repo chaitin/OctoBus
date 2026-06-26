@@ -8,7 +8,6 @@ option go_package = "miner/grpc-service/CTYun_CloudFirewallC100";
 
 service CTYun_CloudFirewallC100 {
   rpc QueryBlackWhitePolicyInfo(CTYunRequest) returns (CTYunResponse) {}
-  rpc JudgeAbilityUpgrade(CTYunRequest) returns (CTYunResponse) {}
   rpc GetSystemVrfbindInfo(CTYunRequest) returns (CTYunResponse) {}
   rpc AcPolicyOverviewC(CTYunRequest) returns (CTYunResponse) {}
   rpc ProtectionStatisticsC(CTYunRequest) returns (CTYunResponse) {}
@@ -16,8 +15,6 @@ service CTYun_CloudFirewallC100 {
   rpc FirewallOverviewC(CTYunRequest) returns (CTYunResponse) {}
   rpc QueryVfwFlowLog(CTYunRequest) returns (CTYunResponse) {}
   rpc QueryRegionMaximumsC(CTYunRequest) returns (CTYunResponse) {}
-  rpc CanDowngradeC(CTYunRequest) returns (CTYunResponse) {}
-  rpc MinQuotaC(CTYunRequest) returns (CTYunResponse) {}
   rpc GetSystemVrfbindSyncStatus(CTYunRequest) returns (CTYunResponse) {}
   rpc GetSystemVrfbindSynctime(CTYunRequest) returns (CTYunResponse) {}
   rpc RandomFirewallName(CTYunRequest) returns (CTYunResponse) {}
@@ -63,8 +60,6 @@ service CTYun_CloudFirewallC100 {
   rpc StatisticAddressGroup(CTYunRequest) returns (CTYunResponse) {}
   rpc QueryAddressGroup(CTYunRequest) returns (CTYunResponse) {}
   rpc ItemsAddressGroup(CTYunRequest) returns (CTYunResponse) {}
-  rpc QueryNewPurchaseOrderPrice(CTYunRequest) returns (CTYunResponse) {}
-  rpc QueryOrderPrice(CTYunRequest) returns (CTYunResponse) {}
   rpc InvokeReadOnlyApi(InvokeReadOnlyApiRequest) returns (CTYunResponse) {}
 }
 
