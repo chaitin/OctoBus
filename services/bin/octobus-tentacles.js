@@ -149,6 +149,18 @@ const services = {
     entryFile: "../venus__ads_v3-6/bin/venus-ads-v3-6.js",
     serviceModule: "../venus__ads_v3-6/src/service.js",
   },
+  "elasticsearch-7-10-0": {
+    entryFile: "../elastic__elasticsearch_7-10-0/bin/elasticsearch-7-10-0.js",
+    serviceModule: "../elastic__elasticsearch_7-10-0/src/service.js",
+  },
+  "openstack-yoga-2022-1": {
+    entryFile: "../openinfra__openstack-yoga_2022-1/bin/openstack-yoga-2022-1.js",
+    serviceModule: "../openinfra__openstack-yoga_2022-1/src/service.js",
+  },
+  "ve-8-3-5": {
+    entryFile: "../proxmox__ve_8-3-5/bin/ve-8-3-5.js",
+    serviceModule: "../proxmox__ve_8-3-5/src/service.js",
+  },
   "wangsu-label-ip": {
     entryFile: "../wangsu__label-ip/bin/wangsu-label-ip.js",
     serviceModule: "../wangsu__label-ip/src/service.js",
