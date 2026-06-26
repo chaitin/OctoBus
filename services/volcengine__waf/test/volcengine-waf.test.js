@@ -298,3 +298,32 @@ test('handler accepts OctoBus SDK single-argument context', async () => {
   assert.match(captured.init.headers.Authorization, /^HMAC-SHA256 Credential=SDKID\//);
   assert.match(captured.init.headers.Authorization, /\/cn-shanghai\/waf\/request,/);
 });
+
+test('InvokeReadOnlyAction accepts OctoBus SDK single-argument context', async () => {
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url: String(url), init, body: JSON.parse(init.body) };
+    return response(200, { ResponseMetadata: { RequestId: 'req-sdk-invoke' }, Result: { ok: true } });
+  });
+
+  await handlers[METHOD_INVOKE_READ_ONLY_ACTION_FULL]({
+    request: {
+      action: 'SearchLogs',
+      method: 'POST',
+      payload: { fields: { StartTime: { numberValue: 1712642400 }, EndTime: { numberValue: 1712646000 } } },
+    },
+    config: { region: 'cn-shanghai' },
+    secret: {
+      accessKeyId: 'SDKID',
+      secretAccessKey: 'SDKKEY',
+    },
+    limits: { timeoutMs: 10_000 },
+    meta: { date: new Date('2024-01-16T08:00:00Z') },
+  });
+
+  const url = new URL(captured.url);
+  assert.equal(url.searchParams.get('Action'), 'SearchLogs');
+  assert.deepEqual(captured.body, { StartTime: 1712642400, EndTime: 1712646000 });
+  assert.match(captured.init.headers.Authorization, /^HMAC-SHA256 Credential=SDKID\//);
+  assert.match(captured.init.headers.Authorization, /\/cn-shanghai\/waf\/request,/);
+});
