@@ -9,15 +9,16 @@ const lockUserPath = '/Tencent_BH.Tencent_BH/LockUser';
 const unlockUserPath = '/Tencent_BH.Tencent_BH/UnlockUser';
 
 const buildCtx = (req = {}, overrides = {}) => ({
-  bindings: {
-    secret_id: 'test-secret-id',
-    secret_key: 'test-secret-key',
-    region: 'ap-guangzhou',
-    ...overrides.bindings,
+  config: overrides.config ?? {},
+  secret: {
+    secret_id: overrides.secret?.secret_id ?? 'test-secret-id',
+    secret_key: overrides.secret?.secret_key ?? 'test-secret-key',
+    ...overrides.secret,
   },
+  request: req,
+  ...(overrides.bindings ? { bindings: overrides.bindings } : {}),
   limits: { timeoutMs: 10000, ...overrides.limits },
   meta: { instance_id: 'inst', request_id: 'req', ...overrides.meta },
-  req,
 });
 
 const loadHandler = async (req, path, overrides = {}) => {
@@ -40,6 +41,27 @@ const mockUpstream = (responseBody, status = 200) => {
 };
 
 // ── Internal helpers ──────────────────────────────────────
+
+test('resolveInvocation handles both single-arg and two-arg calls', async () => {
+  const { _test } = await import('../src/tencent-bh.js');
+
+  // Two-arg call: (req, ctx)
+  const two = _test.resolveInvocation({ limit: 10 }, { config: { region: 'ap-beijing' }, secret: { secret_id: 'id' } });
+  assert.deepEqual(two.request, { limit: 10 });
+  assert.equal(two.context.config.region, 'ap-beijing');
+  assert.equal(two.context.secret.secret_id, 'id');
+
+  // Single-arg call with "request" property (SDK style)
+  const one = _test.resolveInvocation({ request: { limit: 20 }, config: { region: 'ap-shanghai' }, secret: { secret_id: 'id2' } });
+  assert.deepEqual(one.request, { limit: 20 });
+  assert.equal(one.context.config.region, 'ap-shanghai');
+  assert.equal(one.context.secret.secret_id, 'id2');
+
+  // Fallback: no context, plain request
+  const fallback = _test.resolveInvocation({ limit: 5 });
+  assert.deepEqual(fallback.request, { limit: 5 });
+  assert.deepEqual(fallback.context, {});
+});
 
 test('internal helpers work correctly', async () => {
   const { _test } = await import('../src/tencent-bh.js');
@@ -449,7 +471,7 @@ test('UnlockUser sends API call with correct param', async () => {
 
 // ── SDK handlers ──────────────────────────────────────────
 
-test('SDK handlers accept two-arg (req, ctx) style', async () => {
+test('SDK handlers accept both single-arg (ctx) and two-arg (req, ctx) style', async () => {
   let captured;
   setFetch(async (url, init) => {
     captured = { url, init };
@@ -464,17 +486,41 @@ test('SDK handlers accept two-arg (req, ctx) style', async () => {
   });
 
   const { handlers, LIST_SESSIONS_FULL } = await import('../src/tencent-bh.js');
-  const res = await handlers[LIST_SESSIONS_FULL](
-    { status: ['ACTIVE'] },
-    {
-      config: { region: 'ap-beijing' },
-      secret: { secret_id: 'sdk-id', secret_key: 'sdk-key' },
-      meta: { instance_id: 'sdk-inst' },
-    },
-  );
+
+  // Single-arg SDK call: handler(ctx) where ctx has request, config, secret
+  const res = await handlers[LIST_SESSIONS_FULL]({
+    request: { status: ['ACTIVE'] },
+    config: { region: 'ap-beijing' },
+    secret: { secret_id: 'sdk-id', secret_key: 'sdk-key' },
+    meta: { instance_id: 'sdk-inst' },
+  });
 
   assert.equal(res.items.length, 1);
   assert.equal(captured.init.headers['x-engine-instance'], 'sdk-inst');
+
+  // Two-arg test call: handler(req, ctx)
+  setFetch(async (url, init) => {
+    captured = { url, init };
+    return {
+      ok: true,
+      status: 200,
+      headers: new Map([['content-type', 'application/json']]),
+      text: async () => JSON.stringify({
+        Response: { SessionSet: [{ Id: 's-2', UserName: 'user2', DeviceName: 'svr2', Status: 'ACTIVE' }], TotalCount: 1 },
+      }),
+    };
+  });
+
+  const res2 = await handlers[LIST_SESSIONS_FULL](
+    { status: ['ACTIVE'] },
+    {
+      config: { region: 'ap-shanghai' },
+      secret: { secret_id: 'sdk-id2', secret_key: 'sdk-key2' },
+    },
+  );
+
+  assert.equal(res2.items.length, 1);
+  assert.equal(res2.items[0].user_name, 'user2');
 });
 
 // ── Multiple error status codes ───────────────────────────
