@@ -88,6 +88,18 @@ test('DescribeAssetOverview posts signed JSON and returns raw response', async (
   assert.equal(res.response.COSCount, 2);
 });
 
+test('pagination defaults do not leak into non-paginated DSGC actions', async () => {
+  let captured;
+  mockJSON((url, init) => {
+    captured = { url, init, body: JSON.parse(init.body) };
+    return { Response: { RequestId: 'asset-defaults' } };
+  });
+
+  await handlers[METHOD_DESCRIBE_ASSET_OVERVIEW]({ offset: 0, limit: 0 }, buildCtx());
+
+  assert.deepEqual(captured.body, {});
+});
+
 test('list methods merge pagination and extract action-specific arrays', async () => {
   mockJSON((url, init) => {
     assert.equal(init.headers['X-TC-Action'], 'ListDSPAClusters');
@@ -294,4 +306,32 @@ test('configuration validation rejects missing endpoint and credentials', async 
     () => handlers[METHOD_DESCRIBE_ASSET_OVERVIEW]({}, buildCtx({ secret: { secretId: '' } })),
     /secretId is required/,
   );
+});
+
+test('handler accepts OctoBus SDK single-argument context', async () => {
+  let captured;
+  mockJSON((url, init) => {
+    captured = { url, init, body: JSON.parse(init.body) };
+    return { Response: { RequestId: 'req-sdk', TotalCount: 0, Items: [] } };
+  });
+
+  await handlers[METHOD_LIST_DSPA_CLUSTERS]({
+    request: {
+      params: { Limit: 5 },
+    },
+    config: {
+      endpoint: 'https://dsgc.tencentcloudapi.com',
+      region: 'ap-shanghai',
+    },
+    secret: {
+      secretId: 'SDKID',
+      secretKey: 'SDKKEY',
+    },
+    limits: { timeoutMs: 10_000 },
+  });
+
+  assert.equal(captured.url, 'https://dsgc.tencentcloudapi.com');
+  assert.equal(captured.init.headers['X-TC-Region'], 'ap-shanghai');
+  assert.match(captured.init.headers.Authorization, /^TC3-HMAC-SHA256 Credential=SDKID\//);
+  assert.deepEqual(captured.body, { Limit: 5 });
 });
