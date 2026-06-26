@@ -126,6 +126,17 @@ const mergedBindings = (ctx = {}) => ({
   ...(ctx.bindings ?? {}),
 });
 
+const isSdkHandlerContext = (value) => value && typeof value === 'object'
+  && Object.prototype.hasOwnProperty.call(value, 'request')
+  && (
+    Object.prototype.hasOwnProperty.call(value, 'config')
+    || Object.prototype.hasOwnProperty.call(value, 'secret')
+    || Object.prototype.hasOwnProperty.call(value, 'method')
+  );
+
+const handlerRequest = (req, ctx) => (ctx === undefined && isSdkHandlerContext(req) ? (req.request ?? {}) : (req ?? {}));
+const handlerContext = (req, ctx) => (ctx === undefined && isSdkHandlerContext(req) ? req : (ctx ?? {}));
+
 const resolveCallContext = (ctx = {}) => ({
   ...ctx,
   bindings: mergedBindings(ctx),
@@ -336,11 +347,22 @@ const invokeCtyun = async (spec, payload, ctx = {}) => {
   return { response: toValue(body) };
 };
 
-const buildApiHandler = (spec) => async (req = {}, ctx = {}) => invokeCtyun(spec, payloadFromRequest(req), ctx);
+const buildApiHandler = (spec) => async (req, ctx) => invokeCtyun(
+  spec,
+  payloadFromRequest(handlerRequest(req, ctx)),
+  handlerContext(req, ctx),
+);
 
 export const handlers = Object.fromEntries([
   ...READ_ONLY_APIS.map((entry) => [`${SERVICE_PACKAGE}/${entry.methodName}`, buildApiHandler(entry)]),
-  [METHOD_INVOKE_READ_ONLY_API_FULL, async (req = {}, ctx = {}) => invokeCtyun(validateApiSpec(req.api), normalizeStruct(req.payload ?? {}), ctx)],
+  [METHOD_INVOKE_READ_ONLY_API_FULL, async (req, ctx) => {
+    const request = handlerRequest(req, ctx);
+    return invokeCtyun(
+      validateApiSpec(request.api),
+      normalizeStruct(request.payload ?? {}),
+      handlerContext(req, ctx),
+    );
+  }],
 ]);
 
 export const rpcdef = () => Object.fromEntries([
