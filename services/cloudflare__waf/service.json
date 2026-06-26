@@ -1,0 +1,45 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "cloudflare-waf",
+  "displayName": "Cloudflare WAF",
+  "description": "OctoBus package for Cloudflare WAF / firewall: IP block, unblock, access-rule query, and zone security level get/set through the Cloudflare API v4.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/cloudflare_waf.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Cloudflare_WAF.Cloudflare_WAF/BlockIP": {
+          "name": "block-ip",
+          "description": "Block IPs through Cloudflare IP access rules."
+        },
+        "Cloudflare_WAF.Cloudflare_WAF/UnblockIP": {
+          "name": "unblock-ip",
+          "description": "Unblock IPs by deleting matching Cloudflare access rules."
+        },
+        "Cloudflare_WAF.Cloudflare_WAF/ListAccessRules": {
+          "name": "list-access-rules",
+          "description": "List Cloudflare IP access rules."
+        },
+        "Cloudflare_WAF.Cloudflare_WAF/GetSecurityLevel": {
+          "name": "get-security-level",
+          "description": "Get Cloudflare zone security level."
+        },
+        "Cloudflare_WAF.Cloudflare_WAF/SetSecurityLevel": {
+          "name": "set-security-level",
+          "description": "Set Cloudflare zone security level."
+        }
+      }
+    }
+  }
+}
