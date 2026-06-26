@@ -89,6 +89,7 @@ test('validates required credentials and supported read-only APIs', () => {
   assert.equal(_test.validateApiSpec('getDdosAttackTrend').httpMethod, 'POST');
   assert.throws(() => _test.validateApiSpec('domainAdd'), /unsupported/);
   assert.throws(() => _test.validateApiSpec('deletePort'), /unsupported/);
+  assert.throws(() => _test.validateApiSpec('topDomain'), /unsupported/);
 });
 
 test('normalizes protobuf Struct payloads', () => {

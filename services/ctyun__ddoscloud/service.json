@@ -23,10 +23,6 @@
           "name": "domain-query",
           "description": "Query CTYun DDoS Cloud domain basic information."
         },
-        "CTYun_DDoSCloud.CTYun_DDoSCloud/TopDomain": {
-          "name": "top-domain",
-          "description": "Query CTYun DDoS Cloud subscribed service information."
-        },
         "CTYun_DDoSCloud.CTYun_DDoSCloud/GetDdosAttackTrend": {
           "name": "get-ddos-attack-trend",
           "description": "Query CTYun DDoS Cloud DDoS attack trends."
