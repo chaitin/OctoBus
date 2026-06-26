@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"properties":{"timeoutMs":{"type":"integer","minimum":1000,"default":30000,"description":"HTTP request timeout in milliseconds"},"nvdBaseUrl":{"type":"string","default":"https://services.nvd.nist.gov/rest/json/cves/2.0","description":"NVD API 2.0 base URL"}}}
