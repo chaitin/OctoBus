@@ -32,6 +32,7 @@ export function createMockServer() {
       return;
     }
 
+    if (path === '/api/v2/receivers') { sendJson(res, 200, [{ name: 'team-a', integrations: [{ name: 'team-a-webhook', type: 'webhook', active: true }, { name: 'team-a-email', type: 'email', active: false }] }, { name: 'team-b', integrations: [{ name: 'team-b-slack', type: 'slack', active: true }] }]); return; }
     if (path === '/api/v2/status') {
       sendJson(res, 200, { cluster: { name: 'am-1', status: 'ready', peers: [{ name: 'am-2', address: 'am-2:9094' }] }, versionInfo: { version: '0.27.0', branch: 'HEAD' } });
       return;

@@ -92,6 +92,18 @@ test('GetStatus', async () => {
     const result = await handlers['Prometheus_Alertmanager_0_27_0.Prometheus_Alertmanager_0_27_0/GetStatus']({}, buildCtx({ config: { baseUrl } }));
     assert.equal(result.status, 'success');
     assert.equal(result.cluster.name, 'am-1');
-    assert.equal(result.cluster.peers.length, 1);
+    assert.equal(result.cluster.peers.length, 1);  } finally { await mock.close(); }
+});
+
+test('ListReceivers', async () => {
+  const mock = createMockServer(); const baseUrl = await mock.start();
+  try {
+    const result = await handlers['Prometheus_Alertmanager_0_27_0.Prometheus_Alertmanager_0_27_0/ListReceivers']({}, buildCtx({ config: { baseUrl } }));
+    assert.equal(result.status, 'success');
+    assert.equal(result.receivers.length, 2);
+    assert.equal(result.receivers[0].name, 'team-a');
+    assert.equal(result.receivers[0].integrations.length, 2);
+    assert.equal(result.receivers[0].integrations[0].type, 'webhook');
+    assert.equal(result.receivers[0].integrations[0].active, true);
   } finally { await mock.close(); }
 });
