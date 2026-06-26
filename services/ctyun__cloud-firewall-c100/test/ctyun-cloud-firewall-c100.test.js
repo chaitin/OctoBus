@@ -90,6 +90,7 @@ test('validates credentials, region, and read-only API names', () => {
   assert.throws(() => _test.validateBindings({ ak: 'id', sk: 'key' }), /regionId/);
   assert.equal(_test.validateApiSpec('acPolicyOverviewC').path, '/vfw/v2_ac_policy_overview');
   assert.equal(_test.validateApiSpec('logQueryDeliverTimeC').httpMethod, 'POST');
+  assert.equal(_test.validateApiSpec('notification').path, '/vfw/v2_notification');
   assert.throws(() => _test.validateApiSpec('addSecpolicy'), /unsupported/);
   assert.throws(() => _test.validateApiSpec('switchSystemVrfbindProtectStatus'), /unsupported/);
   assert.throws(() => _test.validateApiSpec('queryOrderPrice'), /unsupported/);

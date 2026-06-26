@@ -60,6 +60,7 @@ service CTYun_CloudFirewallC100 {
   rpc StatisticAddressGroup(CTYunRequest) returns (CTYunResponse) {}
   rpc QueryAddressGroup(CTYunRequest) returns (CTYunResponse) {}
   rpc ItemsAddressGroup(CTYunRequest) returns (CTYunResponse) {}
+  rpc Notification(CTYunRequest) returns (CTYunResponse) {}
   rpc InvokeReadOnlyApi(InvokeReadOnlyApiRequest) returns (CTYunResponse) {}
 }
 
