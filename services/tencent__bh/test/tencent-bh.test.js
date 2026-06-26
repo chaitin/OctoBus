@@ -104,13 +104,13 @@ test('TC3 signing produces valid authorization header', async () => {
     'test-secret-key',
     'ap-guangzhou',
     'bh.tencentcloudapi.com',
-    'DescribeSessions',
+    'SearchSession',
   );
 
   assert.ok(signed.url.startsWith('https://'));
   assert.ok(signed.headers['Authorization'].startsWith('TC3-HMAC-SHA256'));
   assert.equal(signed.headers['Content-Type'], 'application/json');
-  assert.equal(signed.headers['X-TC-Action'], 'DescribeSessions');
+  assert.equal(signed.headers['X-TC-Action'], 'SearchSession');
   assert.equal(signed.headers['X-TC-Region'], 'ap-guangzhou');
   assert.equal(signed.headers['X-TC-Version'], '2023-04-18');
   assert.equal(String(signed.headers['X-TC-Timestamp']).length, 10);
@@ -220,11 +220,11 @@ test('ListSessions sends signed request and maps response', async () => {
   assert.ok(captured.url.includes('bh.tencentcloudapi.com'));
   assert.equal(captured.init.method, 'POST');
   assert.equal(captured.init.headers['Content-Type'], 'application/json');
-  assert.equal(captured.init.headers['X-TC-Action'], 'DescribeSessions');
+  assert.equal(captured.init.headers['X-TC-Action'], 'SearchSession');
   // Verify x-tc-action also works (lowercase)
   const lowerHeaders = {};
   Object.keys(captured.init.headers).forEach(k => { lowerHeaders[k.toLowerCase()] = captured.init.headers[k]; });
-  assert.equal(lowerHeaders['x-tc-action'], 'DescribeSessions');
+  assert.equal(lowerHeaders['x-tc-action'], 'SearchSession');
   assert.equal(res.items.length, 1);
   assert.equal(res.items[0].id, 'session-1');
   assert.equal(res.items[0].user_name, 'admin');

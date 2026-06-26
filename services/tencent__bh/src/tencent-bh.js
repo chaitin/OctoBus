@@ -455,7 +455,7 @@ const mapUserRecord = (item) => ({
 
 const listSessions = async (req = {}, ctx = {}) => {
   const params = buildListSessionsParams(req);
-  const response = await callAction(ctx, 'DescribeSessions', params);
+  const response = await callAction(ctx, 'SearchSession', params);
   return {
     items: (response?.SessionSet ?? response?.sessionSet ?? []).map(mapSessionRecord),
     total_count: toInt64(response?.TotalCount ?? response?.totalCount) ?? 0,
