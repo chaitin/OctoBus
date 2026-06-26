@@ -181,6 +181,10 @@ const services = {
     entryFile: "../venus__ads_v3-6/bin/venus-ads-v3-6.js",
     serviceModule: "../venus__ads_v3-6/src/service.js",
   },
+  "volcengine-waf": {
+    entryFile: "../volcengine__waf/bin/volcengine-waf.js",
+    serviceModule: "../volcengine__waf/src/service.js",
+  },
   "wangsu-label-ip": {
     entryFile: "../wangsu__label-ip/bin/wangsu-label-ip.js",
     serviceModule: "../wangsu__label-ip/src/service.js",
