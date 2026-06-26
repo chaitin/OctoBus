@@ -1,0 +1,41 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "venus-tar",
+  "displayName": "Venus TAR",
+  "description": "OctoBus package for Venus TAR authentication, generic REST calls, dashboard, event, asset, and PCAP workflows.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/venus_tar.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Venus_TAR.TARService/Request": {
+          "name": "request",
+          "description": "Call any TAR REST API endpoint."
+        },
+        "Venus_TAR.TARService/GetDashboardOverview": {
+          "name": "dashboard-overview",
+          "description": "Query TAR dashboard overview."
+        },
+        "Venus_TAR.TARService/ListEventLogs": {
+          "name": "list-event-logs",
+          "description": "Query TAR event logs."
+        },
+        "Venus_TAR.TARService/ListAssets": {
+          "name": "list-assets",
+          "description": "Query TAR assets."
+        }
+      }
+    }
+  }
+}
