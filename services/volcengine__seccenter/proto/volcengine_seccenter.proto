@@ -1,0 +1,259 @@
+syntax = "proto3";
+
+package Volcengine_Seccenter;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Volcengine_Seccenter";
+
+service Volcengine_Seccenter {
+  rpc ListAssetCenterHosts(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListHostsBasicInfos(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListHostsAgentIDs(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetHostBasicInfo(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetHostAssetOverview(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAssetGroups(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListHostRegion(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListHostPlatform(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListTagsDetail(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListVulns(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListVulnHosts(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetVulnInfo(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetHostVulnInfo(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetVulnStatistics(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetVulnCheckStatus(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetVulnScanConfig(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListHidsAlarms(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetHidsAlarmSummaryInfo(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetHidsAlarmInfo(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetHidsAlarmStatistics(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAlarmNameList(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAlarmTags(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListEndpointHandleMethods(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetIntrusionRealTimeUpdates(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetIntrusionRiskTrends(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListBaselineCheckItems(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListBaselineCheckRes(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListBaselines(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListBaselineGroups(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListVirusAlarms(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetVirusAlarmSummaryInfo(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListIsolationFiles(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListScanTasks(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAutoDefenseRules(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListCloudEnvs(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListCloudPlatforms(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc MultiCloudAccessStatistics(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc MultiCloudAccessSyncStatus(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListRegistryImages(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListRegistries(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetRepoRegistrySummary(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetK8sAssetStatistic(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAssetClusters(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetSOCAssetVulnStats(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetSOCAssetAlarmStats(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetSOCAssetInstanceProtectStatus(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListFileMonitorAlarms(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetHostVolume(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListTagRelatedAgent(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListLayeredGroupRelatedHost(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetLayeredGroups(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListLayeredGroupsDetail(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListHostVpc(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAssetTags(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetHostImportantProtectState(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListGroupRelatedAgent(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListVulHostByPod(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListVulByPod(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListVulDetail(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAgentProxies(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAgentProxyServers(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListCleanHistory(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetRegularClean(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListOrderedHostsBasicInfos(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetAutoProtectConfig(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetDevFingerprintSoftware(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetDevFingerprintPort(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetDevFingerprintProcess(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetDevDetail(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListDevBasicInfos(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetDevFingerprintStatistics(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListDevPlatform(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListDevRegion(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAssetCenterDevs(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetMlpUpdateSoftwareTaskDetail(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListDevAssetIDs(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetMlpAlarmStatistics(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetMlpAlarmSummaryInfo(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListMlpAlarmTags(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetDevAssetOverview(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListMlpAlarms(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetMLPAssetSyncTaskStatus(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetMLPAssetSyncTaskDetail(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListMLPAssetTasks(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListWhiteLists(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetWhiteListField(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListBaselineCheckItemHosts(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAlarmArchiveRecords(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetNeighboringAlarm(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetAlarmBySmithKey(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetSecurityOverview(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListRaspAlarms(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetSecurityOverviewScoreStats(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetBruteForceBanConfig(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetBruteForceBanStatistics(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListBanIPList(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetVarmorAuthInfo(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetAIAlarmJudgeConfig(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc DescribeLastWeekFileChangeTrends(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListBatchEndpointHandleMethods(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc DescribeFileMonitorOverview(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListMonitorPolicies(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetMonitorPolicyDirectory(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc DescribeFileChangeTrendTop5(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetAllMonitorSuffixList(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetVarmorConfigYAML(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetPolicyStatistics(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetArmorProfile(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListClusterVarmorVersionHistory(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetClusterStatistics(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListClustersAndVarmorApps(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListVarmorPolicies(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetVarmorTLSInfo(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetVarmorPolicy(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetGeoLocation(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetOfflineNotificationList(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetOfflineNotificationConfig(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetAlarmRuleList(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetBruteForceBanCapParams(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetFingerprintPort(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetFingerprintCron(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetFingerprintIntegrity(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetFingerprintProcess(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetFingerprintApp(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetFingerprintUser(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetFingerprintKmod(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetFingerprintRefreshStatus(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetFingerprintSoftware(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetFingerprintService(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetFingerprintAppGroup(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetFingerprintStatistics(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetFingerprintWeb(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetFingerprintTop5(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetFingerprintAIApp(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListFingerprintCollectConfig(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListBaselineHostItemHosts(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListWeakPasswordCheckDetail(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListBaselineCheckDetail(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetGroupCheckStatus(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetBaselineGroupStatistics(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetBaselineDetectProgressDetail(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListBaselineCheckConfig(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetFingerprintEnv(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListBaselineForGroupPolicy(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetCustomWeakPasswords(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListCheckConfigRelatedBaseline(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListBaselineBasicInfo(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetVirusFile(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetMultiLevelAuthDetail(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListMultiLevelAssetHosts(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetMultiLevelInstitutionDetail(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetMultiLevelHostAssetOverview(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListMultiLevelInstitution(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetAutoIsolateAgentList(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListScanSubTasks(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListScanTaskHosts(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetRegularVirusScanConfig(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetRegularVirusTaskStatus(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetVirusDatabaseUpdateTime(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetAlarmVirusStatistics(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetVirusTaskStatistics(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetVirusTaskInfo(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAutoDefenseHosts(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetAlarmTraceRawData(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetAlarmTrace(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetTLSInfo(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListLoginConfigs(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetStackTrace(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetRaspAlarmSummaryInfo(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetRaspConfigStatistics(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListRaspConfigs(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetRaspProtectStatistics(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetRaspAlarmStatistics(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetOneRaspAlarm(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetRaspAuthorizationStatistics(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListRaspConfigAgentInfos(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListRaspProcesses(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetRaspProcessDetail(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetRegistryImagesSyncStatus(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetRegistryImageDetail(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListRegistryNamespaceIDs(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetRepoImageRiskCnt(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAllCntrStaticDict(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetRegistriesPermissionResult(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListRegistryNamespaces(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetRegistrySyncConfig(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAssetNamespaces(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetAssetWorkloadStatistic(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAssetPodsLinkedWorkloadWithNoPage(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAssetWorkloads(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAssetPodsLinkedWorkload(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetCisDetail(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetVulnDetail(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetUserBatchScanStatus(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetRepoImageScanCron(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetRepoImageScanScope(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListRepoImageLayer(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListRepoImageVirus(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListRepoImageLayerVirus(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListRepoImageLayerSenfile(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListRepoImageLayerVuln(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListRiskVulnAffectRepoImage(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListRiskComplAffectRepoImage(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListRepoImageCompl(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListRepoImagePackage(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListRepoImageVuln(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListRepoImageSenfile(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetAssetClustersSyncEnd(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetClustersPermissionResult(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetAssetClusterStatistic(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetSOCPrecautionBaselineStats(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetSOCAssetSecurityScore(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListVulnForAI(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListVulnAffectAISession(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetAIVulnDetectProgressDetail(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetVulnInfoForAI(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetManualSyncAIApplicationStatus(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetAIFingerprintTop5(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetAIFingerprintProcess(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetVulnCheckStatusForAI(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetAIApplicationSyncConfig(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetAIFingerprintRefreshStatus(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetAISessionVulnInfo(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAgentkitSessionIDs(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetAIFingerprintStatistics(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetVulnStatisticsForAI(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetAIFingerprintPort(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetAIFingerprintApp(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetAIFingerprintSoftware(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAIApplicationBasicInfo(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListMonitoring(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc InvokeReadOnlyAction(InvokeReadOnlyActionRequest) returns (VolcengineResponse) {}
+}
+
+message VolcengineRequest {
+  google.protobuf.Struct payload = 1;
+}
+
+message InvokeReadOnlyActionRequest {
+  string action = 1;
+  string service_code = 2;
+  string version = 3;
+  string method = 4;
+  string endpoint = 5;
+  google.protobuf.Struct payload = 6;
+}
+
+message VolcengineResponse {
+  google.protobuf.Value response = 1;
+}
