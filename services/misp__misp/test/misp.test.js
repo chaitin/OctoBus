@@ -292,7 +292,7 @@ test('Non-JSON and empty body handled', async () => {
 
 // ── SDK handlers ──────────────────────────────────────────
 
-test('SDK handlers accept two-arg (req, ctx) style', async () => {
+test('SDK handlers accept single-arg (ctx) style from OctoBus SDK', async () => {
   setFetch(async () => ({
     ok: true, status: 200,
     headers: new Map([['content-type', 'application/json']]),
@@ -300,10 +300,12 @@ test('SDK handlers accept two-arg (req, ctx) style', async () => {
   }));
 
   const { handlers, SEARCH_EVENTS_FULL } = await import('../src/misp.js');
-  const res = await handlers[SEARCH_EVENTS_FULL](
-    { value: '8.8.8.8' },
-    { config: { endpoint: 'https://custom.misp.local' }, secret: { api_key: 'sdk-key' } },
-  );
+  // OctoBus SDK passes a single ctx object: {request, config, secret, ...}
+  const res = await handlers[SEARCH_EVENTS_FULL]({
+    request: { value: '8.8.8.8' },
+    config: { endpoint: 'https://custom.misp.local' },
+    secret: { api_key: 'sdk-key' },
+  });
   assert.equal(res.items[0].info, 'from-sdk');
 });
 
