@@ -1,0 +1,10 @@
+{
+  "config": {
+    "baseUrl": "https://ONESIG_DEVICE_ADDRESS",
+    "timeoutMs": 10000
+  },
+  "secret": {
+    "apiKey": "ONESIG_API_KEY",
+    "secret": "ONESIG_SECRET"
+  }
+}
