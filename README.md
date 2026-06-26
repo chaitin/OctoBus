@@ -6,6 +6,12 @@
   <a href="https://github.com/chaitin/OctoBus/actions/workflows/ci.yml">
     <img src="https://github.com/chaitin/OctoBus/actions/workflows/ci.yml/badge.svg?branch=main" alt="ci">
   </a>
+  <a href="./CONTRIBUTING.md">
+    <img src="https://img.shields.io/badge/Contributing-Guide-blue" alt="contributing">
+  </a>
+  <a href="./SECURITY.md">
+    <img src="https://img.shields.io/badge/Security-Feedback-blue" alt="security">
+  </a>
 </p>
 
 ---
@@ -488,3 +494,9 @@ go test ./tests/e2e -count=1
 End-to-end tests build the real `octobus` binary, start a real daemon, call the admin API through the CLI, and then verify the gRPC, Connect RPC, MCP, OpenAPI, and reflection endpoints.
 
 The default GitHub Actions CI is a lightweight validation: it checks public traces, Go formatting and vet, runs `go test ./cmd/... ./internal/...`, builds the binary, checks the OctoBus npm binary packages, and runs npm test/build/pack dry-run under `sdk`. Full `task test` and e2e remain local gates. OctoBus binary package publishing is triggered only by `v<version>` tag push builds, and the tag version must match `npm/octobus/package.json.version`. SDK publishing is triggered only by `sdk-v<version>` tag push builds, and the tag version must match `sdk/package.json.version`. Both npm publishing paths require the repository secret `NPM_TOKEN`.
+
+## Security And Compliance
+
+If you believe this repository contains a security vulnerability, infringing content, or another compliance risk, please report it privately to `octobus-opensource@chaitin.com`.
+
+For the full reporting process and required details, see [SECURITY.md](SECURITY.md).

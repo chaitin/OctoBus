@@ -1,0 +1,12 @@
+{
+  "name": "elastic-kibana-7-17-26",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "elastic-kibana-7-17-26": "bin/elastic-kibana-7-17-26.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.5.0"
+  }
+}

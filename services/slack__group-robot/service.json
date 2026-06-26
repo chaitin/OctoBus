@@ -1,0 +1,29 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "slack-group-robot",
+  "displayName": "Slack Group Robot",
+  "description": "OctoBus package for Slack Incoming Webhooks text message delivery.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/slack_group_robot.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Slack_GroupRobot.Slack_GroupRobot/SendTextMessage": {
+          "name": "send-text-message",
+          "description": "Send a text message through a Slack Incoming Webhook."
+        }
+      }
+    }
+  }
+}
