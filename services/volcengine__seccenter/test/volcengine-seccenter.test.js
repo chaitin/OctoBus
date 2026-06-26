@@ -250,4 +250,32 @@ test('maps Volcengine and transport errors', async () => {
     'UNKNOWN',
     (err) => assert.match(err.message, /non-JSON/),
   );
+
+  setFetch(async () => {
+    const err = new Error('timeout');
+    err.name = 'TimeoutError';
+    throw err;
+  });
+  await expectGrpcError(
+    () => handlers[`${SERVICE_PACKAGE}/ListAssetCenterHosts`]({}, buildCtx({ limits: { timeoutMs: 25 } })),
+    'DEADLINE_EXCEEDED',
+    (err) => assert.match(err.message, /timed out after 25ms/),
+  );
+
+  setFetch(async (_url, init) => ({
+    status: 200,
+    text: () => new Promise((_resolve, reject) => {
+      init.signal.addEventListener('abort', () => {
+        const err = new Error('body stream timeout');
+        err.name = 'AbortError';
+        reject(err);
+      }, { once: true });
+      setTimeout(() => reject(new Error('signal was not aborted')), 100);
+    }),
+  }));
+  await expectGrpcError(
+    () => handlers[`${SERVICE_PACKAGE}/ListAssetCenterHosts`]({}, buildCtx({ limits: { timeoutMs: 5 } })),
+    'DEADLINE_EXCEEDED',
+    (err) => assert.match(err.message, /timed out after 5ms/),
+  );
 });
