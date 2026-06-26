@@ -1,0 +1,167 @@
+syntax = "proto3";
+
+package tophant.xsiem;
+
+service XsiemService {
+  rpc QueryAlerts(QueryAlertsRequest) returns (QueryAlertsResponse);
+  rpc GetAlertDetail(GetAlertDetailRequest) returns (AlertDetail);
+  rpc AlertAggCount(AlertAggCountRequest) returns (AlertAggCountResponse);
+  rpc AlertAggDetail(AlertAggDetailRequest) returns (AlertAggDetailResponse);
+  rpc BatchUpdateAlertStatus(BatchUpdateAlertStatusRequest) returns (BatchUpdateAlertStatusResponse);
+  rpc QueryDevices(QueryDevicesRequest) returns (QueryDevicesResponse);
+  rpc QueryCollectors(QueryCollectorsRequest) returns (QueryCollectorsResponse);
+}
+
+message QueryAlertsRequest {
+  int32 page = 1;
+  int32 size = 2;
+  string alarm_name = 3 [json_name = "alarmName"];
+  string status = 4;
+  string severity = 5;
+  string alarm_type_id = 6 [json_name = "alarmTypeId"];
+  int64 start_time = 7 [json_name = "startTime"];
+  int64 end_time = 8 [json_name = "endTime"];
+  string sort_field = 9 [json_name = "sortField"];
+  string sort_order = 10 [json_name = "sortOrder"];
+  string rule_id = 11 [json_name = "ruleId"];
+  string rule_tag = 12 [json_name = "ruleTag"];
+  string src_addr = 13 [json_name = "srcAddr"];
+  string dst_addr = 14 [json_name = "dstAddr"];
+  string filter_dsl = 15 [json_name = "filterDsl"];
+}
+
+message AlertItem {
+  string id = 1;
+  string alarm_name = 2 [json_name = "alarmName"];
+  string severity = 3;
+  string status = 4;
+  string src_addr = 5 [json_name = "srcAddr"];
+  string dst_addr = 6 [json_name = "dstAddr"];
+  string src_port = 7 [json_name = "srcPort"];
+  string dst_port = 8 [json_name = "dstPort"];
+  string dev_rec_time = 9 [json_name = "devRecTime"];
+  string rule_name = 10 [json_name = "ruleName"];
+  string rule_id = 11 [json_name = "ruleId"];
+  repeated string alarm_type_name = 12 [json_name = "alarmTypeName"];
+  repeated string attack_phase = 13 [json_name = "attackPhase"];
+  repeated string rule_tag = 14 [json_name = "ruleTag"];
+  string evt_id = 15 [json_name = "evtID"];
+}
+
+message QueryAlertsResponse {
+  repeated AlertItem data = 1;
+}
+
+message GetAlertDetailRequest {
+  string id = 1;
+}
+
+message AlertDetail {
+  string id = 1;
+  string alarm_name = 2 [json_name = "alarmName"];
+  string severity = 3;
+  string status = 4;
+  string src_addr = 5 [json_name = "srcAddr"];
+  string dst_addr = 6 [json_name = "dstAddr"];
+  string src_port = 7 [json_name = "srcPort"];
+  string dst_port = 8 [json_name = "dstPort"];
+  string dev_rec_time = 9 [json_name = "devRecTime"];
+  string log_time = 10 [json_name = "logTime"];
+  string rule_name = 11 [json_name = "ruleName"];
+  string rule_id = 12 [json_name = "ruleId"];
+  repeated string alarm_type_name = 13 [json_name = "alarmTypeName"];
+  repeated string attack_phase = 14 [json_name = "attackPhase"];
+  repeated string rule_tag = 15 [json_name = "ruleTag"];
+  string evt_id = 16 [json_name = "evtID"];
+  string evt_begin_t = 17 [json_name = "evtBeginT"];
+  string evt_end_t = 18 [json_name = "evtEndT"];
+  string trigger_status = 19 [json_name = "triggerStatus"];
+  string raw_log = 20 [json_name = "rawLog"];
+}
+
+message AlertAggCountRequest {
+  string alarm_name = 1 [json_name = "alarmName"];
+  string status = 2;
+  string severity = 3;
+  string alarm_type_id = 4 [json_name = "alarmTypeId"];
+  int64 start_time = 5 [json_name = "startTime"];
+  int64 end_time = 6 [json_name = "endTime"];
+  string rule_id = 7 [json_name = "ruleId"];
+  string rule_tag = 8 [json_name = "ruleTag"];
+  string src_addr = 9 [json_name = "srcAddr"];
+  string dst_addr = 10 [json_name = "dstAddr"];
+  string filter_dsl = 11 [json_name = "filterDsl"];
+  int32 def_agg_type = 12 [json_name = "defAggType"];
+}
+
+message AlertAggCountResponse {
+  int32 count = 1;
+}
+
+message AlertAggDetailRequest {
+  string agg_query_json = 1 [json_name = "aggQueryJson"];
+}
+
+message AlertAggDetailResponse {
+  int32 alarm_type_count = 1 [json_name = "alarmTypeCount"];
+  int32 alarm_count = 2 [json_name = "alarmCount"];
+  int32 attacker_count = 3 [json_name = "attackerCount"];
+  int32 sufferer_count = 4 [json_name = "suffererCount"];
+  repeated string top_k_alarm_name = 5 [json_name = "topKAlarmName"];
+}
+
+message BatchUpdateAlertStatusRequest {
+  repeated string ids = 1;
+  string status = 2;
+}
+
+message BatchUpdateAlertStatusResponse {
+  bool success = 1;
+}
+
+message QueryDevicesRequest {
+  int32 page = 1;
+  int32 size = 2;
+}
+
+message DeviceItem {
+  string id = 1;
+  string name = 2;
+  string source_name = 3 [json_name = "sourceName"];
+  string flow_status = 4 [json_name = "flowStatus"];
+  int32 port = 5;
+  string tlp = 6;
+  string category_belong_name = 7 [json_name = "categoryBelongName"];
+  string updated_time = 8 [json_name = "updatedTime"];
+}
+
+message QueryDevicesResponse {
+  int32 total = 1;
+  repeated DeviceItem items = 2;
+}
+
+message QueryCollectorsRequest {
+  int32 page = 1;
+  int32 size = 2;
+  string name = 3;
+  string source_name = 4 [json_name = "sourceName"];
+  string flow_status = 5 [json_name = "flowStatus"];
+}
+
+message CollectorItem {
+  string id = 1;
+  string name = 2;
+  string source_name = 3 [json_name = "sourceName"];
+  string flow_status = 4 [json_name = "flowStatus"];
+  int32 port = 5;
+  string tlp = 6;
+  string connector_name = 7 [json_name = "connectorName"];
+  string updated_time = 8 [json_name = "updatedTime"];
+  string log_count = 9 [json_name = "logCount"];
+  string fail_count = 10 [json_name = "failCount"];
+}
+
+message QueryCollectorsResponse {
+  int32 total = 1;
+  repeated CollectorItem items = 2;
+}
