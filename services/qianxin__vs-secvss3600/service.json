@@ -1,0 +1,53 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "qianxin-vs-secvss3600",
+  "displayName": "QIANXIN VS SecVSS3600",
+  "description": "OctoBus package for QIANXIN SecVSS 3600 scan task management, result query, device status, and task control APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/qianxin_vs_secvss3600.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/GetDeviceStatus": {
+          "name": "get-device-status",
+          "description": "Query scanner health: CPU load, disk/memory usage, engine status."
+        },
+        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/ListTasks": {
+          "name": "list-tasks",
+          "description": "List scan tasks with optional status/time/pagination filters."
+        },
+        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/GetTaskStatus": {
+          "name": "get-task-status",
+          "description": "Get current status code (0-9) and progress percentage of a scan task."
+        },
+        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/SubmitScanTask": {
+          "name": "submit-scan-task",
+          "description": "Submit a new scan task against an authorized target IP/CIDR/domain."
+        },
+        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/ControlTask": {
+          "name": "control-task",
+          "description": "Control a scan task lifecycle: start, stop, pause, continue, enable, disable, or delete."
+        },
+        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/QuerySysScanResult": {
+          "name": "query-sys-scan-result",
+          "description": "Query system vulnerability scan results including host list and vuln counts."
+        },
+        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/QueryWebScanResult": {
+          "name": "query-web-scan-result",
+          "description": "Query web vulnerability scan results for each scanned host."
+        },
+        "QIANXIN_VS_SecVSS3600.QIANXIN_VS_SecVSS3600/QueryWeakPassResult": {
+          "name": "query-weak-pass-result",
+          "description": "Query weak password scan results: cracked accounts, services, and ports."
+        }
+      }
+    }
+  }
+}
