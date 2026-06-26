@@ -1,5 +1,6 @@
 /* node:coverage disable */
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import http from 'node:http';
 import https from 'node:https';
 import { _test } from '../src/ctyun-accessone.js';
@@ -15,12 +16,22 @@ const verifyEopSignature = (authHeader, eopDate, requestId, bodyStr, ak, sk) => 
 const TEST_AK = 'valid_ak';
 const TEST_SK = 'valid_sk';
 
+const resolveTlsMaterial = (value, label) => {
+  if (Buffer.isBuffer(value)) return value;
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error(`${label} is required for https mock server`);
+  }
+  if (value.includes('-----BEGIN ')) return value;
+  if (fs.existsSync(value)) return fs.readFileSync(value);
+  return value;
+};
+
 export const createMockServer = async (options = {}) => {
   const requests = [];
   const defaultPort = 0;
   const useHttps = options.https === true;
-  const tlsKey = options.tls?.key;
-  const tlsCert = options.tls?.cert;
+  const tlsKey = useHttps ? resolveTlsMaterial(options.tls?.key, 'tls.key') : options.tls?.key;
+  const tlsCert = useHttps ? resolveTlsMaterial(options.tls?.cert, 'tls.cert') : options.tls?.cert;
 
   const sendJson = (res, status, payload) => {
     const body = typeof payload === 'string' ? payload : JSON.stringify(payload);
