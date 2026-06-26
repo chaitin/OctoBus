@@ -6,6 +6,12 @@
   <a href="https://github.com/chaitin/OctoBus/actions/workflows/ci.yml">
     <img src="https://github.com/chaitin/OctoBus/actions/workflows/ci.yml/badge.svg?branch=main" alt="ci">
   </a>
+  <a href="./CONTRIBUTING.zh-CN.md">
+    <img src="https://img.shields.io/badge/贡献者-指南-blue" alt="contributing">
+  </a>
+  <a href="./SECURITY.zh-CN.md">
+    <img src="https://img.shields.io/badge/安全合规-反馈-blue" alt="security">
+  </a>
 </p>
 
 ---
@@ -191,7 +197,7 @@ curl -X POST \
 
 补充提示：
 
-- `service import` 除了本地目录，也支持 `.tgz`、`.zip`、`npm:` source 和 HTTPS Git source；所有 source 都可追加 `//service-dir` 来选择 distribution package 内的 service root，例如 `npm:@scope/tentacle@1.0.0//Hanqing_Ticket` 或 `https://github.com/acme/tentacle.git//Hanqing_Ticket@v1.0.0`；离线导入、强制重装依赖等参数可查看 `./bin/octobus service import --help`
+- `service import` 除了本地目录，也支持本地和远程 HTTP(S) `.tgz` / `.tar.gz` / `.zip` 归档包、`npm:` source 和 HTTPS Git source；除远程 HTTP(S) 归档 URL 外，package source 都可追加 `//service-dir` 来选择 distribution package 内的 service root，例如 `npm:@scope/tentacle@1.0.0//Hanqing_Ticket` 或 `https://github.com/acme/tentacle.git//Hanqing_Ticket@v1.0.0`。远程归档 URL 使用包根目录作为 service root；multi-service 归档可用 recursive import。离线导入、强制重装依赖等参数可查看 `./bin/octobus service import --help`
 - 使用 `service import --recursive SOURCE` 可以一次导入 multi-service distribution package 中发现到的所有 service root，例如 `./bin/octobus service import --recursive npm:@chaitin-ai/octobus-tentacles`。recursive 模式下，`SOURCE//some-dir` 表示递归发现的 scan root；每个导入的 service id 来自对应 `service.json.name`
 - `instance` 支持 `list/get/update/delete/update-config/update-secret/start/stop/restart`；`create` 对 `long-running` service 默认会立即启动实例，配置可以来自 `--config`、`--config-json` 或 stdin，敏感信息可以来自 `--secret`、`--secret-json` 或 stdin
 - `on-demand` instance 会保持 enabled/running 的逻辑状态，但 `start/stop/restart` 和带 `--restart` 的配置更新会返回运行模式不支持持久运行时控制的错误

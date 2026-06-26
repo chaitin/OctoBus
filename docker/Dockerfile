@@ -13,6 +13,7 @@ RUN apt-get update \
 		nodejs \
 		npm \
 		protobuf-compiler \
+		libprotobuf-dev \
 	&& rm -rf /var/lib/apt/lists/*
 
 COPY go.mod go.sum ./
@@ -45,6 +46,7 @@ RUN apt-get update \
 		nodejs \
 		npm \
 		protobuf-compiler \
+		libprotobuf-dev \
 	&& rm -rf /var/lib/apt/lists/* \
 	&& groupadd --system octobus \
 	&& useradd --system --gid octobus --home-dir /var/lib/octobus --create-home --shell /usr/sbin/nologin octobus

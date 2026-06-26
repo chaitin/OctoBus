@@ -405,12 +405,14 @@ func TestGitAskpassArgvDoesNotContainPassword(t *testing.T) {
 
 func TestSourceDispatchClassifiesInputs(t *testing.T) {
 	tests := map[string]sourceKind{
-		"npm:@scope/pkg@1.0.0":      sourceNPM,
-		"https://example.com/r.git": sourceHTTPSGit,
-		"./package.tgz":             sourceLocal,
-		"http://example.com/r.git":  sourceUnsupportedGit,
-		"ssh://example.com/r.git":   sourceUnsupportedGit,
-		"git+https://example/r.git": sourceUnsupportedGit,
+		"npm:@scope/pkg@1.0.0":                           sourceNPM,
+		"https://example.com/r.git":                      sourceHTTPSGit,
+		"https://example.com/package.zip?signature=test": sourceRemoteArchive,
+		"http://example.com/package.tgz?signature=test":  sourceRemoteArchive,
+		"./package.tgz":                                  sourceLocal,
+		"http://example.com/r.git":                       sourceUnsupportedGit,
+		"ssh://example.com/r.git":                        sourceUnsupportedGit,
+		"git+https://example/r.git":                      sourceUnsupportedGit,
 	}
 	for source, want := range tests {
 		if got := classifySource(source); got != want {
