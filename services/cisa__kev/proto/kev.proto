@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package cisa.kev;
+
+service KevService {
+  rpc Check(CheckKevRequest) returns (KevStatusResponse);
+}
+
+message CheckKevRequest {
+  string cve_id = 1 [json_name = "cveId"];
+}
+
+message KevStatusResponse {
+  optional bool in_kev = 1 [json_name = "inKev"];
+  KevEntry entry = 2;
+}
+
+message KevEntry {
+  string cve_id = 1 [json_name = "cveId"];
+  string vendor_project = 2 [json_name = "vendorProject"];
+  string product = 3;
+  string vulnerability_name = 4 [json_name = "vulnerabilityName"];
+  string date_added = 5 [json_name = "dateAdded"];
+  string short_description = 6 [json_name = "shortDescription"];
+  string required_action = 7 [json_name = "requiredAction"];
+  string due_date = 8 [json_name = "dueDate"];
+  string known_ransomware_campaign_use = 9 [json_name = "knownRansomwareCampaignUse"];
+  string notes = 10;
+}
