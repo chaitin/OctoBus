@@ -8,7 +8,6 @@ option go_package = "miner/grpc-service/CTYun_DDoSCloud";
 
 service CTYun_DDoSCloud {
   rpc DomainQuery(CTYunRequest) returns (CTYunResponse) {}
-  rpc TopDomain(CTYunRequest) returns (CTYunResponse) {}
   rpc DomainConfig(CTYunRequest) returns (CTYunResponse) {}
   rpc DomainStatusQuery(CTYunRequest) returns (CTYunResponse) {}
   rpc GetCcAttackAddr(CTYunRequest) returns (CTYunResponse) {}

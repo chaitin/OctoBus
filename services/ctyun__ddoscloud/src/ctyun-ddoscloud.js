@@ -8,7 +8,6 @@ export const DEFAULT_TIMEOUT_MS = 5000;
 
 export const READ_ONLY_APIS = [
   { methodName: 'DomainQuery', api: 'domainQuery', httpMethod: 'GET', path: '/ctapi/v2/domain/query' },
-  { methodName: 'TopDomain', api: 'topDomain', httpMethod: 'POST', path: '/ctapi/v1/sevice_detail' },
   { methodName: 'DomainConfig', api: 'domainConfig', httpMethod: 'POST', path: '/ctapi/v1/domain/config' },
   { methodName: 'DomainStatusQuery', api: 'domainStatusQuery', httpMethod: 'POST', path: '/ctapi/v1/domain/status/query' },
   { methodName: 'GetCcAttackAddr', api: 'getCcAttackAddr', httpMethod: 'POST', path: '/ctapi/v1/ccAttack/getCcAttackAddr' },
