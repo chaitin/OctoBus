@@ -37,6 +37,10 @@ const services = {
     entryFile: "../dptech__umc-ads_v5-3-29/bin/dptech-umc-ads-v5-3-29.js",
     serviceModule: "../dptech__umc-ads_v5-3-29/src/service.js",
   },
+  "elastic-kibana-7-17-26": {
+    entryFile: "../elastic__kibana_7-17-26/bin/elastic-kibana-7-17-26.js",
+    serviceModule: "../elastic__kibana_7-17-26/src/service.js",
+  },
   "feishu-group-robot": {
     entryFile: "../feishu__group-robot/bin/feishu-group-robot.js",
     serviceModule: "../feishu__group-robot/src/service.js",
