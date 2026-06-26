@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "endpoint"
+  ],
+  "properties": {
+    "endpoint": {
+      "type": "string",
+      "description": "CTDSG DPDK API base URL, for example https://ctdsg.example:9091/api.php."
+    },
+    "lan": {
+      "type": "string",
+      "enum": [
+        "zh_CN",
+        "zh_TW",
+        "en_US"
+      ],
+      "default": "zh_CN",
+      "description": "Language header sent to CTDSG DPDK APIs."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 500,
+      "maximum": 30000,
+      "default": 5000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS verification for lab appliances with self-signed certificates."
+    },
+    "allowInsecureHttp": {
+      "type": "boolean",
+      "default": false,
+      "description": "Allow http:// endpoints. Keep false outside isolated lab validation."
+    }
+  }
+}
+

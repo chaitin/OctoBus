@@ -1,0 +1,271 @@
+syntax = "proto3";
+
+package CTDSG_DPDK_V3;
+
+option go_package = "miner/grpc-service/CTDSG_DPDK_V3";
+
+service CTDSG_DPDK_V3 {
+  // Get the current logged-in API user information.
+  //
+  // This is the first read-only MVP method. It authenticates through
+  // POST /Login/uInterlogin when a cached token is not available, then calls
+  // GET /Login/getUserInfo with Authorization and Lan headers.
+  rpc GetUserInfo(GetUserInfoRequest) returns (GetUserInfoResponse) {}
+
+  // Query read-only security event logs such as IPS, DDoS, AV, WAF, TI, WPP,
+  // outbound, regional-access, and industrial-control logs.
+  rpc QuerySecurityLog(SecurityLogRequest) returns (DpdkJsonResponse) {}
+
+  // Query read-only user behavior logs such as web, email, IM, login,
+  // file-outbound, session, alarm, and proxy-bypass logs.
+  rpc QueryBehaviorLog(BehaviorLogRequest) returns (DpdkJsonResponse) {}
+
+  // Query read-only protocol audit and system/jr audit logs.
+  rpc QueryAuditLog(AuditLogRequest) returns (DpdkJsonResponse) {}
+
+  // Query read-only security analytics such as IPS vulnerability statistics,
+  // antivirus rankings, DDoS rankings, and proxy-bypass rankings.
+  rpc QuerySecurityStatistic(SecurityStatisticRequest)
+      returns (DpdkJsonResponse) {}
+
+  // Query read-only traffic and behavior analytics by user, service, site,
+  // terminal, location, or online equivalents.
+  rpc QueryFlowAnalysis(FlowAnalysisRequest) returns (DpdkJsonResponse) {}
+
+  // Query read-only resource metrics such as CPU, memory, sessions, online
+  // users, and physical interfaces.
+  rpc QueryResourceMetric(ResourceMetricRequest) returns (DpdkJsonResponse) {}
+
+  // Query read-only selector/reference data used by reports.
+  rpc QueryReferenceData(ReferenceDataRequest) returns (DpdkJsonResponse) {}
+
+  // List read-only policy objects whose endpoints are documented as getList.
+  rpc ListPolicyObjects(PolicyObjectListRequest) returns (DpdkJsonResponse) {}
+}
+
+message GetUserInfoRequest {
+}
+
+message UserInfo {
+  string rid = 1;
+  string uid = 2;
+  string uname = 3;
+}
+
+message GetUserInfoResponse {
+  int64 code = 1;
+  string message = 2;
+  UserInfo user = 3;
+  int32 http_status = 4;
+}
+
+message DpdkQuery {
+  uint32 page = 1;
+  uint32 page_size = 2;
+  string start_time = 3;
+  string end_time = 4;
+  string keyword = 5;
+  string order = 6;
+  // JSON object of documented filter fields only. Values may be scalar or a
+  // bounded array of scalars. The service rejects nested objects.
+  string filters_json = 7;
+}
+
+message DpdkJsonResponse {
+  int64 code = 1;
+  string message = 2;
+  string data_json = 3;
+  int32 http_status = 4;
+  string upstream_path = 5;
+}
+
+enum SecurityLogType {
+  SECURITY_LOG_TYPE_UNSPECIFIED = 0;
+  SECURITY_LOG_IPS = 1;
+  SECURITY_LOG_DDOS = 2;
+  SECURITY_LOG_ANTIVIRUS = 3;
+  SECURITY_LOG_WAF = 4;
+  SECURITY_LOG_THREAT_INTELLIGENCE = 5;
+  SECURITY_LOG_WEAK_PASSWORD = 6;
+  SECURITY_LOG_OUTBOUND = 7;
+  SECURITY_LOG_REGIONAL_ACCESS = 8;
+  SECURITY_LOG_INDUSTRIAL_SECURITY = 9;
+  SECURITY_LOG_INDUSTRIAL_AUDIT = 10;
+}
+
+message SecurityLogRequest {
+  SecurityLogType type = 1;
+  DpdkQuery query = 2;
+}
+
+enum BehaviorLogType {
+  BEHAVIOR_LOG_TYPE_UNSPECIFIED = 0;
+  BEHAVIOR_LOG_ALL = 1;
+  BEHAVIOR_LOG_WEB_TITLE = 2;
+  BEHAVIOR_LOG_WEB_URL = 3;
+  BEHAVIOR_LOG_WEB_SEARCH = 4;
+  BEHAVIOR_LOG_EMAIL = 5;
+  BEHAVIOR_LOG_IM_CHAT = 6;
+  BEHAVIOR_LOG_BBS = 7;
+  BEHAVIOR_LOG_ACCOUNT_LOGIN = 8;
+  BEHAVIOR_LOG_OUT_FILE = 9;
+  BEHAVIOR_LOG_OUT_HTTP = 10;
+  BEHAVIOR_LOG_TELNET = 11;
+  BEHAVIOR_LOG_DATABASE = 12;
+  BEHAVIOR_LOG_SMB = 13;
+  BEHAVIOR_LOG_AD_FILTER = 14;
+  BEHAVIOR_LOG_DROP = 15;
+  BEHAVIOR_LOG_SESSION = 16;
+  BEHAVIOR_LOG_ALARM = 17;
+  BEHAVIOR_LOG_PROXY_BYPASS = 18;
+}
+
+message BehaviorLogRequest {
+  BehaviorLogType type = 1;
+  DpdkQuery query = 2;
+}
+
+enum AuditLogType {
+  AUDIT_LOG_TYPE_UNSPECIFIED = 0;
+  AUDIT_LOG_HTTP = 1;
+  AUDIT_LOG_SSL = 2;
+  AUDIT_LOG_FTP = 3;
+  AUDIT_LOG_TELNET = 4;
+  AUDIT_LOG_DNS = 5;
+  AUDIT_LOG_AD_DOMAIN = 6;
+  AUDIT_LOG_LDAP = 7;
+  AUDIT_LOG_NETBIOS_DS = 8;
+  AUDIT_LOG_NETBIOS_NS = 9;
+  AUDIT_LOG_NETBIOS_SS = 10;
+  AUDIT_LOG_RADIUS = 11;
+  AUDIT_LOG_RDP = 12;
+  AUDIT_LOG_RLOGIN = 13;
+  AUDIT_LOG_SMB = 14;
+  AUDIT_LOG_SYSLOG = 15;
+  AUDIT_LOG_SSH = 16;
+  AUDIT_LOG_TFTP = 17;
+  AUDIT_LOG_NFS = 18;
+  AUDIT_LOG_DATABASE = 19;
+  AUDIT_LOG_EMAIL = 20;
+  AUDIT_LOG_AUTH = 21;
+  AUDIT_LOG_USER_QUOTA = 22;
+  AUDIT_LOG_ANTI_SHARE = 23;
+  AUDIT_LOG_SHARE_PENALTY = 24;
+  AUDIT_LOG_TERMINAL_DISCOVERY = 25;
+  AUDIT_LOG_COMPLIANCE_ACCESS = 26;
+  AUDIT_LOG_COMMAND = 27;
+  AUDIT_LOG_EVENT = 28;
+}
+
+message AuditLogRequest {
+  AuditLogType type = 1;
+  DpdkQuery query = 2;
+}
+
+enum SecurityStatisticType {
+  SECURITY_STATISTIC_TYPE_UNSPECIFIED = 0;
+  SECURITY_STATISTIC_IPS_HOLE_TOP10 = 1;
+  SECURITY_STATISTIC_IPS_HOLE_ID_LIST = 2;
+  SECURITY_STATISTIC_IPS_HOLE_TYPE_TOP10 = 3;
+  SECURITY_STATISTIC_IPS_HOLE_TYPE_LIST = 4;
+  SECURITY_STATISTIC_IPS_HOLE_LEVEL_LIST = 5;
+  SECURITY_STATISTIC_ANTIVIRUS_TOP10 = 6;
+  SECURITY_STATISTIC_ANTIVIRUS_LIST = 7;
+  SECURITY_STATISTIC_DDOS_TYPE_TOP10 = 8;
+  SECURITY_STATISTIC_DDOS_TYPE_LIST = 9;
+  SECURITY_STATISTIC_DDOS_SOURCE_LIST = 10;
+  SECURITY_STATISTIC_DDOS_DESTINATION_LIST = 11;
+  SECURITY_STATISTIC_PROXY_BYPASS_TOP10 = 12;
+  SECURITY_STATISTIC_PROXY_BYPASS_USER_RANKING = 13;
+  SECURITY_STATISTIC_PROXY_BYPASS_GROUP_RANKING = 14;
+  SECURITY_STATISTIC_PROXY_BYPASS_APP_RANKING = 15;
+}
+
+message SecurityStatisticRequest {
+  SecurityStatisticType type = 1;
+  DpdkQuery query = 2;
+}
+
+enum FlowAnalysisType {
+  FLOW_ANALYSIS_TYPE_UNSPECIFIED = 0;
+  FLOW_ANALYSIS_USER = 1;
+  FLOW_ANALYSIS_USER_GROUP = 2;
+  FLOW_ANALYSIS_SERVICE = 3;
+  FLOW_ANALYSIS_SERVICE_TYPE = 4;
+  FLOW_ANALYSIS_SITE = 5;
+  FLOW_ANALYSIS_SITE_TYPE = 6;
+  FLOW_ANALYSIS_TERMINAL = 7;
+  FLOW_ANALYSIS_LOCATION = 8;
+  FLOW_ANALYSIS_ONLINE_USER = 9;
+  FLOW_ANALYSIS_ONLINE_USER_GROUP = 10;
+  FLOW_ANALYSIS_ONLINE_SERVICE = 11;
+  FLOW_ANALYSIS_ONLINE_SERVICE_TYPE = 12;
+  FLOW_ANALYSIS_ONLINE_SITE_TYPE = 13;
+  FLOW_ANALYSIS_HOT_USER = 14;
+  FLOW_ANALYSIS_HOT_GROUP = 15;
+  FLOW_ANALYSIS_HOT_SITE = 16;
+  FLOW_ANALYSIS_HOT_SITE_TYPE = 17;
+  FLOW_ANALYSIS_HOT_LOCATION = 18;
+}
+
+message FlowAnalysisRequest {
+  FlowAnalysisType type = 1;
+  DpdkQuery query = 2;
+}
+
+enum ResourceMetricType {
+  RESOURCE_METRIC_TYPE_UNSPECIFIED = 0;
+  RESOURCE_METRIC_CPU = 1;
+  RESOURCE_METRIC_MEMORY = 2;
+  RESOURCE_METRIC_ACTIVE_SESSIONS = 3;
+  RESOURCE_METRIC_NEW_SESSION_RATE = 4;
+  RESOURCE_METRIC_ONLINE_IP = 5;
+  RESOURCE_METRIC_ONLINE_USER = 6;
+  RESOURCE_METRIC_PHYSICAL_INTERFACE = 7;
+}
+
+message ResourceMetricRequest {
+  ResourceMetricType type = 1;
+  DpdkQuery query = 2;
+}
+
+enum ReferenceDataType {
+  REFERENCE_DATA_TYPE_UNSPECIFIED = 0;
+  REFERENCE_DATA_TIME_OBJECT = 1;
+  REFERENCE_DATA_IPS_HOLE_TYPE = 2;
+  REFERENCE_DATA_ATTACK_TYPE = 3;
+  REFERENCE_DATA_ANTIVIRUS_CLASS = 4;
+  REFERENCE_DATA_WAF_TYPE = 5;
+  REFERENCE_DATA_THREAT_INTELLIGENCE_TYPE = 6;
+  REFERENCE_DATA_WEAK_PASSWORD_TYPE = 7;
+  REFERENCE_DATA_INDUSTRIAL_AUDIT_APP = 8;
+  REFERENCE_DATA_TERMINAL_CHECK_EVENT_TYPE = 9;
+  REFERENCE_DATA_EVENT_LEVEL = 10;
+  REFERENCE_DATA_EVENT_TYPE = 11;
+  REFERENCE_DATA_AUTH_TYPE = 12;
+  REFERENCE_DATA_AUTH_RESULT = 13;
+  REFERENCE_DATA_QUOTA_IN_REASON = 14;
+  REFERENCE_DATA_QUOTA_OUT_REASON = 15;
+  REFERENCE_DATA_COMPLIANCE_ACCESS_TYPE = 16;
+  REFERENCE_DATA_COMPLIANCE_ACCESS_ACTION = 17;
+  REFERENCE_DATA_APP = 18;
+  REFERENCE_DATA_APP_DETAIL = 19;
+  REFERENCE_DATA_PROXY_BYPASS_APP_TREE = 20;
+}
+
+message ReferenceDataRequest {
+  ReferenceDataType type = 1;
+  DpdkQuery query = 2;
+}
+
+enum PolicyObjectType {
+  POLICY_OBJECT_TYPE_UNSPECIFIED = 0;
+  POLICY_OBJECT_BLACKLIST = 1;
+  POLICY_OBJECT_IP_WHITELIST = 2;
+  POLICY_OBJECT_TERMINAL_ANTI_VPN = 3;
+}
+
+message PolicyObjectListRequest {
+  PolicyObjectType type = 1;
+  DpdkQuery query = 2;
+}

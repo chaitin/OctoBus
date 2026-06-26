@@ -93,6 +93,10 @@ const services = {
     entryFile: "../ctyun__accessone/bin/ctyun-accessone.js",
     serviceModule: "../ctyun__accessone/src/service.js",
   },
+  "ctdsg-dpdk-v3": {
+    entryFile: "../ctdsg__dpdk_v3/bin/ctdsg-dpdk-v3.js",
+    serviceModule: "../ctdsg__dpdk_v3/src/service.js",
+  },
   "cloudwalker": {
     entryFile: "../chaitin__cloudwalker/bin/cloudwalker.js",
     serviceModule: "../chaitin__cloudwalker/src/service.js",
