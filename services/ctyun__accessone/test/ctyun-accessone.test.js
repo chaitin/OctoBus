@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
+import http from 'node:http';
+import https from 'node:https';
 import test from 'node:test';
+import { PassThrough } from 'node:stream';
+import zlib from 'node:zlib';
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
@@ -22,6 +27,8 @@ import { createMockServer } from './mock_upstream.js';
 
 const originalFetch = globalThis.fetch;
 const originalLog = console.log;
+const originalHttpRequest = http.request;
+const originalHttpsRequest = https.request;
 
 const response = (status, body) => ({
   status,
@@ -65,6 +72,8 @@ const expectGrpcError = async (fn, legacyCode, checker = () => {}) => {
 test.afterEach(() => {
   globalThis.fetch = originalFetch;
   console.log = originalLog;
+  http.request = originalHttpRequest;
+  https.request = originalHttpsRequest;
 });
 
 // ── Service structure ──
@@ -463,33 +472,94 @@ test('signedPost enforces timeout via AbortController', async () => {
 });
 
 test('requestWithNodeTransport supports https when skipTlsVerify=true', async () => {
-  const server = await createMockServer({
-    https: true,
-    tls: {
-      key: process.env.CTYUN_TLS_TEST_KEY,
-      cert: process.env.CTYUN_TLS_TEST_CERT,
+  let capturedOptions;
+  https.request = (options, callback) => {
+    capturedOptions = options;
+    const req = new EventEmitter();
+    req.write = () => {};
+    req.setTimeout = () => {};
+    req.destroy = (err) => req.emit('error', err);
+    req.end = () => {
+      const res = new PassThrough();
+      res.statusCode = 200;
+      res.headers = {};
+      callback(res);
+      res.end(JSON.stringify({ ok: true }));
+    };
+    return req;
+  };
+
+  const result = await _test.requestWithNodeTransport('https://example.com/ctapi/v1/domainRule/getDomainRuleAct', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'ctyun-eop-request-id': 'req-1',
+      'Eop-date': '20240626T000000Z',
+      'Eop-Authorization': _test.makeEopSignature('valid_ak', 'valid_sk', '20240626T000000Z', 'req-1', JSON.stringify({ domain: 'test.com' })),
     },
+    body: JSON.stringify({ domain: 'test.com' }),
+  }, {
+    timeoutMs: 1000,
+    skipTlsVerify: true,
   });
 
-  try {
-    const result = await _test.requestWithNodeTransport(`${server.url}/ctapi/v1/domainRule/getDomainRuleAct`, {
-      method: 'POST',
-      headers: {
+  assert.equal(capturedOptions.rejectUnauthorized, false);
+  assert.equal(capturedOptions.method, 'POST');
+  assert.equal(result.status, 200);
+  assert.equal(await result.text(), JSON.stringify({ ok: true }));
+});
+
+test('requestWithNodeTransport decodes compressed responses', async () => {
+  const cases = [
+    ['gzip', (buf) => zlib.gzipSync(buf)],
+    ['deflate', (buf) => zlib.deflateSync(buf)],
+    ['br', (buf) => zlib.brotliCompressSync(buf)],
+  ];
+
+  for (const [encoding, encode] of cases) {
+    const payload = JSON.stringify({ ok: true, encoding });
+    const server = http.createServer((_req, res) => {
+      const body = encode(Buffer.from(payload));
+      res.writeHead(200, {
         'Content-Type': 'application/json',
-        'ctyun-eop-request-id': 'req-1',
-        'Eop-date': '20240626T000000Z',
-        'Eop-Authorization': _test.makeEopSignature('valid_ak', 'valid_sk', '20240626T000000Z', 'req-1', JSON.stringify({ domain: 'test.com' })),
-      },
-      body: JSON.stringify({ domain: 'test.com' }),
-    }, {
-      timeoutMs: 1000,
-      skipTlsVerify: true,
+        'Content-Encoding': encoding,
+        'Content-Length': body.length,
+      });
+      res.end(body);
     });
-    assert.equal(result.status, 200);
-    assert.equal(server.requests.length, 1);
-  } finally {
-    await server.close();
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address();
+
+    try {
+      const result = await _test.requestWithNodeTransport(`http://127.0.0.1:${port}/compressed`, { method: 'GET' }, { timeoutMs: 1000 });
+      assert.equal(result.status, 200);
+      assert.equal(await result.text(), payload);
+    } finally {
+      await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+    }
   }
+});
+
+test('requestWithNodeTransport rejects on response stream error', async () => {
+  http.request = (_options, callback) => {
+    const req = new EventEmitter();
+    req.write = () => {};
+    req.setTimeout = () => {};
+    req.destroy = (err) => req.emit('error', err);
+    req.end = () => {
+      const res = new PassThrough();
+      res.statusCode = 200;
+      res.headers = {};
+      callback(res);
+      queueMicrotask(() => res.emit('error', new Error('stream broke')));
+    };
+    return req;
+  };
+
+  await assert.rejects(
+    () => _test.requestWithNodeTransport('http://example.com/broken', { method: 'GET' }, { timeoutMs: 1000 }),
+    /stream broke/,
+  );
 });
 
 // ── EOP signing ──

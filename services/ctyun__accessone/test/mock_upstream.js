@@ -23,6 +23,9 @@ const resolveTlsMaterial = (value, label) => {
   }
   if (value.includes('-----BEGIN ')) return value;
   if (fs.existsSync(value)) return fs.readFileSync(value);
+  if (typeof value === 'string' && /[\\/]/.test(value)) {
+    throw new Error(`${label} file not found: ${value}`);
+  }
   return value;
 };
 

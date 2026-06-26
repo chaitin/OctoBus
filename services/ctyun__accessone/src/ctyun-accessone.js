@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import http from 'node:http';
 import https from 'node:https';
+import zlib from 'node:zlib';
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
 // ── RPC paths ──
@@ -134,6 +135,15 @@ const fetchWithTimeout = async (url, init, timeoutMs) => {
   }
 };
 
+const decodeResponseStream = (res) => {
+  const encoding = String(res.headers?.['content-encoding'] ?? '').trim().toLowerCase();
+  if (!encoding || encoding === 'identity') return res;
+  if (encoding === 'gzip' || encoding === 'x-gzip') return res.pipe(zlib.createGunzip());
+  if (encoding === 'deflate') return res.pipe(zlib.createInflate());
+  if (encoding === 'br') return res.pipe(zlib.createBrotliDecompress());
+  return res;
+};
+
 const requestWithNodeTransport = (urlString, init, options = {}) => {
   const url = new URL(urlString);
   const isHttps = url.protocol === 'https:';
@@ -152,8 +162,12 @@ const requestWithNodeTransport = (urlString, init, options = {}) => {
       ...(isHttps && options.skipTlsVerify ? { rejectUnauthorized: false } : {}),
     }, (res) => {
       const chunks = [];
-      res.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
-      res.on('end', () => {
+      const stream = decodeResponseStream(res);
+      const fail = (err) => reject(err);
+      res.on('error', fail);
+      if (stream !== res) stream.on('error', fail);
+      stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+      stream.on('end', () => {
         const text = Buffer.concat(chunks).toString('utf8');
         const status = res.statusCode ?? 0;
         resolve({
@@ -236,7 +250,7 @@ const signedPost = async (gateway, path, bodyObj, ak, sk, ctx) => {
 
   logFlow(ctx, 'response', `HTTP ${resp.status} (${text.length}B)`);
 
-  if (!resp.ok && resp.status !== 200) {
+  if (resp.status < 200 || resp.status >= 300) {
     const code = mapHttpStatusToCode(resp.status);
     throw attachResponse(errorWithCode(code, `CTAPI returned HTTP ${resp.status}`), resp.status, text);
   }
@@ -291,7 +305,7 @@ const signedGet = async (gateway, path, queryParams, ak, sk, ctx) => {
 
   logFlow(ctx, 'response', `HTTP ${resp.status} (${text.length}B)`);
 
-  if (!resp.ok && resp.status !== 200) {
+  if (resp.status < 200 || resp.status >= 300) {
     const code = mapHttpStatusToCode(resp.status);
     throw attachResponse(errorWithCode(code, `CTAPI returned HTTP ${resp.status}`), resp.status, text);
   }

@@ -31,7 +31,7 @@
     "insecureSkipVerify": {
       "type": "boolean",
       "default": false,
-      "description": "Alias for skipTlsVerify."
+      "description": "Legacy alias for skipTlsVerify."
     }
   }
 }
