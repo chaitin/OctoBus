@@ -351,7 +351,7 @@ const handleListIndices = async (req = {}, ctx = {}) => {
   const { username, password } = requireCredentials(callCtx);
   const indexFilter = normalizeIndexFilter(req);
 
-  const path = indexFilter ? `/_cat/${encodeURIComponent(indexFilter).replace(/%2F/g, '/')}` : '/_cat/indices';
+  const path = indexFilter ? `/_cat/indices/${encodeURIComponent(indexFilter).replace(/%2F/g, '/')}` : '/_cat/indices';
   const url = buildUrl(baseUrl, path, { format: 'json', h: 'health,status,index,uuid,pri,rep,docs.count,docs.deleted,store.size,pri.store.size' });
   logFlow(callCtx, 'ListIndices', { url: joinPath(baseUrl, path), indexFilter });
   const headers = { Authorization: buildBasicAuth(username, password) };
