@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "description": "Riversec Botgate HTTPS API base URL, for example https://botgate.example.com:20167."
+    },
+    "host": {
+      "type": "string",
+      "description": "Alias for baseUrl."
+    },
+    "endpoint": {
+      "type": "string",
+      "description": "Alias for baseUrl."
+    },
+    "timeout": {
+      "type": "integer",
+      "minimum": 1000,
+      "maximum": 120000,
+      "default": 30000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1000,
+      "maximum": 120000,
+      "description": "Alias for timeout."
+    },
+    "verifySSL": {
+      "type": "boolean",
+      "default": false,
+      "description": "Verify TLS certificates. Default false for self-signed deployments."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS verification when true."
+    },
+    "tlsInsecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Legacy alias for skipTlsVerify."
+    },
+    "insecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Legacy alias for skipTlsVerify."
+    },
+    "maxRetries": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5,
+      "default": 0,
+      "description": "Retry count for transient network failures."
+    },
+    "productType": {
+      "type": "string",
+      "enum": ["Botgate", "Safeplus"],
+      "default": "Botgate",
+      "description": "Product label for logging."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "Optional additional HTTP headers."
+    }
+  }
+}

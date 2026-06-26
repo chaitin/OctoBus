@@ -97,6 +97,10 @@ const services = {
     entryFile: "../ray__waf_v6-1-2/bin/ray-waf-v6-1-2.js",
     serviceModule: "../ray__waf_v6-1-2/src/service.js",
   },
+  "riversec-waf-26-03": {
+    entryFile: "../riversec__waf_26-03/bin/riversec-waf-26-03.js",
+    serviceModule: "../riversec__waf_26-03/src/service.js",
+  },
   "riversafe-waf": {
     entryFile: "../riversafe__waf/bin/riversafe-waf.js",
     serviceModule: "../riversafe__waf/src/service.js",
