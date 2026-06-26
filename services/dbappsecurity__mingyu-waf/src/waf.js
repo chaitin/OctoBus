@@ -52,19 +52,19 @@ export class WafClient {
       throw errorWithCode('UNAVAILABLE', e?.cause?.message ?? e?.message ?? 'network error');
     }
 
+    if (res.status === 401 || res.status === 403) {
+      throw errorWithCode('PERMISSION_DENIED', `HTTP ${res.status}`);
+    }
+    if (res.status >= 500) {
+      throw errorWithCode('UNAVAILABLE', `HTTP ${res.status}`);
+    }
+
     let json;
     try {
       const text = await res.text();
       json = JSON.parse(text);
     } catch {
       throw errorWithCode('UNKNOWN', `non-JSON response from WAF (HTTP ${res.status})`);
-    }
-
-    if (res.status === 401 || res.status === 403) {
-      throw errorWithCode('PERMISSION_DENIED', `HTTP ${res.status}`);
-    }
-    if (res.status >= 500) {
-      throw errorWithCode('UNAVAILABLE', `HTTP ${res.status}`);
     }
 
     return json;
@@ -173,7 +173,7 @@ export const getClient = (ctx) => {
   if (!secret.username) throw errorWithCode('INVALID_ARGUMENT', 'secret.username is required');
   if (!secret.password) throw errorWithCode('INVALID_ARGUMENT', 'secret.password is required');
 
-  const key = JSON.stringify({ host: config.host, username: secret.username, verify_ssl: config.verify_ssl });
+  const key = JSON.stringify({ host: config.host, username: secret.username, password: secret.password, verify_ssl: config.verify_ssl });
   if (_cachedClient && _cachedKey === key) return _cachedClient;
 
   _cachedClient = new WafClient({

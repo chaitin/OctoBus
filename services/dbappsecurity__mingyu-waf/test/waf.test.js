@@ -167,13 +167,13 @@ test('WafClient re-authenticates on GENERAL_TOKEN_INVALID', async () => {
     calls++;
     if (url.includes('public_key')) return successResponse(TEST_RSA_PUBLIC_KEY);
     if (url.includes('login')) return successResponse({ token: `token-${calls}` });
-    // First call: token expired; second call: success
-    if (calls === 4) return jsonResponse({ code: 'GENERAL_TOKEN_INVALID', message: 'expired', data: null });
+    // calls===3: first API call after initial login → token expired → triggers re-login + retry
+    if (calls === 3) return jsonResponse({ code: 'GENERAL_TOKEN_INVALID', message: 'expired', data: null });
     return jsonResponse({ code: 'SUCCESS', message: '', data: { count: 0, page: 1, per_page: 20, result: [] } });
   });
   const client = new _test.WafClient({ host: 'http://localhost', username: 'u', password: 'p' });
-  // Trigger a request that gets token-expired, should re-login and retry
-  await client.fetch('GET', '/api/v1/security/basic_rules/?');
+  const result = await client.fetch('GET', '/api/v1/security/basic_rules/?');
+  assert.equal(result.code, 'SUCCESS');
 });
 
 test('WafClient maps network error to UNAVAILABLE', async () => {
