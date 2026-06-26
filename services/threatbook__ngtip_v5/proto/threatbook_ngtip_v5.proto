@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package ThreatBook_NGTIP_V5;
+
+option go_package = "miner/grpc-service/ThreatBook_NGTIP_V5";
+
+service ThreatBook_NGTIP_V5 {
+  rpc QueryIPReputation(QueryIPReputationRequest) returns (QueryIPReputationResponse) {}
+  rpc QueryDNSCompromised(QueryDNSCompromisedRequest) returns (QueryDNSCompromisedResponse) {}
+  rpc QueryFileReputation(QueryFileReputationRequest) returns (QueryFileReputationResponse) {}
+  rpc QueryVulnerability(QueryVulnerabilityRequest) returns (QueryVulnerabilityResponse) {}
+  rpc QueryIPLocation(QueryIPLocationRequest) returns (QueryIPLocationResponse) {}
+}
+
+message QueryIPReputationRequest {
+  string resource = 1;
+  optional string host = 2;
+  optional string lang = 3;
+  optional bool location = 4;
+}
+
+message QueryIPReputationResponse {
+  int32 response_code = 1;
+  string verbose_msg = 2;
+  string data = 3;
+}
+
+message QueryDNSCompromisedRequest {
+  string resource = 1;
+  optional string host = 2;
+  optional string lang = 3;
+}
+
+message QueryDNSCompromisedResponse {
+  int32 response_code = 1;
+  string verbose_msg = 2;
+  string data = 3;
+}
+
+message QueryFileReputationRequest {
+  string resource = 1;
+}
+
+message QueryFileReputationResponse {
+  int32 response_code = 1;
+  string verbose_msg = 2;
+  string data = 3;
+}
+
+message QueryVulnerabilityRequest {
+  optional string vuln_id = 1;
+  optional string vendor = 2;
+  optional string product = 3;
+  optional string component_package_manager = 4;
+  optional string component_name = 5;
+  optional string version = 6;
+  optional string update_time = 7;
+  optional string threatbook_create_time = 8;
+  optional bool is_highrisk = 9;
+  optional int32 limit = 10;
+  optional string cursor = 11;
+}
+
+message QueryVulnerabilityResponse {
+  int32 response_code = 1;
+  string verbose_msg = 2;
+  string data = 3;
+}
+
+message QueryIPLocationRequest {
+  string resource = 1;
+}
+
+message QueryIPLocationResponse {
+  int32 response_code = 1;
+  string verbose_msg = 2;
+  string data = 3;
+}

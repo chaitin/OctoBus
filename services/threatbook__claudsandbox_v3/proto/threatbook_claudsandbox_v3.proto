@@ -1,0 +1,89 @@
+syntax = "proto3";
+
+package ThreatBook_ClaudSandbox_V3;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/ThreatBook_ClaudSandbox_V3";
+
+service ThreatBook_ClaudSandbox_V3 {
+  rpc UploadFile(UploadFileRequest) returns (UploadFileResponse) {}
+  rpc GetFileReport(GetFileReportRequest) returns (FileReportResponse) {}
+  rpc GetMultiEnginesReport(GetMultiEnginesReportRequest) returns (MultiEnginesReportResponse) {}
+}
+
+message UploadFileRequest {
+  string file_path = 1;
+  bytes file_bytes = 2;
+  string file_bytes_base64 = 3;
+  string file_name = 4;
+  string sandbox_type = 5;
+  int32 run_time = 6;
+}
+
+message UploadFileResponse {
+  int32 http_status = 1;
+  string raw_body = 2;
+  google.protobuf.Value raw_json = 3;
+  string sha256 = 4;
+  string permalink = 5;
+}
+
+message GetFileReportRequest {
+  string resource = 1;
+  string sha256 = 2;
+  string sandbox_type = 3;
+  repeated string query_fields = 4;
+}
+
+message FileReportResponse {
+  int32 http_status = 1;
+  string raw_body = 2;
+  google.protobuf.Value raw_json = 3;
+  FileReportSummary summary = 4;
+  string permalink = 5;
+  google.protobuf.Value data = 6;
+}
+
+message FileReportSummary {
+  string threat_level = 1;
+  string malware_type = 2;
+  string malware_family = 3;
+  bool is_whitelist = 4;
+  string submit_time = 5;
+  string file_name = 6;
+  string file_type = 7;
+  string sample_sha256 = 8;
+  string md5 = 9;
+  string sha1 = 10;
+  repeated string scenes = 11;
+  int32 threat_score = 12;
+  string sandbox_type = 13;
+  repeated string sandbox_type_list = 14;
+  string multi_engines = 15;
+}
+
+message GetMultiEnginesReportRequest {
+  string resource = 1;
+  string sha256 = 2;
+}
+
+message MultiEnginesReportResponse {
+  int32 http_status = 1;
+  string raw_body = 2;
+  google.protobuf.Value raw_json = 3;
+  MultiEnginesReport multiengines = 4;
+  google.protobuf.Value data = 5;
+}
+
+message MultiEnginesReport {
+  string threat_level = 1;
+  int32 total = 2;
+  google.protobuf.Value scans = 3;
+  bool is_white = 4;
+  int32 total2 = 5;
+  int32 positives = 6;
+  string scan_date = 7;
+  string malware_type = 8;
+  string malware_family = 9;
+}

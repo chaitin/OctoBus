@@ -1,0 +1,45 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "threatbook-ngtip-v5",
+  "displayName": "ThreatBook NGTIP V5",
+  "description": "OctoBus package for ThreatBook NGTIP V5 intelligence queries (IP reputation, DNS compromised, file reputation, vulnerability, IP location).",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/threatbook_ngtip_v5.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "ThreatBook_NGTIP_V5.ThreatBook_NGTIP_V5/QueryIPReputation": {
+          "name": "query-ip-reputation",
+          "description": "Query ThreatBook NGTIP V5 IP reputation."
+        },
+        "ThreatBook_NGTIP_V5.ThreatBook_NGTIP_V5/QueryDNSCompromised": {
+          "name": "query-dns-compromised",
+          "description": "Query ThreatBook NGTIP V5 DNS compromised / malicious domain detection."
+        },
+        "ThreatBook_NGTIP_V5.ThreatBook_NGTIP_V5/QueryFileReputation": {
+          "name": "query-file-reputation",
+          "description": "Query ThreatBook NGTIP V5 file hash reputation."
+        },
+        "ThreatBook_NGTIP_V5.ThreatBook_NGTIP_V5/QueryVulnerability": {
+          "name": "query-vulnerability",
+          "description": "Query ThreatBook NGTIP V5 vulnerability intelligence."
+        },
+        "ThreatBook_NGTIP_V5.ThreatBook_NGTIP_V5/QueryIPLocation": {
+          "name": "query-ip-location",
+          "description": "Query ThreatBook NGTIP V5 IP geolocation."
+        }
+      }
+    }
+  }
+}
