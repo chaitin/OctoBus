@@ -61,6 +61,7 @@ export const READ_ONLY_APIS = [
   { methodName: 'StatisticAddressGroup', api: 'statisticAddressGroup', httpMethod: 'GET', path: '/vfw/v2_address_group_statistic' },
   { methodName: 'QueryAddressGroup', api: 'queryAddressGroup', httpMethod: 'GET', path: '/vfw/v2_address_group_query' },
   { methodName: 'ItemsAddressGroup', api: 'itemsAddressGroup', httpMethod: 'GET', path: '/vfw/v2_address_group_items' },
+  { methodName: 'Notification', api: 'notification', httpMethod: 'GET', path: '/vfw/v2_notification' },
 ];
 
 export const METHOD_INVOKE_READ_ONLY_API_FULL = `${SERVICE_PACKAGE}/InvokeReadOnlyApi`;
