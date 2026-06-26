@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "api_base": {
+      "type": "string",
+      "description": "GitHub API base URL",
+      "default": "https://api.github.com"
+    }
+  }
+}

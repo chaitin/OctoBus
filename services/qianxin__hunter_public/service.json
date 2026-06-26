@@ -1,0 +1,12 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "qianxin__hunter_public",
+  "displayName": "奇安信 Hunter 公开 API",
+  "description": "调用奇安信 Hunter 的 API 实现用户信息获取、语法查询和批量查询",
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/hunter.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json"
+}

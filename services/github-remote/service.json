@@ -1,0 +1,12 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "github-remote",
+  "displayName": "GitHub Remote",
+  "description": "Query GitHub issues, PRs, and workflow runs via GitHub API.",
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/github-remote.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json"
+}

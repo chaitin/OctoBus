@@ -1,0 +1,129 @@
+syntax = "proto3";
+package hunter.v1;
+
+service HunterService {
+  rpc GetUserInfo(GetUserInfoRequest) returns (GetUserInfoResponse);
+  rpc Search(SearchRequest) returns (SearchResponse);
+  rpc BatchSearch(BatchSearchRequest) returns (BatchSearchResponse);
+}
+
+// ==================== GetUserInfo ====================
+message GetUserInfoRequest {
+  // no fields required, api-key is passed via secret
+}
+
+message PersonalInfo {
+  string username = 1 [json_name = "username"];
+  string phone = 2 [json_name = "phone"];
+  bool is_charge = 3 [json_name = "is_charge"];
+}
+
+message UserInfoData {
+  string type = 1 [json_name = "type"];
+  int32 rest_equity_point = 2 [json_name = "rest_equity_point"];
+  int32 rest_free_point = 3 [json_name = "rest_free_point"];
+  int32 rest_export_quota = 4 [json_name = "rest_export_quota"];
+  int32 day_free_point = 5 [json_name = "day_free_point"];
+  int32 day_export_quota = 6 [json_name = "day_export_quota"];
+  int32 once_export_quota = 7 [json_name = "once_export_quota"];
+  PersonalInfo personal_info = 8 [json_name = "personal_info"];
+}
+
+message GetUserInfoResponse {
+  int32 code = 1 [json_name = "code"];
+  string message = 2 [json_name = "message"];
+  UserInfoData data = 3 [json_name = "data"];
+}
+
+// ==================== Search ====================
+message SearchRequest {
+  string search = 1 [json_name = "search"];
+  int32 page = 2 [json_name = "page"];
+  int32 page_size = 3 [json_name = "page_size"];
+  string start_time = 4 [json_name = "start_time"];
+  string end_time = 5 [json_name = "end_time"];
+  string is_web = 6 [json_name = "is_web"];
+  string status_code = 7 [json_name = "status_code"];
+  string fields = 8 [json_name = "fields"];
+}
+
+message Component {
+  string name = 1 [json_name = "name"];
+  string version = 2 [json_name = "version"];
+}
+
+message Asset {
+  string ip = 1 [json_name = "ip"];
+  int32 port = 2 [json_name = "port"];
+  string domain = 3 [json_name = "domain"];
+  string ip_tag = 4 [json_name = "ip_tag"];
+  string url = 5 [json_name = "url"];
+  string web_title = 6 [json_name = "web_title"];
+  string is_risk_protocol = 7 [json_name = "is_risk_protocol"];
+  string protocol = 8 [json_name = "protocol"];
+  string base_protocol = 9 [json_name = "base_protocol"];
+  int32 status_code = 10 [json_name = "status_code"];
+  string os = 11 [json_name = "os"];
+  string company = 12 [json_name = "company"];
+  string number = 13 [json_name = "number"];
+  repeated string icp_exception = 14 [json_name = "icp_exception"];
+  string country = 15 [json_name = "country"];
+  string province = 16 [json_name = "province"];
+  string city = 17 [json_name = "city"];
+  string is_web = 18 [json_name = "is_web"];
+  string isp = 19 [json_name = "isp"];
+  string as_org = 20 [json_name = "as_org"];
+  string cert_sha256 = 21 [json_name = "cert_sha256"];
+  string ssl_certificate = 22 [json_name = "ssl_certificate"];
+  repeated Component component = 23 [json_name = "component"];
+  string asset_tag = 24 [json_name = "asset_tag"];
+  string updated_at = 25 [json_name = "updated_at"];
+  string header = 26 [json_name = "header"];
+  string header_server = 27 [json_name = "header_server"];
+  string banner = 28 [json_name = "banner"];
+}
+
+message SearchData {
+  string account_type = 1 [json_name = "account_type"];
+  int32 total = 2 [json_name = "total"];
+  int32 time = 3 [json_name = "time"];
+  repeated Asset arr = 4 [json_name = "arr"];
+  string consume_quota = 5 [json_name = "consume_quota"];
+  string rest_quota = 6 [json_name = "rest_quota"];
+  string syntax_prompt = 7 [json_name = "syntax_prompt"];
+}
+
+message SearchResponse {
+  int32 code = 1 [json_name = "code"];
+  string message = 2 [json_name = "message"];
+  SearchData data = 3 [json_name = "data"];
+}
+
+// ==================== BatchSearch ====================
+message BatchSearchRequest {
+  // 方式一：通过 search 参数查询（单语法）
+  string search = 1 [json_name = "search"];
+  // 方式二：通过 file_content 参数上传文件内容（批量查询）
+  // 文件格式：每行一个目标（IP/域名/网段），最多10行
+  string file_content = 2 [json_name = "file_content"];
+  string start_time = 3 [json_name = "start_time"];
+  string end_time = 4 [json_name = "end_time"];
+  string is_web = 5 [json_name = "is_web"];
+  string status_code = 6 [json_name = "status_code"];
+  string fields = 7 [json_name = "fields"];
+  string search_type = 8 [json_name = "search_type"];
+  int32 assets_limit = 9 [json_name = "assets_limit"];
+}
+
+message BatchSearchData {
+  int32 task_id = 1 [json_name = "task_id"];
+  string filename = 2 [json_name = "filename"];
+  string consume_quota = 3 [json_name = "consume_quota"];
+  string rest_quota = 4 [json_name = "rest_quota"];
+}
+
+message BatchSearchResponse {
+  int32 code = 1 [json_name = "code"];
+  string message = 2 [json_name = "message"];
+  BatchSearchData data = 3 [json_name = "data"];
+}
