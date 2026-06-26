@@ -117,10 +117,6 @@ const services = {
     entryFile: "../tencent__tsec_v2-5-1/bin/tencent-tsec-v2-5-1.js",
     serviceModule: "../tencent__tsec_v2-5-1/src/service.js",
   },
-  "tencent-cfw": {
-    entryFile: "../tencent__cfw/bin/tencent-cfw.js",
-    serviceModule: "../tencent__cfw/src/service.js",
-  },
   "threatbook-cloudapi-v3": {
     entryFile: "../threatbook__cloudapi_v3/bin/threatbook-cloudapi-v3.js",
     serviceModule: "../threatbook__cloudapi_v3/src/service.js",
@@ -160,6 +156,10 @@ const services = {
   "wd-k01": {
     entryFile: "../wd__k01/bin/wd-k01.js",
     serviceModule: "../wd__k01/src/service.js",
+  },
+  "tencent-cfw": {
+    entryFile: "../tencent__cfw/bin/tencent-cfw.js",
+    serviceModule: "../tencent__cfw/src/service.js",
   },
 };
 

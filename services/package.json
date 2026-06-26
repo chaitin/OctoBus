@@ -33,7 +33,6 @@
     "skycloud-inet": "bin/skycloud-inet.js",
     "tencent-qyweixin-group-robot": "bin/tencent-qyweixin-group-robot.js",
     "tencent-tsec-v2-5-1": "bin/tencent-tsec-v2-5-1.js",
-    "tencent-cfw": "bin/tencent-cfw.js",
     "threatbook-cloudapi-v3": "bin/threatbook-cloudapi-v3.js",
     "threatbook-onesig": "bin/threatbook-onesig.js",
     "threatbook-tdp": "bin/threatbook-tdp.js",
@@ -43,7 +42,8 @@
     "topsec-fw-2u": "bin/topsec-fw-2u.js",
     "venus-ads-v3-6": "bin/venus-ads-v3-6.js",
     "wangsu-label-ip": "bin/wangsu-label-ip.js",
-    "wd-k01": "bin/wd-k01.js"
+    "wd-k01": "bin/wd-k01.js",
+    "tencent-cfw": "bin/tencent-cfw.js"
   },
   "files": [
     "bin/das-gateway-v3.js",
@@ -74,7 +74,6 @@
     "bin/sangfor-fw-v8-0-45.js",
     "bin/tencent-qyweixin-group-robot.js",
     "bin/tencent-tsec-v2-5-1.js",
-    "bin/tencent-cfw.js",
     "bin/threatbook-cloudapi-v3.js",
     "bin/threatbook-onesig.js",
     "bin/threatbook-tdp.js",
@@ -113,7 +112,6 @@
     "sangfor__fw_v8-0-45",
     "tencent__qyweixin-group-robot",
     "tencent__tsec_v2-5-1",
-    "tencent__cfw",
     "threatbook__cloudapi_v3",
     "threatbook__onesig",
     "threatbook__tdp",
@@ -125,7 +123,9 @@
     "wd__k01",
     "wangsu__label-ip",
     "scripts",
-    "bin/octobus-tentacles.js"
+    "bin/octobus-tentacles.js",
+    "tencent__cfw",
+    "bin/tencent-cfw.js"
   ],
   "scripts": {
     "validate": "node scripts/validate-service-package.mjs",

@@ -207,11 +207,15 @@ const buildTlsOptions = (bindings = {}) => {
 
 const fetchJson = async (url, init, { bindings = {}, timeoutMs }) => {
   let res;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs || DEFAULT_TIMEOUT_MS);
   try {
-    res = await fetch(url, { ...init, timeoutMs, ...buildTlsOptions(bindings) });
+    res = await fetch(url, { ...init, signal: controller.signal, ...buildTlsOptions(bindings) });
   } catch (err) {
     const reason = err?.cause?.message || err?.message || 'fetch failed';
     throw errorWithCode('UNAVAILABLE', reason);
+  } finally {
+    clearTimeout(timer);
   }
   const text = await res.text();
   if (!res.ok) mapHttpError(res, text);
@@ -328,7 +332,7 @@ const makeRuntime = (ctx = {}) => {
       Detail: comment.slice(0, 100),
     }));
 
-    const params = { Data: rules, Type: 0, Enable: 0 };
+    const params = { Data: rules, Type: 0, Enable: 1 };
     const response = await callCFWAPI('CreateAcRules', params, { meta, bindings, timeoutMs });
     return { code: 0, message: response.RequestId || 'ok' };
   };
@@ -336,10 +340,19 @@ const makeRuntime = (ctx = {}) => {
   const runUnblock = async (req = {}) => {
     const ips = ensureIPs(req);
 
-    // List existing rules to find matching ones
-    const listResp = await callCFWAPI('DescribeAcLists', { Limit: 100, Offset: 0 }, { meta, bindings, timeoutMs });
-    const allRules = listResp.Data || [];
+    // List existing rules with pagination to find matching ones
     const ipSet = new Set(ips);
+    const allRules = [];
+    let offset = 0;
+    const PAGE_LIMIT = 100;
+    let hasMore = true;
+    while (hasMore) {
+      const listResp = await callCFWAPI('DescribeAcLists', { Limit: PAGE_LIMIT, Offset: offset }, { meta, bindings, timeoutMs });
+      const rules = listResp.Data || [];
+      allRules.push(...rules);
+      if (rules.length < PAGE_LIMIT) hasMore = false;
+      offset += PAGE_LIMIT;
+    }
 
     // Find rule IDs to delete (match by source IP)
     const ruleIds = allRules
