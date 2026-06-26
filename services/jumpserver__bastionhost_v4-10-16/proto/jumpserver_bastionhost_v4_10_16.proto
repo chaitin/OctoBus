@@ -1,0 +1,91 @@
+syntax = "proto3";
+
+package JumpServer_Bastionhost_V41016;
+
+option go_package = "miner/grpc-service/JumpServer_Bastionhost_V41016";
+
+service JumpServer_Bastionhost_V41016 {
+  rpc ListAssets(ListAssetsRequest) returns (ListAssetsResponse) {}
+  rpc GetAsset(GetAssetRequest) returns (AssetResponse) {}
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse) {}
+  rpc ListOnlineSessions(ListOnlineSessionsRequest) returns (ListOnlineSessionsResponse) {}
+}
+
+message ListAssetsRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+  string search = 3;
+  string platform = 4;
+}
+
+message GetAssetRequest {
+  string id = 1;
+}
+
+message ListUsersRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+  string search = 3;
+}
+
+message ListOnlineSessionsRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+  string search = 3;
+}
+
+message Asset {
+  string id = 1;
+  string name = 2;
+  string address = 3;
+  string platform = 4;
+  string category = 5;
+  string type = 6;
+  string comment = 7;
+  string raw_json = 100;
+}
+
+message User {
+  string id = 1;
+  string username = 2;
+  string name = 3;
+  string email = 4;
+  string role = 5;
+  bool is_active = 6;
+  string raw_json = 100;
+}
+
+message OnlineSession {
+  string id = 1;
+  string user = 2;
+  string asset = 3;
+  string account = 4;
+  string protocol = 5;
+  string remote_addr = 6;
+  string login_from = 7;
+  string date_start = 8;
+  string raw_json = 100;
+}
+
+message ListAssetsResponse {
+  int32 total = 1;
+  repeated Asset items = 2;
+  string raw_json = 100;
+}
+
+message AssetResponse {
+  Asset asset = 1;
+  string raw_json = 100;
+}
+
+message ListUsersResponse {
+  int32 total = 1;
+  repeated User items = 2;
+  string raw_json = 100;
+}
+
+message ListOnlineSessionsResponse {
+  int32 total = 1;
+  repeated OnlineSession items = 2;
+  string raw_json = 100;
+}
