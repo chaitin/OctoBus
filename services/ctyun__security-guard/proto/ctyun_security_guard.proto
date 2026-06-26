@@ -87,6 +87,25 @@ service CTYun_SecurityGuard {
   rpc SelectCountry(CTYunRequest) returns (CTYunResponse) {}
   rpc SelectProvince(CTYunRequest) returns (CTYunResponse) {}
   rpc SelectCity(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetHostsByAz(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetHostByAz(CTYunRequest) returns (CTYunResponse) {}
+  rpc AnnouncementAffectedHostDetail(CTYunRequest) returns (CTYunResponse) {}
+  rpc V1instrusionwhitelisthostlist(CTYunRequest) returns (CTYunResponse) {}
+  rpc ScaEventIsrunCheck(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetAgentKey(CTYunRequest) returns (CTYunResponse) {}
+  rpc BusinessGroupQuery22(CTYunRequest) returns (CTYunResponse) {}
+  rpc ScaCheckWhiteList(CTYunRequest) returns (CTYunResponse) {}
+  rpc TamperproofConfigQueryBackup(CTYunRequest) returns (CTYunResponse) {}
+  rpc HostAgentIpList(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetVulWhiteList(CTYunRequest) returns (CTYunResponse) {}
+  rpc TamperproofQueryFilterHostList(CTYunRequest) returns (CTYunResponse) {}
+  rpc AppProofQueryList(CTYunRequest) returns (CTYunResponse) {}
+  rpc TamperproofQueryRemoteServerList(CTYunRequest) returns (CTYunResponse) {}
+  rpc AnnouncementAffectedHostsList1(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetPeriodicScanConf(CTYunRequest) returns (CTYunResponse) {}
+  rpc SyncTime(CTYunRequest) returns (CTYunResponse) {}
+  rpc VulnerabilityGetUpgradeSource(CTYunRequest) returns (CTYunResponse) {}
+  rpc SetFocusQueryList(CTYunRequest) returns (CTYunResponse) {}
   rpc InvokeReadOnlyApi(InvokeReadOnlyApiRequest) returns (CTYunResponse) {}
 }
 
