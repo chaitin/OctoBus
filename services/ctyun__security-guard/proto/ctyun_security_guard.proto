@@ -1,0 +1,123 @@
+syntax = "proto3";
+
+package CTYun_SecurityGuard;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/CTYun_SecurityGuard";
+
+service CTYun_SecurityGuard {
+  rpc UntreatedRisk(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetHostStatus(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetRiskTrend(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetRealTimeDynamics(CTYunRequest) returns (CTYunResponse) {}
+  rpc OverviewAssets(CTYunRequest) returns (CTYunResponse) {}
+  rpc AssetsTop(CTYunRequest) returns (CTYunResponse) {}
+  rpc V1indexagentStatus(CTYunRequest) returns (CTYunResponse) {}
+  rpc IndexOsType(CTYunRequest) returns (CTYunResponse) {}
+  rpc V1indexprotectVersion(CTYunRequest) returns (CTYunResponse) {}
+  rpc V1indexassertDistribution(CTYunRequest) returns (CTYunResponse) {}
+  rpc StatHostsByRegion(CTYunRequest) returns (CTYunResponse) {}
+  rpc StatHostsTrend(CTYunRequest) returns (CTYunResponse) {}
+  rpc AssetClassify(CTYunRequest) returns (CTYunResponse) {}
+  rpc AssertList(CTYunRequest) returns (CTYunResponse) {}
+  rpc AssertAssertChangeHistory(CTYunRequest) returns (CTYunResponse) {}
+  rpc V1hosttotalCount(CTYunRequest) returns (CTYunResponse) {}
+  rpc HostList(CTYunRequest) returns (CTYunResponse) {}
+  rpc HostCSCAllNoRisk(CTYunRequest) returns (CTYunResponse) {}
+  rpc HostRegion(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetHostsDetail(CTYunRequest) returns (CTYunResponse) {}
+  rpc HostCloudGuardStatusQueryQuery(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetHostsVulList(CTYunRequest) returns (CTYunResponse) {}
+  rpc ScaRuleQueryScaRuleListOfPage(CTYunRequest) returns (CTYunResponse) {}
+  rpc ScaRuleQueryScaruleList(CTYunRequest) returns (CTYunResponse) {}
+  rpc ScaRuleQueryScaList(CTYunRequest) returns (CTYunResponse) {}
+  rpc ScaRuleQueryDetail(CTYunRequest) returns (CTYunResponse) {}
+  rpc ScaEventBaseLevel(CTYunRequest) returns (CTYunResponse) {}
+  rpc ScaEventSecondLevel(CTYunRequest) returns (CTYunResponse) {}
+  rpc ScaEventThirdLevel(CTYunRequest) returns (CTYunResponse) {}
+  rpc ScaEventHost(CTYunRequest) returns (CTYunResponse) {}
+  rpc ScaEventCheckDetail(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetVulnerabilityList(CTYunRequest) returns (CTYunResponse) {}
+  rpc VulnerabilityInfo(CTYunRequest) returns (CTYunResponse) {}
+  rpc VulnerabilityDetails(CTYunRequest) returns (CTYunResponse) {}
+  rpc AnnouncementVulTypeCount(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetVulStatistics(CTYunRequest) returns (CTYunResponse) {}
+  rpc VulnerabilityAffectedServers(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetVulScanResult(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetLastScanStatics(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetLastScanDetail(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetLastScanDetailList(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetWeakPwByPage(CTYunRequest) returns (CTYunResponse) {}
+  rpc WeakPwCheck(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetWeakPwList(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetWeakScanConf(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetWeakPwScanResult(CTYunRequest) returns (CTYunResponse) {}
+  rpc V1instrusioneventlist(CTYunRequest) returns (CTYunResponse) {}
+  rpc InstrusionEventDetail(CTYunRequest) returns (CTYunResponse) {}
+  rpc V1instrusioneventstatistics(CTYunRequest) returns (CTYunResponse) {}
+  rpc V1instrusioneventTypestatistics(CTYunRequest) returns (CTYunResponse) {}
+  rpc InstrusionAttckStatistics(CTYunRequest) returns (CTYunResponse) {}
+  rpc InstrusionWhitelistAllList(CTYunRequest) returns (CTYunResponse) {}
+  rpc FileQuarantineList(CTYunRequest) returns (CTYunResponse) {}
+  rpc IpBlockQueryList(CTYunRequest) returns (CTYunResponse) {}
+  rpc TamperproofConfigQuery(CTYunRequest) returns (CTYunResponse) {}
+  rpc TamperProofAlarmLogAlarmList(CTYunRequest) returns (CTYunResponse) {}
+  rpc TamperproofStatistics(CTYunRequest) returns (CTYunResponse) {}
+  rpc TamperproofFileDistribution(CTYunRequest) returns (CTYunResponse) {}
+  rpc TamperproofFileChange(CTYunRequest) returns (CTYunResponse) {}
+  rpc TamperproofProtectionDynamic(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetVirusStatics(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetVirusByPage(CTYunRequest) returns (CTYunResponse) {}
+  rpc VirusDetail(CTYunRequest) returns (CTYunResponse) {}
+  rpc VirusQueryVirusAndRealTimeConf(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetVirusResult(CTYunRequest) returns (CTYunResponse) {}
+  rpc VirusLastScan(CTYunRequest) returns (CTYunResponse) {}
+  rpc VirusLastScanDetail(CTYunRequest) returns (CTYunResponse) {}
+  rpc VirusLastScanDetailList(CTYunRequest) returns (CTYunResponse) {}
+  rpc IntegrityProtectionConfigList(CTYunRequest) returns (CTYunResponse) {}
+  rpc ApiIntegrityProtectionStatistics(CTYunRequest) returns (CTYunResponse) {}
+  rpc ApiIntegrityProtectionFileChangeList(CTYunRequest) returns (CTYunResponse) {}
+  rpc ApiIntegrityProtectionChangeStatistics(CTYunRequest) returns (CTYunResponse) {}
+  rpc SafetyReportEventList(CTYunRequest) returns (CTYunResponse) {}
+  rpc SafetyReportConfigUserConfList(CTYunRequest) returns (CTYunResponse) {}
+  rpc ApiSafetyReportEventStatistics(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetSyncUser(CTYunRequest) returns (CTYunResponse) {}
+  rpc SecurityDataQueryTask(CTYunRequest) returns (CTYunResponse) {}
+  rpc SelectCountry(CTYunRequest) returns (CTYunResponse) {}
+  rpc SelectProvince(CTYunRequest) returns (CTYunResponse) {}
+  rpc SelectCity(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetHostsByAz(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetHostByAz(CTYunRequest) returns (CTYunResponse) {}
+  rpc AnnouncementAffectedHostDetail(CTYunRequest) returns (CTYunResponse) {}
+  rpc V1instrusionwhitelisthostlist(CTYunRequest) returns (CTYunResponse) {}
+  rpc ScaEventIsrunCheck(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetAgentKey(CTYunRequest) returns (CTYunResponse) {}
+  rpc BusinessGroupQuery22(CTYunRequest) returns (CTYunResponse) {}
+  rpc ScaCheckWhiteList(CTYunRequest) returns (CTYunResponse) {}
+  rpc TamperproofConfigQueryBackup(CTYunRequest) returns (CTYunResponse) {}
+  rpc HostAgentIpList(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetVulWhiteList(CTYunRequest) returns (CTYunResponse) {}
+  rpc TamperproofQueryFilterHostList(CTYunRequest) returns (CTYunResponse) {}
+  rpc AppProofQueryList(CTYunRequest) returns (CTYunResponse) {}
+  rpc TamperproofQueryRemoteServerList(CTYunRequest) returns (CTYunResponse) {}
+  rpc AnnouncementAffectedHostsList1(CTYunRequest) returns (CTYunResponse) {}
+  rpc GetPeriodicScanConf(CTYunRequest) returns (CTYunResponse) {}
+  rpc SyncTime(CTYunRequest) returns (CTYunResponse) {}
+  rpc VulnerabilityGetUpgradeSource(CTYunRequest) returns (CTYunResponse) {}
+  rpc SetFocusQueryList(CTYunRequest) returns (CTYunResponse) {}
+  rpc InvokeReadOnlyApi(InvokeReadOnlyApiRequest) returns (CTYunResponse) {}
+}
+
+message CTYunRequest {
+  google.protobuf.Struct payload = 1;
+}
+
+message InvokeReadOnlyApiRequest {
+  string api = 1;
+  google.protobuf.Struct payload = 2;
+}
+
+message CTYunResponse {
+  google.protobuf.Value response = 1;
+}
