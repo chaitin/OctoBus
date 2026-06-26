@@ -10,11 +10,9 @@ const encryptAes256Cbc = (plaintext) => {
   const key = Buffer.from(AES_KEY, 'utf8');
   const iv = Buffer.from(AES_IV, 'utf8');
   const input = Buffer.from(String(plaintext || ''), 'utf8');
-  const padLength = (16 - (input.length % 16)) % 16;
-  const padded = padLength === 0 ? input : Buffer.concat([input, Buffer.alloc(padLength)]);
   const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
-  cipher.setAutoPadding(false);
-  return Buffer.concat([cipher.update(padded), cipher.final()]).toString('base64');
+  // PKCS7 padding (Node.js default) — matches the main service implementation
+  return Buffer.concat([cipher.update(input), cipher.final()]).toString('base64');
 };
 
 const decryptAes256Cbc = (ciphertextB64) => {
@@ -22,18 +20,18 @@ const decryptAes256Cbc = (ciphertextB64) => {
   const iv = Buffer.from(AES_IV, 'utf8');
   const ciphertext = Buffer.from(String(ciphertextB64 || '').replace(/\s+/g, ''), 'base64');
   const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-  decipher.setAutoPadding(false);
+  // PKCS7 padding (Node.js default) — matches the main service implementation
   const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-  let end = decrypted.length;
-  while (end > 0 && decrypted[end - 1] === 0) end--;
-  return decrypted.slice(0, end).toString('utf8');
+  return decrypted.toString('utf8');
 };
+
+const SIGN_SALT = 'dO(QK*EX@cTG';
 
 // Mock token for authenticated requests
 const MOCK_TOKEN = 'mock_jwt_token_edr_2024';
 const MOCK_NONCE = 'mock_nonce_abc';
 const MOCK_STIME = '1719300000';
-const MOCK_SIGN = crypto.createHash('md5').update(MOCK_NONCE + MOCK_STIME + MOCK_TOKEN, 'utf8').digest('hex');
+const MOCK_SIGN = crypto.createHash('md5').update(MOCK_TOKEN + MOCK_STIME + MOCK_NONCE + SIGN_SALT, 'utf8').digest('hex');
 
 // Mock terminal data
 const MOCK_CLIENTS = [
@@ -98,10 +96,19 @@ export const mockLoginResponse = () => {
 
 /**
  * Validate that a login request body contains properly encrypted credentials.
- * Returns the decrypted username and password.
+ * The actual EDR login body format is { encryptStr: AES(JSON) } where
+ * the encrypted JSON contains username and hashedPassword.
+ * Returns the decrypted username and password hash.
  */
 export const decryptLoginBody = (body) => {
   const parsed = JSON.parse(body);
+  const encryptStr = parsed.encryptStr;
+  if (encryptStr) {
+    const decrypted = decryptAes256Cbc(encryptStr);
+    const decoded = JSON.parse(decrypted);
+    return { username: decoded.username, password: decoded.password };
+  }
+  // Fallback: legacy format { username: enc, password: enc }
   const username = decryptAes256Cbc(parsed.username);
   const password = decryptAes256Cbc(parsed.password);
   return { username, password };
@@ -113,7 +120,7 @@ export const decryptLoginBody = (body) => {
  */
 export const validateSignedQuery = (query) => {
   const expectedSign = crypto.createHash('md5')
-    .update(String(query.nonce || '') + String(query.stime || '') + String(query.token || ''), 'utf8')
+    .update(String(query.token || '') + String(query.stime || '') + String(query.nonce || '') + SIGN_SALT, 'utf8')
     .digest('hex');
   return query.sign === expectedSign;
 };

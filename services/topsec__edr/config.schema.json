@@ -23,12 +23,12 @@
     },
     "skipTlsVerify": {
       "type": "boolean",
-      "default": true,
-      "description": "Skip TLS certificate verification for private EDR deployments (default true because EDR typically uses self-signed certificates)."
+      "default": false,
+      "description": "Skip TLS certificate verification for private EDR deployments with self-signed certificates. Enable only when you understand the MITM risk."
     },
     "tlsInsecureSkipVerify": {
       "type": "boolean",
-      "default": true,
+      "default": false,
       "description": "Legacy alias for skipTlsVerify."
     }
   }
