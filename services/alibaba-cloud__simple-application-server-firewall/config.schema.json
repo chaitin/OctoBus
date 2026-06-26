@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "regionId": {
+      "type": "string",
+      "description": "Alibaba Cloud region ID, for example cn-beijing."
+    },
+    "region_id": {
+      "type": "string",
+      "description": "Alias for regionId."
+    },
+    "instanceId": {
+      "type": "string",
+      "description": "Simple Application Server instance ID."
+    },
+    "instance_id": {
+      "type": "string",
+      "description": "Alias for instanceId."
+    },
+    "endpoint": {
+      "type": "string",
+      "description": "Optional SWAS OpenAPI endpoint override. Defaults to swas.<regionId>.aliyuncs.com."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 10000,
+      "description": "Alibaba Cloud SDK request timeout in milliseconds."
+    },
+    "timeout_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Alias for timeoutMs."
+    }
+  }
+}
