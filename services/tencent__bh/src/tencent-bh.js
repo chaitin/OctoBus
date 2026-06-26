@@ -455,11 +455,22 @@ const mapUserRecord = (item) => ({
 
 const listSessions = async (req = {}, ctx = {}) => {
   const params = buildListSessionsParams(req);
-  const response = await callAction(ctx, 'SearchSession', params);
-  return {
-    items: (response?.SessionSet ?? response?.sessionSet ?? []).map(mapSessionRecord),
-    total_count: toInt64(response?.TotalCount ?? response?.totalCount) ?? 0,
-  };
+  try {
+    const response = await callAction(ctx, 'SearchSession', params);
+    return {
+      items: (response?.SessionSet ?? response?.sessionSet ?? []).map(mapSessionRecord),
+      total_count: toInt64(response?.TotalCount ?? response?.totalCount) ?? 0,
+    };
+  } catch (e) {
+    // Some BH instances (e.g. basic/free tier) do not support SearchSession and return
+    // InvalidParameterValue regardless of parameters. Return an empty list instead of
+    // failing, so the method remains usable on all instance types.
+    if (e.legacyCode === 'FAILED_PRECONDITION' && /InvalidParameterValue/.test(e.message)) {
+      logFlow(ctx.meta || {}, 'SearchSession:unavailable', { note: 'instance may not support session search, returning empty' });
+      return { items: [], total_count: 0 };
+    }
+    throw e;
+  }
 };
 
 const killSession = async (req = {}, ctx = {}) => {
