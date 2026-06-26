@@ -93,10 +93,10 @@ const buildCanonicalQueryString = (params = {}) => {
 };
 
 const signHuawei = (accessKey, secretKey, method, uri, queryString, body, sdkDate, region) => {
-  const canonicalURI = ensureTrailingSlash(uri);
+  const canonicalURI = uri || '/';
   const host = `waf.${region}.myhuaweicloud.com`;
   const payloadHash = sha256hex(body);
-  const contentType = body ? 'application/json;charset=utf8' : 'application/json';
+  const contentType = body ? 'application/json;charset=utf-8' : 'application/json';
   const signedHeaders = ['content-type', 'host', 'x-sdk-date'];
   const canonicalHeaders = [
     `content-type:${contentType}\n`,
@@ -158,11 +158,15 @@ const buildTlsOptions = (bindings = {}) => {
 
 const fetchJson = async (url, init, { bindings = {}, timeoutMs }) => {
   let res;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs || DEFAULT_TIMEOUT_MS);
   try {
-    res = await fetch(url, { ...init, timeoutMs, ...buildTlsOptions(bindings) });
+    res = await fetch(url, { ...init, signal: controller.signal, ...buildTlsOptions(bindings) });
   } catch (err) {
     const reason = err?.cause?.message || err?.message || 'fetch failed';
     throw errorWithCode('UNAVAILABLE', reason);
+  } finally {
+    clearTimeout(timer);
   }
   const text = await res.text();
   if (!res.ok) mapHttpError(res, text);
@@ -183,8 +187,8 @@ const resolveTimeoutMs = (ctx = {}, bindings = {}) =>
 // ---- WAF API call ----
 
 const callWAFAPI = async (method, uriPath, queryString, body, { meta, bindings, timeoutMs }) => {
-  const accessKey = unwrapString(firstDefined(bindings.access_key, bindings.accessKey)).trim();
-  const secretKey = unwrapString(firstDefined(bindings.secret_key, bindings.secretKey)).trim();
+  const accessKey = unwrapString(firstDefined(bindings.access_key, bindings.accessKey, bindings.ak)).trim();
+  const secretKey = unwrapString(firstDefined(bindings.secret_key, bindings.secretKey, bindings.sk)).trim();
   if (!accessKey) throw errorWithCode('PERMISSION_DENIED', 'access_key is required in bindings');
   if (!secretKey) throw errorWithCode('PERMISSION_DENIED', 'secret_key is required in bindings');
 
