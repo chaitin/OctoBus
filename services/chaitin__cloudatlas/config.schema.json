@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "description": "CloudAtlas API base URL, for example https://cloudatlas.example.com."
+    },
+    "space": {
+      "type": "integer",
+      "description": "Default space ID. Per-request space parameter takes precedence when provided."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "Optional extra HTTP headers sent to CloudAtlas."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 15000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for private CloudAtlas deployments."
+    }
+  }
+}

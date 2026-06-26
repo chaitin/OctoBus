@@ -1,0 +1,57 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "alibaba-cloud-simple-application-server-firewall",
+  "displayName": "Alibaba Cloud Simple Application Server Firewall",
+  "description": "OctoBus package for Alibaba Cloud Simple Application Server firewall rule CRUD operations.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/alibaba_cloud_simple_application_server_firewall.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "AlibabaCloud_SWAS_Firewall.SimpleApplicationServerFirewallService/CreateFirewallRule": {
+          "name": "create-firewall-rule",
+          "description": "Create one firewall rule on an Alibaba Cloud Simple Application Server instance."
+        },
+        "AlibabaCloud_SWAS_Firewall.SimpleApplicationServerFirewallService/CreateFirewallRules": {
+          "name": "create-firewall-rules",
+          "description": "Create multiple firewall rules on an Alibaba Cloud Simple Application Server instance."
+        },
+        "AlibabaCloud_SWAS_Firewall.SimpleApplicationServerFirewallService/ListFirewallRules": {
+          "name": "list-firewall-rules",
+          "description": "List firewall rules on an Alibaba Cloud Simple Application Server instance."
+        },
+        "AlibabaCloud_SWAS_Firewall.SimpleApplicationServerFirewallService/ModifyFirewallRule": {
+          "name": "modify-firewall-rule",
+          "description": "Modify one firewall rule on an Alibaba Cloud Simple Application Server instance."
+        },
+        "AlibabaCloud_SWAS_Firewall.SimpleApplicationServerFirewallService/DeleteFirewallRule": {
+          "name": "delete-firewall-rule",
+          "description": "Delete one firewall rule from an Alibaba Cloud Simple Application Server instance."
+        },
+        "AlibabaCloud_SWAS_Firewall.SimpleApplicationServerFirewallService/DeleteFirewallRules": {
+          "name": "delete-firewall-rules",
+          "description": "Delete multiple firewall rules from an Alibaba Cloud Simple Application Server instance."
+        },
+        "AlibabaCloud_SWAS_Firewall.SimpleApplicationServerFirewallService/EnableFirewallRule": {
+          "name": "enable-firewall-rule",
+          "description": "Enable one firewall rule on an Alibaba Cloud Simple Application Server instance."
+        },
+        "AlibabaCloud_SWAS_Firewall.SimpleApplicationServerFirewallService/DisableFirewallRule": {
+          "name": "disable-firewall-rule",
+          "description": "Disable one firewall rule on an Alibaba Cloud Simple Application Server instance."
+        }
+      }
+    }
+  }
+}

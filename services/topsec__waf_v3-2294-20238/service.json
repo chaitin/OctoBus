@@ -1,0 +1,53 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "topsec-waf-v3-2294-20238",
+  "displayName": "TopSec WAF v3.2294.20238",
+  "description": "OctoBus package for TopSec WAF v3.2294.20238 — IP blacklist management and URL block rules via RESTful API.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/topsec_waf.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "TopSec_WAF.TopSec_WAF/AddBlacklistIP": {
+          "name": "add-blacklist-ip",
+          "description": "Add IP addresses to the TopSec WAF blacklist."
+        },
+        "TopSec_WAF.TopSec_WAF/DeleteBlacklistIP": {
+          "name": "delete-blacklist-ip",
+          "description": "Remove a blacklist group by name in TopSec WAF."
+        },
+        "TopSec_WAF.TopSec_WAF/ListBlacklistIPs": {
+          "name": "list-blacklist-ips",
+          "description": "List IP blacklist entries from TopSec WAF."
+        },
+        "TopSec_WAF.TopSec_WAF/AddUrlBlock": {
+          "name": "add-url-block",
+          "description": "Add a URL block rule (custom policy) in TopSec WAF."
+        },
+        "TopSec_WAF.TopSec_WAF/DeleteUrlBlock": {
+          "name": "delete-url-block",
+          "description": "Remove a URL block rule by name in TopSec WAF."
+        },
+        "TopSec_WAF.TopSec_WAF/ListUrlBlocks": {
+          "name": "list-url-blocks",
+          "description": "List URL block rules from TopSec WAF."
+        },
+        "TopSec_WAF.TopSec_WAF/SetUrlBlockStatus": {
+          "name": "set-url-block-status",
+          "description": "Enable or disable a URL block rule in TopSec WAF."
+        }
+      }
+    }
+  }
+}
