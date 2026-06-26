@@ -347,6 +347,7 @@ const invokeVolcengine = async (spec, payload, ctx = {}) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let res;
+  let body;
   try {
     res = await fetch(endpoint.toString(), {
       method: actionSpec.httpMethod,
@@ -354,7 +355,9 @@ const invokeVolcengine = async (spec, payload, ctx = {}) => {
       body: actionSpec.httpMethod === 'GET' ? undefined : bodyText,
       signal: controller.signal,
     });
+    body = await parseVolcengineResponse(res);
   } catch (err) {
+    if (err.legacyCode) throw err;
     if (err.name === 'AbortError' || err.name === 'TimeoutError') {
       throw errorWithCode('DEADLINE_EXCEEDED', `Volcengine WAF API request timed out after ${timeoutMs}ms`);
     }
@@ -362,8 +365,6 @@ const invokeVolcengine = async (spec, payload, ctx = {}) => {
   } finally {
     clearTimeout(timeout);
   }
-
-  const body = await parseVolcengineResponse(res);
   if (res.status < 200 || res.status >= 300) {
     throw errorWithCode('UNAVAILABLE', `Volcengine WAF API HTTP ${res.status}: ${JSON.stringify(body).slice(0, 500)}`);
   }
