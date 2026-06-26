@@ -335,3 +335,33 @@ test('handler accepts OctoBus SDK single-argument context', async () => {
   assert.match(captured.init.headers.Authorization, /^TC3-HMAC-SHA256 Credential=SDKID\//);
   assert.deepEqual(captured.body, { Limit: 5 });
 });
+
+test('InvokeReadOnlyAction accepts OctoBus SDK single-argument context', async () => {
+  let captured;
+  mockJSON((url, init) => {
+    captured = { url, init, body: JSON.parse(init.body) };
+    return { Response: { RequestId: 'req-sdk-invoke', Items: [] } };
+  });
+
+  await handlers[METHOD_INVOKE_READ_ONLY_ACTION]({
+    request: {
+      action: 'DescribeDSPAComplianceGroups',
+      params: { DspaId: 'dspa-abcd' },
+    },
+    config: {
+      endpoint: 'https://dsgc.tencentcloudapi.com',
+      region: 'ap-shanghai',
+    },
+    secret: {
+      secretId: 'SDKID',
+      secretKey: 'SDKKEY',
+    },
+    limits: { timeoutMs: 10_000 },
+  });
+
+  assert.equal(captured.url, 'https://dsgc.tencentcloudapi.com');
+  assert.equal(captured.init.headers['X-TC-Action'], 'DescribeDSPAComplianceGroups');
+  assert.equal(captured.init.headers['X-TC-Region'], 'ap-shanghai');
+  assert.match(captured.init.headers.Authorization, /^TC3-HMAC-SHA256 Credential=SDKID\//);
+  assert.deepEqual(captured.body, { DspaId: 'dspa-abcd' });
+});
