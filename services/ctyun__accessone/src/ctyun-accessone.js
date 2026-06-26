@@ -330,6 +330,33 @@ const requireString = (value, name) => {
   return v;
 };
 
+const normalizeRequestShape = (value) => {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeRequestShape(item));
+  }
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+
+  const out = Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [key, normalizeRequestShape(item)]),
+  );
+  for (const [camelKey, snakeKey] of [
+    ['productCode', 'product_code'],
+    ['areaScope', 'area_scope'],
+    ['pageSize', 'page_size'],
+    ['requestId', 'request_id'],
+    ['ruleName', 'rule_name'],
+    ['publicRange', 'public_range'],
+    ['publicContent', 'public_content'],
+  ]) {
+    if (out[snakeKey] === undefined && out[camelKey] !== undefined) {
+      out[snakeKey] = out[camelKey];
+    }
+  }
+  return out;
+};
+
 // ── Handlers ──
 
 // 1. 域名列表 (GET)
@@ -496,7 +523,12 @@ const handleIPv6NoSupLink = async (req, ctx = {}) => {
   return signedPost(gateway, HTTP_IPV6_NO_SUP_LINK, { requestId }, ak, sk, ctx);
 };
 
-const makeHandler = (fn) => async (call, ctx) => fn(call.request ?? call, ctx ?? call.context ?? {});
+const makeHandler = (fn) => async (callOrCtx, maybeCtx) => {
+  if (maybeCtx !== undefined) {
+    return fn(normalizeRequestShape(callOrCtx?.request ?? callOrCtx), maybeCtx ?? callOrCtx?.context ?? {});
+  }
+  return fn(normalizeRequestShape(callOrCtx?.request ?? callOrCtx), callOrCtx ?? {});
+};
 
 export const handlers = {
   [RPC_DOMAIN_LIST]: makeHandler(handleDomainList),
@@ -537,4 +569,5 @@ export const _test = {
   toTrimmedString,
   mergedBindings,
   logFlow,
+  normalizeRequestShape,
 };

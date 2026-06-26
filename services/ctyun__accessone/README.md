@@ -6,7 +6,7 @@
 |------|------|
 | 用途 | AccessOne 配置查询 + 访问控制规则管理 |
 | 接口数 | 10 个 RPC（8 读 + 2 写），覆盖 6 个产品域 |
-| 测试 | 默认 `node --test`：39 pass / 0 fail / 1 skip；`RUN_INTEGRATION=1`：40 pass / 0 fail / 0 skip；真机 16/16 验证通过 |
+| 测试 | 默认 `node --test`：43 pass / 0 fail / 1 skip；`RUN_INTEGRATION=1`：40 pass / 0 fail / 0 skip；真机 16/16 验证通过 |
 | 输入 | 域名 + `product_code`（资源包/IPv6 查询另有参数） |
 | 输出 | CTAPI 原始 JSON 响应透传（`http_status` + `http_body`） |
 | 依赖 | `@chaitin-ai/octobus-sdk ^0.5.0` |
@@ -102,7 +102,7 @@ update-access-control-switch — 域名级访问控制总开关
 
 | 模式 | 命令 | 结果 | 说明 |
 |------|------|------|------|
-| 默认单测 | `node --test ctyun__accessone/test/ctyun-accessone.test.js` | 39 pass / 0 fail / 1 skip | 包含 helper、超时、TLS fallback、压缩响应、响应流错误回归；跳过 mock integration |
+| 默认单测 | `node --test ctyun__accessone/test/ctyun-accessone.test.js` | 43 pass / 0 fail / 1 skip | 包含 helper、超时、TLS fallback、压缩响应、解压流错误、响应流错误回归；新增 SDK 单参数 ctx / camelCase 请求归一化回归；跳过 mock integration |
 | mock integration | `RUN_INTEGRATION=1 node --test ctyun__accessone/test/ctyun-accessone.test.js` | 40 pass / 0 fail / 0 skip | 10/10 endpoint 通路 + EOP 签名校验 |
 
 ### 真机验证记录
@@ -125,8 +125,10 @@ update-access-control-switch — 域名级访问控制总开关
 | 12 | update-access-control-switch CLOSE | 200 ✓ | 回归：写通路正常 |
 | 13 | update-access-control-switch ON | 200 ✓ | 回归：恢复开关 |
 | 14 | query-resource-packages | 200 ✓ | 回归：资源包通路 |
-| 15 | query-ipv6-nosup-link | 200 ✓ | 回归：IPv6 通路 |
+| 15 | query-ipv6-nosup-link | 200 ✓ | 使用真实 `requestId=20266` 回归成功 |
 | 16 | MonkeyCode 修复后 5 接口回归 | 5/5 ✓ | timeout/TLS/资源包/IPv6/访问控制通路全部正常 |
+| 17 | insert-access-control（二次复测） | 200 ✓ | 手动清理配额后重新写入成功，返回 ruleId |
+| 18 | update-access-control-switch CLOSE→ON | 200 ✓ | 写通路回滚后再次查询确认 mod=ON |
 
 ### 代码审查修复记录
 
@@ -144,6 +146,9 @@ MonkeyCode 审查与后续一致性补全已同步到当前实现：
 | 8 | src/ctyun-accessone.js | `public_range` 非法结构静默降级为空数组 | 无效 group 直接抛 `INVALID_ARGUMENT` | 单测 |
 | 9 | src/ctyun-accessone.js | `requestWithNodeTransport` 未处理压缩响应 | 新增 `gzip` / `deflate` / `br` 解码逻辑 | 单测 |
 | 10 | src/ctyun-accessone.js | `requestWithNodeTransport` 缺少响应流错误监听 | 为原始响应流与解压流补 `error` 传播 | 单测 |
+| 11 | src/ctyun-accessone.js | `makeHandler` 与 SDK 单参数 ctx 调用形态不兼容，导致真实 OctoBus Connect 场景下 `secret/config` 丢失 | wrapper 兼容 SDK 单参数与现有双参数测试调用 | 单测 + 本地 OctoBus 真机验证 |
+| 12 | src/ctyun-accessone.js | ProtoJSON/SDK 默认 camelCase 字段与内部 snake_case handler 参数名不一致 | 新增统一 `normalizeRequestShape`，兼容 `productCode/requestId/ruleName/publicRange/publicContent` 等字段 | 单测 + 本地 OctoBus 真机验证 |
+| 13 | test/ctyun-accessone.test.js | 仅覆盖原始响应流报错，未覆盖解压流自身报错分支 | 新增损坏 gzip 响应回归，验证 `stream !== res` 时解压流 error 能正确 reject | 单测 |
 
 ### 已知限制
 
@@ -151,5 +156,5 @@ MonkeyCode 审查与后续一致性补全已同步到当前实现：
 |------|------|------|
 | GET 带参签名 | `query-domain-list` 不支持 `page/page_size` 之外的复杂查询扩展 | 天翼云 EOP GET 签名对 query string 的规范未公开，复杂带参请求易触发签名不一致 |
 | 单条规则启停/删除 | 不支持 `updateAccessControl` / `deleteAccessControl` | AKSK 缺少 `accessControlConf` 子模块权限（返回 `200003`） |
-| insert 规则数上限 | 高频测试域名可能撞到厂商侧规则配额 | 非代码问题，生产域名规则数较少时通常不受影响 |
-| IPv6 数据依赖 | 需先在控制台创建检测任务获取 `requestId` | 接口为查询性质，无创建任务能力 |
+| insert 规则数上限 | 高频测试域名可能撞到厂商侧规则配额；清理旧规则后可恢复写入成功 | 非代码问题，生产域名规则数较少时通常不受影响 |
+| IPv6 数据依赖 | 需先在控制台创建检测任务获取 `requestId`（本轮验证使用 `20266` 成功） | 接口为查询性质，无创建任务能力 |
