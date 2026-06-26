@@ -1,0 +1,36 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "baseUrl"
+  ],
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "minLength": 1
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 10000
+    },
+    "allowInsecureHttp": {
+      "type": "boolean",
+      "default": false
+    },
+    "timestampPrecision": {
+      "type": "string",
+      "enum": [
+        "seconds",
+        "milliseconds"
+      ],
+      "default": "seconds"
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  }
+}
