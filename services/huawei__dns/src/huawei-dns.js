@@ -100,9 +100,9 @@ const buildCanonicalQueryString = (params = {}) => {
 };
 
 const signHuawei = (accessKey, secretKey, method, uri, queryString, body, sdkDate) => {
-  const canonicalURI = ensureTrailingSlash(uri);
+  const canonicalURI = uri || '/';
   const payloadHash = sha256hex(body || '');
-  const contentType = body ? 'application/json;charset=utf8' : 'application/json';
+  const contentType = body ? 'application/json;charset=utf-8' : 'application/json';
   const signedHeaders = ['content-type', 'host', 'x-sdk-date'];
   const canonicalHeaders = [
     `content-type:${contentType}\n`,
@@ -164,11 +164,15 @@ const buildTlsOptions = (bindings = {}) => {
 
 const fetchJson = async (url, init, { bindings = {}, timeoutMs }) => {
   let res;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs || DEFAULT_TIMEOUT_MS);
   try {
-    res = await fetch(url, { ...init, timeoutMs, ...buildTlsOptions(bindings) });
+    res = await fetch(url, { ...init, signal: controller.signal, ...buildTlsOptions(bindings) });
   } catch (err) {
     const reason = err?.cause?.message || err?.message || 'fetch failed';
     throw errorWithCode('UNAVAILABLE', reason);
+  } finally {
+    clearTimeout(timer);
   }
   const text = await res.text();
   if (!res.ok) mapHttpError(res, text);
@@ -273,7 +277,7 @@ const makeRuntime = (ctx = {}) => {
       create_time: rs.created_at || '',
     }));
 
-    return { code: 0, message: 'ok', data: items, total: items.length };
+    return { code: 0, message: 'ok', data: items, total: response.metadata?.total_count ?? items.length };
   };
 
   const runCreateRecordSet = async (req = {}) => {
@@ -293,7 +297,7 @@ const makeRuntime = (ctx = {}) => {
     const body = { name, type: rtype, records: [value], ttl };
     if (description) body.description = description;
 
-    const response = await callDNSAPI('POST', `/v2/zones/${zoneId}/recordsets`, '', JSON.stringify(body), { meta, bindings, timeoutMs });
+    const response = await callDNSAPI('POST', `/v2/zones/${encodeURIComponent(zoneId)}/recordsets`, '', JSON.stringify(body), { meta, bindings, timeoutMs });
 
     return {
       code: 0, message: 'ok',
@@ -311,7 +315,7 @@ const makeRuntime = (ctx = {}) => {
     if (!zoneId) throw errorWithCode('INVALID_ARGUMENT', 'zone_id is required');
     if (!recordsetId) throw errorWithCode('INVALID_ARGUMENT', 'recordset_id is required');
 
-    await callDNSAPI('DELETE', `/v2/zones/${zoneId}/recordsets/${recordsetId}`, '', '', { meta, bindings, timeoutMs });
+    await callDNSAPI('DELETE', `/v2/zones/${encodeURIComponent(zoneId)}/recordsets/${encodeURIComponent(recordsetId)}`, '', '', { meta, bindings, timeoutMs });
 
     return { code: 0, message: 'ok' };
   };
@@ -329,7 +333,7 @@ export const handlers = {
 };
 
 export const _test = {
-  sha256hex, hmacSha256, signHuawei, buildCanonicalQueryString, iso8601Basic, ensureTrailingSlash,
+  sha256hex, hmacSha256, signHuawei, buildCanonicalQueryString, iso8601Basic,
   errorWithCode, firstDefined, hasOwn, logInfo, logError, makeRuntime, mapHttpError,
   mergedBindings, optionalUint32, parseJson, resolveCallContext, resolveTimeoutMs, toBoolean, unwrapString,
 };
