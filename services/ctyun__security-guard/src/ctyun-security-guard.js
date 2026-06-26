@@ -108,6 +108,7 @@ const grpcCodeFor = (code) => ({
   INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT,
   PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED,
   UNAVAILABLE: grpcStatus.UNAVAILABLE,
+  DEADLINE_EXCEEDED: grpcStatus.DEADLINE_EXCEEDED,
   UNKNOWN: grpcStatus.UNKNOWN,
 })[code] ?? grpcStatus.UNKNOWN;
 
@@ -221,12 +222,22 @@ const endpointFor = (endpoint) => {
 const uriEscape = (value) => encodeURIComponent(String(value))
   .replace(/[!'()*]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`);
 
+const assertQueryParamValue = (key, value) => {
+  if (value !== null && typeof value === 'object') {
+    throw errorWithCode('INVALID_ARGUMENT', `nested object not supported in query params for key "${key}"`);
+  }
+};
+
 const queryParamsToString = (params = {}) => Object.keys(params)
   .filter((key) => params[key] !== undefined && params[key] !== null && params[key] !== '')
   .sort()
   .flatMap((key) => {
     const value = params[key];
-    if (Array.isArray(value)) return value.map((item) => `${key}=${uriEscape(item)}`).sort();
+    if (Array.isArray(value)) return value.map((item) => {
+      assertQueryParamValue(key, item);
+      return `${key}=${uriEscape(item)}`;
+    }).sort();
+    assertQueryParamValue(key, value);
     return [`${key}=${uriEscape(value)}`];
   })
   .join('&');
@@ -379,16 +390,24 @@ const invokeCtyun = async (spec, payload, ctx = {}) => {
     requestId: requestId || undefined,
     date,
   });
+  const timeoutMs = resolveTimeoutMs(callCtx);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let res;
   try {
     res = await fetch(url.toString(), {
       method: apiSpec.httpMethod,
       headers: buildHeaders(callCtx, signed.headers),
       body: apiSpec.httpMethod === 'GET' ? undefined : bodyText,
-      timeoutMs: resolveTimeoutMs(callCtx),
+      signal: controller.signal,
     });
   } catch (err) {
+    if (err.name === 'AbortError' || err.name === 'TimeoutError') {
+      throw errorWithCode('DEADLINE_EXCEEDED', `CTYun Server Security Guard API request timed out after ${timeoutMs}ms`);
+    }
     throw errorWithCode('UNAVAILABLE', `failed to call CTYun Server Security Guard API: ${err.message}`);
+  } finally {
+    clearTimeout(timeout);
   }
 
   const body = await parseJsonResponse(res);
