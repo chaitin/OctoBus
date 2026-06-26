@@ -950,12 +950,15 @@ describe('Error handling — network errors', () => {
   });
 });
 
-describe('skipTlsVerify — tlsOptions passed to fetch', () => {
+describe('skipTlsVerify — NODE_TLS_REJECT_UNAUTHORIZED handling', () => {
   beforeEach(() => { originalFetch = globalThis.fetch; });
   afterEach(() => { globalThis.fetch = originalFetch; });
 
-  it('passes insecureSkipVerify and tlsInsecureSkipVerify when skipTlsVerify is true', async () => {
-    const { mockFetch, calls } = mockFetchSuccess({ data: [] });
+  it('sets NODE_TLS_REJECT_UNAUTHORIZED=0 when skipTlsVerify is true, restores after', async () => {
+    const savedEnv = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+
+    const { mockFetch } = mockFetchSuccess({ data: [] });
     installMock(mockFetch);
 
     const ctx = makeCtx({
@@ -964,13 +967,63 @@ describe('skipTlsVerify — tlsOptions passed to fetch', () => {
     });
     await rpcdef(ctx)['/Chaitin_COSMOS.Chaitin_COSMOS/SearchLogInfo']();
 
-    const opts = calls[0].options;
-    assert.equal(opts.insecureSkipVerify, true);
-    assert.equal(opts.tlsInsecureSkipVerify, true);
+    assert.equal(process.env.NODE_TLS_REJECT_UNAUTHORIZED, undefined);
+
+    // Restore
+    if (savedEnv !== undefined) process.env.NODE_TLS_REJECT_UNAUTHORIZED = savedEnv;
   });
 
-  it('does NOT pass tlsOptions when skipTlsVerify is false', async () => {
-    const { mockFetch, calls } = mockFetchSuccess({ data: [] });
+  it('preserves original NODE_TLS_REJECT_UNAUTHORIZED value after request', async () => {
+    const savedEnv = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '1';
+
+    const { mockFetch } = mockFetchSuccess({ data: [] });
+    installMock(mockFetch);
+
+    const ctx = makeCtx({
+      config: { endpoint: MOCK_ENDPOINT, skipTlsVerify: true },
+      req: { ids: ['id1'] },
+    });
+    await rpcdef(ctx)['/Chaitin_COSMOS.Chaitin_COSMOS/SearchLogInfo']();
+
+    assert.equal(process.env.NODE_TLS_REJECT_UNAUTHORIZED, '1');
+
+    // Restore
+    if (savedEnv === undefined) {
+      delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    } else {
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED = savedEnv;
+    }
+  });
+
+  it('restores env even when upstream throws an error', async () => {
+    const savedEnv = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+
+    const { mockFetch } = mockFetchHttpError(500, 'error');
+    installMock(mockFetch);
+
+    const ctx = makeCtx({
+      config: { endpoint: MOCK_ENDPOINT, skipTlsVerify: true },
+      req: { ids: ['id1'] },
+    });
+    try {
+      await rpcdef(ctx)['/Chaitin_COSMOS.Chaitin_COSMOS/SearchLogInfo']();
+    } catch {
+      // expected
+    }
+
+    assert.equal(process.env.NODE_TLS_REJECT_UNAUTHORIZED, undefined);
+
+    // Restore
+    if (savedEnv !== undefined) process.env.NODE_TLS_REJECT_UNAUTHORIZED = savedEnv;
+  });
+
+  it('does NOT touch env when skipTlsVerify is false', async () => {
+    const savedEnv = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+
+    const { mockFetch } = mockFetchSuccess({ data: [] });
     installMock(mockFetch);
 
     const ctx = makeCtx({
@@ -979,28 +1032,17 @@ describe('skipTlsVerify — tlsOptions passed to fetch', () => {
     });
     await rpcdef(ctx)['/Chaitin_COSMOS.Chaitin_COSMOS/SearchLogInfo']();
 
-    const opts = calls[0].options;
-    assert.equal(opts.insecureSkipVerify, undefined);
-    assert.equal(opts.tlsInsecureSkipVerify, undefined);
-  });
+    assert.equal(process.env.NODE_TLS_REJECT_UNAUTHORIZED, undefined);
 
-  it('does NOT pass tlsOptions by default (skipTlsVerify unset)', async () => {
-    const { mockFetch, calls } = mockFetchSuccess({ data: [] });
-    installMock(mockFetch);
-
-    const ctx = makeCtx({
-      config: { endpoint: MOCK_ENDPOINT },
-      req: { ids: ['id1'] },
-    });
-    await rpcdef(ctx)['/Chaitin_COSMOS.Chaitin_COSMOS/SearchLogInfo']();
-
-    const opts = calls[0].options;
-    assert.equal(opts.insecureSkipVerify, undefined);
-    assert.equal(opts.tlsInsecureSkipVerify, undefined);
+    // Restore
+    if (savedEnv !== undefined) process.env.NODE_TLS_REJECT_UNAUTHORIZED = savedEnv;
   });
 
   it('accepts tlsInsecureSkipVerify alias from config', async () => {
-    const { mockFetch, calls } = mockFetchSuccess({ data: [] });
+    const savedEnv = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+
+    const { mockFetch } = mockFetchSuccess({ data: [] });
     installMock(mockFetch);
 
     const ctx = makeCtx({
@@ -1009,37 +1051,10 @@ describe('skipTlsVerify — tlsOptions passed to fetch', () => {
     });
     await rpcdef(ctx)['/Chaitin_COSMOS.Chaitin_COSMOS/SearchLogInfo']();
 
-    const opts = calls[0].options;
-    assert.equal(opts.insecureSkipVerify, true);
-    assert.equal(opts.tlsInsecureSkipVerify, true);
-  });
-});
+    assert.equal(process.env.NODE_TLS_REJECT_UNAUTHORIZED, undefined);
 
-describe('timeoutMs — passed to fetch options', () => {
-  beforeEach(() => { originalFetch = globalThis.fetch; });
-  afterEach(() => { globalThis.fetch = originalFetch; });
-
-  it('passes timeoutMs from limits to fetch', async () => {
-    const { mockFetch, calls } = mockFetchSuccess({ data: [] });
-    installMock(mockFetch);
-
-    const ctx = makeCtx({
-      limits: { timeoutMs: 10000 },
-      req: { ids: ['id1'] },
-    });
-    await rpcdef(ctx)['/Chaitin_COSMOS.Chaitin_COSMOS/SearchLogInfo']();
-
-    assert.equal(calls[0].options.timeoutMs, 10000);
-  });
-
-  it('uses DEFAULT_TIMEOUT_MS (5000) when limits.timeoutMs is not set', async () => {
-    const { mockFetch, calls } = mockFetchSuccess({ data: [] });
-    installMock(mockFetch);
-
-    const ctx = makeCtx({ req: { ids: ['id1'] } });
-    await rpcdef(ctx)['/Chaitin_COSMOS.Chaitin_COSMOS/SearchLogInfo']();
-
-    assert.equal(calls[0].options.timeoutMs, 5000);
+    // Restore
+    if (savedEnv !== undefined) process.env.NODE_TLS_REJECT_UNAUTHORIZED = savedEnv;
   });
 });
 

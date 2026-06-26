@@ -137,18 +137,21 @@ const callPedestalRpc = async (endpoint, rpcMethod, params, token, baseHeaders, 
     id: '0',
   };
 
-  const tlsOptions = skipTlsVerify
-    ? { insecureSkipVerify: true, tlsInsecureSkipVerify: true }
-    : {};
+  const fetchOptions = {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  };
+  // Node.js fetch() does not support TLS options directly.
+  // Set NODE_TLS_REJECT_UNAUTHORIZED=0 before the request to skip verification
+  // for self-signed certs, then restore the original value afterward.
+  const savedTlsEnv = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+  if (skipTlsVerify) {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+  }
 
   try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      timeoutMs,
-      ...tlsOptions,
-    });
+    const res = await fetch(url, fetchOptions);
 
     if (!res.ok) {
       const text = await res.text();
@@ -186,6 +189,13 @@ const callPedestalRpc = async (endpoint, rpcMethod, params, token, baseHeaders, 
     if (e instanceof GrpcError) throw e;
     const reason = e?.cause?.message || e?.message || 'rpc call failed';
     throw errorWithCode('UNAVAILABLE', reason);
+  } finally {
+    // Restore original TLS env var
+    if (savedTlsEnv === undefined) {
+      delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    } else {
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED = savedTlsEnv;
+    }
   }
 };
 
