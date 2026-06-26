@@ -500,3 +500,5 @@ The default GitHub Actions CI is a lightweight validation: it checks public trac
 If you believe this repository contains a security vulnerability, infringing content, or another compliance risk, please report it privately to `octobus-opensource@chaitin.com`.
 
 For the full reporting process and required details, see [SECURITY.md](SECURITY.md).
+
+External contributors should also review [CONTRIBUTING.md](CONTRIBUTING.md) and agree to the [Individual Contributor License Agreement (ICLA)](ICLA.md) before contributions can be merged.

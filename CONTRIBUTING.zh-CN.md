@@ -32,6 +32,10 @@
 
 OctoBus 项目采用 GNU General Public License v3.0 (GPL-3.0) 开源许可证。
 
+### 个人贡献者许可协议
+
+外部贡献在合并前，贡献者需要同意 [个人贡献者许可协议（ICLA）](./ICLA.zh-CN.md)。如果仓库接入了 CLA Assistant 或其他自动化流程，维护者可以要求贡献者在 Pull Request 流程中完成电子确认后再继续审核。
+
 ### GPL-3.0 兼容性要求
 
 提交贡献即表示你确认：

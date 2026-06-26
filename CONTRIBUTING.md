@@ -32,6 +32,10 @@ We explicitly reject code, documentation, or materials that include:
 
 OctoBus is licensed under the GNU General Public License v3.0 (GPL-3.0).
 
+### Individual Contributor License Agreement
+
+Before a contribution can be merged, external contributors must agree to the [Individual Contributor License Agreement (ICLA)](./ICLA.md). If the repository is integrated with CLA Assistant or another workflow, maintainers may require contributors to complete the electronic confirmation step in the pull request flow before review can be completed.
+
 ### GPL-3.0 Compatibility Requirements
 
 By submitting a contribution, you confirm that:
