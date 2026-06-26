@@ -1,4 +1,5 @@
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import net from 'node:net';
 
 import { RiversecClient, EMPTY_MD5_HASH, signRequest, buildCanonicalQueryString } from './riversec-client.js';
 
@@ -356,11 +357,11 @@ const isIPv4 = (value) => {
 };
 
 const isIPv6 = (value) => {
-  const text = String(value);
-  if (!text.includes(':')) return false;
-  if ((text.match(/::/g) || []).length > 1) return false;
-  if (/^::ffff:\d{1,3}(?:\.\d{1,3}){3}$/i.test(text)) return isIPv4(text.substring(text.lastIndexOf(':') + 1));
-  return /^[0-9a-fA-F:.]+$/.test(text);
+  const text = String(value).trim();
+  if (/^::ffff:/i.test(text)) {
+    return isIPv4(text.substring(text.lastIndexOf(':') + 1));
+  }
+  return net.isIPv6(text);
 };
 
 export const normalizeHostCIDR = (input) => {

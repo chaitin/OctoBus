@@ -4,7 +4,7 @@ import test from 'node:test';
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
-import { RiversecClient, signRequest, buildCanonicalQueryString, EMPTY_MD5_HASH, resolveVerifySSL } from '../src/riversec-client.js';
+import { RiversecClient, signRequest, buildCanonicalQueryString, EMPTY_MD5_HASH, resolveVerifySSL, buildTlsOptions } from '../src/riversec-client.js';
 import {
   METHOD_PATHS,
   _test,
@@ -119,11 +119,47 @@ test('checkAPIResponse maps HTTP 400 auth errors from response body', () => {
   );
 });
 
-test('resolveVerifySSL defaults to false and honors explicit true', () => {
-  assert.equal(resolveVerifySSL({}), false);
-  assert.equal(resolveVerifySSL({ baseUrl: 'https://example.com' }), false);
+test('resolveVerifySSL defaults to true and honors explicit false', () => {
+  assert.equal(resolveVerifySSL({}), true);
+  assert.equal(resolveVerifySSL({ baseUrl: 'https://example.com' }), true);
   assert.equal(resolveVerifySSL({ verifySSL: true }), true);
+  assert.equal(resolveVerifySSL({ verifySSL: false }), false);
   assert.equal(resolveVerifySSL({ skipTlsVerify: true }), false);
+});
+
+test('buildTlsOptions uses fetch init flags instead of global TLS env', () => {
+  assert.deepEqual(buildTlsOptions({ verifySSL: true }), {});
+  assert.deepEqual(buildTlsOptions({ verifySSL: false }), {
+    skipTlsVerify: true,
+    tlsInsecureSkipVerify: true,
+    insecureSkipVerify: true,
+  });
+});
+
+test('RiversecClient does not mutate process env on construction or request', async () => {
+  const previousNoProxy = process.env.NO_PROXY;
+  const previousTlsReject = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+  let capturedInit;
+
+  setFetch(async (_url, init) => {
+    capturedInit = init;
+    return new Response(JSON.stringify({ err_no: 0, value: 'off' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  });
+
+  const client = new RiversecClient(
+    { baseUrl: 'https://192.168.2.200:20167', verifySSL: false },
+    { tokenId: 'api_admin', tokenValue: 'test-token-value' },
+  );
+  assert.equal(process.env.NO_PROXY, previousNoProxy);
+  assert.equal(process.env.NODE_TLS_REJECT_UNAUTHORIZED, previousTlsReject);
+
+  await client.getBlacklistStatus();
+  assert.equal(capturedInit.insecureSkipVerify, true);
+  assert.equal(process.env.NO_PROXY, previousNoProxy);
+  assert.equal(process.env.NODE_TLS_REJECT_UNAUTHORIZED, previousTlsReject);
 });
 
 test('BlockIP fails when upstream reports invalid_ip', async () => {
@@ -301,6 +337,13 @@ test('shouldRemoveBlacklistItem matches normalized blacklist entries', () => {
 test('normalizeHostCIDR rejects IPv4 with leading zeros', () => {
   assert.throws(
     () => _test.normalizeHostCIDR('010.0.0.1'),
+    (err) => err instanceof GrpcError && err.legacyCode === 'INVALID_ARGUMENT',
+  );
+});
+
+test('normalizeHostCIDR rejects invalid IPv6 with too many segments', () => {
+  assert.throws(
+    () => _test.normalizeHostCIDR('1:2:3:4:5:6:7:8:9'),
     (err) => err instanceof GrpcError && err.legacyCode === 'INVALID_ARGUMENT',
   );
 });

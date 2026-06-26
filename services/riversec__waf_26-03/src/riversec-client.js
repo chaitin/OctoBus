@@ -3,29 +3,6 @@ import { URL } from 'node:url';
 
 export const EMPTY_MD5_HASH = 'd41d8cd98f00b204e9800998ecf8427e';
 
-let insecureTlsRefCount = 0;
-let previousTlsReject;
-
-function enterInsecureTls() {
-  if (insecureTlsRefCount === 0) {
-    previousTlsReject = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-  }
-  insecureTlsRefCount += 1;
-}
-
-function leaveInsecureTls() {
-  insecureTlsRefCount = Math.max(0, insecureTlsRefCount - 1);
-  if (insecureTlsRefCount === 0) {
-    if (previousTlsReject === undefined) {
-      delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-    } else {
-      process.env.NODE_TLS_REJECT_UNAUTHORIZED = previousTlsReject;
-    }
-    previousTlsReject = undefined;
-  }
-}
-
 export function rfc3986Encode(str) {
   return encodeURIComponent(str)
     .replace(/!/g, '%21')
@@ -100,22 +77,16 @@ export function resolveVerifySSL(config = {}) {
   const verify = toBoolean(config.verifySSL);
   if (verify === true) return true;
   if (verify === false) return false;
-  return false;
+  return true;
 }
 
-function ensureNoProxyForHost(baseUrl) {
-  let host;
-  try {
-    host = new URL(baseUrl).hostname;
-  } catch {
-    return;
-  }
-  for (const key of ['NO_PROXY', 'no_proxy']) {
-    const current = process.env[key] || '';
-    const entries = current.split(',').map((entry) => entry.trim()).filter(Boolean);
-    if (entries.includes('*') || entries.includes(host)) continue;
-    process.env[key] = current ? `${current},${host}` : host;
-  }
+export function buildTlsOptions(config = {}) {
+  if (resolveVerifySSL(config)) return {};
+  return {
+    skipTlsVerify: true,
+    tlsInsecureSkipVerify: true,
+    insecureSkipVerify: true,
+  };
 }
 
 function normalizeHeaders(headers = {}) {
@@ -140,7 +111,6 @@ export class RiversecClient {
     this.verifySSL = resolveVerifySSL(config);
     this.maxRetries = config.maxRetries ?? 0;
     this.defaultHeaders = normalizeHeaders(config.headers);
-    ensureNoProxyForHost(this.baseUrl);
   }
 
   async request(method, path, { query = {}, body = null, rawBody = false } = {}) {
@@ -169,18 +139,13 @@ export class RiversecClient {
           method: method.toUpperCase(),
           headers,
           signal: controller.signal,
+          ...buildTlsOptions({ verifySSL: this.verifySSL }),
         };
         if (bodyStr != null && method.toUpperCase() !== 'GET') {
           fetchOptions.body = bodyStr;
         }
 
-        if (!this.verifySSL) enterInsecureTls();
-        let response;
-        try {
-          response = await fetch(url, fetchOptions);
-        } finally {
-          if (!this.verifySSL) leaveInsecureTls();
-        }
+        const response = await fetch(url, fetchOptions);
         clearTimeout(timer);
 
         const contentType = response.headers.get('content-type') || '';

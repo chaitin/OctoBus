@@ -30,8 +30,8 @@
     },
     "verifySSL": {
       "type": "boolean",
-      "default": false,
-      "description": "Verify TLS certificates. Default false for self-signed deployments."
+      "default": true,
+      "description": "Verify TLS certificates. Set false only for trusted self-signed deployments."
     },
     "skipTlsVerify": {
       "type": "boolean",
