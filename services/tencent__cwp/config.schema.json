@@ -46,16 +46,6 @@
       "type": "boolean",
       "default": false,
       "description": "Allow InvokeReadOnlyAction to call any CWP action whose name starts with Describe."
-    },
-    "skipTlsVerify": {
-      "type": "boolean",
-      "default": false,
-      "description": "Skip TLS certificate verification for private endpoints."
-    },
-    "tlsInsecureSkipVerify": {
-      "type": "boolean",
-      "default": false,
-      "description": "Alias for skipTlsVerify."
     }
   }
 }
