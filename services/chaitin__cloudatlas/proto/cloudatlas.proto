@@ -1,0 +1,1102 @@
+syntax = "proto3";
+
+package CloudAtlas;
+
+option go_package = "miner/grpc-service/CloudAtlas";
+
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/struct.proto";
+
+// ============================================================
+// CloudAtlas Service
+// ============================================================
+
+service CloudAtlas {
+
+  // --- Seed (11 methods) ---
+
+  rpc ListEnterpriseSubjects(ListEnterpriseSubjectsRequest) returns (ListEnterpriseSubjectsResponse);
+  rpc BatchCreateEnterpriseSubjects(BatchCreateEnterpriseSubjectsRequest) returns (BatchCreateEnterpriseSubjectsResponse);
+  rpc BatchDeleteEnterpriseSubjects(BatchDeleteEnterpriseSubjectsRequest) returns (BatchDeleteEnterpriseSubjectsResponse);
+  rpc ListKeywords(ListKeywordsRequest) returns (ListKeywordsResponse);
+  rpc BatchCreateKeywords(BatchCreateKeywordsRequest) returns (BatchCreateKeywordsResponse);
+  rpc ListSeedDomains(ListSeedDomainsRequest) returns (ListSeedDomainsResponse);
+  rpc BatchCreateSeedDomains(BatchCreateSeedDomainsRequest) returns (BatchCreateSeedDomainsResponse);
+  rpc ListSeedCerts(ListSeedCertsRequest) returns (ListSeedCertsResponse);
+  rpc ListSeedIcons(ListSeedIconsRequest) returns (ListSeedIconsResponse);
+  rpc ListSeedWebTitles(ListSeedWebTitlesRequest) returns (ListSeedWebTitlesResponse);
+  rpc BatchUpdateSeeds(BatchUpdateSeedsRequest) returns (BatchUpdateSeedsResponse);
+
+  // --- Asset (9 methods) ---
+
+  rpc ListRootDomains(ListRootDomainsRequest) returns (ListRootDomainsResponse);
+  rpc BatchCreateRootDomains(BatchCreateRootDomainsRequest) returns (BatchCreateRootDomainsResponse);
+  rpc ListSubdomains(ListSubdomainsRequest) returns (ListSubdomainsResponse);
+  rpc ListDNS(ListDNSRequest) returns (ListDNSResponse);
+  rpc ListIPs(ListIPsRequest) returns (ListIPsResponse);
+  rpc BatchCreateIPs(BatchCreateIPsRequest) returns (BatchCreateIPsResponse);
+  rpc ListAssetCerts(ListAssetCertsRequest) returns (ListAssetCertsResponse);
+  rpc BatchUpdateAssetStatus(BatchUpdateAssetStatusRequest) returns (BatchUpdateAssetStatusResponse);
+  rpc BatchDeleteAssets(BatchDeleteAssetsRequest) returns (BatchDeleteAssetsResponse);
+
+  // --- Attack Surface (6 methods) ---
+
+  rpc ListPorts(ListPortsRequest) returns (ListPortsResponse);
+  rpc ListOpenPorts(ListOpenPortsRequest) returns (ListOpenPortsResponse);
+  rpc ListWebEntities(ListWebEntitiesRequest) returns (ListWebEntitiesResponse);
+  rpc ListWebPaths(ListWebPathsRequest) returns (ListWebPathsResponse);
+  rpc ListWebFingerprints(ListWebFingerprintsRequest) returns (ListWebFingerprintsResponse);
+  rpc ListCrawlerData(ListCrawlerDataRequest) returns (ListCrawlerDataResponse);
+
+  // --- Risk (5 methods) ---
+
+  rpc ListVulnerabilities(ListVulnerabilitiesRequest) returns (ListVulnerabilitiesResponse);
+  rpc BatchUpdateVulnStatus(BatchUpdateVulnStatusRequest) returns (BatchUpdateVulnStatusResponse);
+  rpc ListHighRiskApps(ListHighRiskAppsRequest) returns (ListHighRiskAppsResponse);
+  rpc GetHighRiskAppFingers(GetHighRiskAppFingersRequest) returns (GetHighRiskAppFingersResponse);
+  rpc ListHighRiskServices(ListHighRiskServicesRequest) returns (ListHighRiskServicesResponse);
+
+  // --- KB (4 methods) ---
+
+  rpc ListVendors(ListVendorsRequest) returns (ListVendorsResponse);
+  rpc ListProducts(ListProductsRequest) returns (ListProductsResponse);
+  rpc ListVulnSubjects(ListVulnSubjectsRequest) returns (ListVulnSubjectsResponse);
+  rpc ListKBVulns(ListKBVulnsRequest) returns (ListKBVulnsResponse);
+
+  // --- DRPS (10 methods) ---
+
+  rpc ListMonitoringRules(ListMonitoringRulesRequest) returns (ListMonitoringRulesResponse);
+  rpc BatchCreateMonitoringRules(BatchCreateMonitoringRulesRequest) returns (BatchCreateMonitoringRulesResponse);
+  rpc ListGithubLeaks(ListGithubLeaksRequest) returns (ListGithubLeaksResponse);
+  rpc ListDiskLeaks(ListDiskLeaksRequest) returns (ListDiskLeaksResponse);
+  rpc ListDocLeaks(ListDocLeaksRequest) returns (ListDocLeaksResponse);
+  rpc ListDarknetIntel(ListDarknetIntelRequest) returns (ListDarknetIntelResponse);
+  rpc ListStolenData(ListStolenDataRequest) returns (ListStolenDataResponse);
+  rpc ListEmailLeaks(ListEmailLeaksRequest) returns (ListEmailLeaksResponse);
+  rpc ListMobileApps(ListMobileAppsRequest) returns (ListMobileAppsResponse);
+  rpc ListSocialMedia(ListSocialMediaRequest) returns (ListSocialMediaResponse);
+
+  // --- Task (4 methods) ---
+
+  rpc ListTaskSchedules(ListTaskSchedulesRequest) returns (ListTaskSchedulesResponse);
+  rpc CreateTaskSchedule(CreateTaskScheduleRequest) returns (CreateTaskScheduleResponse);
+  rpc ListTaskInstances(ListTaskInstancesRequest) returns (ListTaskInstancesResponse);
+  rpc CreateTaskInstance(CreateTaskInstanceRequest) returns (CreateTaskInstanceResponse);
+
+  // --- Space (3 methods) ---
+
+  rpc ListSpaces(ListSpacesRequest) returns (ListSpacesResponse);
+  rpc ListTags(ListTagsRequest) returns (ListTagsResponse);
+  rpc ListBusinessUnits(ListBusinessUnitsRequest) returns (ListBusinessUnitsResponse);
+}
+
+// ============================================================
+// Resource Item Messages
+// ============================================================
+
+message EnterpriseSubject {
+  int64 id = 1;
+  string name = 2;
+  bool enable = 3;
+  string confidence = 4;
+  string status = 5;
+  google.protobuf.Value extra = 6;
+}
+
+message Keyword {
+  int64 id = 1;
+  string name = 2;
+  bool enable = 3;
+  string confidence = 4;
+  string type = 5;
+  google.protobuf.Value extra = 6;
+}
+
+message SeedDomain {
+  int64 id = 1;
+  string name = 2;
+  bool enable = 3;
+  string confidence = 4;
+  google.protobuf.Value extra = 5;
+}
+
+message SeedCert {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message SeedIcon {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message SeedWebTitle {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message RootDomain {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message Subdomain {
+  int64 id = 1;
+  string hostname = 2;
+  bool enable = 3;
+  google.protobuf.Value extra = 4;
+}
+
+message DNS {
+  int64 id = 1;
+  string hostname = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message IP {
+  int64 id = 1;
+  string ip = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message AssetCert {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message Port {
+  int64 id = 1;
+  string ip = 2;
+  int32 port = 3;
+  string hostname = 4;
+  google.protobuf.Value extra = 5;
+}
+
+message OpenPort {
+  int64 id = 1;
+  string ip = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message WebEntity {
+  int64 id = 1;
+  string hostname = 2;
+  string url = 3;
+  google.protobuf.Value extra = 4;
+}
+
+message WebPath {
+  int64 id = 1;
+  string url = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message WebFingerprint {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message CrawlerData {
+  int64 id = 1;
+  string url = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message Vulnerability {
+  int64 id = 1;
+  string hostname = 2;
+  string status = 3;
+  google.protobuf.Value extra = 4;
+}
+
+message HighRiskApp {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message HighRiskAppFinger {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message HighRiskService {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message Vendor {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message Product {
+  int64 id = 1;
+  string name = 2;
+  int64 vendor_id = 3;
+  google.protobuf.Value extra = 4;
+}
+
+message VulnSubject {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message KBVuln {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message MonitoringRule {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message GithubLeak {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message DiskLeak {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message DocLeak {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message DarknetIntel {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message StolenData {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message EmailLeak {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message MobileApp {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message SocialMediaItem {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message TaskSchedule {
+  int64 id = 1;
+  string name = 2;
+  string task_type = 3;
+  google.protobuf.Value extra = 4;
+}
+
+message TaskInstance {
+  int64 id = 1;
+  string name = 2;
+  string task_type = 3;
+  google.protobuf.Value extra = 4;
+}
+
+message Space {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message Tag {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Value extra = 3;
+}
+
+message BusinessUnit {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Value extra = 3;
+}
+
+// ============================================================
+// Seed Request / Response Messages
+// ============================================================
+
+// 1. ListEnterpriseSubjects
+message ListEnterpriseSubjectsRequest {
+  int32 space = 1;
+  string name = 2;
+  google.protobuf.BoolValue enable = 3;
+  string confidence = 4; // "60", "100"
+  string status = 5;     // comma-separated
+  int32 page = 6;
+  int32 size = 7;
+  string sort = 8;
+}
+
+message ListEnterpriseSubjectsResponse {
+  int64 total = 1;
+  repeated EnterpriseSubject items = 2;
+}
+
+// 2. BatchCreateEnterpriseSubjects
+message BatchCreateEnterpriseSubjectsRequest {
+  int32 space = 1;
+  repeated EnterpriseSubject entries = 2;
+}
+
+message BatchCreateEnterpriseSubjectsResponse {
+  int32 affected_count = 1;
+  string message = 2;
+}
+
+// 3. BatchDeleteEnterpriseSubjects
+message BatchDeleteEnterpriseSubjectsRequest {
+  int32 space = 1;
+  repeated int64 ids = 2;
+}
+
+message BatchDeleteEnterpriseSubjectsResponse {
+  int32 affected_count = 1;
+  string message = 2;
+}
+
+// 4. ListKeywords
+message ListKeywordsRequest {
+  int32 space = 1;
+  string name = 2;
+  google.protobuf.BoolValue enable = 3;
+  string confidence = 4;
+  string type = 5;       // "品牌标识", "业务系统"
+  int32 page = 6;
+  int32 size = 7;
+  string sort = 8;
+}
+
+message ListKeywordsResponse {
+  int64 total = 1;
+  repeated Keyword items = 2;
+}
+
+// 5. BatchCreateKeywords
+message BatchCreateKeywordsRequest {
+  int32 space = 1;
+  repeated Keyword entries = 2;
+}
+
+message BatchCreateKeywordsResponse {
+  int32 affected_count = 1;
+  string message = 2;
+}
+
+// 6. ListSeedDomains
+message ListSeedDomainsRequest {
+  int32 space = 1;
+  string name = 2;
+  google.protobuf.BoolValue enable = 3;
+  string confidence = 4;
+  int32 page = 5;
+  int32 size = 6;
+  string sort = 7;
+}
+
+message ListSeedDomainsResponse {
+  int64 total = 1;
+  repeated SeedDomain items = 2;
+}
+
+// 7. BatchCreateSeedDomains
+message BatchCreateSeedDomainsRequest {
+  int32 space = 1;
+  repeated SeedDomain entries = 2;
+}
+
+message BatchCreateSeedDomainsResponse {
+  int32 affected_count = 1;
+  string message = 2;
+}
+
+// 8. ListSeedCerts
+message ListSeedCertsRequest {
+  int32 space = 1;
+  string name = 2;
+  int32 page = 3;
+  int32 size = 4;
+  string sort = 5;
+}
+
+message ListSeedCertsResponse {
+  int64 total = 1;
+  repeated SeedCert items = 2;
+}
+
+// 9. ListSeedIcons
+message ListSeedIconsRequest {
+  int32 space = 1;
+  string name = 2;
+  int32 page = 3;
+  int32 size = 4;
+  string sort = 5;
+}
+
+message ListSeedIconsResponse {
+  int64 total = 1;
+  repeated SeedIcon items = 2;
+}
+
+// 10. ListSeedWebTitles
+message ListSeedWebTitlesRequest {
+  int32 space = 1;
+  string name = 2;
+  int32 page = 3;
+  int32 size = 4;
+  string sort = 5;
+}
+
+message ListSeedWebTitlesResponse {
+  int64 total = 1;
+  repeated SeedWebTitle items = 2;
+}
+
+// 11. BatchUpdateSeeds
+message BatchUpdateSeedsRequest {
+  int32 space = 1;
+  string resource_type = 2; // "enterprise", "keyword", "domain", "email_domain", "cert", "icon", "web_title"
+  string update_type = 3;   // "switch" or "confidence"
+  repeated int64 ids = 4;
+  google.protobuf.BoolValue enable = 5;     // for update_type="switch"
+  string confidence = 6;                     // for update_type="confidence"
+}
+
+message BatchUpdateSeedsResponse {
+  int32 affected_count = 1;
+  string message = 2;
+}
+
+// ============================================================
+// Asset Request / Response Messages
+// ============================================================
+
+// 12. ListRootDomains
+message ListRootDomainsRequest {
+  int32 space = 1;
+  string name = 2;
+  int32 page = 3;
+  int32 size = 4;
+  string sort = 5;
+}
+
+message ListRootDomainsResponse {
+  int64 total = 1;
+  repeated RootDomain items = 2;
+}
+
+// 13. BatchCreateRootDomains
+message BatchCreateRootDomainsRequest {
+  int32 space = 1;
+  repeated RootDomain entries = 2;
+}
+
+message BatchCreateRootDomainsResponse {
+  int32 affected_count = 1;
+  string message = 2;
+}
+
+// 14. ListSubdomains
+message ListSubdomainsRequest {
+  int32 space = 1;
+  string hostname = 2;
+  google.protobuf.BoolValue enable = 3;
+  int32 page = 4;
+  int32 size = 5;
+  string sort = 6;
+}
+
+message ListSubdomainsResponse {
+  int64 total = 1;
+  repeated Subdomain items = 2;
+}
+
+// 15. ListDNS
+message ListDNSRequest {
+  int32 space = 1;
+  string hostname = 2;
+  string view_mode = 3; // "list", "aggregate"
+  int32 page = 4;
+  int32 size = 5;
+  string sort = 6;
+}
+
+message ListDNSResponse {
+  int64 total = 1;
+  repeated DNS items = 2;
+}
+
+// 16. ListIPs
+message ListIPsRequest {
+  int32 space = 1;
+  string ip = 2;
+  string hostname = 3;
+  int32 page = 4;
+  int32 size = 5;
+  string sort = 6;
+}
+
+message ListIPsResponse {
+  int64 total = 1;
+  repeated IP items = 2;
+}
+
+// 17. BatchCreateIPs
+message BatchCreateIPsRequest {
+  int32 space = 1;
+  repeated IP entries = 2;
+}
+
+message BatchCreateIPsResponse {
+  int32 affected_count = 1;
+  string message = 2;
+}
+
+// 18. ListAssetCerts
+message ListAssetCertsRequest {
+  int32 space = 1;
+  string name = 2;
+  int32 page = 3;
+  int32 size = 4;
+  string sort = 5;
+}
+
+message ListAssetCertsResponse {
+  int64 total = 1;
+  repeated AssetCert items = 2;
+}
+
+// 19. BatchUpdateAssetStatus
+message BatchUpdateAssetStatusRequest {
+  int32 space = 1;
+  string resource_type = 2; // "root_domain", "subdomain", "dns", "ip", "cert"
+  repeated int64 ids = 3;
+  string status = 4;
+}
+
+message BatchUpdateAssetStatusResponse {
+  int32 affected_count = 1;
+  string message = 2;
+}
+
+// 20. BatchDeleteAssets
+message BatchDeleteAssetsRequest {
+  int32 space = 1;
+  string resource_type = 2; // "root_domain", "subdomain", "dns", "ip"
+  repeated int64 ids = 3;
+}
+
+message BatchDeleteAssetsResponse {
+  int32 affected_count = 1;
+  string message = 2;
+}
+
+// ============================================================
+// Attack Surface Request / Response Messages
+// ============================================================
+
+// 21. ListPorts
+message ListPortsRequest {
+  int32 space = 1;
+  string ip = 2;
+  int32 port = 3;
+  string hostname = 4;
+  int32 page = 5;
+  int32 size = 6;
+  string sort = 7;
+}
+
+message ListPortsResponse {
+  int64 total = 1;
+  repeated Port items = 2;
+}
+
+// 22. ListOpenPorts
+message ListOpenPortsRequest {
+  int32 space = 1;
+  string ip = 2;
+  int32 page = 3;
+  int32 size = 4;
+  string sort = 5;
+}
+
+message ListOpenPortsResponse {
+  int64 total = 1;
+  repeated OpenPort items = 2;
+}
+
+// 23. ListWebEntities
+message ListWebEntitiesRequest {
+  int32 space = 1;
+  string hostname = 2;
+  string url = 3;
+  int32 page = 4;
+  int32 size = 5;
+  string sort = 6;
+}
+
+message ListWebEntitiesResponse {
+  int64 total = 1;
+  repeated WebEntity items = 2;
+}
+
+// 24. ListWebPaths
+message ListWebPathsRequest {
+  int32 space = 1;
+  string url = 2;
+  string view_mode = 3;
+  int32 page = 4;
+  int32 size = 5;
+  string sort = 6;
+}
+
+message ListWebPathsResponse {
+  int64 total = 1;
+  repeated WebPath items = 2;
+}
+
+// 25. ListWebFingerprints
+message ListWebFingerprintsRequest {
+  int32 space = 1;
+  string name = 2;
+  int32 page = 3;
+  int32 size = 4;
+  string sort = 5;
+}
+
+message ListWebFingerprintsResponse {
+  int64 total = 1;
+  repeated WebFingerprint items = 2;
+}
+
+// 26. ListCrawlerData
+message ListCrawlerDataRequest {
+  int32 space = 1;
+  string url = 2;
+  int32 page = 3;
+  int32 size = 4;
+  string sort = 5;
+}
+
+message ListCrawlerDataResponse {
+  int64 total = 1;
+  repeated CrawlerData items = 2;
+}
+
+// ============================================================
+// Risk Request / Response Messages
+// ============================================================
+
+// 27. ListVulnerabilities
+message ListVulnerabilitiesRequest {
+  int32 space = 1;
+  string hostname = 2;
+  string status = 3;
+  int32 page = 4;
+  int32 size = 5;
+  string sort = 6;
+}
+
+message ListVulnerabilitiesResponse {
+  int64 total = 1;
+  repeated Vulnerability items = 2;
+}
+
+// 28. BatchUpdateVulnStatus
+message BatchUpdateVulnStatusRequest {
+  int32 space = 1;
+  string update_type = 2; // "status" or "recheck"
+  repeated int64 ids = 3;
+  string status = 4;      // for update_type="status"
+}
+
+message BatchUpdateVulnStatusResponse {
+  int32 affected_count = 1;
+  string message = 2;
+}
+
+// 29. ListHighRiskApps
+message ListHighRiskAppsRequest {
+  int32 space = 1;
+  string name = 2;
+  int32 page = 3;
+  int32 size = 4;
+  string sort = 5;
+}
+
+message ListHighRiskAppsResponse {
+  int64 total = 1;
+  repeated HighRiskApp items = 2;
+}
+
+// 30. GetHighRiskAppFingers
+message GetHighRiskAppFingersRequest {
+  int32 space = 1;
+  int64 pk = 2;
+}
+
+message GetHighRiskAppFingersResponse {
+  int64 total = 1;
+  repeated HighRiskAppFinger items = 2;
+}
+
+// 31. ListHighRiskServices
+message ListHighRiskServicesRequest {
+  int32 space = 1;
+  string name = 2;
+  int32 page = 3;
+  int32 size = 4;
+  string sort = 5;
+}
+
+message ListHighRiskServicesResponse {
+  int64 total = 1;
+  repeated HighRiskService items = 2;
+}
+
+// ============================================================
+// KB Request / Response Messages
+// ============================================================
+
+// 32. ListVendors
+message ListVendorsRequest {
+  int32 space = 1;
+  string name = 2;
+  int32 page = 3;
+  int32 size = 4;
+  string sort = 5;
+}
+
+message ListVendorsResponse {
+  int64 total = 1;
+  repeated Vendor items = 2;
+}
+
+// 33. ListProducts
+message ListProductsRequest {
+  int32 space = 1;
+  int64 pk = 2;            // optional, for detail
+  string name = 3;
+  int32 page = 4;
+  int32 size = 5;
+  string sort = 6;
+}
+
+message ListProductsResponse {
+  int64 total = 1;
+  repeated Product items = 2;
+}
+
+// 34. ListVulnSubjects
+message ListVulnSubjectsRequest {
+  int32 space = 1;
+  string name = 2;
+  int32 page = 3;
+  int32 size = 4;
+  string sort = 5;
+}
+
+message ListVulnSubjectsResponse {
+  int64 total = 1;
+  repeated VulnSubject items = 2;
+}
+
+// 35. ListKBVulns
+message ListKBVulnsRequest {
+  int32 space = 1;
+  int64 pk = 2;            // optional, fetch affected products
+  string name = 3;
+  int32 page = 4;
+  int32 size = 5;
+  string sort = 6;
+}
+
+message ListKBVulnsResponse {
+  int64 total = 1;
+  repeated KBVuln items = 2;
+}
+
+// ============================================================
+// DRPS Request / Response Messages
+// ============================================================
+
+// 36. ListMonitoringRules
+message ListMonitoringRulesRequest {
+  int32 space = 1;
+  int64 pk = 2;            // optional, for detail
+  string name = 3;
+  int32 page = 4;
+  int32 size = 5;
+  string sort = 6;
+}
+
+message ListMonitoringRulesResponse {
+  int64 total = 1;
+  repeated MonitoringRule items = 2;
+}
+
+// 37. BatchCreateMonitoringRules
+message BatchCreateMonitoringRulesRequest {
+  int32 space = 1;
+  repeated MonitoringRule entries = 2;
+}
+
+message BatchCreateMonitoringRulesResponse {
+  int32 affected_count = 1;
+  string message = 2;
+}
+
+// 38. ListGithubLeaks
+message ListGithubLeaksRequest {
+  int32 space = 1;
+  string name = 2;
+  int32 page = 3;
+  int32 size = 4;
+  string sort = 5;
+}
+
+message ListGithubLeaksResponse {
+  int64 total = 1;
+  repeated GithubLeak items = 2;
+}
+
+// 39. ListDiskLeaks
+message ListDiskLeaksRequest {
+  int32 space = 1;
+  string name = 2;
+  int32 page = 3;
+  int32 size = 4;
+  string sort = 5;
+}
+
+message ListDiskLeaksResponse {
+  int64 total = 1;
+  repeated DiskLeak items = 2;
+}
+
+// 40. ListDocLeaks
+message ListDocLeaksRequest {
+  int32 space = 1;
+  string name = 2;
+  int32 page = 3;
+  int32 size = 4;
+  string sort = 5;
+}
+
+message ListDocLeaksResponse {
+  int64 total = 1;
+  repeated DocLeak items = 2;
+}
+
+// 41. ListDarknetIntel
+message ListDarknetIntelRequest {
+  int32 space = 1;
+  string name = 2;
+  int32 page = 3;
+  int32 size = 4;
+  string sort = 5;
+}
+
+message ListDarknetIntelResponse {
+  int64 total = 1;
+  repeated DarknetIntel items = 2;
+}
+
+// 42. ListStolenData
+message ListStolenDataRequest {
+  int32 space = 1;
+  string name = 2;
+  int32 page = 3;
+  int32 size = 4;
+  string sort = 5;
+}
+
+message ListStolenDataResponse {
+  int64 total = 1;
+  repeated StolenData items = 2;
+}
+
+// 43. ListEmailLeaks
+message ListEmailLeaksRequest {
+  int32 space = 1;
+  string name = 2;
+  int32 page = 3;
+  int32 size = 4;
+  string sort = 5;
+}
+
+message ListEmailLeaksResponse {
+  int64 total = 1;
+  repeated EmailLeak items = 2;
+}
+
+// 44. ListMobileApps
+message ListMobileAppsRequest {
+  int32 space = 1;
+  string name = 2;
+  int32 page = 3;
+  int32 size = 4;
+  string sort = 5;
+}
+
+message ListMobileAppsResponse {
+  int64 total = 1;
+  repeated MobileApp items = 2;
+}
+
+// 45. ListSocialMedia
+message ListSocialMediaRequest {
+  int32 space = 1;
+  string name = 2;
+  int32 page = 3;
+  int32 size = 4;
+  string sort = 5;
+}
+
+message ListSocialMediaResponse {
+  int64 total = 1;
+  repeated SocialMediaItem items = 2;
+}
+
+// ============================================================
+// Task Request / Response Messages
+// ============================================================
+
+// 46. ListTaskSchedules
+message ListTaskSchedulesRequest {
+  int32 space = 1;
+  int64 pk = 2;            // optional, for detail
+  string task_type = 3;
+  string name = 4;
+  int32 page = 5;
+  int32 size = 6;
+  string sort = 7;
+}
+
+message ListTaskSchedulesResponse {
+  int64 total = 1;
+  repeated TaskSchedule items = 2;
+}
+
+// 47. CreateTaskSchedule
+message CreateTaskScheduleRequest {
+  int32 space = 1;
+  string name = 2;
+  string task_type = 3;
+  bool run_immediately = 4;
+  google.protobuf.Value schedule = 5; // schedule config fields
+  google.protobuf.Value extra = 6;
+}
+
+message CreateTaskScheduleResponse {
+  int64 id = 1;
+  string message = 2;
+}
+
+// 48. ListTaskInstances
+message ListTaskInstancesRequest {
+  int32 space = 1;
+  int64 pk = 2;            // optional, for detail
+  string task_type = 3;
+  string name = 4;
+  int32 page = 5;
+  int32 size = 6;
+  string sort = 7;
+}
+
+message ListTaskInstancesResponse {
+  int64 total = 1;
+  repeated TaskInstance items = 2;
+}
+
+// 49. CreateTaskInstance
+message CreateTaskInstanceRequest {
+  int32 space = 1;
+  string task_type = 2;
+  string name = 3;
+  google.protobuf.Value extra = 4;
+}
+
+message CreateTaskInstanceResponse {
+  int64 id = 1;
+  string message = 2;
+}
+
+// ============================================================
+// Space Request / Response Messages
+// ============================================================
+
+// 50. ListSpaces
+message ListSpacesRequest {
+  int32 space = 1;
+  int64 pk = 2;            // optional, for detail
+  string name = 3;
+  int32 page = 4;
+  int32 size = 5;
+  string sort = 6;
+}
+
+message ListSpacesResponse {
+  int64 total = 1;
+  repeated Space items = 2;
+}
+
+// 51. ListTags
+message ListTagsRequest {
+  int32 space = 1;
+  string name = 2;
+  int32 page = 3;
+  int32 size = 4;
+  string sort = 5;
+}
+
+message ListTagsResponse {
+  int64 total = 1;
+  repeated Tag items = 2;
+}
+
+// 52. ListBusinessUnits
+message ListBusinessUnitsRequest {
+  int32 space = 1;
+  string name = 2;
+  int32 page = 3;
+  int32 size = 4;
+  string sort = 5;
+}
+
+message ListBusinessUnitsResponse {
+  int64 total = 1;
+  repeated BusinessUnit items = 2;
+}

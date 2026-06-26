@@ -5,6 +5,10 @@ import { runServiceMain } from "@chaitin-ai/octobus-sdk";
 import { Command } from "commander";
 
 const services = {
+  "alibaba-cloud-simple-application-server-firewall": {
+    entryFile: "../alibaba-cloud__simple-application-server-firewall/bin/alibaba-cloud-simple-application-server-firewall.js",
+    serviceModule: "../alibaba-cloud__simple-application-server-firewall/src/service.js",
+  },
   "safeline-waf": {
     entryFile: "../chaitin__safeline-waf/bin/safeline-waf.js",
     serviceModule: "../chaitin__safeline-waf/src/service.js",
@@ -36,6 +40,10 @@ const services = {
   "dptech-umc-ads-v5-3-29": {
     entryFile: "../dptech__umc-ads_v5-3-29/bin/dptech-umc-ads-v5-3-29.js",
     serviceModule: "../dptech__umc-ads_v5-3-29/src/service.js",
+  },
+  "elastic-kibana-7-17-26": {
+    entryFile: "../elastic__kibana_7-17-26/bin/elastic-kibana-7-17-26.js",
+    serviceModule: "../elastic__kibana_7-17-26/src/service.js",
   },
   "feishu-group-robot": {
     entryFile: "../feishu__group-robot/bin/feishu-group-robot.js",
@@ -105,6 +113,10 @@ const services = {
     entryFile: "../sangfor__fw_v8-0-45/bin/sangfor-fw-v8-0-45.js",
     serviceModule: "../sangfor__fw_v8-0-45/src/service.js",
   },
+  "slack-group-robot": {
+    entryFile: "../slack__group-robot/bin/slack-group-robot.js",
+    serviceModule: "../slack__group-robot/src/service.js",
+  },
   "skycloud-inet": {
     entryFile: "../skycloud__inet/bin/skycloud-inet.js",
     serviceModule: "../skycloud__inet/src/service.js",
@@ -136,6 +148,10 @@ const services = {
   "threatbook-tip-v4": {
     entryFile: "../threatbook__tip_v4/bin/threatbook-tip-v4.js",
     serviceModule: "../threatbook__tip_v4/src/service.js",
+  },
+  "topsec-waf-v3-2294-20238": {
+    entryFile: "../topsec__waf_v3-2294-20238/bin/topsec-waf-v3-2294-20238.js",
+    serviceModule: "../topsec__waf_v3-2294-20238/src/service.js",
   },
   "topsec-fw-2u": {
     entryFile: "../topsec__fw-2u/bin/topsec-fw-2u.js",

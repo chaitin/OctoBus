@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "webhook": {
+      "type": "string",
+      "description": "Slack Incoming Webhook URL (https://hooks.slack.com/services/T.../B.../xxxx)."
+    },
+    "webhook_url": {
+      "type": "string",
+      "description": "Alias for webhook."
+    },
+    "webhookUrl": {
+      "type": "string",
+      "description": "Alias for webhook."
+    },
+    "url": {
+      "type": "string",
+      "description": "Alias for webhook."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "timeout_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Legacy alias for timeoutMs."
+    }
+  }
+}
