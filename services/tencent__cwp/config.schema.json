@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "endpoint": {
+      "type": "string",
+      "default": "https://cwp.tencentcloudapi.com",
+      "description": "Tencent Cloud CWP API endpoint."
+    },
+    "host": {
+      "type": "string",
+      "description": "Alias for endpoint."
+    },
+    "region": {
+      "type": "string",
+      "default": "ap-guangzhou",
+      "description": "Tencent Cloud region used in X-TC-Region."
+    },
+    "version": {
+      "type": "string",
+      "default": "2018-02-28",
+      "description": "Tencent Cloud CWP API version."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000,
+      "description": "HTTP request timeout in milliseconds."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional extra HTTP headers."
+    },
+    "allowActions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Additional CWP Describe* actions allowed by InvokeReadOnlyAction."
+    },
+    "allowAllDescribeActions": {
+      "type": "boolean",
+      "default": false,
+      "description": "Allow InvokeReadOnlyAction to call any CWP action whose name starts with Describe."
+    }
+  }
+}

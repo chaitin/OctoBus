@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package Tencent_CWP;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Tencent_CWP";
+
+service TencentCwpService {
+  // 查询主机列表，调用 DescribeMachines。
+  rpc DescribeMachines(TencentCloudQueryRequest) returns (TencentCloudListResponse) {}
+
+  // 查询主机概览，调用 DescribeMachineGeneral。
+  rpc DescribeMachineGeneral(TencentCloudQueryRequest) returns (TencentCloudActionResponse) {}
+
+  // 查询木马列表，调用 DescribeMalWareList。
+  rpc DescribeMalWareList(TencentCloudQueryRequest) returns (TencentCloudListResponse) {}
+
+  // 查询漏洞列表，调用 DescribeVulList。
+  rpc DescribeVulList(TencentCloudQueryRequest) returns (TencentCloudListResponse) {}
+
+  // 查询基线检测概览，调用 DescribeBaselineDetectOverview。
+  rpc DescribeBaselineDetectOverview(TencentCloudQueryRequest) returns (TencentCloudActionResponse) {}
+
+  // 查询主机入侵检测事件统计，调用 DescribeMachineRiskCnt。
+  rpc DescribeMachineRiskCnt(TencentCloudQueryRequest) returns (TencentCloudActionResponse) {}
+
+  // 调用受限的腾讯云 CWP Describe* 只读接口。
+  rpc InvokeReadOnlyAction(InvokeReadOnlyActionRequest) returns (TencentCloudActionResponse) {}
+}
+
+message TencentCloudQueryRequest {
+  google.protobuf.Struct params = 1; // 透传给腾讯云 Action 的 JSON 请求参数。
+  int64 offset = 2; // 可选分页偏移，写入 Offset。
+  int64 limit = 3; // 可选分页大小，写入 Limit。
+}
+
+message InvokeReadOnlyActionRequest {
+  string action = 1; // 必须是 allowActions 中的 Describe* 接口，或配置 allowAllDescribeActions=true 后的任意 Describe* 接口。
+  google.protobuf.Struct params = 2;
+}
+
+message TencentCloudActionResponse {
+  string action = 1;
+  string request_id = 2;
+  google.protobuf.Struct response = 3;
+  google.protobuf.Struct raw = 4;
+}
+
+message TencentCloudListResponse {
+  string action = 1;
+  string request_id = 2;
+  int64 total_count = 3;
+  repeated google.protobuf.Struct items = 4;
+  google.protobuf.Struct response = 5;
+  google.protobuf.Struct raw = 6;
+}
