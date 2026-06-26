@@ -598,8 +598,6 @@ test('Handler fails with clear error when credentials are not configured', async
 // ── SearchSession graceful degradation ───────────────────
 
 test('ListSessions returns empty list when BH instance does not support SearchSession (InvalidParameterValue)', async () => {
-  // Simulate a BH instance that doesn't support SearchSession and returns
-  // InvalidParameterValue regardless of parameters
   mockUpstream({
     Response: {
       Error: {
@@ -614,8 +612,6 @@ test('ListSessions returns empty list when BH instance does not support SearchSe
 });
 
 test('ListSessions propagates other InvalidParameterValue errors (not SearchSession-specific)', async () => {
-  // Simulate a genuine InvalidParameterValue error (e.g. wrong parameter value)
-  // that should NOT be silently swallowed
   mockUpstream({
     Response: {
       Error: {
@@ -629,7 +625,6 @@ test('ListSessions propagates other InvalidParameterValue errors (not SearchSess
 });
 
 test('ListSessions propagates non-InvalidParameterValue errors unchanged', async () => {
-  // Simulate an AuthFailure error - should not be caught by SearchSession degradation
   mockUpstream({
     Response: {
       Error: {
@@ -644,12 +639,9 @@ test('ListSessions propagates non-InvalidParameterValue errors unchanged', async
 
 test('callAction attaches tencentCode to error for precise matching', async () => {
   const { _test } = await import('../src/tencent-bh.js');
-  // Verify errorWithCode doesn't have tencentCode (only set by callAction)
   const plainErr = _test.errorWithCode('FAILED_PRECONDITION', 'test error');
   assert.equal(plainErr.tencentCode, undefined);
 
-  // Simulate upstream error to verify tencentCode is set on a non-degraded path
-  // Use killSession with a valid session_id so it reaches the API call
   mockUpstream({
     Response: {
       Error: {
