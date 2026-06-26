@@ -189,6 +189,10 @@ const services = {
     entryFile: "../wd__k01/bin/wd-k01.js",
     serviceModule: "../wd__k01/src/service.js",
   },
+  "dbappsecurity-mingyu-waf": {
+    entryFile: "../dbappsecurity__mingyu-waf/bin/dbappsecurity-mingyu-waf.js",
+    serviceModule: "../dbappsecurity__mingyu-waf/src/service.js",
+  },
 };
 
 const serviceNames = Object.keys(services);
