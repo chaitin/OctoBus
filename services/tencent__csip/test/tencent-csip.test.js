@@ -256,3 +256,32 @@ test('uses current timestamp when meta timestamp is absent', async () => {
 
   assert.equal(captured['X-TC-Timestamp'], '1705392000');
 });
+
+test('handler accepts OctoBus SDK single-argument context', async () => {
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url: String(url), init, body: JSON.parse(init.body) };
+    return response(200, { Response: { RequestId: 'req-sdk', TotalCount: 0, Data: [] } });
+  });
+
+  await handlers[`${SERVICE_PACKAGE}/DescribeCVMAssets`]({
+    request: {
+      payload: { fields: { Filter: { structValue: { fields: { Limit: { numberValue: 5 } } } } } },
+    },
+    config: {
+      endpoint: 'https://csip.tencentcloudapi.com',
+      region: 'ap-shanghai',
+    },
+    secret: {
+      secretId: 'SDKID',
+      secretKey: 'SDKKEY',
+    },
+    limits: { timeoutMs: 10_000 },
+    meta: { timestamp: 1705392000 },
+  });
+
+  assert.equal(captured.url, 'https://csip.tencentcloudapi.com/');
+  assert.equal(captured.init.headers['X-TC-Region'], 'ap-shanghai');
+  assert.match(captured.init.headers.Authorization, /^TC3-HMAC-SHA256 Credential=SDKID\//);
+  assert.deepEqual(captured.body, { Filter: { Limit: 5 } });
+});

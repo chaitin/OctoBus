@@ -255,6 +255,17 @@ const mergedBindings = (ctx = {}) => ({
   ...(ctx.bindings ?? {}),
 });
 
+const isSdkHandlerContext = (value) => value && typeof value === 'object'
+  && Object.prototype.hasOwnProperty.call(value, 'request')
+  && (
+    Object.prototype.hasOwnProperty.call(value, 'config')
+    || Object.prototype.hasOwnProperty.call(value, 'secret')
+    || Object.prototype.hasOwnProperty.call(value, 'method')
+  );
+
+const handlerRequest = (req, ctx) => (ctx === undefined && isSdkHandlerContext(req) ? (req.request ?? {}) : (req ?? {}));
+const handlerContext = (req, ctx) => (ctx === undefined && isSdkHandlerContext(req) ? req : (ctx ?? {}));
+
 const resolveCallContext = (ctx = {}) => ({
   ...ctx,
   bindings: mergedBindings(ctx),
@@ -430,11 +441,22 @@ const invokeTencentCloud = async (action, payload, ctx = {}) => {
   return { response: toValue(response) };
 };
 
-const buildActionHandler = (action) => async (req = {}, ctx = {}) => invokeTencentCloud(action, payloadFromRequest(req), ctx);
+const buildActionHandler = (action) => async (req, ctx) => invokeTencentCloud(
+  action,
+  payloadFromRequest(handlerRequest(req, ctx)),
+  handlerContext(req, ctx),
+);
 
 export const handlers = Object.fromEntries([
   ...READ_ONLY_ACTIONS.map((action) => [`${SERVICE_PACKAGE}/${action}`, buildActionHandler(action)]),
-  [METHOD_INVOKE_READ_ONLY_ACTION_FULL, async (req = {}, ctx = {}) => invokeTencentCloud(validateReadOnlyAction(req.action), normalizeStruct(req.payload ?? {}), ctx)],
+  [METHOD_INVOKE_READ_ONLY_ACTION_FULL, async (req, ctx) => {
+    const request = handlerRequest(req, ctx);
+    return invokeTencentCloud(
+      validateReadOnlyAction(request.action),
+      normalizeStruct(request.payload ?? {}),
+      handlerContext(req, ctx),
+    );
+  }],
 ]);
 
 export const rpcdef = () => Object.fromEntries([
