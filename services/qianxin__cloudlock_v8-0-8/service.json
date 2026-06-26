@@ -1,0 +1,20 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "qianxin-cloudlock-v8-0-8",
+  "displayName": "QIANXIN CloudLock V8.0.8",
+  "description": "OctoBus package for QIANXIN NetSec CloudLock (JiaoTu) server security V8.0.8 Hotfix1: server/asset list query via web session token.",
+  "runtime": { "mode": "long-running" },
+  "proto": { "roots": ["proto"], "files": ["proto/qianxin_cloudlock_v8_0_8.proto"] },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "QIANXIN_CloudLock_V8_0_8.QIANXIN_CloudLock_V8_0_8/QueryMachineList": {
+          "name": "query-machine-list",
+          "description": "Query CloudLock server/asset list (POST /api/assetSrv/machineController/searchMachineList)."
+        }
+      }
+    }
+  }
+}
