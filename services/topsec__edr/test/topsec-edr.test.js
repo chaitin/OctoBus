@@ -28,11 +28,9 @@ const encryptAes256Cbc = (plaintext) => {
   const key = Buffer.from(AES_KEY, 'utf8');
   const iv = Buffer.from(AES_IV, 'utf8');
   const input = Buffer.from(String(plaintext || ''), 'utf8');
-  const padLength = (16 - (input.length % 16)) % 16;
-  const padded = padLength === 0 ? input : Buffer.concat([input, Buffer.alloc(padLength)]);
   const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
-  cipher.setAutoPadding(false);
-  return Buffer.concat([cipher.update(padded), cipher.final()]).toString('base64');
+  // PKCS7 padding (Node.js default) — matches the main service implementation
+  return Buffer.concat([cipher.update(input), cipher.final()]).toString('base64');
 };
 
 const decryptAes256Cbc = (ciphertextB64) => {
@@ -40,15 +38,13 @@ const decryptAes256Cbc = (ciphertextB64) => {
   const iv = Buffer.from(AES_IV, 'utf8');
   const ciphertext = Buffer.from(String(ciphertextB64 || '').replace(/\s+/g, ''), 'base64');
   const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-  decipher.setAutoPadding(false);
+  // PKCS7 padding (Node.js default) — matches the main service implementation
   const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-  let end = decrypted.length;
-  while (end > 0 && decrypted[end - 1] === 0) end--;
-  return decrypted.slice(0, end).toString('utf8');
+  return decrypted.toString('utf8');
 };
 
 const computeSign = (nonce, stime, token) => {
-  const raw = String(nonce || '') + String(stime || '') + String(token || '');
+  const raw = String(token || '') + String(stime || '') + String(nonce || '') + 'dO(QK*EX@cTG';
   return crypto.createHash('md5').update(raw, 'utf8').digest('hex');
 };
 
@@ -121,14 +117,13 @@ describe('mock login response', () => {
 });
 
 describe('decrypt login body', () => {
-  it('should decrypt encrypted username/password from request body', () => {
-    const body = JSON.stringify({
-      username: encryptAes256Cbc('admin'),
-      password: encryptAes256Cbc('Topsec@123'),
-    });
+  it('should decrypt encrypted credentials from request body (encryptStr format)', () => {
+    // Actual EDR login body format: { encryptStr: AES(JSON) }
+    const payload = JSON.stringify({ 'ng-cloud': true, username: 'admin', password: 'hashedPwd123', captcha: '', tenant_id: '', captcha_id: '' });
+    const body = JSON.stringify({ encryptStr: encryptAes256Cbc(payload) });
     const { username, password } = decryptLoginBody(body);
     assert.equal(username, 'admin');
-    assert.equal(password, 'Topsec@123');
+    assert.equal(password, 'hashedPwd123');
   });
 });
 

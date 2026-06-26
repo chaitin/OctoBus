@@ -195,7 +195,7 @@ const toBoolean = (value) => {
 
 const buildTlsOptions = (ctx = {}) => {
   const bindings = ctx.bindings || {};
-  // EDR typically uses self-signed certs, default to skip verification
+  // Only skip TLS verification when explicitly enabled by the user
   if (toBoolean(bindings.skipTlsVerify) || toBoolean(bindings.tlsInsecureSkipVerify) || toBoolean(bindings.insecureSkipVerify)) {
     return {
       skipTlsVerify: true,
@@ -439,7 +439,7 @@ const buildSessionFromDecrypted = (decrypted, responseHeaders) => {
 // sign = MD5(token + stime + nonce + "dO(QK*EX@cTG")
 // Each request generates fresh nonce/stime (not reused from login)
 const buildSignedQuery = (session) => {
-  const nonce = String(Math.random()).slice(2, 10); // 8 random digits
+  const nonce = String(crypto.randomInt(0, 100000000)).padStart(8, '0'); // 8 random digits, crypto-safe
   const stime = Math.floor(Date.now() / 1000).toString().slice(0, 10); // Unix timestamp
   const sign = computeSign(nonce, stime, session.token);
   return { nonce, stime, sign };
@@ -456,7 +456,7 @@ const buildAuthHeaders = (session, extraHeaders = {}, meta = {}) => {
     headers['Cookie'] = session.cookie;
   }
   // EDR Angular tokenService adds token to requests
-  headers['Authorization'] = session.token;
+  headers['Authorization'] = `Bearer ${session.token}`;
   return addTraceHeaders(headers, meta);
 };
 
