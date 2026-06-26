@@ -1,0 +1,20 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "nsfocus-ids-v5-6-r10-f02",
+  "displayName": "NSFOCUS IDS V5.6R10F02",
+  "description": "OctoBus package for NSFOCUS IDS/IPS V5.6R10F02 alert event query (GET /ips/eventList/..., web session cookie, HTML event table parsed into structured events).",
+  "runtime": { "mode": "long-running" },
+  "proto": { "roots": ["proto"], "files": ["proto/nsfocus_ids_v5_6_r10_f02.proto"] },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "NSFOCUS_IDS_V5_6_R10_F02.NSFOCUS_IDS_V5_6_R10_F02/QueryEventList": {
+          "name": "query-event-list",
+          "description": "Query NSFOCUS IDS alert event list."
+        }
+      }
+    }
+  }
+}
