@@ -3,6 +3,7 @@
 // API key: secret.apiKey
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import https from 'node:https';
 
 const DEFAULT_TIMEOUT_MS = 1500;
 const DEFAULT_PAGE = 1;
@@ -131,18 +132,16 @@ export function rpcdef(ctx) {
   };
 
   const fetchHfish = async (url, init) => {
-    const options = {
-      ...init,
-      timeoutMs,
-    };
-    if (skipTlsVerify) {
-      options.insecureSkipVerify = true;
-      options.tlsInsecureSkipVerify = true;
-    }
+    const agent = skipTlsVerify ? new https.Agent({ rejectUnauthorized: false }) : undefined;
     try {
-      return await fetch(url, options);
+      return await fetch(url, {
+        ...init,
+        signal: AbortSignal.timeout(timeoutMs),
+        agent,
+      });
     } catch (e) {
-      const reason = e?.cause?.message || e?.message || 'fetch failed';
+      const isTimeout = e?.name === 'TimeoutError' || e?.name === 'AbortError';
+      const reason = isTimeout ? 'timeout after ' + timeoutMs + 'ms' : (e?.cause?.message || e?.message || 'fetch failed');
       throw errorWithCode('UNAVAILABLE', reason);
     }
   };
