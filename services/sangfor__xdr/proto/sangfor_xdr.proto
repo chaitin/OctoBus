@@ -1,0 +1,287 @@
+syntax = "proto3";
+
+package sangfor_xdr;
+
+// ============ Shared Types ============
+
+message Empty {}
+message CountResult { int32 count = 1; }
+message DeleteResponse { bool success = 1; string message = 2; }
+message ActionResponse { bool success = 1; string message = 2; string task_id = 3 [json_name = "taskId"]; }
+
+// ============ AssetService: /apps/asset/*, /api/xdr/v1/device/*, /api/xdr/v2/asset/* ============
+
+service AssetService {
+  rpc ListAssets(ListAssetsRequest) returns (ListAssetsResponse);
+  rpc GetAsset(GetAssetRequest) returns (Asset);
+  rpc UpdateAsset(UpdateAssetRequest) returns (UpdateAssetResponse);
+  rpc ListBranches(ListBranchesRequest) returns (ListBranchesResponse);
+  rpc ListGroups(ListGroupsRequest) returns (ListGroupsResponse);
+  rpc GetAssetStats(GetAssetStatsRequest) returns (AssetStats);
+  rpc GetAssetCard(Empty) returns (AssetCard);
+  rpc GetExposure(GetExposureRequest) returns (ExposureInfo);
+  rpc ListDevices(ListDevicesRequest) returns (ListDevicesResponse);
+  rpc GetDeviceStats(Empty) returns (DeviceStats);
+  rpc GetOpenServiceCount(Empty) returns (CountResult);
+  rpc GetOsStats(Empty) returns (OsStats);
+  rpc GetNewAssetCount(Empty) returns (CountResult);
+  rpc GetActiveAssets(Empty) returns (ActiveAssetsResult);
+  rpc GetDeviceClassCount(Empty) returns (DeviceClassStats);
+  rpc GetAssetAttributes(GetAssetAttributesRequest) returns (AssetAttributesResult);
+  rpc ListAssetsV1(ListAssetsV1Request) returns (ListAssetsV1Response);
+  rpc GetAssetV1(GetAssetV1Request) returns (AssetV1);
+  rpc GetAssetByOrigin(GetAssetByOriginRequest) returns (Asset);
+  rpc ListAssetsSaaS(ListAssetsSaaSRequest) returns (ListAssetsResponse);
+  rpc GetAssetSaaS(GetAssetRequest) returns (Asset);
+}
+
+message ListAssetsRequest { int32 page = 1; int32 page_size = 2 [json_name = "pageSize"]; string keyword = 3; repeated string branch_ids = 4 [json_name = "branchIds"]; repeated string group_ids = 5 [json_name = "groupIds"]; repeated string ip_list = 6 [json_name = "ipList"]; }
+message ListAssetsResponse { int32 total = 1; int32 page = 2; int32 page_size = 3 [json_name = "pageSize"]; repeated Asset items = 4; }
+message GetAssetRequest { string asset_id = 1 [json_name = "assetId"]; }
+message UpdateAssetRequest { string asset_id = 1 [json_name = "assetId"]; string name = 2; string description = 3; string group_id = 4 [json_name = "groupId"]; string responsible_person = 5 [json_name = "responsiblePerson"]; }
+message UpdateAssetResponse { bool success = 1; string message = 2; }
+message Asset { string id = 1; string name = 2; string ip = 3; string mac = 4; string hostname = 5; string os = 6; string risk_level = 7 [json_name = "riskLevel"]; string group_name = 8 [json_name = "groupName"]; string branch_name = 9 [json_name = "branchName"]; string responsible_person = 10 [json_name = "responsiblePerson"]; string department = 11; string status = 12; string last_seen = 13 [json_name = "lastSeen"]; int32 vuln_count = 14 [json_name = "vulnCount"]; int32 alert_count = 15 [json_name = "alertCount"]; }
+message ListBranchesRequest { string group_id = 1 [json_name = "groupId"]; }
+message ListBranchesResponse { int32 total = 1; repeated Branch items = 2; }
+message Branch { string id = 1; string name = 2; int32 asset_count = 3 [json_name = "assetCount"]; }
+message ListGroupsRequest { string group_type = 1 [json_name = "groupType"]; }
+message ListGroupsResponse { int32 total = 1; repeated Group items = 2; }
+message Group { string id = 1; string name = 2; string type = 3; int32 asset_count = 4 [json_name = "assetCount"]; }
+message GetAssetStatsRequest { string time_range = 1 [json_name = "timeRange"]; }
+message AssetStats { int32 total = 1; int32 online = 2; int32 offline = 3; int32 high_risk = 4 [json_name = "highRisk"]; int32 medium_risk = 5 [json_name = "mediumRisk"]; int32 low_risk = 6 [json_name = "lowRisk"]; repeated AssetChangePoint changes = 7; }
+message AssetChangePoint { string date = 1; int32 count = 2; }
+message AssetCard { int32 total = 1; int32 server_count = 2 [json_name = "serverCount"]; int32 pc_count = 3 [json_name = "pcCount"]; int32 network_device_count = 4 [json_name = "networkDeviceCount"]; int32 other_count = 5 [json_name = "otherCount"]; }
+message GetExposureRequest { string asset_id = 1 [json_name = "assetId"]; }
+message ExposureInfo { repeated string open_ports = 1 [json_name = "openPorts"]; repeated string open_services = 2 [json_name = "openServices"]; repeated string vulnerabilities = 3; }
+message ListDevicesRequest { int32 page = 1; int32 page_size = 2 [json_name = "pageSize"]; string keyword = 3; string branch_id = 4 [json_name = "branchId"]; }
+message ListDevicesResponse { int32 total = 1; repeated Device items = 2; }
+message Device { string id = 1; string name = 2; string ip = 3; string type = 4; string status = 5; string branch_name = 6 [json_name = "branchName"]; int32 asset_count = 7 [json_name = "assetCount"]; }
+message DeviceStats { int32 total = 1; int32 online = 2; int32 offline = 3; repeated DeviceTypeCount type_counts = 4 [json_name = "typeCounts"]; }
+message DeviceTypeCount { string type = 1; int32 count = 2; }
+message OsStats { repeated OsCount items = 1; }
+message OsCount { string os = 1; int32 count = 2; }
+message ActiveAssetsResult { repeated Asset items = 1; }
+message DeviceClassStats { repeated DeviceTypeCount items = 1; }
+message GetAssetAttributesRequest { repeated string asset_ids = 1 [json_name = "assetIds"]; }
+message AssetAttributesResult { repeated AssetAttribute items = 1; }
+message AssetAttribute { string asset_id = 1 [json_name = "assetId"]; map<string, string> attributes = 2; }
+message ListAssetsV1Request { int32 page = 1; int32 page_size = 2 [json_name = "pageSize"]; string keyword = 3; string branch_id = 4 [json_name = "branchId"]; string group_type = 5 [json_name = "groupType"]; }
+message ListAssetsV1Response { int32 total = 1; int32 page = 2; int32 page_size = 3 [json_name = "pageSize"]; repeated AssetV1 items = 4; }
+message GetAssetV1Request { string aid = 1; }
+message AssetV1 { int32 id = 1; string name = 2; string ip = 3; string hostname = 4; string os = 5; string group_name = 6 [json_name = "groupName"]; string branch_name = 7 [json_name = "branchName"]; string responsible_person = 8 [json_name = "responsiblePerson"]; string department = 9; }
+message GetAssetByOriginRequest { string origin_device_id = 1 [json_name = "originDeviceId"]; string product_name = 2 [json_name = "productName"]; string ip = 3; }
+message ListAssetsSaaSRequest { int32 page = 1; int32 page_size = 2 [json_name = "pageSize"]; string keyword = 3; }
+
+// ============ IncidentService: /api/xdr/v1/incident/*, /api/xdr/v1/report/* ============
+
+service IncidentService {
+  rpc ListIncidents(ListIncidentsRequest) returns (ListIncidentsResponse);
+  rpc ListAlerts(ListAlertsRequest) returns (ListAlertsResponse);
+  rpc GetAnalysisField(GetAnalysisFieldRequest) returns (AnalysisField);
+  rpc GetLogDetail(GetLogDetailRequest) returns (LogDetail);
+  rpc GetESideLogDetail(GetESideLogDetailRequest) returns (LogDetail);
+  rpc GetAlertLogs(GetAlertLogsRequest) returns (AlertLogsResponse);
+  rpc GetDisposalStats(GetDisposalStatsRequest) returns (DisposalStats);
+  rpc GetDisposalTabs(GetDisposalTabsRequest) returns (DisposalTabsResponse);
+  rpc GetDisposalAdvices(GetDisposalAdvicesRequest) returns (DisposalAdvices);
+  rpc GetIncidentTrend(Empty) returns (IncidentTrend);
+}
+
+message ListIncidentsRequest { int32 page = 1; int32 page_size = 2 [json_name = "pageSize"]; string start_time = 3 [json_name = "startTime"]; string end_time = 4 [json_name = "endTime"]; string severity = 5; string status = 6; string keyword = 7; }
+message ListIncidentsResponse { int32 total = 1; int32 page = 2; int32 page_size = 3 [json_name = "pageSize"]; repeated Incident items = 4; }
+message Incident { string uuid = 1; string name = 2; string severity = 3; string status = 4; string type = 5; string source_ip = 6 [json_name = "sourceIp"]; string target_ip = 7 [json_name = "targetIp"]; string asset_name = 8 [json_name = "assetName"]; string description = 9; string detect_time = 10 [json_name = "detectTime"]; string handle_time = 11 [json_name = "handleTime"]; string handle_result = 12 [json_name = "handleResult"]; string analyst = 13; }
+message ListAlertsRequest { int32 page = 1; int32 page_size = 2 [json_name = "pageSize"]; string start_time = 3 [json_name = "startTime"]; string end_time = 4 [json_name = "endTime"]; string severity = 5; string status = 6; string asset_id = 7 [json_name = "assetId"]; string keyword = 8; }
+message ListAlertsResponse { int32 total = 1; int32 page = 2; int32 page_size = 3 [json_name = "pageSize"]; repeated Alert items = 4; }
+message Alert { string id = 1; string name = 2; string severity = 3; string status = 4; string source_ip = 5 [json_name = "sourceIp"]; string target_ip = 6 [json_name = "targetIp"]; string asset_name = 7 [json_name = "assetName"]; string description = 8; string detect_time = 9 [json_name = "detectTime"]; }
+message GetAnalysisFieldRequest { string uuid = 1; }
+message AnalysisField { repeated AnalysisFieldItem fields = 1; }
+message AnalysisFieldItem { string field_name = 1 [json_name = "fieldName"]; string field_value = 2 [json_name = "fieldValue"]; string field_type = 3 [json_name = "fieldType"]; }
+message GetLogDetailRequest { string log_id = 1 [json_name = "logId"]; string uuid = 2; }
+message LogDetail { string id = 1; string log_type = 2 [json_name = "logType"]; string timestamp = 3; string source = 4; string raw_data = 5 [json_name = "rawData"]; map<string, string> fields = 6; }
+message GetESideLogDetailRequest { string uuid = 1; string log_id = 2 [json_name = "logId"]; }
+message GetAlertLogsRequest { string alert_id = 1 [json_name = "alertId"]; int32 page = 2; int32 page_size = 3 [json_name = "pageSize"]; }
+message AlertLogsResponse { int32 total = 1; repeated LogDetail items = 2; }
+message GetDisposalStatsRequest { string uuid = 1; }
+message DisposalStats { int32 total_entities = 1 [json_name = "totalEntities"]; int32 disposed = 2; int32 pending = 3; repeated EntityStat entities = 4; }
+message EntityStat { string entity_type = 1 [json_name = "entityType"]; string entity_name = 2 [json_name = "entityName"]; string status = 3; }
+message GetDisposalTabsRequest { string uuid = 1; string entity_type = 2 [json_name = "entityType"]; }
+message DisposalTabsResponse { repeated DisposalTab tabs = 1; }
+message DisposalTab { string tab_name = 1 [json_name = "tabName"]; string tab_type = 2 [json_name = "tabType"]; repeated EntityStat entities = 3; }
+message GetDisposalAdvicesRequest { string uuid = 1; }
+message DisposalAdvices { string summary = 1; repeated DisposalAdvice advices = 2; }
+message DisposalAdvice { string action = 1; string target = 2; string description = 3; string severity = 4; }
+message IncidentTrend { repeated TrendPoint points = 1; }
+message TrendPoint { string date = 1; int32 high = 2; int32 medium = 3; int32 low = 4; }
+
+// ============ ResponseService: /api/xdr/v1/linkage/*, 一键遏制, 微信推送 ============
+
+service ResponseService {
+  rpc BanIP(BanIPRequest) returns (ActionResponse);
+  rpc IsolateHost(IsolateHostRequest) returns (ActionResponse);
+  rpc DisposeFile(DisposeFileRequest) returns (ActionResponse);
+  rpc UntrustFile(UntrustFileRequest) returns (ActionResponse);
+  rpc DispatchScript(DispatchScriptRequest) returns (ActionResponse);
+  rpc GetTaskStatus(GetTaskStatusRequest) returns (TaskStatus);
+  rpc GetTaskResult(GetTaskResultRequest) returns (TaskResult);
+  rpc GetDisposeFileStatus(GetDisposeFileStatusRequest) returns (DisposeFileStatus);
+  rpc UnblockIPs(UnblockIPsRequest) returns (ActionResponse);
+  rpc UnisolateHost(UnisolateHostRequest) returns (ActionResponse);
+  rpc UnisolateFile(UnisolateFileRequest) returns (ActionResponse);
+  rpc OneClickDisposeTask(OneClickDisposeTaskRequest) returns (ActionResponse);
+  rpc GetDisposeEntities(GetDisposeEntitiesRequest) returns (DisposeEntitiesResponse);
+  rpc GetLinkageDevices(GetLinkageDevicesRequest) returns (LinkageDevicesResponse);
+  rpc UnblockEntity(UnblockEntityRequest) returns (ActionResponse);
+  rpc PollTask(PollTaskRequest) returns (TaskResult);
+  rpc WechatPushEvent(WechatPushEventRequest) returns (ActionResponse);
+}
+
+message BanIPRequest { string ip = 1; string reason = 2; int32 duration_minutes = 3 [json_name = "durationMinutes"]; repeated string device_ids = 4 [json_name = "deviceIds"]; }
+message IsolateHostRequest { string host_ip = 1 [json_name = "hostIp"]; string reason = 2; repeated string device_ids = 3 [json_name = "deviceIds"]; }
+message DisposeFileRequest { string file_hash = 1 [json_name = "fileHash"]; string file_path = 2 [json_name = "filePath"]; string action = 3; repeated string device_ids = 4 [json_name = "deviceIds"]; }
+message UntrustFileRequest { repeated string file_hashes = 1 [json_name = "fileHashes"]; string reason = 2; }
+message DispatchScriptRequest { string script_content = 1 [json_name = "scriptContent"]; repeated string device_ids = 2 [json_name = "deviceIds"]; string script_type = 3 [json_name = "scriptType"]; }
+message GetTaskStatusRequest { int32 page = 1; int32 page_size = 2 [json_name = "pageSize"]; string task_id = 3 [json_name = "taskId"]; }
+message TaskStatus { int32 total = 1; repeated TaskStatusItem items = 2; }
+message TaskStatusItem { string task_id = 1 [json_name = "taskId"]; string device_name = 2 [json_name = "deviceName"]; string status = 3; string message = 4; }
+message GetTaskResultRequest { string task_id = 1 [json_name = "taskId"]; }
+message TaskResult { string task_id = 1 [json_name = "taskId"]; string status = 2; string result = 3; string create_time = 4 [json_name = "createTime"]; string finish_time = 5 [json_name = "finishTime"]; }
+message GetDisposeFileStatusRequest { repeated string file_hashes = 1 [json_name = "fileHashes"]; }
+message DisposeFileStatus { repeated FileStatusItem items = 1; }
+message FileStatusItem { string file_hash = 1 [json_name = "fileHash"]; string status = 2; string message = 3; }
+message UnblockIPsRequest { repeated string ips = 1; repeated string device_ids = 2 [json_name = "deviceIds"]; }
+message UnisolateHostRequest { string host_ip = 1 [json_name = "hostIp"]; repeated string device_ids = 2 [json_name = "deviceIds"]; }
+message UnisolateFileRequest { repeated string file_hashes = 1 [json_name = "fileHashes"]; }
+message OneClickDisposeTaskRequest { string uuid = 1; repeated string entity_ids = 2 [json_name = "entityIds"]; string action = 3; }
+message GetDisposeEntitiesRequest { string uuid = 1; }
+message DisposeEntitiesResponse { repeated DisposeEntity entities = 1; }
+message DisposeEntity { string entity_id = 1 [json_name = "entityId"]; string entity_type = 2 [json_name = "entityType"]; string entity_name = 3 [json_name = "entityName"]; string status = 4; repeated string available_actions = 5 [json_name = "availableActions"]; }
+message GetLinkageDevicesRequest { string uuid = 1; }
+message LinkageDevicesResponse { repeated LinkageDevice devices = 1; }
+message LinkageDevice { string device_id = 1 [json_name = "deviceId"]; string device_name = 2 [json_name = "deviceName"]; string device_type = 3 [json_name = "deviceType"]; string status = 4; }
+message UnblockEntityRequest { repeated string entity_ids = 1 [json_name = "entityIds"]; string entity_type = 2 [json_name = "entityType"]; }
+message PollTaskRequest { string task_id = 1 [json_name = "taskId"]; }
+message WechatPushEventRequest { string event_id = 1 [json_name = "eventId"]; string content = 2; repeated string recipients = 3; }
+
+// ============ VulnerabilityService: /api/xdr/v1/asm/*, /order/*/risk/*, /order/*/vuln* ============
+
+service VulnerabilityService {
+  rpc ListWeakPasswords(ListWeakPasswordsRequest) returns (ListWeakPasswordsResponse);
+  rpc GetWeakPasswordProof(GetWeakPasswordProofRequest) returns (WeakPasswordProof);
+  rpc GetWeakPasswordCommon(GetWeakPasswordCommonRequest) returns (WeakPasswordCommon);
+  rpc GetWeakPasswordBase(GetWeakPasswordBaseRequest) returns (WeakPasswordBase);
+  rpc ListVulnerabilities(ListVulnRequest) returns (ListVulnResponse);
+  rpc GetVulnProof(GetVulnProofRequest) returns (VulnProof);
+  rpc GetVulnCommon(GetVulnCommonRequest) returns (VulnCommon);
+  rpc GetVulnBase(GetVulnBaseRequest) returns (VulnBase);
+  rpc AggregateVulns(AggregateVulnsRequest) returns (AggregateVulnsResponse);
+  rpc ListRiskyAssets(ListRiskyAssetsRequest) returns (ListRiskyAssetsResponse);
+  rpc ListAssetVulns(ListAssetVulnsRequest) returns (ListAssetVulnsResponse);
+  rpc GetVulnsByPerson(GetVulnsByPersonRequest) returns (VulnsByPersonResponse);
+  rpc GetRiskOverview(Empty) returns (RiskOverview);
+  rpc GetVulnAssetOverview(Empty) returns (VulnAssetOverview);
+  rpc GetVulnAssetTop5(Empty) returns (VulnAssetTop5);
+}
+
+message ListWeakPasswordsRequest { int32 page = 1; int32 page_size = 2 [json_name = "pageSize"]; string severity = 3; string status = 4; }
+message ListWeakPasswordsResponse { int32 total = 1; repeated WeakPasswordItem items = 2; }
+message WeakPasswordItem { string id = 1; string host = 2; string username = 3; string password = 4; string service = 5; string severity = 6; string status = 7; }
+message GetWeakPasswordProofRequest { string risk_id = 1 [json_name = "riskId"]; }
+message WeakPasswordProof { string risk_id = 1 [json_name = "riskId"]; repeated ProofItem proofs = 2; }
+message ProofItem { string key = 1; string value = 2; }
+message GetWeakPasswordCommonRequest { string risk_id = 1 [json_name = "riskId"]; }
+message WeakPasswordCommon { string risk_id = 1 [json_name = "riskId"]; string protocol = 2; string port = 3; string service = 4; string description = 5; }
+message GetWeakPasswordBaseRequest { string risk_id = 1 [json_name = "riskId"]; }
+message WeakPasswordBase { string risk_id = 1 [json_name = "riskId"]; string vuln_name = 2 [json_name = "vulnName"]; string cve_id = 3 [json_name = "cveId"]; string severity = 4; string status = 5; string detect_time = 6 [json_name = "detectTime"]; string fix_time = 7 [json_name = "fixTime"]; }
+message ListVulnRequest { int32 page = 1; int32 page_size = 2 [json_name = "pageSize"]; string severity = 3; string status = 4; string asset_id = 5 [json_name = "assetId"]; string keyword = 6; }
+message ListVulnResponse { int32 total = 1; repeated Vulnerability items = 2; }
+message Vulnerability { string id = 1; string name = 2; string cve_id = 3 [json_name = "cveId"]; string severity = 4; string status = 5; string asset_id = 6 [json_name = "assetId"]; string asset_name = 7 [json_name = "assetName"]; string description = 8; string solution = 9; string detect_time = 10 [json_name = "detectTime"]; string fix_time = 11 [json_name = "fixTime"]; string responsible_person = 12 [json_name = "responsiblePerson"]; }
+message GetVulnProofRequest { string risk_id = 1 [json_name = "riskId"]; }
+message VulnProof { string risk_id = 1 [json_name = "riskId"]; repeated ProofItem proofs = 2; }
+message GetVulnCommonRequest { string risk_id = 1 [json_name = "riskId"]; }
+message VulnCommon { string risk_id = 1 [json_name = "riskId"]; string protocol = 2; string port = 3; string description = 4; }
+message GetVulnBaseRequest { string risk_id = 1 [json_name = "riskId"]; }
+message VulnBase { string risk_id = 1 [json_name = "riskId"]; string vuln_name = 2 [json_name = "vulnName"]; string cve_id = 3 [json_name = "cveId"]; string severity = 4; string status = 5; }
+message AggregateVulnsRequest { string dimension = 1; int32 page = 2; int32 page_size = 3 [json_name = "pageSize"]; }
+message AggregateVulnsResponse { int32 total = 1; repeated AggregateVulnGroup groups = 2; }
+message AggregateVulnGroup { string key = 1; int32 count = 2; int32 high = 3; int32 medium = 4; int32 low = 5; }
+message ListRiskyAssetsRequest { int32 page = 1; int32 page_size = 2 [json_name = "pageSize"]; string severity = 3; }
+message ListRiskyAssetsResponse { int32 total = 1; repeated RiskyAsset items = 2; }
+message RiskyAsset { string asset_id = 1 [json_name = "assetId"]; string asset_name = 2 [json_name = "assetName"]; string ip = 3; int32 vuln_count = 4 [json_name = "vulnCount"]; string risk_level = 5 [json_name = "riskLevel"]; }
+message ListAssetVulnsRequest { string asset_id = 1 [json_name = "assetId"]; int32 page = 2; int32 page_size = 3 [json_name = "pageSize"]; }
+message ListAssetVulnsResponse { int32 total = 1; repeated Vulnerability items = 2; }
+message GetVulnsByPersonRequest { string person_id = 1 [json_name = "personId"]; int32 page = 2; int32 page_size = 3 [json_name = "pageSize"]; }
+message VulnsByPersonResponse { int32 total = 1; repeated Vulnerability items = 2; }
+message RiskOverview { int32 total = 1; int32 critical = 2; int32 high = 3; int32 medium = 4; int32 low = 5; int32 fixed = 6; repeated FixPriorityItem priorities = 7; }
+message FixPriorityItem { string priority = 1; int32 count = 2; }
+message VulnAssetOverview { int32 total_vulns = 1 [json_name = "totalVulns"]; int32 affected_assets = 2 [json_name = "affectedAssets"]; int32 fixed_vulns = 3 [json_name = "fixedVulns"]; }
+message VulnAssetTop5 { repeated Top5Item assets = 1; }
+message Top5Item { string asset_id = 1 [json_name = "assetId"]; string asset_name = 2 [json_name = "assetName"]; int32 vuln_count = 3 [json_name = "vulnCount"]; }
+
+// ============ SoarService: /api/xdr/v1/customized/soar/* ============
+
+service SoarService {
+  rpc GetDictionary(GetDictionaryRequest) returns (DictionaryResponse);
+  rpc GetDetail(GetDetailRequest) returns (DetailResponse);
+}
+
+message GetDictionaryRequest { string type = 1; }
+message DictionaryResponse { repeated DictionaryItem items = 1; }
+message DictionaryItem { string key = 1; string value = 2; string type = 3; }
+message GetDetailRequest { string detail_type = 1 [json_name = "detailType"]; string id = 2; }
+message DetailResponse { string detail_type = 1 [json_name = "detailType"]; string id = 2; string raw_data = 3 [json_name = "rawData"]; }
+
+// ============ AuthService: OAuth2 认证 + Client 管理 ============
+
+service AuthService {
+  rpc Authorize(AuthorizeRequest) returns (AuthorizeResponse);
+  rpc GetToken(GetTokenRequest) returns (TokenResponse);
+  rpc GetProfile(Empty) returns (Profile);
+  rpc CreateClient(CreateClientRequest) returns (Client);
+  rpc ListClients(ListClientsRequest) returns (ListClientsResponse);
+  rpc GetClient(GetClientRequest) returns (Client);
+  rpc GetClientByName(GetClientByNameRequest) returns (Client);
+  rpc UpdateClient(UpdateClientRequest) returns (Client);
+  rpc DeleteClient(DeleteClientRequest) returns (DeleteResponse);
+  rpc GenerateSecret(GenerateSecretRequest) returns (SecretResponse);
+  rpc GetSecret(GetSecretRequest) returns (SecretInfo);
+  rpc DeleteSecret(DeleteSecretRequest) returns (DeleteResponse);
+}
+
+message AuthorizeRequest { string response_type = 1 [json_name = "responseType"]; string client_id = 2 [json_name = "clientId"]; string redirect_uri = 3 [json_name = "redirectUri"]; string scope = 4; string state = 5; }
+message AuthorizeResponse { string code = 1; string state = 2; string redirect_uri = 3 [json_name = "redirectUri"]; }
+message GetTokenRequest { string grant_type = 1 [json_name = "grantType"]; string code = 2; string client_id = 3 [json_name = "clientId"]; string client_secret = 4 [json_name = "clientSecret"]; string redirect_uri = 5 [json_name = "redirectUri"]; string refresh_token = 6 [json_name = "refreshToken"]; }
+message TokenResponse { string access_token = 1 [json_name = "accessToken"]; string token_type = 2 [json_name = "tokenType"]; int32 expires_in = 3 [json_name = "expiresIn"]; string refresh_token = 4 [json_name = "refreshToken"]; string scope = 5; }
+message Profile { string user_id = 1 [json_name = "userId"]; string username = 2; string display_name = 3 [json_name = "displayName"]; string email = 4; string role = 5; repeated string permissions = 6; }
+message CreateClientRequest { string name = 1; string description = 2; repeated string redirect_uris = 3 [json_name = "redirectUris"]; repeated string grant_types = 4 [json_name = "grantTypes"]; repeated string scopes = 5; }
+message Client { string client_id = 1 [json_name = "clientId"]; string name = 2; string description = 3; repeated string redirect_uris = 4 [json_name = "redirectUris"]; repeated string grant_types = 5 [json_name = "grantTypes"]; repeated string scopes = 6; string status = 7; string create_time = 8 [json_name = "createTime"]; }
+message ListClientsRequest { int32 page = 1; int32 page_size = 2 [json_name = "pageSize"]; string keyword = 3; }
+message ListClientsResponse { int32 total = 1; repeated Client items = 2; }
+message GetClientRequest { string client_id = 1 [json_name = "clientId"]; }
+message GetClientByNameRequest { string name = 1; }
+message UpdateClientRequest { string client_id = 1 [json_name = "clientId"]; string name = 2; string description = 3; repeated string redirect_uris = 4 [json_name = "redirectUris"]; repeated string grant_types = 5 [json_name = "grantTypes"]; repeated string scopes = 6; }
+message DeleteClientRequest { string client_id = 1 [json_name = "clientId"]; }
+message GenerateSecretRequest { string client_id = 1 [json_name = "clientId"]; }
+message SecretResponse { string client_id = 1 [json_name = "clientId"]; string client_secret = 2 [json_name = "clientSecret"]; string create_time = 3 [json_name = "createTime"]; }
+message GetSecretRequest { string client_id = 1 [json_name = "clientId"]; }
+message SecretInfo { string client_id = 1 [json_name = "clientId"]; string secret_hint = 2 [json_name = "secretHint"]; string create_time = 3 [json_name = "createTime"]; string expire_time = 4 [json_name = "expireTime"]; }
+message DeleteSecretRequest { string client_id = 1 [json_name = "clientId"]; }
+
+// ============ ThreatExpertService: XTH 安全专家推送 + 系统信息 ============
+
+service ThreatExpertService {
+  rpc PushIncident(PushIncidentRequest) returns (ActionResponse);
+  rpc PushReport(PushReportRequest) returns (ActionResponse);
+  rpc ConfirmIncident(ConfirmIncidentRequest) returns (ActionResponse);
+  rpc ListOrderInfos(Empty) returns (OrderInfosResponse);
+  rpc GetProductInfo(Empty) returns (ProductInfo);
+  rpc UpdateDisposeIcon(UpdateDisposeIconRequest) returns (ActionResponse);
+}
+
+message PushIncidentRequest { string incident_id = 1 [json_name = "incidentId"]; string title = 2; string severity = 3; string description = 4; string source_ip = 5 [json_name = "sourceIp"]; string target_ip = 6 [json_name = "targetIp"]; string detect_time = 7 [json_name = "detectTime"]; string asset_name = 8 [json_name = "assetName"]; repeated EvidenceItem evidences = 9; repeated string tags = 10; }
+message EvidenceItem { string type = 1; string content = 2; string timestamp = 3; }
+message PushReportRequest { string incident_id = 1 [json_name = "incidentId"]; string report_title = 2 [json_name = "reportTitle"]; string report_content = 3 [json_name = "reportContent"]; string conclusion = 4; repeated string affected_assets = 5 [json_name = "affectedAssets"]; }
+message ConfirmIncidentRequest { string incident_id = 1 [json_name = "incidentId"]; string confirm_result = 2 [json_name = "confirmResult"]; string comment = 3; string analyst = 4; }
+message OrderInfosResponse { repeated OrderInfo items = 1; }
+message OrderInfo { string order_id = 1 [json_name = "orderId"]; string product_name = 2 [json_name = "productName"]; string status = 3; string start_time = 4 [json_name = "startTime"]; string end_time = 5 [json_name = "endTime"]; map<string, string> attributes = 6; }
+message ProductInfo { string product_name = 1 [json_name = "productName"]; string version = 2; string api_version = 3 [json_name = "apiVersion"]; string serial_number = 4 [json_name = "serialNumber"]; map<string, string> features = 5; }
+message UpdateDisposeIconRequest { string uuid = 1; string icon_status = 2 [json_name = "iconStatus"]; }
