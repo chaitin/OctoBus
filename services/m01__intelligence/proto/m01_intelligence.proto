@@ -1,0 +1,176 @@
+syntax = "proto3";
+
+package M01_Intelligence;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
+
+option go_package = "miner/grpc-service/M01_Intelligence";
+
+// m01 邮件安全网关 - 本地威胁情报（Threat Intelligence）操作。
+// 枚举值以上游 wire string 形式保留（字符串字段 + handler 校验），与仓库既有风格一致。
+service M01_Intelligence {
+  // IOC 匹配/查询：对一批指标查询本地威胁情报（只读，核心方法）
+  rpc DetectIntelligence(DetectIntelligenceRequest) returns (DetectIntelligenceResponse) {}
+
+  // 分页查询本地情报列表，支持多条件与时间范围过滤（只读）
+  rpc ListIntelligence(ListIntelligenceRequest) returns (ListIntelligenceResponse) {}
+
+  // 写操作：批量添加本地情报；幂等性由上游按 pattern 去重，重复项进 failures
+  rpc AddIntelligence(AddIntelligenceRequest) returns (AddIntelligenceResponse) {}
+
+  // 写操作：按 id 批量修改本地情报（部分字段更新），按 id 幂等
+  rpc UpdateIntelligence(UpdateIntelligenceRequest) returns (UpdateIntelligenceResponse) {}
+
+  // 写操作：批量删除本地情报；删除不存在的条目仍视为成功（幂等）
+  rpc DeleteIntelligence(DeleteIntelligenceRequest) returns (DeleteIntelligenceResponse) {}
+
+  // 本地情报统计（只读）
+  rpc GetIntelligenceStats(GetIntelligenceStatsRequest) returns (GetIntelligenceStatsResponse) {}
+}
+
+// ============================ DetectIntelligence ============================
+
+message IntelligenceQuery {
+  string pattern = 1;    // 情报内容，必填
+  string type = 2;       // 情报类型，必填：url/url-domain/email-domain/email-addr/ipv4/md5/sha256
+  string request_id = 3; // 请求ID，必填，用于区分检测对象
+}
+
+message DetectIntelligenceRequest {
+  repeated IntelligenceQuery queries = 1; // 序列化为顶层 JSON 数组，必填且非空
+}
+
+message IntelligenceRecord {
+  bool hit = 1;                                          // 是否命中情报
+  string request_id = 2;                                // 请求ID
+  string id = 3;                                         // 情报ID(uuid)
+  string description = 4;                                // 情报描述
+  repeated string source_industry = 5;                  // 行业分类
+  string source = 6;                                     // 情报来源
+  string status = 7;                                     // 情报状态：active/expired/revoked
+  string tlp = 8;                                        // 红绿灯协议：RED/AMBER/GREEN/CLEAR/AMBER+STRICT
+  string intelligence_type = 9;                          // 情报分类名称
+  string urgency = 10;                                   // 紧急程度：high/medium/low
+  string first_discovered_time = 11;                     // 首次发现时间
+  string last_active_time = 12;                          // 最后活跃时间
+  string intelligence_update_time = 13;                  // 情报更新时间
+  string intelligence_expiration_time = 14;              // 情报过期时间
+  string attribute = 15;                                 // 情报属性：url/url-domain/.../sha1/url-regex
+  string pattern = 16;                                   // 情报内容
+  google.protobuf.Struct info = 17;                      // 类型信息（多态对象，原样透传）
+  repeated google.protobuf.Struct phishing_script = 18;  // 关联剧本，可空 -> []
+}
+
+message DetectIntelligenceResponse {
+  repeated IntelligenceRecord records = 1; // 上游 data 数组
+}
+
+// ============================ ListIntelligence ============================
+
+message ListIntelligenceRequest {
+  int64 page = 1;       // 页码，可选，默认 1
+  int64 page_size = 2;  // 每页数量，可选，默认 10
+
+  google.protobuf.StringValue id = 3;          // 情报ID（精确）
+  google.protobuf.StringValue description = 4; // 情报描述（模糊）
+  google.protobuf.StringValue pattern = 5;     // 内容（模糊）
+  google.protobuf.StringValue status = 6;      // 状态：active/revoked
+  google.protobuf.StringValue attribute = 7;   // 属性：url/ipv4/md5 等
+
+  google.protobuf.StringValue first_discovered_time_start = 8;
+  google.protobuf.StringValue first_discovered_time_end = 9;
+  google.protobuf.StringValue last_active_time_start = 10;
+  google.protobuf.StringValue last_active_time_end = 11;
+  google.protobuf.StringValue expiration_time_start = 12;
+  google.protobuf.StringValue expiration_time_end = 13;
+  google.protobuf.StringValue update_time_start = 14;
+  google.protobuf.StringValue update_time_end = 15;
+}
+
+message ListIntelligenceResponse {
+  int64 total = 1;                            // 总条数
+  int64 page = 2;                             // 当前页
+  int64 page_size = 3;                        // 每页数量
+  int64 total_pages = 4;                      // 总页数
+  repeated google.protobuf.Struct records = 5; // 记录列表（原样透传）
+}
+
+// ============================ AddIntelligence ============================
+
+message AddIntelligenceItem {
+  google.protobuf.StringValue description = 1;                  // 情报描述，可选
+  string status = 2;                                            // 状态，可选，默认 active；active/revoked
+  string tlp = 3;                                               // 红绿灯协议，必填
+  string urgency = 4;                                           // 紧急程度，必填：high/medium/low
+  string attribute = 5;                                         // 属性，必填
+  string pattern = 6;                                           // 情报内容，必填
+  google.protobuf.StringValue intelligence_expiration_time = 7; // 过期时间，可选
+}
+
+message AddIntelligenceRequest {
+  repeated AddIntelligenceItem items = 1; // 序列化为顶层 JSON 数组，必填且非空
+}
+
+message AddedIntelligence {
+  string intelligence_id = 1; // 新增情报ID
+  string pattern = 2;         // 情报内容
+}
+
+message AddIntelligenceFailure {
+  string pattern = 1; // 情报内容
+  string reason = 2;  // 失败原因
+}
+
+message AddIntelligenceResponse {
+  int64 success_count = 1;                          // 成功数量
+  repeated AddedIntelligence intelligence_ids = 2;  // 成功的情报ID列表
+  int64 failed_count = 3;                           // 失败数量
+  repeated AddIntelligenceFailure failures = 4;     // 失败明细
+}
+
+// ============================ UpdateIntelligence ============================
+
+message UpdateIntelligenceItem {
+  string id = 1;                                                // 情报ID，必填
+  google.protobuf.StringValue description = 2;                  // 描述，可选
+  string status = 3;                                            // 状态，可选：active/expired/revoked
+  string tlp = 4;                                               // 红绿灯协议，可选
+  string urgency = 5;                                           // 紧急程度，可选：high/medium/low
+  google.protobuf.StringValue intelligence_expiration_time = 6; // 过期时间，可选
+}
+
+message UpdateIntelligenceRequest {
+  repeated UpdateIntelligenceItem items = 1; // 序列化为顶层 JSON 数组，必填且非空
+}
+
+message UpdateIntelligenceResponse {
+  string id = 1; // 上游 data 返回的情报ID
+}
+
+// ============================ DeleteIntelligence ============================
+
+message DeleteIntelligenceItem {
+  string intelligence_id = 1;   // 情报ID，必填
+  string intelligence_type = 2; // 情报类型，必填：url/url-domain/email-domain/email-addr/md5/sha256/ipv4
+  string pattern = 3;           // 情报内容，必填
+  string pattern_type = 4;      // 匹配模式，必填
+}
+
+message DeleteIntelligenceRequest {
+  repeated DeleteIntelligenceItem items = 1; // 序列化为顶层 JSON 数组，必填且非空
+}
+
+message DeleteIntelligenceResponse {
+  int64 success_count = 1; // 成功数量
+}
+
+// ============================ GetIntelligenceStats ============================
+
+message GetIntelligenceStatsRequest {}
+
+message GetIntelligenceStatsResponse {
+  int64 total = 1;         // 情报总数
+  int64 active_count = 2;  // 启用数量
+  int64 revoked_count = 3; // 禁用数量
+}

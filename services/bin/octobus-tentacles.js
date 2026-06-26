@@ -77,6 +77,10 @@ const services = {
     entryFile: "../huawei__fw-usg6000e/bin/huawei-fw-usg6000e.js",
     serviceModule: "../huawei__fw-usg6000e/src/service.js",
   },
+  "m01-intelligence": {
+    entryFile: "../m01__intelligence/bin/m01-intelligence.js",
+    serviceModule: "../m01__intelligence/src/service.js",
+  },
   "nsfocus-ads-v4-5-r90-f06": {
     entryFile: "../nsfocus__ads_v4-5-r90-f06/bin/nsfocus-ads-v4-5-r90-f06.js",
     serviceModule: "../nsfocus__ads_v4-5-r90-f06/src/service.js",
