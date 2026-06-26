@@ -25,6 +25,10 @@ const services = {
     entryFile: "../das__tgfw_v6/bin/das-tgfw-v6.js",
     serviceModule: "../das__tgfw_v6/src/service.js",
   },
+  "defectdojo": {
+    entryFile: "../defectdojo__defectdojo/bin/defectdojo.js",
+    serviceModule: "../defectdojo__defectdojo/src/service.js",
+  },
   "dingtalk-group-robot": {
     entryFile: "../dingtalk__group-robot/bin/dingtalk-group-robot.js",
     serviceModule: "../dingtalk__group-robot/src/service.js",
@@ -73,6 +77,10 @@ const services = {
     entryFile: "../huawei__fw-usg6000e/bin/huawei-fw-usg6000e.js",
     serviceModule: "../huawei__fw-usg6000e/src/service.js",
   },
+  "imperva-waf-gateway-v13-6-90": {
+    entryFile: "../imperva__waf-gateway_v13-6-90/bin/imperva-waf-gateway-v13-6-90.js",
+    serviceModule: "../imperva__waf-gateway_v13-6-90/src/service.js",
+  },
   "nsfocus-ads-v4-5-r90-f06": {
     entryFile: "../nsfocus__ads_v4-5-r90-f06/bin/nsfocus-ads-v4-5-r90-f06.js",
     serviceModule: "../nsfocus__ads_v4-5-r90-f06/src/service.js",
@@ -113,6 +121,10 @@ const services = {
     entryFile: "../sangfor__fw_v8-0-45/bin/sangfor-fw-v8-0-45.js",
     serviceModule: "../sangfor__fw_v8-0-45/src/service.js",
   },
+  "sangfor-xdr-v2-0-45": {
+    entryFile: "../sangfor__xdr_v2-0-45/bin/sangfor-xdr-v2-0-45.js",
+    serviceModule: "../sangfor__xdr_v2-0-45/src/service.js",
+  },
   "slack-group-robot": {
     entryFile: "../slack__group-robot/bin/slack-group-robot.js",
     serviceModule: "../slack__group-robot/src/service.js",
@@ -136,6 +148,10 @@ const services = {
   "threatbook-cloudapi-v3": {
     entryFile: "../threatbook__cloudapi_v3/bin/threatbook-cloudapi-v3.js",
     serviceModule: "../threatbook__cloudapi_v3/src/service.js",
+  },
+  "threatbook-claudsandbox-v3": {
+    entryFile: "../threatbook__claudsandbox_v3/bin/threatbook-claudsandbox-v3.js",
+    serviceModule: "../threatbook__claudsandbox_v3/src/service.js",
   },
   "threatbook-onesig": {
     entryFile: "../threatbook__onesig/bin/threatbook-onesig.js",

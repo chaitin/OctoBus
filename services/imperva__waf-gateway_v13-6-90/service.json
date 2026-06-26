@@ -1,0 +1,41 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "imperva-waf-gateway-v13-6-90",
+  "displayName": "Imperva_WAF Gateway 13.6.90（Imperva_WAF Gateway 13.6.90）",
+  "description": "用于 Imperva Web应用防火墙（原 SecureSphere）/ WAF Gateway 13.6.90 的 OctoBus 标准能力，提供在线检查、IP 封禁、封禁列表查询和解封接口。",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/imperva_waf_gateway_v13_6_90.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Imperva_WAF_Gateway_v13_6_90.Imperva_WAF_Gateway_v13_6_90/CheckOnline": {
+          "name": "check-online",
+          "description": "检查 Imperva_WAF Gateway 13.6.90（Imperva_WAF Gateway 13.6.90） 在线状态。"
+        },
+        "Imperva_WAF_Gateway_v13_6_90.Imperva_WAF_Gateway_v13_6_90/BlockIP": {
+          "name": "block-ip",
+          "description": "向 Imperva_WAF Gateway 13.6.90（Imperva_WAF Gateway 13.6.90） 添加封禁 IP。"
+        },
+        "Imperva_WAF_Gateway_v13_6_90.Imperva_WAF_Gateway_v13_6_90/ListBlockedIPs": {
+          "name": "list-blocked-ips",
+          "description": "查询 Imperva_WAF Gateway 13.6.90（Imperva_WAF Gateway 13.6.90） 当前封禁 IP 列表。"
+        },
+        "Imperva_WAF_Gateway_v13_6_90.Imperva_WAF_Gateway_v13_6_90/UnblockIP": {
+          "name": "unblock-ip",
+          "description": "从 Imperva_WAF Gateway 13.6.90（Imperva_WAF Gateway 13.6.90） 删除封禁 IP。"
+        }
+      }
+    }
+  }
+}
