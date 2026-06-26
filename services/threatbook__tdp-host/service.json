@@ -1,0 +1,29 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "threatbook-tdp-host",
+  "displayName": "ThreatBook TDP Host",
+  "description": "OctoBus package for ThreatBook TDP web console fall-host (失陷主机) query API.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/threatbook_tdp_host.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "ThreatBook_TDP_Host.ThreatBook_TDP_Host/QueryFallHostList": {
+          "name": "query-fall-host",
+          "description": "Query the fall-host summary list from ThreatBook TDP."
+        }
+      }
+    }
+  }
+}
