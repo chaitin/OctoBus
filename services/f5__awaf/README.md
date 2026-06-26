@@ -268,14 +268,14 @@ npm run pack:check   # verify package structure
 
 ---
 
-## Pending Real-Device Verification
+## Real-Device Verification ✅
 
-The following behavior requires testing on physical F5 AWAF hardware:
+Verified on BIG-IP 17.5.1 (`https://172.16.221.9:8443`) — 2026-06-26.
 
-- [ ] `POST /mgmt/tm/asm/policies/{id}/ip-exceptions` — confirm `blockRequests` field name and accepted values
-- [ ] `GET /mgmt/tm/asm/policies?$filter=name+eq+...` — confirm query parameter format
-- [ ] `POST /mgmt/tm/asm/tasks/apply-policy` — confirm request body format and task status polling
-- [ ] Token expiry behavior with `DELETE /mgmt/shared/authz/tokens/{token}`
+- [x] IP exception endpoint is `POST /mgmt/tm/asm/policies/{id}/whitelist-ips` (not `ip-exceptions`). `blockRequests` field name and accepted values (`always` / `never`) confirmed correct.
+- [x] `GET /mgmt/tm/asm/policies?$select=id,name,enforcementMode,active` — query parameter format confirmed working.
+- [x] `POST /mgmt/tm/asm/tasks/apply-policy` — request body `{"policyReference":{"link":"..."}}` confirmed; returns task id with `status: "NEW"`.
+- [x] Token expiry: `DELETE /mgmt/shared/authz/tokens/{token}` invalidates immediately; subsequent requests return HTTP 401.
 
 ---
 

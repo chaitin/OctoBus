@@ -208,10 +208,10 @@ describe('BlockIP — unit (mock fetch)', () => {
       if (url.includes('/mgmt/tm/asm/policies?')) {
         return { status: 200, text: async () => JSON.stringify({ items: [{ id: 'p1', name: 'test_policy' }] }) };
       }
-      if (url.includes('/ip-exceptions') && opts?.method === 'GET') {
+      if (url.includes('/whitelist-ips') && opts?.method === 'GET') {
         return { status: 200, text: async () => JSON.stringify({ items: [] }) };
       }
-      if (url.includes('/ip-exceptions') && opts?.method === 'POST') {
+      if (url.includes('/whitelist-ips') && opts?.method === 'POST') {
         return { status: 201, text: async () => JSON.stringify({ id: 'exc-1', ipAddress: '10.0.0.1', blockRequests: 'always' }) };
       }
       if (url.includes('/apply-policy')) {
@@ -234,12 +234,12 @@ describe('BlockIP — unit (mock fetch)', () => {
       if (url.includes('/mgmt/tm/asm/policies?')) {
         return { status: 200, text: async () => JSON.stringify({ items: [{ id: 'p1', name: 'test_policy' }] }) };
       }
-      if (url.includes('/ip-exceptions') && opts?.method === 'GET') {
+      if (url.includes('/whitelist-ips') && opts?.method === 'GET') {
         return { status: 200, text: async () => JSON.stringify({
           items: [{ id: 'exc-1', ipAddress: '10.0.0.1', blockRequests: 'always' }],
         }) };
       }
-      if (url.includes('/ip-exceptions/exc-1') && opts?.method === 'PATCH') {
+      if (url.includes('/whitelist-ips/exc-1') && opts?.method === 'PATCH') {
         return { status: 200, text: async () => JSON.stringify({ id: 'exc-1', blockRequests: 'always' }) };
       }
       if (url.includes('/apply-policy')) {
@@ -274,7 +274,7 @@ describe('UnblockIP — unit (mock fetch)', () => {
       if (url.includes('/mgmt/tm/asm/policies?')) {
         return { status: 200, text: async () => JSON.stringify({ items: [{ id: 'p1', name: 'test_policy' }] }) };
       }
-      if (url.includes('/ip-exceptions') && opts?.method === 'GET') {
+      if (url.includes('/whitelist-ips') && opts?.method === 'GET') {
         return { status: 200, text: async () => JSON.stringify({ items: [] }) }; // empty — IP not blocked
       }
       if (url.includes('/apply-policy')) {
@@ -350,10 +350,10 @@ describe('AllowIP — unit (mock fetch)', () => {
       if (url.includes('/mgmt/tm/asm/policies?')) {
         return { status: 200, text: async () => JSON.stringify({ items: [{ id: 'p1', name: 'test_policy' }] }) };
       }
-      if (url.includes('/ip-exceptions') && opts?.method === 'GET') {
+      if (url.includes('/whitelist-ips') && opts?.method === 'GET') {
         return { status: 200, text: async () => JSON.stringify({ items: [] }) };
       }
-      if (url.includes('/ip-exceptions') && opts?.method === 'POST') {
+      if (url.includes('/whitelist-ips') && opts?.method === 'POST') {
         capturedBody = JSON.parse(opts.body);
         return { status: 201, text: async () => JSON.stringify({ id: 'exc-1', ipAddress: '10.0.0.2', blockRequests: 'never' }) };
       }

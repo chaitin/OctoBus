@@ -5,10 +5,10 @@
  *   POST   /mgmt/shared/authn/login
  *   DELETE /mgmt/shared/authz/tokens/:token
  *   GET    /mgmt/tm/asm/policies
- *   GET    /mgmt/tm/asm/policies/:id/ip-exceptions
- *   POST   /mgmt/tm/asm/policies/:id/ip-exceptions
- *   PATCH  /mgmt/tm/asm/policies/:id/ip-exceptions/:excId
- *   DELETE /mgmt/tm/asm/policies/:id/ip-exceptions/:excId
+ *   GET    /mgmt/tm/asm/policies/:id/whitelist-ips
+ *   POST   /mgmt/tm/asm/policies/:id/whitelist-ips
+ *   PATCH  /mgmt/tm/asm/policies/:id/whitelist-ips/:excId
+ *   DELETE /mgmt/tm/asm/policies/:id/whitelist-ips/:excId
  *   POST   /mgmt/tm/asm/tasks/apply-policy
  *
  * Usage:
@@ -145,9 +145,9 @@ const handler = async (req, res) => {
     return;
   }
 
-  // ── /mgmt/tm/asm/policies/:id/ip-exceptions[/:excId] ─────────────────────
-  const excListMatch = path.match(/^\/mgmt\/tm\/asm\/policies\/([^/]+)\/ip-exceptions$/);
-  const excItemMatch = path.match(/^\/mgmt\/tm\/asm\/policies\/([^/]+)\/ip-exceptions\/([^/]+)$/);
+  // ── /mgmt/tm/asm/policies/:id/whitelist-ips[/:excId] ─────────────────────
+  const excListMatch = path.match(/^\/mgmt\/tm\/asm\/policies\/([^/]+)\/whitelist-ips$/);
+  const excItemMatch = path.match(/^\/mgmt\/tm\/asm\/policies\/([^/]+)\/whitelist-ips\/([^/]+)$/);
 
   if (excListMatch) {
     if (!requireAuth(req, res)) return;

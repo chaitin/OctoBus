@@ -151,7 +151,7 @@ async function findPolicyId(policyName, token, baseUrl, doFetch, timeoutMs) {
 }
 
 async function listIpExceptions(policyId, token, baseUrl, doFetch, timeoutMs) {
-  const url = `${baseUrl}/mgmt/tm/asm/policies/${policyId}/ip-exceptions?$select=id,ipAddress,blockRequests`;
+  const url = `${baseUrl}/mgmt/tm/asm/policies/${policyId}/whitelist-ips?$select=id,ipAddress,blockRequests`;
   const r = await f5Fetch(doFetch, 'GET', url, { token, timeoutMs });
   if (r.status !== 200) throwForStatus(r.status, r.text, 'ListIpExceptions');
   return r.data?.items ?? [];
@@ -189,12 +189,12 @@ async function doBlockIP(req, bindings, baseUrl, doFetch, timeoutMs) {
       if (exc) {
         // Already exists → PATCH to ensure blockRequests=always
         const r = await f5Fetch(doFetch, 'PATCH',
-          `${baseUrl}/mgmt/tm/asm/policies/${policyId}/ip-exceptions/${exc.id}`,
+          `${baseUrl}/mgmt/tm/asm/policies/${policyId}/whitelist-ips/${exc.id}`,
           { token, timeoutMs, body: { blockRequests: 'always' } });
         r.status === 200 ? blocked.push(address) : failed.push(address);
       } else {
         const r = await f5Fetch(doFetch, 'POST',
-          `${baseUrl}/mgmt/tm/asm/policies/${policyId}/ip-exceptions`,
+          `${baseUrl}/mgmt/tm/asm/policies/${policyId}/whitelist-ips`,
           {
             token, timeoutMs,
             body: {
@@ -244,7 +244,7 @@ async function doUnblockIP(req, bindings, baseUrl, doFetch, timeoutMs) {
 
     try {
       const r = await f5Fetch(doFetch, 'DELETE',
-        `${baseUrl}/mgmt/tm/asm/policies/${policyId}/ip-exceptions/${exc.id}`,
+        `${baseUrl}/mgmt/tm/asm/policies/${policyId}/whitelist-ips/${exc.id}`,
         { token, timeoutMs });
       (r.status === 200 || r.status === 204) ? unblocked.push(address) : failed.push(address);
     } catch {
@@ -285,12 +285,12 @@ async function doAllowIP(req, bindings, baseUrl, doFetch, timeoutMs) {
       const exc = existingMap.get(address);
       if (exc) {
         const r = await f5Fetch(doFetch, 'PATCH',
-          `${baseUrl}/mgmt/tm/asm/policies/${policyId}/ip-exceptions/${exc.id}`,
+          `${baseUrl}/mgmt/tm/asm/policies/${policyId}/whitelist-ips/${exc.id}`,
           { token, timeoutMs, body: { blockRequests: 'never' } });
         r.status === 200 ? allowed.push(address) : failed.push(address);
       } else {
         const r = await f5Fetch(doFetch, 'POST',
-          `${baseUrl}/mgmt/tm/asm/policies/${policyId}/ip-exceptions`,
+          `${baseUrl}/mgmt/tm/asm/policies/${policyId}/whitelist-ips`,
           {
             token, timeoutMs,
             body: {
