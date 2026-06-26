@@ -1,0 +1,45 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "qianxin-fw-secgate3600-policy",
+  "displayName": "QIANXIN FW SecGate3600 Security Policy",
+  "description": "OctoBus package for QIANXIN SecGate3600 firewall security-policy (sec_policy) APIs: login, list/set/move security policies, and logout.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/qianxin_fw_secgate3600_policy.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "QIANXIN_FW_SecGate3600_Policy.QIANXIN_FW_SecGate3600_Policy/Login": {
+          "name": "login",
+          "description": "Login to SecGate3600 and cache the session."
+        },
+        "QIANXIN_FW_SecGate3600_Policy.QIANXIN_FW_SecGate3600_Policy/ListSecPolicy": {
+          "name": "list-sec-policy",
+          "description": "List SecGate3600 security policies."
+        },
+        "QIANXIN_FW_SecGate3600_Policy.QIANXIN_FW_SecGate3600_Policy/SetSecPolicy": {
+          "name": "set-sec-policy",
+          "description": "Add or modify SecGate3600 security policies."
+        },
+        "QIANXIN_FW_SecGate3600_Policy.QIANXIN_FW_SecGate3600_Policy/MoveSecPolicyPriority": {
+          "name": "move-sec-policy-priority",
+          "description": "Reorder SecGate3600 security policy priority."
+        },
+        "QIANXIN_FW_SecGate3600_Policy.QIANXIN_FW_SecGate3600_Policy/Logout": {
+          "name": "logout",
+          "description": "Logout the SecGate3600 session."
+        }
+      }
+    }
+  }
+}

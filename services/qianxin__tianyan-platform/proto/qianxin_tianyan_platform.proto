@@ -1,0 +1,157 @@
+syntax = "proto3";
+
+package QIANXIN_TianYan_Platform;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
+
+service QIANXIN_TianYan_Platform {
+  rpc ListAlarms (ListAlarmsRequest) returns (ListAlarmsResponse);
+  rpc UpdateAlarmStatus (UpdateAlarmStatusRequest) returns (UpdateAlarmStatusResponse);
+  rpc SearchLogs (SearchLogsRequest) returns (SearchLogsResponse);
+  rpc SPLSearch (SPLSearchRequest) returns (SPLSearchResponse);
+  rpc ListAssets (ListAssetsRequest) returns (ListAssetsResponse);
+  rpc ListVulnerabilities (ListVulnerabilitiesRequest) returns (ListVulnerabilitiesResponse);
+  rpc ThreatHuntSearch (ThreatHuntSearchRequest) returns (ThreatHuntSearchResponse);
+  rpc AddFlowWhitelist (AddFlowWhitelistRequest) returns (AddFlowWhitelistResponse);
+  rpc GetCompromisedHostStatus (GetCompromisedHostStatusRequest) returns (GetCompromisedHostStatusResponse);
+}
+
+// ListAlarms — query threat alarms with filters
+message ListAlarmsRequest {
+  int32 offset = 1;
+  int32 limit = 2;
+  google.protobuf.Int32Value hazard_level = 3;
+  google.protobuf.Int64Value start_time = 4;
+  google.protobuf.Int64Value end_time = 5;
+  google.protobuf.StringValue threat_name = 6;
+  google.protobuf.StringValue attack_sip = 7;
+  google.protobuf.StringValue alarm_sip = 8;
+  google.protobuf.StringValue status = 9;
+  google.protobuf.StringValue threat_type = 10;
+  google.protobuf.StringValue host_state = 11;
+  google.protobuf.StringValue data_source = 12;
+  google.protobuf.StringValue serial_num = 13;
+  google.protobuf.StringValue ioc = 14;
+  google.protobuf.StringValue order_by = 15;
+}
+
+message ListAlarmsResponse {
+  int32 total = 1;
+  repeated google.protobuf.Value items = 2;
+}
+
+// UpdateAlarmStatus — update alarm disposition (handled/ignored/false-positive)
+message UpdateAlarmStatusRequest {
+  string ids = 1;
+  int32 status = 2;
+}
+
+message UpdateAlarmStatusResponse {}
+
+// SearchLogs — raw log search with keyword or SPL filter
+message SearchLogsRequest {
+  int64 start_time = 1;
+  int64 end_time = 2;
+  int32 offset = 3;
+  int32 limit = 4;
+  google.protobuf.StringValue branch_id = 5;
+  google.protobuf.StringValue index = 6;
+  google.protobuf.StringValue category = 7;
+  google.protobuf.StringValue mode = 8;
+  google.protobuf.StringValue keyword = 9;
+}
+
+message SearchLogsResponse {
+  int32 total = 1;
+  repeated google.protobuf.Value items = 2;
+  repeated string fields = 3;
+}
+
+// SPLSearch — expert SPL query with field extraction
+message SPLSearchRequest {
+  int64 start_time = 1;
+  int64 end_time = 2;
+  google.protobuf.StringValue category = 3;
+  google.protobuf.StringValue index = 4;
+  google.protobuf.StringValue branch_id = 5;
+  google.protobuf.StringValue keyword = 6;
+}
+
+message SPLSearchResponse {
+  repeated string fields = 1;
+  repeated google.protobuf.Value results = 2;
+}
+
+// ListAssets — asset inventory query with filters
+message ListAssetsRequest {
+  int32 offset = 1;
+  int32 limit = 2;
+  google.protobuf.StringValue ipaddrs = 3;
+  google.protobuf.StringValue sname = 4;
+  google.protobuf.StringValue group_ids = 5;
+  google.protobuf.StringValue port = 6;
+  google.protobuf.StringValue stype_ids = 7;
+  google.protobuf.StringValue branch_id = 8;
+}
+
+message ListAssetsResponse {
+  int32 total = 1;
+  repeated google.protobuf.Value data = 2;
+}
+
+// ListVulnerabilities — asset vulnerability list
+message ListVulnerabilitiesRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+  google.protobuf.StringValue ip = 3;
+  google.protobuf.StringValue name = 4;
+  google.protobuf.Int32Value level = 5;
+  google.protobuf.StringValue branch_id = 6;
+}
+
+message ListVulnerabilitiesResponse {
+  int32 total = 1;
+  repeated google.protobuf.Value items = 2;
+}
+
+// ThreatHuntSearch — build threat relationship graph for an IOC
+message ThreatHuntSearchRequest {
+  string kwd = 1;
+  int64 start_time = 2;
+  int64 end_time = 3;
+}
+
+message ThreatHuntSearchResponse {
+  repeated google.protobuf.Value nodes = 1;
+  repeated google.protobuf.Value links = 2;
+}
+
+// AddFlowWhitelist — add IP/IOC to flow sensor whitelist
+message AddFlowWhitelistRequest {
+  google.protobuf.StringValue alarm_sips = 1;
+  google.protobuf.StringValue attack_sips = 2;
+  google.protobuf.StringValue ioc = 3;
+  google.protobuf.StringValue threat_name = 4;
+  google.protobuf.StringValue type_chain = 5;
+  google.protobuf.Int64Value end_time = 6;
+  google.protobuf.Int64Value start_time = 7;
+}
+
+message AddFlowWhitelistResponse {
+  google.protobuf.StringValue id = 1;
+}
+
+// GetCompromisedHostStatus — check if a host is compromised
+message GetCompromisedHostStatusRequest {
+  int64 start_time = 1;
+  int64 end_time = 2;
+  string asset_ip = 3;
+}
+
+message GetCompromisedHostStatusResponse {
+  int32 alarm_count = 1;
+  int32 risk_value = 2;
+  int32 ioc_count = 3;
+  google.protobuf.Value detail = 4;
+}
