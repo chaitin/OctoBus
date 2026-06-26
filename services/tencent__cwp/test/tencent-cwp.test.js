@@ -348,3 +348,33 @@ test('handler accepts OctoBus SDK single-argument context', async () => {
   assert.match(captured.init.headers.Authorization, /^TC3-HMAC-SHA256 Credential=SDKID\//);
   assert.deepEqual(captured.body, { MachineRegion: 'all-regions', Limit: 5 });
 });
+
+test('InvokeReadOnlyAction accepts OctoBus SDK single-argument context', async () => {
+  let captured;
+  mockJSON((url, init) => {
+    captured = { url, init, body: JSON.parse(init.body) };
+    return { Response: { RequestId: 'req-sdk-invoke', Data: [] } };
+  });
+
+  await handlers[METHOD_INVOKE_READ_ONLY_ACTION]({
+    request: {
+      action: 'SearchLog',
+      params: { Limit: 10 },
+    },
+    config: {
+      endpoint: 'https://cwp.tencentcloudapi.com',
+      region: 'ap-shanghai',
+    },
+    secret: {
+      secretId: 'SDKID',
+      secretKey: 'SDKKEY',
+    },
+    limits: { timeoutMs: 10_000 },
+  });
+
+  assert.equal(captured.url, 'https://cwp.tencentcloudapi.com');
+  assert.equal(captured.init.headers['X-TC-Action'], 'SearchLog');
+  assert.equal(captured.init.headers['X-TC-Region'], 'ap-shanghai');
+  assert.match(captured.init.headers.Authorization, /^TC3-HMAC-SHA256 Credential=SDKID\//);
+  assert.deepEqual(captured.body, { Limit: 10 });
+});
