@@ -1,0 +1,10 @@
+{
+  "config": {
+    "baseUrl": "https://ES_BASE_URL:9200",
+    "timeoutMs": 5000
+  },
+  "secret": {
+    "username": "ES_USERNAME",
+    "password": "ES_PASSWORD"
+  }
+}
