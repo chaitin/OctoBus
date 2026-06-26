@@ -467,9 +467,6 @@ const listSessions = async (req = {}, ctx = {}) => {
     // Some BH instances (e.g. basic/free tier) do not support SearchSession and return
     // InvalidParameterValue regardless of parameters. Return an empty list instead of
     // failing, so the method remains usable on all instance types.
-    // Use tencentCode (the original Tencent API error code) for precise matching,
-    // rather than regex on e.message, to avoid silently swallowing genuine parameter
-    // errors from other API calls that also contain "InvalidParameterValue".
     if (e.legacyCode === 'FAILED_PRECONDITION' && e.tencentCode === 'InvalidParameterValue') {
       logFlow(ctx.meta || {}, 'SearchSession:unavailable', { note: 'instance may not support session search, returning empty' });
       return { items: [], total_count: 0 };
