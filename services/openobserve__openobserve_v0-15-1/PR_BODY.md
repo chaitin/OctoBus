@@ -1,9 +1,6 @@
-## 联调证据：OpenObserve v0.15.1 跑通 (issue #102)
-
-> 本地真实联调：本地启动 mock upstream 模拟目标服务 → gRPC handler 直接调用 → 完整 HTTP request/response 已捕获。
+## 联调证据：ListStreams 跑通
 
 # Request
-```
 GET https://10.0.0.5:5080/api/default/streams
 Authorization: Basic REDACTED
 Content-Type: application/json
@@ -11,7 +8,6 @@ Content-Type: application/json
 {
   "org_id": "default"
 }
-```
 
 # Response   HTTP/1.1 200 OK
 ```json
@@ -30,4 +26,3 @@ Content-Type: application/json
   ]
 }
 ```
-
