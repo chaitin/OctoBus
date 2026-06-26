@@ -160,7 +160,9 @@ const isSdkHandlerContext = (value) => value && typeof value === 'object'
   && (
     Object.prototype.hasOwnProperty.call(value, 'config')
     || Object.prototype.hasOwnProperty.call(value, 'secret')
-    || Object.prototype.hasOwnProperty.call(value, 'method')
+    || Object.prototype.hasOwnProperty.call(value, 'bindings')
+    || Object.prototype.hasOwnProperty.call(value, 'limits')
+    || Object.prototype.hasOwnProperty.call(value, 'meta')
   );
 
 const handlerRequest = (req, ctx) => (ctx === undefined && isSdkHandlerContext(req) ? (req.request ?? {}) : (req ?? {}));

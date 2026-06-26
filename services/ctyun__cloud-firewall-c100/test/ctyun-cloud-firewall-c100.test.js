@@ -322,3 +322,34 @@ test('handler accepts OctoBus SDK single-argument context', async () => {
   assert.equal(captured.init.headers.regionid, 'region-sdk');
   assert.match(captured.init.headers['Eop-Authorization'], /^SDKAK Headers=ctyun-eop-request-id;eop-date Signature=/);
 });
+
+test('InvokeReadOnlyApi accepts OctoBus SDK single-argument context', async () => {
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url: String(url), init };
+    return response(200, { statusCode: '800', error: 'CFW_0000', returnObj: { result: [] } });
+  });
+
+  await handlers[METHOD_INVOKE_READ_ONLY_API_FULL]({
+    request: {
+      api: 'alarmQuery',
+      payload: { fields: { page: { numberValue: 1 }, pageSize: { numberValue: 20 } } },
+    },
+    config: { regionId: 'region-sdk' },
+    secret: {
+      accessKeyId: 'SDKAK',
+      secretAccessKey: 'SDKSK',
+    },
+    limits: { timeoutMs: 10_000 },
+    meta: {
+      date: new Date('2024-01-16T08:00:00Z'),
+      request_id: '27cfe4dc-e640-45f6-92ca-492ca73e8680',
+    },
+  });
+
+  const url = new URL(captured.url);
+  assert.equal(url.pathname, '/vfw/v2_alarm_query');
+  assert.equal(url.searchParams.get('pageSize'), '20');
+  assert.equal(captured.init.headers.regionid, 'region-sdk');
+  assert.match(captured.init.headers['Eop-Authorization'], /^SDKAK Headers=ctyun-eop-request-id;eop-date Signature=/);
+});
