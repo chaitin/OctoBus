@@ -4,13 +4,9 @@ import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
 // ---- Method paths ----
 
-export const METHOD_BLOCK_PATH = '/Tencent_CFW.Tencent_CFW/BlockIP';
-export const METHOD_UNBLOCK_PATH = '/Tencent_CFW.Tencent_CFW/UnblockIP';
-export const METHOD_LIST_PATH = '/Tencent_CFW.Tencent_CFW/ListRules';
-
-export const METHOD_BLOCK_FULL = 'Tencent_CFW.Tencent_CFW/BlockIP';
-export const METHOD_UNBLOCK_FULL = 'Tencent_CFW.Tencent_CFW/UnblockIP';
-export const METHOD_LIST_FULL = 'Tencent_CFW.Tencent_CFW/ListRules';
+const METHOD_BLOCK_FULL = 'Tencent_CFW.Tencent_CFW/BlockIP';
+const METHOD_UNBLOCK_FULL = 'Tencent_CFW.Tencent_CFW/UnblockIP';
+const METHOD_LIST_FULL = 'Tencent_CFW.Tencent_CFW/ListRules';
 
 // ---- Constants ----
 
@@ -394,15 +390,6 @@ const makeRuntime = (ctx = {}) => {
 };
 
 // ---- Exports ----
-
-export function rpcdef(ctx = {}) {
-  const runtime = makeRuntime(ctx);
-  return {
-    [METHOD_BLOCK_PATH]: async (req) => runtime.runBlock(req ?? {}),
-    [METHOD_UNBLOCK_PATH]: async (req) => runtime.runUnblock(req ?? {}),
-    [METHOD_LIST_PATH]: async (req) => runtime.runList(req ?? {}),
-  };
-}
 
 export const handlers = {
   [METHOD_BLOCK_FULL]: (ctx) => {
