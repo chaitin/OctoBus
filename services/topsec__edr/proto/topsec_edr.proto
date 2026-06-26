@@ -1,0 +1,197 @@
+syntax = "proto3";
+
+package TopSec_EDR;
+
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/TopSec_EDR";
+
+// TopSec EDR (天融信终端威胁防御系统) service for OctoBus.
+// Provides terminal asset query, alert/threat query, system info, and host isolation capabilities.
+service TopSec_EDR {
+  // Authenticate and obtain a session token for subsequent API calls.
+  rpc Login(LoginRequest) returns (LoginResponse) {}
+
+  // Query terminal/endpoint information with pagination and optional filters.
+  rpc ListClients(ListClientsRequest) returns (ListClientsResponse) {}
+
+  // Get detailed information for a specific terminal by client_id.
+  rpc GetClient(GetClientRequest) returns (GetClientResponse) {}
+
+  // Get threat alert statistics (pending threats, daily protection stats).
+  rpc GetAlertStats(GetAlertStatsRequest) returns (GetAlertStatsResponse) {}
+
+  // Get system overview info (terminal counts, license, server info).
+  rpc GetSystemView(GetSystemViewRequest) returns (GetSystemViewResponse) {}
+
+  // Get system resource usage (CPU, memory, disk, network).
+  rpc GetSystemInfo(GetSystemInfoRequest) returns (GetSystemInfoResponse) {}
+}
+
+// Session context carried between RPC calls after login.
+// nonce/stime/sign are generated fresh per request (not stored in session).
+message SessionContext {
+  string token = 1;       // JWT token from /auth/token
+}
+
+// --- Login ---
+
+message LoginRequest {
+  string host = 1;       // EDR management center URL, e.g. https://192.168.8.201
+  string username = 2;   // Login username, typically "admin"
+  string password = 3;   // Login password (plaintext; will be AES-encrypted before sending)
+}
+
+message LoginResponse {
+  SessionContext session = 1;  // Session context for subsequent calls
+  int32 status_code = 2;       // HTTP status code
+  string raw_body = 3;         // Raw response body
+}
+
+// --- ListClients ---
+
+message ListClientsRequest {
+  string host = 1;                           // EDR management center URL
+  SessionContext session = 2;                 // Session from Login
+  google.protobuf.Int64Value page = 3;       // Page number (default 1)
+  google.protobuf.Int64Value page_size = 4;  // Page size (default 25)
+  bool first_load = 5;                       // Whether this is the initial load (default true)
+}
+
+message ClientRecord {
+  string client_id = 1;        // Terminal unique ID
+  string hostname = 2;         // Computer name
+  string mac = 3;              // MAC address
+  string client_ip = 4;        // Terminal IP address
+  string os_name = 5;          // Operating system name
+  string os_version = 6;       // Operating system version
+  string os_arch = 7;          // Architecture (e.g. "64 位")
+  string client_version = 8;   // EDR client version
+  int64 virus_db_version = 9;  // Virus database version (unix timestamp)
+  string group_name = 10;      // Department/group name
+  string group_id = 11;        // Department/group ID
+  string person = 12;          // Responsible person
+  string terminal_type = 13;   // Terminal type
+  string location = 14;        // Terminal location
+  int64 login_time = 15;       // Last online time (unix timestamp)
+  int64 heartbeat_time = 16;   // Last heartbeat time (unix timestamp)
+  int32 status = 17;           // Service status (1=online)
+  string os_type = 18;         // OS type (e.g. "windows", "linux")
+  string tenancy_id = 19;      // Tenant ID
+  int64 upgrade_dbver = 20;    // Required virus DB upgrade version
+  int64 next_heart_time = 21;  // Next expected heartbeat time
+  int64 off_line = 22;         // Last offline time
+}
+
+message ListClientsResponse {
+  repeated ClientRecord clients = 1;  // List of terminal records
+  int64 total_count = 2;              // Total number of records
+  int32 status_code = 3;              // HTTP status code
+  string raw_body = 4;                // Raw response body
+}
+
+// --- GetClient ---
+
+message GetClientRequest {
+  string host = 1;             // EDR management center URL
+  SessionContext session = 2;   // Session from Login
+  string client_id = 3;        // Terminal ID to query
+}
+
+message GetClientResponse {
+  ClientRecord client = 1;   // Terminal details
+  int32 status_code = 2;      // HTTP status code
+  string raw_body = 3;        // Raw response body
+}
+
+// --- GetAlertStats ---
+
+message GetAlertStatsRequest {
+  string host = 1;             // EDR management center URL
+  SessionContext session = 2;   // Session from Login
+}
+
+message ThreatStat {
+  int64 threats_num = 1;   // Number of threats
+  int64 terminal_num = 2;  // Number of affected terminals
+}
+
+message GetAlertStatsResponse {
+  ThreatStat scan = 1;                  // Virus scan threats
+  ThreatStat hi_leak = 2;               // High-risk vulnerability threats
+  ThreatStat week_pwd = 3;              // Weak password threats
+  ThreatStat intrusion = 4;             // Intrusion threats
+  int64 aggregate_virus_value = 5;      // Total processed threats
+  int64 aggregate_ransom_value = 6;     // Total ransom threats processed
+  int64 file_prot = 7;                  // File protection count
+  int64 exec_prot = 8;                  // Execution protection count
+  int64 reg_prot = 9;                   // Registry protection count
+  int64 proc_prot = 10;                 // Process protection count
+  int64 risk_blocked = 11;              // Risky action blocked count
+  int64 virus_immune = 12;              // Virus immune count
+  int64 udev_illegal = 13;             // USB storage violation count
+  int64 soft_illegal = 14;             // Software violation count
+  int64 inner_illegal = 15;            // Outbound connection violation count
+  int32 status_code = 16;              // HTTP status code
+  string raw_body = 17;                // Raw response body
+}
+
+// --- GetSystemView ---
+
+message TerminalView {
+  int64 terminal_all = 1;       // Total protected terminals
+  int64 terminal_online = 2;    // Online terminals
+  int64 terminal_banned = 3;    // Banned terminals
+  int64 total_use = 4;          // Total usage duration
+  int64 windows = 5;            // Windows terminal count
+  int64 server = 6;             // Windows Server terminal count
+  int64 linux = 7;              // Linux terminal count
+  int64 domestic = 8;           // Domestic OS terminal count
+}
+
+message ServerInfo {
+  string host_name = 1;        // Server hostname
+  string server_time = 2;      // Server time
+}
+
+message LicenseInfo {
+  string user = 1;             // License user
+  string type = 2;             // License type (e.g. "正式授权")
+  string license_platform = 3; // License platform
+}
+
+message GetSystemViewRequest {
+  string host = 1;             // EDR management center URL
+  SessionContext session = 2;   // Session from Login
+}
+
+message GetSystemViewResponse {
+  TerminalView view = 1;          // Terminal statistics
+  ServerInfo server_info = 2;     // Server info
+  LicenseInfo license_info = 3;   // License info
+  int32 status_code = 4;          // HTTP status code
+  string raw_body = 5;            // Raw response body
+}
+
+// --- GetSystemInfo ---
+
+message SystemResourceInfo {
+  int64 disk_usage = 1;       // Disk usage percentage
+  int64 memory_usage = 2;     // Memory usage percentage
+  int64 cpu_usage = 3;        // CPU usage percentage
+  int64 network_tx = 4;       // Inbound traffic (bytes)
+  int64 network_rx = 5;       // Outbound traffic (bytes)
+  string server_time = 6;     // Server time
+}
+
+message GetSystemInfoRequest {
+  string host = 1;             // EDR management center URL
+  SessionContext session = 2;   // Session from Login
+}
+
+message GetSystemInfoResponse {
+  SystemResourceInfo system_info = 1;  // System resource info
+  int32 status_code = 2;               // HTTP status code
+  string raw_body = 3;                 // Raw response body
+}
