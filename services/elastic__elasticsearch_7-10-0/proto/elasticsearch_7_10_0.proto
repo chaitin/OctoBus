@@ -1,0 +1,167 @@
+syntax = "proto3";
+
+package Elasticsearch_7_10_0;
+
+option go_package = "miner/grpc-service/Elasticsearch_7_10_0";
+
+service Elasticsearch_7_10_0 {
+  rpc ClusterHealth(ClusterHealthRequest) returns (ClusterHealthResponse);
+  rpc ListIndices(ListIndicesRequest) returns (ListIndicesResponse);
+  rpc GetIndex(GetIndexRequest) returns (GetIndexResponse);
+  rpc SearchDocuments(SearchDocumentsRequest) returns (SearchDocumentsResponse);
+  rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);
+}
+
+message ClusterHealthRequest {
+  string level = 1;
+  string timeout = 2;
+  string wait_for_status = 3;
+}
+
+message ClusterHealthResponse {
+  string cluster_name = 1;
+  string status = 2;
+  int32 number_of_nodes = 3;
+  int32 number_of_data_nodes = 4;
+  int32 active_primary_shards = 5;
+  int32 active_shards = 6;
+  int32 relocating_shards = 7;
+  int32 initializing_shards = 8;
+  int32 unassigned_shards = 9;
+  int32 delayed_unassigned_shards = 10;
+  int32 number_of_pending_tasks = 11;
+  int32 number_of_in_flight_fetch = 12;
+  int32 task_max_waiting_in_queue_millis = 13;
+  double active_shards_percent_as_number = 14;
+  string raw_body = 15;
+  bool timed_out = 16;
+}
+
+message ListIndicesRequest {
+  string index = 1;
+}
+
+message IndexSummary {
+  string health = 1;
+  string status = 2;
+  string index = 3;
+  string uuid = 4;
+  string pri = 5;
+  string rep = 6;
+  string docs_count = 7;
+  string docs_deleted = 8;
+  string store_size = 9;
+  string pri_store_size = 10;
+}
+
+message ListIndicesResponse {
+  repeated IndexSummary indices = 1;
+  string raw_body = 2;
+}
+
+message GetIndexRequest {
+  string index = 1;
+}
+
+message GetIndexAlias {
+  bool is_write_index = 1;
+  bool is_hidden = 2;
+  string filter = 3;
+  string index_routing = 4;
+  string search_routing = 5;
+  string raw_json = 6;
+}
+
+message GetIndexAliases {
+  map<string, GetIndexAlias> aliases = 1;
+  string raw_json = 2;
+}
+
+message GetIndexMappingField {
+  string type = 1;
+  string raw_json = 2;
+}
+
+message GetIndexMapping {
+  map<string, GetIndexMappingField> properties = 1;
+  bool dynamic = 2;
+  string dynamic_templates_json = 3;
+  string raw_json = 4;
+}
+
+message GetIndexSetting {
+  string number_of_shards = 1;
+  string number_of_replicas = 2;
+  string refresh_interval = 3;
+  string raw_json = 4;
+}
+
+message GetIndexResponse {
+  string index = 1;
+  map<string, GetIndexAliases> aliases = 2;
+  map<string, GetIndexMapping> mappings = 3;
+  map<string, GetIndexSetting> settings = 4;
+  string raw_body = 5;
+}
+
+message SearchDocumentsRequest {
+  string index = 1;
+  string query = 2;
+  int32 size = 3;
+  int32 from = 4;
+}
+
+message SearchHit {
+  string index = 1;
+  string id = 2;
+  double score = 3;
+  string source = 4;
+  string type = 5;
+  int64 version = 6;
+  int64 seq_no = 7;
+  int64 primary_term = 8;
+  string sort_json = 9;
+  string fields_json = 10;
+  string highlight_json = 11;
+  string explanation_json = 12;
+  string matched_queries_json = 13;
+  string inner_hits_json = 14;
+  string ignored_json = 15;
+}
+
+message SearchDocumentsResponse {
+  int64 took = 1;
+  bool timed_out = 2;
+  int64 total_hits = 3;
+  double max_score = 4;
+  repeated SearchHit hits = 5;
+  string raw_body = 6;
+  int32 shards_total = 7;
+  int32 shards_successful = 8;
+  int32 shards_skipped = 9;
+  int32 shards_failed = 10;
+  string total_hits_relation = 11;
+  string scroll_id = 12;
+}
+
+message ListNodesRequest {
+  string bytes = 1;
+}
+
+message NodeSummary {
+  string ip = 1;
+  string name = 2;
+  string heap_percent = 3;
+  string ram_percent = 4;
+  string cpu = 5;
+  string load_1m = 6;
+  string load_5m = 7;
+  string load_15m = 8;
+  string node_role = 9;
+  string master = 10;
+}
+
+message ListNodesResponse {
+  repeated NodeSummary nodes = 1;
+  string raw_body = 2;
+}

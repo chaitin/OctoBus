@@ -469,6 +469,11 @@ const services = {
     entryFile: "../openobserve__openobserve_v0-15-1/bin/openobserve-v0-15-1.js",
     serviceModule: "../openobserve__openobserve_v0-15-1/src/service.js",
   },
+  "elasticsearch-7-10-0": {
+    entryFile: "../elastic__elasticsearch_7-10-0/bin/elasticsearch-7-10-0.js",
+    serviceModule: "../elastic__elasticsearch_7-10-0/src/service.js",
+  },
+  },
   "wangsu-label-ip": {
     entryFile: "../wangsu__label-ip/bin/wangsu-label-ip.js",
     serviceModule: "../wangsu__label-ip/src/service.js",

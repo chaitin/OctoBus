@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "description": "Elasticsearch base URL, for example https://es.example.com:9200."
+    },
+    "elasticsearch_domain": {
+      "type": "string",
+      "description": "Alias for baseUrl."
+    },
+    "restBaseUrl": {
+      "type": "string",
+      "description": "Legacy alias for baseUrl."
+    },
+    "domain": {
+      "type": "string",
+      "description": "Alias for baseUrl."
+    },
+    "url": {
+      "type": "string",
+      "description": "Alias for baseUrl."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for private deployments."
+    },
+    "tlsInsecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Alias for skipTlsVerify."
+    },
+    "insecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Alias for skipTlsVerify."
+    }
+  }
+}

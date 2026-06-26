@@ -1,0 +1,45 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "elasticsearch-7-10-0",
+  "displayName": "Elasticsearch 7.10.0",
+  "description": "OctoBus package for Elasticsearch 7.10.0 read-only cluster operations (cluster health, indices, search, nodes).",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/elasticsearch_7_10_0.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Elasticsearch_7_10_0.Elasticsearch_7_10_0/ClusterHealth": {
+          "name": "cluster-health",
+          "description": "Get Elasticsearch cluster health."
+        },
+        "Elasticsearch_7_10_0.Elasticsearch_7_10_0/ListIndices": {
+          "name": "list-indices",
+          "description": "List Elasticsearch indices (cat indices JSON)."
+        },
+        "Elasticsearch_7_10_0.Elasticsearch_7_10_0/GetIndex": {
+          "name": "get-index",
+          "description": "Get an Elasticsearch index definition."
+        },
+        "Elasticsearch_7_10_0.Elasticsearch_7_10_0/SearchDocuments": {
+          "name": "search-documents",
+          "description": "Search documents in an Elasticsearch index."
+        },
+        "Elasticsearch_7_10_0.Elasticsearch_7_10_0/ListNodes": {
+          "name": "list-nodes",
+          "description": "List Elasticsearch cluster nodes (cat nodes JSON)."
+        }
+      }
+    }
+  }
+}
