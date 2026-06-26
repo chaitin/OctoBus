@@ -1,6 +1,7 @@
 /* node:coverage disable */
 import crypto from 'node:crypto';
 import http from 'node:http';
+import https from 'node:https';
 import { _test } from '../src/ctyun-accessone.js';
 
 const { makeEopSignature } = _test;
@@ -14,9 +15,12 @@ const verifyEopSignature = (authHeader, eopDate, requestId, bodyStr, ak, sk) => 
 const TEST_AK = 'valid_ak';
 const TEST_SK = 'valid_sk';
 
-export const createMockServer = async () => {
+export const createMockServer = async (options = {}) => {
   const requests = [];
   const defaultPort = 0;
+  const useHttps = options.https === true;
+  const tlsKey = options.tls?.key;
+  const tlsCert = options.tls?.cert;
 
   const sendJson = (res, status, payload) => {
     const body = typeof payload === 'string' ? payload : JSON.stringify(payload);
@@ -24,7 +28,7 @@ export const createMockServer = async () => {
     res.end(body);
   };
 
-  const server = http.createServer((req, res) => {
+  const requestHandler = (req, res) => {
     const chunks = [];
     req.on('data', (c) => chunks.push(c));
     req.on('end', () => {
@@ -138,13 +142,18 @@ export const createMockServer = async () => {
 
       res.writeHead(404); res.end('not found');
     });
-  });
+  };
+
+  const server = useHttps
+    ? https.createServer({ key: tlsKey, cert: tlsCert }, requestHandler)
+    : http.createServer(requestHandler);
 
   await new Promise((resolve) => server.listen(defaultPort, '127.0.0.1', resolve));
   const { port } = server.address();
+  const scheme = useHttps ? 'https' : 'http';
   return {
     requests,
-    url: `http://127.0.0.1:${port}`,
+    url: `${scheme}://127.0.0.1:${port}`,
     close: () => new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve()))),
   };
 };

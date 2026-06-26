@@ -428,6 +428,8 @@ test('helper functions', () => {
   assert.equal(_test.resolveTimeoutMs({ limits: { timeoutMs: 'bad' } }), 10000);
   assert.deepEqual(_test.buildTlsOptions({}), {});
   assert.deepEqual(_test.buildTlsOptions({ skipTlsVerify: true }), { skipTlsVerify: true, tlsInsecureSkipVerify: true, insecureSkipVerify: true });
+  assert.equal(_test.shouldSkipTlsVerify({}), false);
+  assert.equal(_test.shouldSkipTlsVerify({ tlsInsecureSkipVerify: true }), true);
   assert.equal(_test.mapHttpStatusToCode(401), 'PERMISSION_DENIED');
   assert.equal(_test.mapHttpStatusToCode(403), 'PERMISSION_DENIED');
   assert.equal(_test.mapHttpStatusToCode(400), 'FAILED_PRECONDITION');
@@ -435,6 +437,59 @@ test('helper functions', () => {
   const err = _test.attachResponse(_test.errorWithCode('UNAVAILABLE', 'x'), 500, 'boom');
   assert.deepEqual(err.response, { http_status: 500, http_body: 'boom' });
   assert.deepEqual(_test.mergedBindings({ config: { a: 1 }, secret: { b: 2 }, bindings: { a: 3 } }), { a: 3, b: 2 });
+});
+
+test('signedPost enforces timeout via AbortController', async () => {
+  const originalFetchImpl = globalThis.fetch;
+  let signalSeen;
+  setFetch(async (_url, init) => {
+    signalSeen = init.signal;
+    await new Promise((_, reject) => {
+      init.signal.addEventListener('abort', () => reject(init.signal.reason));
+    });
+    return response(200, {});
+  });
+
+  try {
+    await expectGrpcError(
+      () => _test.signedPost('example.com', '/slow', {}, 'valid_ak', 'valid_sk', buildCtx({ limits: { timeoutMs: 20 } })),
+      'UNAVAILABLE',
+      (e) => assert.match(e.message, /timeout after 20ms/),
+    );
+    assert.equal(signalSeen.aborted, true);
+  } finally {
+    globalThis.fetch = originalFetchImpl;
+  }
+});
+
+test('requestWithNodeTransport supports https when skipTlsVerify=true', async () => {
+  const server = await createMockServer({
+    https: true,
+    tls: {
+      key: process.env.CTYUN_TLS_TEST_KEY,
+      cert: process.env.CTYUN_TLS_TEST_CERT,
+    },
+  });
+
+  try {
+    const result = await _test.requestWithNodeTransport(`${server.url}/ctapi/v1/domainRule/getDomainRuleAct`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'ctyun-eop-request-id': 'req-1',
+        'Eop-date': '20240626T000000Z',
+        'Eop-Authorization': _test.makeEopSignature('valid_ak', 'valid_sk', '20240626T000000Z', 'req-1', JSON.stringify({ domain: 'test.com' })),
+      },
+      body: JSON.stringify({ domain: 'test.com' }),
+    }, {
+      timeoutMs: 1000,
+      skipTlsVerify: true,
+    });
+    assert.equal(result.status, 200);
+    assert.equal(server.requests.length, 1);
+  } finally {
+    await server.close();
+  }
 });
 
 // ── EOP signing ──

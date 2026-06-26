@@ -1,4 +1,6 @@
 import crypto from 'node:crypto';
+import http from 'node:http';
+import https from 'node:https';
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
 // ── RPC paths ──
@@ -115,6 +117,60 @@ const buildTlsOptions = (bindings = {}) => {
   return { skipTlsVerify: true, tlsInsecureSkipVerify: true, insecureSkipVerify: true };
 };
 
+const shouldSkipTlsVerify = (bindings = {}) => Boolean(
+  bindings.skipTlsVerify || bindings.tlsInsecureSkipVerify || bindings.insecureSkipVerify,
+);
+
+const fetchWithTimeout = async (url, init, timeoutMs) => {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new Error(`timeout after ${timeoutMs}ms`)), timeoutMs);
+  try {
+    return await globalThis.fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+const requestWithNodeTransport = (urlString, init, options = {}) => {
+  const url = new URL(urlString);
+  const isHttps = url.protocol === 'https:';
+  const transport = isHttps ? https : http;
+  const timeoutMs = Number(options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  const body = init.body ?? '';
+
+  return new Promise((resolve, reject) => {
+    const req = transport.request({
+      protocol: url.protocol,
+      hostname: url.hostname,
+      port: url.port || (isHttps ? 443 : 80),
+      path: `${url.pathname}${url.search}`,
+      method: init.method ?? 'GET',
+      headers: init.headers ?? {},
+      ...(isHttps && options.skipTlsVerify ? { rejectUnauthorized: false } : {}),
+    }, (res) => {
+      const chunks = [];
+      res.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+      res.on('end', () => {
+        const text = Buffer.concat(chunks).toString('utf8');
+        const status = res.statusCode ?? 0;
+        resolve({
+          status,
+          ok: status >= 200 && status < 300,
+          text: async () => text,
+        });
+      });
+    });
+
+    req.on('error', reject);
+    req.setTimeout(timeoutMs, () => req.destroy(new Error(`timeout after ${timeoutMs}ms`)));
+    if (body) req.write(body);
+    req.end();
+  });
+};
+
 const mapHttpStatusToCode = (status) => {
   if (status === 401 || status === 403) return 'PERMISSION_DENIED';
   if (status >= 400 && status < 500) return 'FAILED_PRECONDITION';
@@ -141,6 +197,8 @@ const signedPost = async (gateway, path, bodyObj, ak, sk, ctx) => {
   const requestId = uuid();
   const bodyStr = bodyObj ? JSON.stringify(bodyObj) : '{}';
   const auth = makeEopSignature(ak, sk, eopDate, requestId, bodyStr);
+  const timeoutMs = resolveTimeoutMs(ctx);
+  const skipTlsVerify = shouldSkipTlsVerify(mergedBindings(ctx));
 
   const scheme = /^(127\.0\.0\.1|localhost)(:\d+)?$/.test(gateway) ? 'http' : 'https';
   const url = `${scheme}://${gateway}${path}`;
@@ -153,17 +211,17 @@ const signedPost = async (gateway, path, bodyObj, ak, sk, ctx) => {
       'Eop-Authorization': auth,
     },
     body: bodyStr,
-    timeoutMs: resolveTimeoutMs(ctx),
-    ...buildTlsOptions(mergedBindings(ctx)),
   };
 
   logFlow(ctx, 'request', `POST ${url}`);
 
   let resp;
   try {
-    resp = await globalThis.fetch(url, init);
+    resp = skipTlsVerify
+      ? await requestWithNodeTransport(url, init, { timeoutMs, skipTlsVerify: true })
+      : await fetchWithTimeout(url, init, timeoutMs);
   } catch (err) {
-    const cause = err?.cause?.message || err.message;
+    const cause = err?.cause?.message || err?.message || String(err);
     logFlow(ctx, 'error', { phase: 'fetch', error: cause });
     throw attachResponse(errorWithCode('UNAVAILABLE', `network error: ${cause}`), 0, cause);
   }
@@ -192,6 +250,8 @@ const signedGet = async (gateway, path, queryParams, ak, sk, ctx) => {
   const requestId = uuid();
   // GET signs with empty body
   const auth = makeEopSignature(ak, sk, eopDate, requestId, '');
+  const timeoutMs = resolveTimeoutMs(ctx);
+  const skipTlsVerify = shouldSkipTlsVerify(mergedBindings(ctx));
 
   const scheme = /^(127\.0\.0\.1|localhost)(:\d+)?$/.test(gateway) ? 'http' : 'https';
   let url = `${scheme}://${gateway}${path}`;
@@ -206,17 +266,17 @@ const signedGet = async (gateway, path, queryParams, ak, sk, ctx) => {
       'Eop-date': eopDate,
       'Eop-Authorization': auth,
     },
-    timeoutMs: resolveTimeoutMs(ctx),
-    ...buildTlsOptions(mergedBindings(ctx)),
   };
 
   logFlow(ctx, 'request', `GET ${url}`);
 
   let resp;
   try {
-    resp = await globalThis.fetch(url, init);
+    resp = skipTlsVerify
+      ? await requestWithNodeTransport(url, init, { timeoutMs, skipTlsVerify: true })
+      : await fetchWithTimeout(url, init, timeoutMs);
   } catch (err) {
-    const cause = err?.cause?.message || err.message;
+    const cause = err?.cause?.message || err?.message || String(err);
     logFlow(ctx, 'error', { phase: 'fetch', error: cause });
     throw attachResponse(errorWithCode('UNAVAILABLE', `network error: ${cause}`), 0, cause);
   }
@@ -448,6 +508,9 @@ export const _test = {
   resolveSk,
   resolveTimeoutMs,
   buildTlsOptions,
+  shouldSkipTlsVerify,
+  fetchWithTimeout,
+  requestWithNodeTransport,
   mapHttpStatusToCode,
   attachResponse,
   signedPost,
