@@ -59,6 +59,7 @@ const expectGrpcError = async (fn, legacyCode, checker = () => {}) => {
     INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT,
     PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED,
     UNAVAILABLE: grpcStatus.UNAVAILABLE,
+    DEADLINE_EXCEEDED: grpcStatus.DEADLINE_EXCEEDED,
     UNKNOWN: grpcStatus.UNKNOWN,
   })[legacyCode]);
   checker(caught);
@@ -93,6 +94,12 @@ test('validates required credentials and supported actions', () => {
   assert.equal(_test.validateActionName('SearchLogs'), 'SearchLogs');
   assert.throws(() => _test.validateActionName('UpdateInstance'), /read-only/);
   assert.throws(() => _test.validateActionSpec({ action: 'ListDomain', serviceCode: 'ecs' }), /unsupported/);
+});
+
+test('escapes Volcengine query params and rejects nested GET query values', () => {
+  assert.equal(_test.queryParamsToString({ Special: "!'()*", Text: 'hello world', CN: '中文' }), 'CN=%E4%B8%AD%E6%96%87&Special=%21%27%28%29%2A&Text=hello%20world');
+  assert.throws(() => _test.queryParamsToString({ Filter: { Name: 'status' } }), /nested object/);
+  assert.throws(() => _test.queryParamsToString({ Filter: ['ok', { Name: 'status' }] }), /nested object/);
 });
 
 test('normalizes protobuf Struct payloads', () => {
@@ -135,7 +142,8 @@ test('signs and sends POST WAF list-domain request with body payload', async () 
   assert.equal(url.searchParams.get('Version'), '2023-12-25');
   assert.deepEqual(captured.body, { Page: 1, PageSize: 10 });
   assert.equal(captured.init.method, 'POST');
-  assert.equal(captured.init.timeoutMs, 25);
+  assert.equal(Object.hasOwn(captured.init, 'timeoutMs'), false);
+  assert.equal(typeof captured.init.signal?.aborted, 'boolean');
   assert.equal(captured.init.headers['X-Custom'], 'trace');
   assert.equal(captured.init.headers['Content-Type'], 'application/json');
   assert.equal(captured.init.headers.Host, 'waf.volcengineapi.com');

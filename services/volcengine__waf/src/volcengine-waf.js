@@ -59,6 +59,7 @@ const grpcCodeFor = (code) => ({
   INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT,
   PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED,
   UNAVAILABLE: grpcStatus.UNAVAILABLE,
+  DEADLINE_EXCEEDED: grpcStatus.DEADLINE_EXCEEDED,
   UNKNOWN: grpcStatus.UNKNOWN,
 })[code] ?? grpcStatus.UNKNOWN;
 
@@ -162,8 +163,13 @@ const validateBindings = (bindings = {}) => {
 };
 
 const uriEscape = (value) => encodeURIComponent(String(value))
-  .replace(/[^A-Za-z0-9_.~\-%]+/g, escape)
-  .replace(/[*]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`);
+  .replace(/[!'()*]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`);
+
+const assertQueryParamValue = (key, value) => {
+  if (value !== null && typeof value === 'object') {
+    throw errorWithCode('INVALID_ARGUMENT', `nested object not supported in query params for key "${key}"`);
+  }
+};
 
 const queryParamsToString = (params = {}) => Object.keys(params)
   .filter((key) => params[key] !== undefined && params[key] !== null)
@@ -171,7 +177,11 @@ const queryParamsToString = (params = {}) => Object.keys(params)
   .flatMap((key) => {
     const escapedKey = uriEscape(key);
     const value = params[key];
-    if (Array.isArray(value)) return value.map((item) => `${escapedKey}=${uriEscape(item)}`).sort();
+    if (Array.isArray(value)) return value.map((item) => {
+      assertQueryParamValue(key, item);
+      return `${escapedKey}=${uriEscape(item)}`;
+    }).sort();
+    assertQueryParamValue(key, value);
     return [`${escapedKey}=${uriEscape(value)}`];
   })
   .join('&');
@@ -333,16 +343,24 @@ const invokeVolcengine = async (spec, payload, ctx = {}) => {
     date,
   });
   const headers = buildHeaders(callCtx, signed.headers);
+  const timeoutMs = resolveTimeoutMs(callCtx);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let res;
   try {
     res = await fetch(endpoint.toString(), {
       method: actionSpec.httpMethod,
       headers,
       body: actionSpec.httpMethod === 'GET' ? undefined : bodyText,
-      timeoutMs: resolveTimeoutMs(callCtx),
+      signal: controller.signal,
     });
   } catch (err) {
+    if (err.name === 'AbortError' || err.name === 'TimeoutError') {
+      throw errorWithCode('DEADLINE_EXCEEDED', `Volcengine WAF API request timed out after ${timeoutMs}ms`);
+    }
     throw errorWithCode('UNAVAILABLE', `failed to call Volcengine WAF API: ${err.message}`);
+  } finally {
+    clearTimeout(timeout);
   }
 
   const body = await parseVolcengineResponse(res);
