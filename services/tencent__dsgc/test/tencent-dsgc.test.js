@@ -149,16 +149,16 @@ test('risk and asset list methods preserve fallback list arrays', async () => {
 
 test('InvokeReadOnlyAction enforces read-only action allow list', async () => {
   mockJSON((url, init) => {
-    assert.equal(init.headers['X-TC-Action'], 'GetTrialVersion');
+    assert.equal(init.headers['X-TC-Action'], 'GetDSPAAssessmentRiskTrend');
     assert.deepEqual(JSON.parse(init.body), { DspaId: 'dspa-abcd' });
-    return { Response: { RequestId: 'trial-1', Status: 'enabled' } };
+    return { Response: { RequestId: 'risk-trend-1', Trend: [] } };
   });
 
   const res = await handlers[METHOD_INVOKE_READ_ONLY_ACTION]({
-    action: 'GetTrialVersion',
+    action: 'GetDSPAAssessmentRiskTrend',
     params: { DspaId: 'dspa-abcd' },
-  }, buildCtx({ config: { allowActions: ['GetTrialVersion'] } }));
-  assert.equal(res.action, 'GetTrialVersion');
+  }, buildCtx({ config: { allowActions: ['GetDSPAAssessmentRiskTrend'] } }));
+  assert.equal(res.action, 'GetDSPAAssessmentRiskTrend');
 
   await assert.rejects(
     () => handlers[METHOD_INVOKE_READ_ONLY_ACTION]({ action: 'CreateDSPADiscoveryTask', params: {} }, buildCtx()),
