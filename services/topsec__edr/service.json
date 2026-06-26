@@ -1,0 +1,49 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "topsec-edr",
+  "displayName": "TopSec EDR",
+  "description": "OctoBus package for TopSec EDR (天融信终端威胁防御系统) terminal management, alert statistics, system info, and authenticated API access.",
+  "runtime": {
+    "mode": "on-demand"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/topsec_edr.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "TopSec_EDR.TopSec_EDR/Login": {
+          "name": "login",
+          "description": "Authenticate to the TopSec EDR management center and obtain a session token."
+        },
+        "TopSec_EDR.TopSec_EDR/ListClients": {
+          "name": "list-clients",
+          "description": "Query terminal/endpoint information with pagination."
+        },
+        "TopSec_EDR.TopSec_EDR/GetClient": {
+          "name": "get-client",
+          "description": "Get detailed information for a specific terminal by client_id."
+        },
+        "TopSec_EDR.TopSec_EDR/GetAlertStats": {
+          "name": "get-alert-stats",
+          "description": "Get threat alert statistics and daily protection data."
+        },
+        "TopSec_EDR.TopSec_EDR/GetSystemView": {
+          "name": "get-system-view",
+          "description": "Get system overview: terminal counts, license, server info."
+        },
+        "TopSec_EDR.TopSec_EDR/GetSystemInfo": {
+          "name": "get-system-info",
+          "description": "Get system resource usage: CPU, memory, disk, network."
+        }
+      }
+    }
+  }
+}
