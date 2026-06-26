@@ -1,0 +1,61 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "huayulab-ngaf",
+  "displayName": "Huayulab NGAF",
+  "description": "OctoBus package for Huayulab NGAF read-only security operations APIs. Exposes identity, logs, analytics, resource metrics, reference data, and read-only policy object lists through fixed allowlists.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/huayulab_ngaf.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "HUAYULAB_NGAF.HUAYULAB_NGAF/GetUserInfo": {
+          "name": "get-user-info",
+          "description": "Login to Huayulab NGAF if needed and fetch current API user information."
+        },
+        "HUAYULAB_NGAF.HUAYULAB_NGAF/QuerySecurityLog": {
+          "name": "query-security-log",
+          "description": "Query allowlisted read-only security logs such as IPS, DDoS, AV, WAF, TI, weak-password, outbound, regional, and ICS logs."
+        },
+        "HUAYULAB_NGAF.HUAYULAB_NGAF/QueryBehaviorLog": {
+          "name": "query-behavior-log",
+          "description": "Query allowlisted read-only behavior logs such as web, email, IM, login, outbound file, session, alarm, and proxy-bypass logs."
+        },
+        "HUAYULAB_NGAF.HUAYULAB_NGAF/QueryAuditLog": {
+          "name": "query-audit-log",
+          "description": "Query allowlisted read-only protocol, authentication, command, event, and compliance audit logs."
+        },
+        "HUAYULAB_NGAF.HUAYULAB_NGAF/QuerySecurityStatistic": {
+          "name": "query-security-statistic",
+          "description": "Query allowlisted read-only IPS, antivirus, DDoS, and proxy-bypass security statistics."
+        },
+        "HUAYULAB_NGAF.HUAYULAB_NGAF/QueryFlowAnalysis": {
+          "name": "query-flow-analysis",
+          "description": "Query allowlisted read-only traffic and behavior analytics by user, service, site, terminal, location, and online dimensions."
+        },
+        "HUAYULAB_NGAF.HUAYULAB_NGAF/QueryResourceMetric": {
+          "name": "query-resource-metric",
+          "description": "Query allowlisted read-only CPU, memory, session, online user, and physical interface metrics."
+        },
+        "HUAYULAB_NGAF.HUAYULAB_NGAF/QueryReferenceData": {
+          "name": "query-reference-data",
+          "description": "Query allowlisted read-only selector and reference data used by NGAF reports."
+        },
+        "HUAYULAB_NGAF.HUAYULAB_NGAF/ListPolicyObjects": {
+          "name": "list-policy-objects",
+          "description": "List allowlisted read-only policy objects such as user blacklist, IP whitelist, and terminal anti-VPN entries."
+        }
+      }
+    }
+  }
+}
