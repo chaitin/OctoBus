@@ -36,6 +36,9 @@ service Volcengine_WAF {
   rpc ListAllIpGroups(VolcengineRequest) returns (VolcengineResponse) {}
   rpc ListIpGroup(VolcengineRequest) returns (VolcengineResponse) {}
   rpc ListHostGroup(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListBlockRule(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAllowRule(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListProjectResources(VolcengineRequest) returns (VolcengineResponse) {}
   rpc InvokeReadOnlyAction(InvokeReadOnlyActionRequest) returns (VolcengineResponse) {}
 }
 
