@@ -16,7 +16,6 @@ service Tencent_CSIP {
   rpc DescribeRiskCenterAssetViewCFGRiskList(TencentCloudRequest) returns (TencentCloudResponse) {}
   rpc DescribeRiskCenterAssetViewPortRiskList(TencentCloudRequest) returns (TencentCloudResponse) {}
   rpc DescribeCSIPRiskStatistics(TencentCloudRequest) returns (TencentCloudResponse) {}
-  rpc DescribeAccessKeyRisk(TencentCloudRequest) returns (TencentCloudResponse) {}
   rpc DescribeCosAlarmList(TencentCloudRequest) returns (TencentCloudResponse) {}
   rpc DescribeSkillScanResult(TencentCloudRequest) returns (TencentCloudResponse) {}
   rpc DescribeOrganizationUserInfo(TencentCloudRequest) returns (TencentCloudResponse) {}
@@ -25,6 +24,7 @@ service Tencent_CSIP {
   rpc DescribeAccessKeyAlarm(TencentCloudRequest) returns (TencentCloudResponse) {}
   rpc DescribeAccessKeyAlarmDetail(TencentCloudRequest) returns (TencentCloudResponse) {}
   rpc DescribeAccessKeyAsset(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeAccessKeyRisk(TencentCloudRequest) returns (TencentCloudResponse) {}
   rpc DescribeAccessKeyRiskDetail(TencentCloudRequest) returns (TencentCloudResponse) {}
   rpc DescribeAccessKeyUserDetail(TencentCloudRequest) returns (TencentCloudResponse) {}
   rpc DescribeAccessKeyUserList(TencentCloudRequest) returns (TencentCloudResponse) {}
