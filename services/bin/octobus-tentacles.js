@@ -428,6 +428,10 @@ const services = {
     entryFile: "../ctdsg__fw/bin/ctdsg-fw.js",
     serviceModule: "../ctdsg__fw/src/service.js",
   },
+  "tencent-ssl": {
+    entryFile: "../tencent__ssl/bin/tencent-ssl.js",
+    serviceModule: "../tencent__ssl/src/service.js",
+  },
 };
 
 const serviceNames = Object.keys(services);

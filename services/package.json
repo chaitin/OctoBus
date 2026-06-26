@@ -109,7 +109,8 @@
     "sangfor-af-v8-0-35r1": "bin/sangfor-af-v8-0-35r1.js",
     "ctyun-accessone": "bin/ctyun-accessone.js",
     "lighthouse-firewall": "bin/tencent-lighthouse-firewall.js",
-    "qianxin-skyeye-v3-0-14-0": "bin/qianxin-skyeye-v3-0-14-0.js"
+    "qianxin-skyeye-v3-0-14-0": "bin/qianxin-skyeye-v3-0-14-0.js",
+    "tencent-ssl": "bin/tencent-ssl.js"
   },
   "files": [
     "bin/huawei-ccm.js",
@@ -323,7 +324,9 @@
     "bin/tencent-lighthouse-firewall.js",
     "tencent__lighthouse-firewall",
     "bin/qianxin-skyeye-v3-0-14-0.js",
-    "qianxin__skyeye_v3.0.14.0"
+    "qianxin__skyeye_v3.0.14.0",
+    "tencent__ssl",
+    "bin/tencent-ssl.js"
   ],
   "scripts": {
     "validate": "node scripts/validate-service-package.mjs",
