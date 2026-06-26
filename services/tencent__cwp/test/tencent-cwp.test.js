@@ -131,7 +131,9 @@ test('common list methods use action-specific item arrays', async () => {
 });
 
 test('non-list action returns raw response object', async () => {
+  let captured;
   mockJSON((url, init) => {
+    captured = { url, init, body: JSON.parse(init.body) };
     assert.equal(init.headers['X-TC-Action'], 'DescribeMachineRiskCnt');
     return {
       Response: {
@@ -144,9 +146,22 @@ test('non-list action returns raw response object', async () => {
   });
 
   const res = await handlers[METHOD_DESCRIBE_MACHINE_RISK_CNT]({}, buildCtx());
+  assert.deepEqual(captured.body, {});
   assert.equal(res.request_id, 'risk-1');
   assert.equal(res.response.HostLogin, 1);
   assert.equal(res.response.Malware, 3);
+});
+
+test('pagination defaults do not leak into non-paginated CWP actions', async () => {
+  let captured;
+  mockJSON((url, init) => {
+    captured = { url, init, body: JSON.parse(init.body) };
+    return { Response: { RequestId: 'risk-defaults' } };
+  });
+
+  await handlers[METHOD_DESCRIBE_MACHINE_RISK_CNT]({ offset: 0, limit: 0 }, buildCtx());
+
+  assert.deepEqual(captured.body, {});
 });
 
 test('DescribeBaselineDetectOverview is exposed as a read-only baseline overview method', async () => {
@@ -303,4 +318,33 @@ test('configuration validation rejects missing endpoint and credentials', async 
     () => handlers[METHOD_DESCRIBE_MACHINES]({}, buildCtx({ secret: { secretId: '' } })),
     /secretId is required/,
   );
+});
+
+test('handler accepts OctoBus SDK single-argument context', async () => {
+  let captured;
+  mockJSON((url, init) => {
+    captured = { url, init, body: JSON.parse(init.body) };
+    return { Response: { RequestId: 'req-sdk', TotalCount: 0, Machines: [] } };
+  });
+
+  await handlers[METHOD_DESCRIBE_MACHINES]({
+    request: {
+      params: { MachineRegion: 'all-regions' },
+      limit: 5,
+    },
+    config: {
+      endpoint: 'https://cwp.tencentcloudapi.com',
+      region: 'ap-shanghai',
+    },
+    secret: {
+      secretId: 'SDKID',
+      secretKey: 'SDKKEY',
+    },
+    limits: { timeoutMs: 10_000 },
+  });
+
+  assert.equal(captured.url, 'https://cwp.tencentcloudapi.com');
+  assert.equal(captured.init.headers['X-TC-Region'], 'ap-shanghai');
+  assert.match(captured.init.headers.Authorization, /^TC3-HMAC-SHA256 Credential=SDKID\//);
+  assert.deepEqual(captured.body, { MachineRegion: 'all-regions', Limit: 5 });
 });
