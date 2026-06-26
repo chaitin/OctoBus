@@ -327,3 +327,30 @@ test('InvokeReadOnlyAction accepts OctoBus SDK single-argument context', async (
   assert.match(captured.init.headers.Authorization, /^HMAC-SHA256 Credential=SDKID\//);
   assert.match(captured.init.headers.Authorization, /\/cn-shanghai\/waf\/request,/);
 });
+
+test('InvokeReadOnlyAction accepts bindings-only SDK context', async () => {
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url: String(url), init, body: JSON.parse(init.body) };
+    return response(200, { ResponseMetadata: { RequestId: 'req-sdk-bindings' }, Result: { ok: true } });
+  });
+
+  await handlers[METHOD_INVOKE_READ_ONLY_ACTION_FULL]({
+    request: {
+      action: 'ListDomain',
+      method: 'POST',
+      payload: { fields: { Page: { numberValue: 1 }, PageSize: { numberValue: 5 } } },
+    },
+    bindings: {
+      region: 'cn-shanghai',
+      accessKeyId: 'SDKID',
+      secretAccessKey: 'SDKKEY',
+    },
+  });
+
+  const url = new URL(captured.url);
+  assert.equal(url.searchParams.get('Action'), 'ListDomain');
+  assert.deepEqual(captured.body, { Page: 1, PageSize: 5 });
+  assert.match(captured.init.headers.Authorization, /^HMAC-SHA256 Credential=SDKID\//);
+  assert.match(captured.init.headers.Authorization, /\/cn-shanghai\/waf\/request,/);
+});
