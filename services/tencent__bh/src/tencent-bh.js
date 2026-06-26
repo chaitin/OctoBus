@@ -5,6 +5,7 @@
 // Endpoint: bh.tencentcloudapi.com
 
 import crypto from 'node:crypto';
+import https from 'node:https';
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
 // ── Constants ──────────────────────────────────────────────
@@ -238,6 +239,9 @@ const callAction = async (ctx, action, params) => {
     ...extraHeaders,
   };
 
+  const skipVerify = toBoolean(bindings.skipTlsVerify) || toBoolean(bindings.tlsInsecureSkipVerify);
+  const agent = skipVerify ? new https.Agent({ rejectUnauthorized: false }) : undefined;
+
   logFlow(meta, `${action}:start`, { region, endpoint });
 
   let res;
@@ -246,13 +250,12 @@ const callAction = async (ctx, action, params) => {
       method: 'POST',
       headers: requestHeaders,
       body: signed.body,
-      timeoutMs,
-      ...(toBoolean(bindings.skipTlsVerify) || toBoolean(bindings.tlsInsecureSkipVerify)
-        ? { insecureSkipVerify: true, tlsInsecureSkipVerify: true }
-        : {}),
+      signal: AbortSignal.timeout(timeoutMs),
+      agent,
     });
   } catch (err) {
-    const reason = err?.cause?.message || err?.message || 'fetch failed';
+    const isTimeout = err?.name === 'TimeoutError' || err?.name === 'AbortError';
+    const reason = isTimeout ? 'timeout after ' + timeoutMs + 'ms' : (err?.cause?.message || err?.message || 'fetch failed');
     logFlow(meta, `${action}:error`, { error: reason });
     throw errorWithCode('UNAVAILABLE', `upstream error: ${reason}`);
   }
