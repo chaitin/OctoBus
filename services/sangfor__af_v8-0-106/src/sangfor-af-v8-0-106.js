@@ -137,14 +137,12 @@ export const handlers = {
     const bindings = merged(ctx);
     const request = reqOf(ctx);
     const payload = requestBody(request);
-    if (request.groupName) payload.name = request.groupName;
     return callHttp({ bindings, method: 'POST', path: '/api/batch/v1/namespaces/{namespace}/ipgroups'.replace('{namespace}', namespaceOf(request)), headers: authHeaders(request, bindings), body: payload });
   },
   'sangfor.af.v8_0_106.SangforAfService/DeleteIpGroup': async (ctx) => {
     const bindings = merged(ctx);
     const request = reqOf(ctx);
     const payload = requestBody(request);
-    if (request.groupName) payload.name = request.groupName;
     return callHttp({ bindings, method: 'POST', path: '/api/batch/v1/namespaces/{namespace}/ipgroups?_method=delete'.replace('{namespace}', namespaceOf(request)), headers: authHeaders(request, bindings), body: payload });
   },
   
@@ -155,6 +153,7 @@ export const handlers = {
     const method = text(request.method || 'GET').toUpperCase();
     const path = text(request.path);
     if (!path) throw invalid('path is required');
+    if (!path.startsWith('/') || path.startsWith('//')) throw invalid('path must be a relative path starting with /');
     return callHttp({ bindings, method, path, query: request.query, headers: request.token || bindings.token ? authHeaders(request, bindings) : {}, body: ['GET', 'DELETE'].includes(method) ? undefined : requestBody(request) });
   },
 };
