@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "endpoint": {
+      "type": "string",
+      "default": "https://dsgc.tencentcloudapi.com",
+      "description": "Tencent Cloud DSGC API endpoint."
+    },
+    "host": {
+      "type": "string",
+      "description": "Alias for endpoint."
+    },
+    "region": {
+      "type": "string",
+      "default": "ap-guangzhou",
+      "description": "Tencent Cloud region used in X-TC-Region."
+    },
+    "version": {
+      "type": "string",
+      "default": "2019-07-23",
+      "description": "Tencent Cloud DSGC API version."
+    },
+    "language": {
+      "type": "string",
+      "description": "Optional X-TC-Language value, such as zh-CN or en-US."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000,
+      "description": "HTTP request timeout in milliseconds."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional extra HTTP headers."
+    },
+    "allowActions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Additional DSGC Describe*, List*, or Get* actions allowed by InvokeReadOnlyAction."
+    },
+    "allowAllReadOnlyActions": {
+      "type": "boolean",
+      "default": false,
+      "description": "Allow InvokeReadOnlyAction to call any action whose name starts with Describe, List, or Get."
+    },
+    "allowAllDescribeActions": {
+      "type": "boolean",
+      "default": false,
+      "description": "Alias for allowAllReadOnlyActions."
+    }
+  }
+}

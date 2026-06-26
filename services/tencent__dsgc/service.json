@@ -1,0 +1,61 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "tencent-dsgc",
+  "displayName": "Tencent Cloud DSGC",
+  "description": "OctoBus package for Tencent Cloud Data Security Governance Center API 3.0 read-only operations.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/tencent_dsgc.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Tencent_DSGC.TencentDsgcService/DescribeAssetOverview": {
+          "name": "describe-asset-overview",
+          "description": "Query Tencent Cloud DSGC asset overview."
+        },
+        "Tencent_DSGC.TencentDsgcService/ListDSPAClusters": {
+          "name": "list-dspa-clusters",
+          "description": "Query Tencent Cloud DSGC DSPA clusters."
+        },
+        "Tencent_DSGC.TencentDsgcService/DescribeDSPACOSDataAssetBuckets": {
+          "name": "describe-dspa-cos-data-asset-buckets",
+          "description": "Query Tencent Cloud DSGC COS data asset buckets."
+        },
+        "Tencent_DSGC.TencentDsgcService/DescribeDSPARDBDataAssetByComplianceId": {
+          "name": "describe-dspa-rdb-data-asset-by-compliance-id",
+          "description": "Query Tencent Cloud DSGC RDB data assets."
+        },
+        "Tencent_DSGC.TencentDsgcService/DescribeDSPAESDataAssetByComplianceId": {
+          "name": "describe-dspa-es-data-asset-by-compliance-id",
+          "description": "Query Tencent Cloud DSGC ES data assets."
+        },
+        "Tencent_DSGC.TencentDsgcService/DescribeDSPAAssessmentLatestRiskList": {
+          "name": "describe-dspa-assessment-latest-risk-list",
+          "description": "Query Tencent Cloud DSGC latest assessment risks."
+        },
+        "Tencent_DSGC.TencentDsgcService/DescribeDSPAAssessmentTasks": {
+          "name": "describe-dspa-assessment-tasks",
+          "description": "Query Tencent Cloud DSGC assessment tasks."
+        },
+        "Tencent_DSGC.TencentDsgcService/DescribeReportTasks": {
+          "name": "describe-report-tasks",
+          "description": "Query Tencent Cloud DSGC report tasks."
+        },
+        "Tencent_DSGC.TencentDsgcService/InvokeReadOnlyAction": {
+          "name": "invoke-read-only-action",
+          "description": "Invoke an allowed Tencent Cloud DSGC Describe*, List*, or Get* action."
+        }
+      }
+    }
+  }
+}
