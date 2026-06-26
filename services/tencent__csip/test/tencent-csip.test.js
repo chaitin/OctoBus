@@ -285,3 +285,34 @@ test('handler accepts OctoBus SDK single-argument context', async () => {
   assert.match(captured.init.headers.Authorization, /^TC3-HMAC-SHA256 Credential=SDKID\//);
   assert.deepEqual(captured.body, { Filter: { Limit: 5 } });
 });
+
+test('InvokeReadOnlyAction accepts OctoBus SDK single-argument context', async () => {
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url: String(url), init, body: JSON.parse(init.body) };
+    return response(200, { Response: { RequestId: 'req-sdk-invoke', Items: [] } });
+  });
+
+  await handlers[METHOD_INVOKE_READ_ONLY_ACTION_FULL]({
+    request: {
+      action: 'DescribeSkillScanResult',
+      payload: { fields: { TaskId: { stringValue: 'task-1' } } },
+    },
+    config: {
+      endpoint: 'https://csip.tencentcloudapi.com',
+      region: 'ap-shanghai',
+    },
+    secret: {
+      secretId: 'SDKID',
+      secretKey: 'SDKKEY',
+    },
+    limits: { timeoutMs: 10_000 },
+    meta: { timestamp: 1705392000 },
+  });
+
+  assert.equal(captured.url, 'https://csip.tencentcloudapi.com/');
+  assert.equal(captured.init.headers['X-TC-Action'], 'DescribeSkillScanResult');
+  assert.equal(captured.init.headers['X-TC-Region'], 'ap-shanghai');
+  assert.match(captured.init.headers.Authorization, /^TC3-HMAC-SHA256 Credential=SDKID\//);
+  assert.deepEqual(captured.body, { TaskId: 'task-1' });
+});
