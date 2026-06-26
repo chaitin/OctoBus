@@ -149,24 +149,24 @@ test('risk and asset list methods preserve fallback list arrays', async () => {
 
 test('InvokeReadOnlyAction enforces read-only action allow list', async () => {
   mockJSON((url, init) => {
-    assert.equal(init.headers['X-TC-Action'], 'GetDSPAAssessmentRiskTrend');
+    assert.equal(init.headers['X-TC-Action'], 'DescribeDSPAComplianceGroups');
     assert.deepEqual(JSON.parse(init.body), { DspaId: 'dspa-abcd' });
-    return { Response: { RequestId: 'risk-trend-1', Trend: [] } };
+    return { Response: { RequestId: 'compliance-groups-1', Items: [] } };
   });
 
   const res = await handlers[METHOD_INVOKE_READ_ONLY_ACTION]({
-    action: 'GetDSPAAssessmentRiskTrend',
+    action: 'DescribeDSPAComplianceGroups',
     params: { DspaId: 'dspa-abcd' },
-  }, buildCtx({ config: { allowActions: ['GetDSPAAssessmentRiskTrend'] } }));
-  assert.equal(res.action, 'GetDSPAAssessmentRiskTrend');
+  }, buildCtx());
+  assert.equal(res.action, 'DescribeDSPAComplianceGroups');
 
   await assert.rejects(
     () => handlers[METHOD_INVOKE_READ_ONLY_ACTION]({ action: 'CreateDSPADiscoveryTask', params: {} }, buildCtx()),
     /InvokeReadOnlyAction only allows Describe\*, List\*, or Get\* actions/,
   );
   await assert.rejects(
-    () => handlers[METHOD_INVOKE_READ_ONLY_ACTION]({ action: 'DescribeDSPAComplianceGroups', params: {} }, buildCtx()),
-    /DescribeDSPAComplianceGroups is not allowed/,
+    () => handlers[METHOD_INVOKE_READ_ONLY_ACTION]({ action: 'DescribeReportTaskDownloadUrl', params: {} }, buildCtx()),
+    /DescribeReportTaskDownloadUrl is not allowed/,
   );
 });
 
