@@ -166,7 +166,7 @@ const parseStringList = (value) => {
 };
 
 const assertSupportedTlsConfig = (bindings = {}) => {
-  if (asBool(firstDefined(bindings.skipTlsVerify, bindings.tlsInsecureSkipVerify, bindings.insecureSkipVerify))) {
+  if (asBool(bindings.skipTlsVerify) || asBool(bindings.tlsInsecureSkipVerify) || asBool(bindings.insecureSkipVerify)) {
     throw errorWithCode('INVALID_ARGUMENT', 'TLS certificate verification bypass is not supported by this Node.js fetch adapter');
   }
 };
