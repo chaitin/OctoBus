@@ -1,0 +1,173 @@
+syntax = "proto3";
+
+package Tencent_CSIP;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Tencent_CSIP";
+
+service Tencent_CSIP {
+  rpc DescribeAlertList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCVMAssets(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribePublicIpAssets(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeVpcAssets(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeRiskCenterAssetViewVULRiskList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeRiskCenterAssetViewWeakPasswordRiskList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeRiskCenterAssetViewCFGRiskList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeRiskCenterAssetViewPortRiskList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCSIPRiskStatistics(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCosAlarmList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeSkillScanResult(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeOrganizationUserInfo(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeSubUserInfo(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeAbnormalCallRecord(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeAccessKeyAlarm(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeAccessKeyAlarmDetail(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeAccessKeyAsset(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeAccessKeyRisk(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeAccessKeyRiskDetail(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeAccessKeyUserDetail(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeAccessKeyUserList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeAIAgentAssetList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeAKAnalysisDetail(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeAssetProcessList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeAssetRiskList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeAssetViewVulRiskList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeAssumeRole(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeBucketInvokeIpList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCallRecord(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCFWAssetStatistics(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCheckViewRisks(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeClusterAssets(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeClusterPodAssets(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeConfigCheckRules(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCosAccessPermission(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCosAccessPermissions(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCosActionList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCosAkAsset(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCosAkInvokeIpList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCosAlarmTrendData(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCosAsset(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCosAssetSyncTask(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCosAuditAppIdList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCosAuditDictionaryList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCosBucketList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCosBucketRisk(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCosIdentifyFileList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCosInvokeUa(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCosIpInvokeLog(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCosIpInvokeRecordFile(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCosOverview(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCosPolicy(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCosRiskActionList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCosRiskEvidence(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCosRiskScanTask(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCosRoleAccessPermission(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCosRoleAccessPermissions(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCosSourceIp(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCVMAssetInfo(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCWPMachineDetail(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeCWPMachines(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDbAssetInfo(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDbAssets(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDomainAssets(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmAccessRecord(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmAccessTopologyAccounts(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmAccessTopologyAssets(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmAccessTopologyIps(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmApplyHistory(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmApproveHistory(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmAssetAccessTopology(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmAssetAccountIdentify(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmAssetAccountPresetPrivileges(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmAssetAccountRecycledPrivileges(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmAssetAccounts(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmAssetDatabaseList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmAssetDatabases(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmAssetFieldList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmAssetIds(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmAssetLoginCredential(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmAssets(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmAssetSecurityAnalyseStatus(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmAssetSupportedPrivileges(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmAssetTableList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmBackupLogList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmBackupSetting(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmDictionaryList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmIdentifyIdList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmIdentifyInfo(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmIdentifyInfoList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmLogList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmPersonalIdentifyList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmPersonApplyHistory(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmRisk(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmRiskDetail(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmRiskStrategy(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmRiskStrategyGroup(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmRiskTendency(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmStatistics(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmSupportedAssetType(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmSyncAssetsStatus(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmSyncUsersStatus(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeDspmWhitelistStrategy(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeExposeAssetCategory(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeExposePath(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeExposures(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeGatewayAssets(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeHighBaseLineRiskList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeIaCFileList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeIaCFileOverview(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeIaCFileReport(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeIpInvokeRecord(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeIpInvokeRecordDetail(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeKeySandboxCredential(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeKeySandboxCredentialList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeListenerList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeNICAssets(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeOrganizationInfo(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeOtherCloudAssets(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribePolicyHitData(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeRepositoryImageAssets(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeRiskBucketList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeRiskCallRecord(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeRiskCenterCFGViewCFGRiskList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeRiskCenterPortViewPortRiskList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeRiskCenterServerRiskList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeRiskCenterVULViewVULRiskList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeRiskCenterWebsiteRiskList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeRiskDetailList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeRiskItemList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeRiskRuleDetail(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeRiskRules(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeRiskTrendData(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeScanReportList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeScanStatistic(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeScanTaskList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeSearchBugInfo(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeSourceIPAsset(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeSubnetAssets(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeTaskLogList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeTopAttackInfo(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeUebaRule(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeUserCallRecord(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeUserDspmInfoList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeVULList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeVULRiskAdvanceCFGList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeVULRiskDetail(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeVulRiskList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc DescribeVulViewVulRiskList(TencentCloudRequest) returns (TencentCloudResponse) {}
+  rpc InvokeReadOnlyAction(InvokeReadOnlyActionRequest) returns (TencentCloudResponse) {}
+}
+
+message TencentCloudRequest {
+  google.protobuf.Struct payload = 1;
+}
+
+message InvokeReadOnlyActionRequest {
+  string action = 1;
+  google.protobuf.Struct payload = 2;
+}
+
+message TencentCloudResponse {
+  google.protobuf.Value response = 1;
+}

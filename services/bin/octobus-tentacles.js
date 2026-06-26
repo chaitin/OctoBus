@@ -133,6 +133,10 @@ const services = {
     entryFile: "../skycloud__inet/bin/skycloud-inet.js",
     serviceModule: "../skycloud__inet/src/service.js",
   },
+  "tencent-csip": {
+    entryFile: "../tencent__csip/bin/tencent-csip.js",
+    serviceModule: "../tencent__csip/src/service.js",
+  },
   "tencent-qyweixin-group-robot": {
     entryFile: "../tencent__qyweixin-group-robot/bin/tencent-qyweixin-group-robot.js",
     serviceModule: "../tencent__qyweixin-group-robot/src/service.js",
