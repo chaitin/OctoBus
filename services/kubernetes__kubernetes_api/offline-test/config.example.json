@@ -1,0 +1,10 @@
+{
+  "config": {
+    "baseUrl": "https://k8s-api.example.com:6443",
+    "timeoutMs": 15000,
+    "skipTlsVerify": true
+  },
+  "secret": {
+    "token": "KUBERNETES_BEARER_TOKEN"
+  }
+}

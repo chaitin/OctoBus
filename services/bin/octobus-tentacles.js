@@ -553,6 +553,10 @@ const services = {
     entryFile: "../wazuh__siem/bin/siem.js",
     serviceModule: "../wazuh__siem/src/service.js",
   },
+  "kubernetes-api": {
+    entryFile: "../kubernetes__kubernetes_api/bin/kubernetes-api.js",
+    serviceModule: "../kubernetes__kubernetes_api/src/service.js",
+  },
 };
 
 const serviceNames = Object.keys(services);

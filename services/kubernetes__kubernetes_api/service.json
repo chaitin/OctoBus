@@ -1,0 +1,53 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "kubernetes-api",
+  "displayName": "Kubernetes API",
+  "description": "OctoBus package for Kubernetes API read-only operations (namespaces, pods, services, deployments, nodes, pod logs).",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/kubernetes_api.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Kubernetes_API.Kubernetes_API/ListNamespaces": {
+          "name": "list-namespaces",
+          "description": "List Kubernetes namespaces."
+        },
+        "Kubernetes_API.Kubernetes_API/ListPods": {
+          "name": "list-pods",
+          "description": "List Kubernetes pods in a namespace or across all namespaces."
+        },
+        "Kubernetes_API.Kubernetes_API/ListServices": {
+          "name": "list-services",
+          "description": "List Kubernetes services."
+        },
+        "Kubernetes_API.Kubernetes_API/ListDeployments": {
+          "name": "list-deployments",
+          "description": "List Kubernetes deployments."
+        },
+        "Kubernetes_API.Kubernetes_API/ListNodes": {
+          "name": "list-nodes",
+          "description": "List Kubernetes cluster nodes."
+        },
+        "Kubernetes_API.Kubernetes_API/GetPod": {
+          "name": "get-pod",
+          "description": "Get a single Kubernetes pod by name and namespace."
+        },
+        "Kubernetes_API.Kubernetes_API/GetPodLogs": {
+          "name": "get-pod-logs",
+          "description": "Get logs from a Kubernetes pod."
+        }
+      }
+    }
+  }
+}

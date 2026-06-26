@@ -139,7 +139,8 @@
     "tencent-bh": "bin/tencent-bh.js",
     "nist-nvd-v2": "bin/nist-nvd-v2.js",
     "siem": "bin/siem.js",
-    "security-engine": "bin/security-engine.js"
+    "security-engine": "bin/security-engine.js",
+    "kubernetes-api": "bin/kubernetes-api.js"
   },
   "files": [
     "bin/huawei-ccm.js",
@@ -413,7 +414,9 @@
     "nist__nvd-v2",
     "bin/nist-nvd-v2.js",
     "wazuh__siem",
-    "bin/siem.js"
+    "bin/siem.js",
+    "bin/kubernetes-api.js",
+    "kubernetes__kubernetes_api"
   ],
   "scripts": {
     "validate": "node scripts/validate-service-package.mjs",

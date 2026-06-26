@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "description": "Kubernetes API server base URL, for example https://k8s-api.example.com:6443."
+    },
+    "domain": {
+      "type": "string",
+      "description": "Alias for baseUrl."
+    },
+    "url": {
+      "type": "string",
+      "description": "Alias for baseUrl."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 15000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification."
+    }
+  }
+}

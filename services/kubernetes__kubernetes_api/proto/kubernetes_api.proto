@@ -1,0 +1,257 @@
+syntax = "proto3";
+
+package Kubernetes_API;
+
+option go_package = "miner/grpc-service/Kubernetes_API";
+
+service Kubernetes_API {
+  rpc ListNamespaces(ListNamespacesRequest) returns (ListNamespacesResponse);
+  rpc ListPods(ListPodsRequest) returns (ListPodsResponse);
+  rpc ListServices(ListServicesRequest) returns (ListServicesResponse);
+  rpc ListDeployments(ListDeploymentsRequest) returns (ListDeploymentsResponse);
+  rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);
+  rpc GetPod(GetPodRequest) returns (GetPodResponse);
+  rpc GetPodLogs(GetPodLogsRequest) returns (GetPodLogsResponse);
+}
+
+message ListNamespacesRequest {
+  string label_selector = 1;
+  string field_selector = 2;
+  int32 limit = 3;
+  string continue_token = 4;
+}
+
+message ObjectMeta {
+  string name = 1;
+  string namespace = 2;
+  string uid = 3;
+  string resource_version = 4;
+  string creation_timestamp = 5;
+  string deletion_timestamp = 6;
+  map<string, string> labels = 7;
+  map<string, string> annotations = 8;
+  string raw_json = 9;
+}
+
+message NamespaceStatus {
+  string phase = 1;
+  string raw_json = 2;
+}
+
+message NamespaceInfo {
+  ObjectMeta metadata = 1;
+  NamespaceStatus status = 2;
+  string raw_json = 3;
+}
+
+message ListNamespacesResponse {
+  repeated NamespaceInfo items = 1;
+  string raw_body = 2;
+  string continue_token = 3;
+  int32 remaining_item_count = 4;
+}
+
+message ListPodsRequest {
+  string namespace = 1;
+  string label_selector = 2;
+  string field_selector = 3;
+  int32 limit = 4;
+  string continue_token = 5;
+}
+
+message ContainerState {
+  string state = 1;
+  string reason = 2;
+  string message = 3;
+  string started_at = 4;
+  string finished_at = 5;
+  int32 restart_count = 6;
+  string image = 7;
+  string image_id = 8;
+  string container_id = 9;
+  bool ready = 10;
+  bool started = 11;
+  string raw_json = 12;
+}
+
+message PodContainer {
+  string name = 1;
+  string image = 2;
+  repeated string ports = 3;
+  string raw_json = 4;
+}
+
+message PodStatus {
+  string phase = 1;
+  string host_ip = 2;
+  string pod_ip = 3;
+  string start_time = 4;
+  string qos_class = 5;
+  repeated ContainerState container_statuses = 6;
+  string raw_json = 7;
+}
+
+message PodInfo {
+  ObjectMeta metadata = 1;
+  PodStatus status = 2;
+  repeated PodContainer containers = 3;
+  string node_name = 4;
+  string raw_json = 5;
+}
+
+message ListPodsResponse {
+  repeated PodInfo items = 1;
+  string raw_body = 2;
+  string continue_token = 3;
+  int32 remaining_item_count = 4;
+}
+
+message ListServicesRequest {
+  string namespace = 1;
+  string label_selector = 2;
+  int32 limit = 3;
+  string continue_token = 4;
+}
+
+message ServicePort {
+  string name = 1;
+  string protocol = 2;
+  int32 port = 3;
+  int32 target_port = 4;
+  int32 node_port = 5;
+  string raw_json = 6;
+}
+
+message ServiceInfo {
+  ObjectMeta metadata = 1;
+  string cluster_ip = 2;
+  string type = 3;
+  repeated ServicePort ports = 4;
+  map<string, string> selector = 5;
+  string raw_json = 6;
+}
+
+message ListServicesResponse {
+  repeated ServiceInfo items = 1;
+  string raw_body = 2;
+  string continue_token = 3;
+  int32 remaining_item_count = 4;
+}
+
+message ListDeploymentsRequest {
+  string namespace = 1;
+  string label_selector = 2;
+  int32 limit = 3;
+  string continue_token = 4;
+}
+
+message DeploymentCondition {
+  string type = 1;
+  string status = 2;
+  string reason = 3;
+  string message = 4;
+  string raw_json = 5;
+}
+
+message DeploymentStatus {
+  int32 replicas = 1;
+  int32 ready_replicas = 2;
+  int32 available_replicas = 3;
+  int32 unavailable_replicas = 4;
+  int32 updated_replicas = 5;
+  repeated DeploymentCondition conditions = 6;
+  string raw_json = 7;
+}
+
+message DeploymentInfo {
+  ObjectMeta metadata = 1;
+  DeploymentStatus status = 2;
+  string raw_json = 3;
+}
+
+message ListDeploymentsResponse {
+  repeated DeploymentInfo items = 1;
+  string raw_body = 2;
+  string continue_token = 3;
+  int32 remaining_item_count = 4;
+}
+
+message ListNodesRequest {
+  string label_selector = 1;
+  int32 limit = 2;
+  string continue_token = 3;
+}
+
+message NodeAddress {
+  string type = 1;
+  string address = 2;
+}
+
+message NodeCondition {
+  string type = 1;
+  string status = 2;
+  string reason = 3;
+  string message = 4;
+  string last_heartbeat = 5;
+  string last_transition = 6;
+  string raw_json = 7;
+}
+
+message NodeResources {
+  string cpu = 1;
+  string memory = 2;
+  string pods = 3;
+  string raw_json = 4;
+}
+
+message NodeStatus {
+  string phase = 1;
+  repeated NodeAddress addresses = 2;
+  repeated NodeCondition conditions = 3;
+  NodeResources capacity = 4;
+  NodeResources allocatable = 5;
+  string kubelet_version = 6;
+  string os_image = 7;
+  string kernel_version = 8;
+  string container_runtime = 9;
+  string architecture = 10;
+  string raw_json = 11;
+}
+
+message NodeInfo {
+  ObjectMeta metadata = 1;
+  NodeStatus status = 2;
+  string raw_json = 3;
+}
+
+message ListNodesResponse {
+  repeated NodeInfo items = 1;
+  string raw_body = 2;
+  string continue_token = 3;
+  int32 remaining_item_count = 4;
+}
+
+message GetPodRequest {
+  string namespace = 1;
+  string name = 2;
+}
+
+message GetPodResponse {
+  PodInfo pod = 1;
+  string raw_body = 2;
+}
+
+message GetPodLogsRequest {
+  string namespace = 1;
+  string name = 2;
+  string container = 3;
+  int32 tail_lines = 4;
+  int64 since_seconds = 5;
+  bool previous = 6;
+  bool timestamps = 7;
+}
+
+message GetPodLogsResponse {
+  string logs = 1;
+  string raw_body = 2;
+}
