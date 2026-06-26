@@ -117,6 +117,10 @@ const services = {
     entryFile: "../tencent__tsec_v2-5-1/bin/tencent-tsec-v2-5-1.js",
     serviceModule: "../tencent__tsec_v2-5-1/src/service.js",
   },
+  "telegram-bot-api": {
+    entryFile: "../telegram__bot-api/bin/telegram-bot-api.js",
+    serviceModule: "../telegram__bot-api/src/service.js",
+  },
   "threatbook-cloudapi-v3": {
     entryFile: "../threatbook__cloudapi_v3/bin/threatbook-cloudapi-v3.js",
     serviceModule: "../threatbook__cloudapi_v3/src/service.js",
