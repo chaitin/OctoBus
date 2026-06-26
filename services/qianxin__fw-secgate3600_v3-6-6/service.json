@@ -1,0 +1,45 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "qianxin-fw-secgate3600-v3-6-6",
+  "displayName": "QIANXIN FW SecGate3600 V3.6.6.0",
+  "description": "OctoBus package for QIANXIN SecGate3600 firewall V3.6.6.0 login, IP blacklist block/unblock/query, and logout APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/qianxin_fw_secgate3600_v3_6_6.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "QIANXIN_FW_SecGate3600_V3_6_6.QIANXIN_FW_SecGate3600_V3_6_6/Login": {
+          "name": "login",
+          "description": "Login to SecGate3600 and cache token/cookie session state."
+        },
+        "QIANXIN_FW_SecGate3600_V3_6_6.QIANXIN_FW_SecGate3600_V3_6_6/BlockIP": {
+          "name": "block-ip",
+          "description": "Block IPs by adding them to the SecGate3600 address blacklist."
+        },
+        "QIANXIN_FW_SecGate3600_V3_6_6.QIANXIN_FW_SecGate3600_V3_6_6/UnblockIP": {
+          "name": "unblock-ip",
+          "description": "Unblock IPs by removing them from the SecGate3600 address blacklist."
+        },
+        "QIANXIN_FW_SecGate3600_V3_6_6.QIANXIN_FW_SecGate3600_V3_6_6/QueryBlacklist": {
+          "name": "query-blacklist",
+          "description": "Query the SecGate3600 address blacklist by IP/MAC search key."
+        },
+        "QIANXIN_FW_SecGate3600_V3_6_6.QIANXIN_FW_SecGate3600_V3_6_6/Logout": {
+          "name": "logout",
+          "description": "Logout from SecGate3600 and clear cached session state."
+        }
+      }
+    }
+  }
+}
