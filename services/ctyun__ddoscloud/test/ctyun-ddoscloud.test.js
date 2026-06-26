@@ -285,3 +285,32 @@ test('maps CTYun business and transport errors', async () => {
     (err) => assert.match(err.message, /timed out after 5ms/),
   );
 });
+
+test('handler accepts OctoBus SDK single-argument context', async () => {
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url: String(url), init };
+    return response(200, { statusCode: 100000, returnObj: { total: 0 } });
+  });
+
+  await handlers[`${SERVICE_PACKAGE}/DomainQuery`]({
+    request: {
+      payload: { fields: { page: { numberValue: 1 }, page_size: { numberValue: 5 } } },
+    },
+    config: {},
+    secret: {
+      accessKeyId: 'SDKAK',
+      secretAccessKey: 'SDKSK',
+    },
+    limits: { timeoutMs: 10_000 },
+    meta: {
+      date: new Date('2024-01-16T08:00:00Z'),
+      request_id: '27cfe4dc-e640-45f6-92ca-492ca73e8680',
+    },
+  });
+
+  const url = new URL(captured.url);
+  assert.equal(url.pathname, '/ctapi/v2/domain/query');
+  assert.equal(url.searchParams.get('page_size'), '5');
+  assert.match(captured.init.headers['Eop-Authorization'], /^SDKAK Headers=ctyun-eop-request-id;eop-date Signature=/);
+});
