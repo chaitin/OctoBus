@@ -64,6 +64,10 @@ const services = {
     entryFile: "../das__apt/bin/das-apt.js",
     serviceModule: "../das__apt/src/service.js",
   },
+  "ctyun-accessone": {
+    entryFile: "../ctyun__accessone/bin/ctyun-accessone.js",
+    serviceModule: "../ctyun__accessone/src/service.js",
+  },
   "das-gateway-v3": {
     entryFile: "../das__gateway_v3/bin/das-gateway-v3.js",
     serviceModule: "../das__gateway_v3/src/service.js",
