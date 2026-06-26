@@ -1,0 +1,73 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "dongtai-iast",
+  "displayName": "DongTai IAST",
+  "description": "OctoBus package for Huoxian DongTai IAST vulnerability, project, agent, strategy, SCA and system APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/dongtai_iast.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Huoxian_IAST_DONGTAI.Huoxian_IAST_DONGTAI/ListVulnerabilities": {
+          "name": "list-vulnerabilities",
+          "description": "List DongTai IAST vulnerabilities with filters."
+        },
+        "Huoxian_IAST_DONGTAI.Huoxian_IAST_DONGTAI/GetVulnerability": {
+          "name": "get-vulnerability",
+          "description": "Get DongTai IAST vulnerability detail."
+        },
+        "Huoxian_IAST_DONGTAI.Huoxian_IAST_DONGTAI/UpdateVulnStatus": {
+          "name": "update-vuln-status",
+          "description": "Update DongTai IAST vulnerability status."
+        },
+        "Huoxian_IAST_DONGTAI.Huoxian_IAST_DONGTAI/GetVulnSummary": {
+          "name": "get-vuln-summary",
+          "description": "Get DongTai IAST vulnerability summary statistics."
+        },
+        "Huoxian_IAST_DONGTAI.Huoxian_IAST_DONGTAI/ListProjects": {
+          "name": "list-projects",
+          "description": "List DongTai IAST projects."
+        },
+        "Huoxian_IAST_DONGTAI.Huoxian_IAST_DONGTAI/GetProject": {
+          "name": "get-project",
+          "description": "Get DongTai IAST project detail."
+        },
+        "Huoxian_IAST_DONGTAI.Huoxian_IAST_DONGTAI/CreateProject": {
+          "name": "create-project",
+          "description": "Create a DongTai IAST project."
+        },
+        "Huoxian_IAST_DONGTAI.Huoxian_IAST_DONGTAI/DeleteProject": {
+          "name": "delete-project",
+          "description": "Delete a DongTai IAST project."
+        },
+        "Huoxian_IAST_DONGTAI.Huoxian_IAST_DONGTAI/ListAgents": {
+          "name": "list-agents",
+          "description": "List DongTai IAST agents."
+        },
+        "Huoxian_IAST_DONGTAI.Huoxian_IAST_DONGTAI/GetSystemInfo": {
+          "name": "get-system-info",
+          "description": "Get DongTai IAST system info."
+        },
+        "Huoxian_IAST_DONGTAI.Huoxian_IAST_DONGTAI/ListStrategies": {
+          "name": "list-strategies",
+          "description": "List DongTai IAST detection strategies."
+        },
+        "Huoxian_IAST_DONGTAI.Huoxian_IAST_DONGTAI/GetScaDetail": {
+          "name": "get-sca-detail",
+          "description": "Get DongTai IAST SCA component vulnerability detail."
+        }
+      }
+    }
+  }
+}
