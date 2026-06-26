@@ -60,6 +60,7 @@ const expectGrpcError = async (fn, legacyCode, checker = () => {}) => {
     INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT,
     PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED,
     UNAVAILABLE: grpcStatus.UNAVAILABLE,
+  DEADLINE_EXCEEDED: grpcStatus.DEADLINE_EXCEEDED,
     UNKNOWN: grpcStatus.UNKNOWN,
   })[legacyCode]);
   checker(caught);
@@ -151,7 +152,8 @@ test('signs and sends Tencent Cloud CSIP request', async () => {
 
   assert.equal(captured.url, 'https://csip.tencentcloudapi.com/');
   assert.equal(captured.init.method, 'POST');
-  assert.equal(captured.init.timeoutMs, 25);
+  assert.equal(Object.hasOwn(captured.init, 'timeoutMs'), false);
+  assert.equal(typeof captured.init.signal?.aborted, 'boolean');
   assert.deepEqual(captured.body, { Filter: { Limit: 10, Offset: 0 } });
   assert.equal(captured.init.headers['X-Custom'], 'trace');
   assert.equal(captured.init.headers['Content-Type'], 'application/json; charset=utf-8');
@@ -211,6 +213,17 @@ test('maps Tencent Cloud and transport errors', async () => {
     () => handlers[`${SERVICE_PACKAGE}/DescribeAlertList`]({}, buildCtx()),
     'UNKNOWN',
     (err) => assert.match(err.message, /non-JSON/),
+  );
+
+  setFetch(async () => {
+    const err = new Error('timeout');
+    err.name = 'AbortError';
+    throw err;
+  });
+  await expectGrpcError(
+    () => handlers[`${SERVICE_PACKAGE}/DescribeAlertList`]({}, buildCtx({ limits: { timeoutMs: 25 } })),
+    'DEADLINE_EXCEEDED',
+    (err) => assert.match(err.message, /timed out after 25ms/),
   );
 });
 

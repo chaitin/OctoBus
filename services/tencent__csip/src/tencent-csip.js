@@ -39,6 +39,7 @@ const grpcCodeFor = (code) => ({
   INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT,
   PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED,
   UNAVAILABLE: grpcStatus.UNAVAILABLE,
+  DEADLINE_EXCEEDED: grpcStatus.DEADLINE_EXCEEDED,
   UNKNOWN: grpcStatus.UNKNOWN,
 })[code] ?? grpcStatus.UNKNOWN;
 
@@ -263,16 +264,24 @@ const invokeTencentCloud = async (action, payload, ctx = {}) => {
   const timestamp = optionalUint32(callCtx.meta?.timestamp) ?? Math.floor(Date.now() / 1000);
   const signed = signRequest({ ...bindings, action, payloadText, timestamp });
   const headers = buildHeaders(callCtx, signed.headers);
+  const timeoutMs = resolveTimeoutMs(callCtx);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let res;
   try {
     res = await fetch(bindings.endpoint, {
       method: 'POST',
       headers,
       body: payloadText,
-      timeoutMs: resolveTimeoutMs(callCtx),
+      signal: controller.signal,
     });
   } catch (err) {
+    if (err.name === 'AbortError' || err.name === 'TimeoutError') {
+      throw errorWithCode('DEADLINE_EXCEEDED', `Tencent Cloud CSIP API request timed out after ${timeoutMs}ms`);
+    }
     throw errorWithCode('UNAVAILABLE', `failed to call Tencent Cloud CSIP API: ${err.message}`);
+  } finally {
+    clearTimeout(timeout);
   }
 
   const body = await parseTencentResponse(res);
