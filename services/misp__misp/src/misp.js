@@ -4,7 +4,6 @@
 // Endpoint: configurable (https://misp-instance.example.com)
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
-import https from 'node:https';
 
 // ── Constants ──────────────────────────────────────────────
 
@@ -177,7 +176,7 @@ const callMisp = async (ctx, method, path, body, queryParams) => {
   };
 
   const skipVerify = toBoolean(bindings.skipTlsVerify) || toBoolean(bindings.tlsInsecureSkipVerify);
-  const agent = skipVerify ? new https.Agent({ rejectUnauthorized: false }) : undefined;
+  const tlsOptions = skipVerify ? { insecureSkipVerify: true, tlsInsecureSkipVerify: true } : {};
 
   logFlow(meta, method + ':start', { path, body: body ? '(body)' : undefined });
 
@@ -187,8 +186,8 @@ const callMisp = async (ctx, method, path, body, queryParams) => {
       method: method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
+      ...tlsOptions,
       signal: AbortSignal.timeout(timeoutMs),
-      agent,
     });
   } catch (err) {
     const isTimeout = err?.name === 'TimeoutError' || err?.name === 'AbortError';
