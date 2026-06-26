@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "endpoint": {
+      "type": "string",
+      "default": "https://xti.qq.com/api/v3/ti",
+      "description": "Tencent TIX API endpoint."
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "Alias for endpoint."
+    },
+    "lang": {
+      "type": "string",
+      "enum": ["zh", "en"],
+      "default": "zh",
+      "description": "Default response language."
+    },
+    "version": {
+      "type": "string",
+      "default": "3.0",
+      "description": "Tencent TIX API version."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 30000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional additional HTTP headers. Content-Type is set by the service."
+    }
+  }
+}
