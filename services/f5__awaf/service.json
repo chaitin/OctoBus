@@ -1,0 +1,49 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "f5__awaf",
+  "displayName": "F5 AWAF",
+  "description": "OctoBus package for F5 Advanced WAF IP management and policy control via iControl REST API.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/f5_awaf_v1.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "f5.awaf.v1.F5AWAF/Login": {
+          "name": "login",
+          "description": "登录 F5 AWAF，获取认证 Token"
+        },
+        "f5.awaf.v1.F5AWAF/BlockIP": {
+          "name": "block-ip",
+          "description": "在 ASM 策略中封禁 IP（添加 blockRequests=always 的 IP Exception）"
+        },
+        "f5.awaf.v1.F5AWAF/UnblockIP": {
+          "name": "unblock-ip",
+          "description": "解封 IP（删除对应 IP Exception）"
+        },
+        "f5.awaf.v1.F5AWAF/AllowIP": {
+          "name": "allow-ip",
+          "description": "将 IP 加入白名单（添加 blockRequests=never 的 IP Exception）"
+        },
+        "f5.awaf.v1.F5AWAF/SetEnforcementMode": {
+          "name": "set-enforcement-mode",
+          "description": "切换 ASM 策略执行模式（blocking / transparent）"
+        },
+        "f5.awaf.v1.F5AWAF/ListPolicies": {
+          "name": "list-policies",
+          "description": "列出所有 ASM 策略及其执行模式"
+        },
+        "f5.awaf.v1.F5AWAF/Logout": {
+          "name": "logout",
+          "description": "释放 Token"
+        }
+      }
+    }
+  }
+}
