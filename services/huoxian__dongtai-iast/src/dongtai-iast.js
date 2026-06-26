@@ -175,19 +175,25 @@ export function rpcdef(ctx) {
     : {});
 
   const fetchDongtai = async (url, init) => {
+    const signal = AbortSignal.timeout(timeoutMs);
     try {
-      return await fetch(url, { ...init, timeoutMs, ...tlsOptions() });
+      return await fetch(url, { ...init, signal, ...tlsOptions() });
     } catch (e) {
+      if (e?.name === 'TimeoutError' || e?.name === 'AbortError') {
+        throw errorWithCode('DEADLINE_EXCEEDED', `request timed out after ${timeoutMs}ms`);
+      }
       const reason = e?.cause?.message || e?.message || 'fetch failed';
       throw errorWithCode('UNAVAILABLE', reason);
     }
   };
 
   const throwForHttpError = (status, text) => {
-    if (status === 401) throw errorWithCode('UNAUTHENTICATED', `upstream http ${status}: ${text}`);
-    if (status === 403) throw errorWithCode('PERMISSION_DENIED', `upstream http ${status}: ${text}`);
-    if (status >= 400 && status < 500) throw errorWithCode('FAILED_PRECONDITION', `upstream http ${status}: ${text}`);
-    throw errorWithCode('UNAVAILABLE', `upstream http ${status}: ${text}`);
+    // Log upstream response body server-side only (may contain sensitive data)
+    try { console.error(`[Huoxian_IAST_DONGTAI] upstream http ${status}: ${String(text).slice(0, 500)}`); } catch { /* ignore */ }
+    if (status === 401) throw errorWithCode('UNAUTHENTICATED', `upstream returned ${status}`);
+    if (status === 403) throw errorWithCode('PERMISSION_DENIED', `upstream returned ${status}`);
+    if (status >= 400 && status < 500) throw errorWithCode('FAILED_PRECONDITION', `upstream returned ${status}`);
+    throw errorWithCode('UNAVAILABLE', `upstream returned ${status}`);
   };
 
   const readJsonResponse = async (res, emptyValue) => {

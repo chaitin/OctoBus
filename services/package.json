@@ -43,16 +43,9 @@
     "venus-ads-v3-6": "bin/venus-ads-v3-6.js",
     "wangsu-label-ip": "bin/wangsu-label-ip.js",
     "wd-k01": "bin/wd-k01.js",
-    "dongtai-iast": "bin/dongtai-iast.js",
-    "email-gateway-v3-5-ext": "bin/email-gateway-v3-5-ext.js",
-    "email-gateway-v3-5": "bin/email-gateway.js",
-    "honeypot": "bin/honeypot.js",
-    "tip": "bin/tip.js"
+    "dongtai-iast": "bin/dongtai-iast.js"
   },
   "files": [
-    "bin/email-gateway.js",
-    "bin/email-gateway-v3-5.js",
-    "bin/email-gateway-v3-5-ext.js",
     "bin/das-gateway-v3.js",
     "bin/das-tgfw-v6.js",
     "bin/dingtalk-group-robot.js",
@@ -131,13 +124,7 @@
     "wangsu__label-ip",
     "huoxian__dongtai-iast",
     "scripts",
-    "bin/octobus-tentacles.js",
-    "bin/honeypot.js",
-    "bin/tip.js",
-    "fangxiangbiao__email-gateway_v3-5-ext",
-    "fangxiangbiao__email-gateway_v3-5",
-    "hfish__honeypot",
-    "misp__tip"
+    "bin/octobus-tentacles.js"
   ],
   "scripts": {
     "validate": "node scripts/validate-service-package.mjs",

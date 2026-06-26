@@ -157,22 +157,6 @@ const services = {
     entryFile: "../wd__k01/bin/wd-k01.js",
     serviceModule: "../wd__k01/src/service.js",
   },
-  "email-gateway-v3-5": {
-    entryFile: "../fangxiangbiao__email-gateway_v3-5/bin/email-gateway.js",
-    serviceModule: "../fangxiangbiao__email-gateway_v3-5/src/service.js",
-  },
-  "email-gateway-v3-5-ext": {
-    entryFile: "../fangxiangbiao__email-gateway_v3-5-ext/bin/email-gateway-v3-5-ext.js",
-    serviceModule: "../fangxiangbiao__email-gateway_v3-5-ext/src/service.js",
-  },
-  "honeypot": {
-    entryFile: "../hfish__honeypot/bin/honeypot.js",
-    serviceModule: "../hfish__honeypot/src/service.js",
-  },
-  "tip": {
-    entryFile: "../misp__tip/bin/tip.js",
-    serviceModule: "../misp__tip/src/service.js",
-  },
   "dongtai-iast": {
     entryFile: "../huoxian__dongtai-iast/bin/dongtai-iast.js",
     serviceModule: "../huoxian__dongtai-iast/src/service.js",
