@@ -168,24 +168,24 @@ test('DescribeBaselineDetectOverview is exposed as a read-only baseline overview
 
 test('InvokeReadOnlyAction enforces Describe action allow list', async () => {
   mockJSON((url, init) => {
-    assert.equal(init.headers['X-TC-Action'], 'DescribeMachinesSimple');
+    assert.equal(init.headers['X-TC-Action'], 'DescribeAssetAppList');
     assert.deepEqual(JSON.parse(init.body), { Limit: 5 });
-    return { Response: { RequestId: 'simple-1', MachineList: [] } };
+    return { Response: { RequestId: 'asset-apps-1', Apps: [] } };
   });
 
   const res = await handlers[METHOD_INVOKE_READ_ONLY_ACTION]({
-    action: 'DescribeMachinesSimple',
+    action: 'DescribeAssetAppList',
     params: { Limit: 5 },
-  }, buildCtx({ config: { allowActions: ['DescribeMachinesSimple'] } }));
-  assert.equal(res.action, 'DescribeMachinesSimple');
+  }, buildCtx());
+  assert.equal(res.action, 'DescribeAssetAppList');
 
   await assert.rejects(
     () => handlers[METHOD_INVOKE_READ_ONLY_ACTION]({ action: 'DeleteMalwares', params: {} }, buildCtx()),
     /InvokeReadOnlyAction only allows Describe\* actions/,
   );
   await assert.rejects(
-    () => handlers[METHOD_INVOKE_READ_ONLY_ACTION]({ action: 'DescribeAssetAppList', params: {} }, buildCtx()),
-    /DescribeAssetAppList is not allowed/,
+    () => handlers[METHOD_INVOKE_READ_ONLY_ACTION]({ action: 'DescribeAESKey', params: {} }, buildCtx()),
+    /DescribeAESKey is not allowed/,
   );
 });
 
