@@ -8,26 +8,13 @@ const DEFAULT_TIMESTAMP_PRECISION = 'seconds';
 const METHOD_PREFIX = 'threatbook.onesig.policy.v1.OneSigPolicyService';
 
 const operationMap = {
-  DevicePlatformStatus: ['POST', '/api/v3/device/platformStatus'],
-  DeviceSystemStatus: ['POST', '/api/v3/device/systemStatus'],
-  DeviceNetworkStatus: ['POST', '/api/v3/device/networkStatus'],
   ListAssetGroups: ['GET', '/api/v3/asset/group'],
   ListAssets: ['POST', '/api/v3/asset/list'],
   ListGlobalWhitelist: ['POST', '/api/v3/globalWhitelist/list'],
-  CreateGlobalWhitelist: ['POST', '/api/v3/globalWhitelist/create'],
-  UpdateGlobalWhitelist: ['POST', '/api/v3/globalWhitelist/update'],
-  DeleteGlobalWhitelist: ['POST', '/api/v3/globalWhitelist/delete'],
-  RemoveGlobalWhitelist: ['POST', '/api/v3/globalWhitelist/remove'],
   ListGlobalBlacklist: ['POST', '/api/v3/globalBlacklist/list'],
   CreateGlobalBlacklist: ['POST', '/api/v3/globalBlacklist/create'],
-  UpdateGlobalBlacklist: ['POST', '/api/v3/globalBlacklist/update'],
-  DeleteGlobalBlacklist: ['POST', '/api/v3/globalBlacklist/delete'],
-  RemoveGlobalBlacklist: ['POST', '/api/v3/globalBlacklist/remove'],
   ListHttpBlacklist: ['POST', '/api/v3/httpBlacklist/list'],
   CreateHttpBlacklist: ['POST', '/api/v3/httpBlacklist/create'],
-  UpdateHttpBlacklist: ['POST', '/api/v3/httpBlacklist/update'],
-  EnableHttpBlacklist: ['POST', '/api/v3/httpBlacklist/enable'],
-  DeleteHttpBlacklist: ['POST', '/api/v3/httpBlacklist/delete'],
 };
 
 const queryAsPayloadOperations = new Set([
@@ -167,20 +154,6 @@ const callMapped = (name, ctx) => {
 
 export const handlers = Object.fromEntries([
   ...Object.keys(operationMap).map((name) => [`${METHOD_PREFIX}/${name}`, (ctx) => callMapped(name, ctx)]),
-  [`${METHOD_PREFIX}/GenericSignedRequest`, (ctx) => {
-    const request = requestOf(ctx);
-    const method = text(request.method).toUpperCase();
-    const path = text(request.path);
-    if (!method) throw invalid('method is required');
-    if (!path || !path.startsWith('/')) throw invalid('path must start with /');
-    return callOneSig({
-      bindings: bindingsOf(ctx),
-      method,
-      path,
-      query: request.query,
-      payload: parsePayload(first(request.payload_json, request.payloadJson)),
-    });
-  }],
 ]);
 
 export const _test = {
