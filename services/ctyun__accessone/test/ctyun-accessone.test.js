@@ -191,6 +191,36 @@ test('QueryAccessControlSwitch: success', async () => {
   assert.match(result.http_body, /"mod":"ON"/);
 });
 
+test('QueryAccessControlSwitch: success with SDK single-argument ctx shape', async () => {
+  setFetch(async () => response(200, { code: '100000', data: { mod: 'ON' } }));
+  const result = await handlers[RPC_ACCESS_CONTROL_SWITCH]({
+    request: { domain: 'test.com', productCode: '020' },
+    config: { ctyun_gateway: 'accessone-global.ctapi.ctyun.cn' },
+    secret: { ctyun_ak: 'valid_ak', ctyun_sk: 'valid_sk' },
+    bindings: {},
+    limits: { timeoutMs: 10_000 },
+    meta: { instance_id: 'inst', request_id: 'req' },
+  });
+  assert.equal(result.http_status, 200);
+  assert.match(result.http_body, /"mod":"ON"/);
+});
+
+test('QueryDomainList: SDK camelCase request shape is normalized', async () => {
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url: String(url), init };
+    return response(200, { statusCode: 100000, returnObj: { total: 0 } });
+  });
+
+  await handlers[RPC_DOMAIN_LIST]({
+    request: { productCode: '020', areaScope: 3, pageSize: 10 },
+    ...buildCtx(),
+  });
+  assert.match(captured.url, /product_code=020/);
+  assert.match(captured.url, /area_scope=3/);
+  assert.match(captured.url, /page_size=10/);
+});
+
 // ── 7. QueryResourcePackages (POST) ──
 test('QueryResourcePackages: success', async () => {
   setFetch(async () => response(200, { statusCode: 100000, returnObj: {} }));
@@ -260,17 +290,40 @@ test('InsertAccessControl: success (with publicRange)', async () => {
     configs: [{
       mod: 'ON',
       act: 'LOG',
-      rule_name: 'with_ip_rule',
-      public_range: [[{
-        zone: 'IP',
-        equal: 'true',
-        public_content: '192.0.2.1',
-      }]],
+      rule_name: 'allow_office',
+      public_range: [{ items: [{ zone: 'BODY', equal: 'contain', public_content: '10.0.0.1' }] }],
     }],
   }, buildCtx());
   assert.equal(result.http_status, 200);
   const body = JSON.parse(captured.init.body);
-  assert.deepEqual(body.accessControlConfigs[0].publicRange, [[{ zone: 'IP', equal: 'true', publicContent: '192.0.2.1' }]]);
+  assert.equal(body.accessControlConfigs[0].publicRange[0][0].publicContent, '10.0.0.1');
+});
+
+test('InsertAccessControl: SDK camelCase request shape is normalized', async () => {
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url: String(url), init };
+    return response(200, { code: '100000', data: [{ successIds: [77777] }], message: 'success' });
+  });
+
+  const result = await handlers[RPC_INSERT_ACCESS_CONTROL]({
+    request: {
+      domains: ['test-jzb.ctcdn.cn'],
+      productCode: '020',
+      configs: [{
+        mod: 'ON',
+        act: 'LOG',
+        ruleName: 'camel_case_ok',
+        publicRange: [{ items: [{ zone: 'BODY', equal: 'contain', publicContent: '10.0.0.2' }] }],
+      }],
+    },
+    ...buildCtx(),
+  });
+  assert.equal(result.http_status, 200);
+  const body = JSON.parse(captured.init.body);
+  assert.equal(body.productCode, '020');
+  assert.equal(body.accessControlConfigs[0].ruleName, 'camel_case_ok');
+  assert.equal(body.accessControlConfigs[0].publicRange[0][0].publicContent, '10.0.0.2');
 });
 
 test('InsertAccessControl: missing domains', async () => {
@@ -446,6 +499,28 @@ test('helper functions', () => {
   const err = _test.attachResponse(_test.errorWithCode('UNAVAILABLE', 'x'), 500, 'boom');
   assert.deepEqual(err.response, { http_status: 500, http_body: 'boom' });
   assert.deepEqual(_test.mergedBindings({ config: { a: 1 }, secret: { b: 2 }, bindings: { a: 3 } }), { a: 3, b: 2 });
+  assert.deepEqual(_test.normalizeRequestShape({
+    productCode: '020',
+    areaScope: 3,
+    pageSize: 10,
+    requestId: 99,
+    configs: [{ ruleName: 'x', publicRange: [{ items: [{ publicContent: '1.1.1.1' }] }] }],
+  }), {
+    productCode: '020',
+    product_code: '020',
+    areaScope: 3,
+    area_scope: 3,
+    pageSize: 10,
+    page_size: 10,
+    requestId: 99,
+    request_id: 99,
+    configs: [{
+      ruleName: 'x',
+      rule_name: 'x',
+      publicRange: [{ items: [{ publicContent: '1.1.1.1', public_content: '1.1.1.1' }] }],
+      public_range: [{ items: [{ publicContent: '1.1.1.1', public_content: '1.1.1.1' }] }],
+    }],
+  });
 });
 
 test('signedPost enforces timeout via AbortController', async () => {
@@ -537,6 +612,32 @@ test('requestWithNodeTransport decodes compressed responses', async () => {
     } finally {
       await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
     }
+  }
+});
+
+test('requestWithNodeTransport rejects on decompression stream error', async () => {
+  const server = http.createServer((_req, res) => {
+    const body = Buffer.from('not-a-valid-gzip-stream');
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Content-Encoding': 'gzip',
+      'Content-Length': body.length,
+    });
+    res.end(body);
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address();
+
+  try {
+    await assert.rejects(
+      () => _test.requestWithNodeTransport(`http://127.0.0.1:${port}/compressed-bad`, { method: 'GET' }, { timeoutMs: 1000 }),
+      (err) => {
+        assert.match(String(err?.message ?? err), /incorrect header check|unexpected end of file|invalid|Z_DATA_ERROR/i);
+        return true;
+      },
+    );
+  } finally {
+    await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }
 });
 
