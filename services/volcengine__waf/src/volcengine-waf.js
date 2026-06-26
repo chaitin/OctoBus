@@ -45,6 +45,9 @@ export const READ_ONLY_ACTIONS = [
   { methodName: 'ListAllIpGroups', action: 'ListAllIpGroups' },
   { methodName: 'ListIpGroup', action: 'ListIpGroup' },
   { methodName: 'ListHostGroup', action: 'ListHostGroup' },
+  { methodName: 'ListBlockRule', action: 'ListBlockRule' },
+  { methodName: 'ListAllowRule', action: 'ListAllowRule' },
+  { methodName: 'ListProjectResources', action: 'ListProjectResources' },
 ];
 
 export const METHOD_INVOKE_READ_ONLY_ACTION_FULL = `${SERVICE_PACKAGE}/InvokeReadOnlyAction`;

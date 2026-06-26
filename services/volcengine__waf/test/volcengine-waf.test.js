@@ -92,6 +92,7 @@ test('validates required credentials and supported actions', () => {
   assert.equal(_test.validateActionName('ListDomain'), 'ListDomain');
   assert.equal(_test.validateActionName('QueryProtectionOverviewLb'), 'QueryProtectionOverviewLb');
   assert.equal(_test.validateActionName('SearchLogs'), 'SearchLogs');
+  assert.equal(_test.validateActionName('ListBlockRule'), 'ListBlockRule');
   assert.throws(() => _test.validateActionName('UpdateInstance'), /read-only/);
   assert.throws(() => _test.validateActionSpec({ action: 'ListDomain', serviceCode: 'ecs' }), /unsupported/);
 });
