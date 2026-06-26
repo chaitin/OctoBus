@@ -1,0 +1,45 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "openobserve-v0-15-1",
+  "displayName": "OpenObserve v0.15.1",
+  "description": "OctoBus package for OpenObserve v0.15.1 read-only operations (organizations, streams, schema, search, functions).",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/openobserve_v0_15_1.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "OpenObserve_v0_15_1.OpenObserve_v0_15_1/ListOrganizations": {
+          "name": "list-organizations",
+          "description": "List OpenObserve organizations."
+        },
+        "OpenObserve_v0_15_1.OpenObserve_v0_15_1/ListStreams": {
+          "name": "list-streams",
+          "description": "List OpenObserve streams in an organization."
+        },
+        "OpenObserve_v0_15_1.OpenObserve_v0_15_1/GetStreamSchema": {
+          "name": "get-stream-schema",
+          "description": "Get schema for an OpenObserve stream."
+        },
+        "OpenObserve_v0_15_1.OpenObserve_v0_15_1/SearchData": {
+          "name": "search-data",
+          "description": "Search data in an OpenObserve stream."
+        },
+        "OpenObserve_v0_15_1.OpenObserve_v0_15_1/ListFunctions": {
+          "name": "list-functions",
+          "description": "List OpenObserve functions in an organization."
+        }
+      }
+    }
+  }
+}

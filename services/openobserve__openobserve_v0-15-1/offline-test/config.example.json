@@ -1,0 +1,10 @@
+{
+  "config": {
+    "baseUrl": "https://o2.example.com:5080",
+    "timeoutMs": 10000
+  },
+  "secret": {
+    "username": "admin@openobserve.ai",
+    "password": "OPENOBSERVE_PASSWORD"
+  }
+}
