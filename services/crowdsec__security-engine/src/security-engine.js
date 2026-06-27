@@ -55,7 +55,10 @@ const mapHttpStatus = (status, body) => {
 
 const getReqField = (req, snakeName, camelName) => {
   // proto3 SDK decodes field names as camelCase; support both conventions
-  return req?.[snakeName] || req?.[camelName];
+  // Use explicit undefined check to preserve falsy values (0, false, '')
+  if (req?.[snakeName] !== undefined) return req[snakeName];
+  if (req?.[camelName] !== undefined) return req[camelName];
+  return undefined;
 };
 
 const firstDefined = (...vals) => vals.find((v) => v !== undefined && v !== null && v !== '');
@@ -111,6 +114,10 @@ const requestWithDefaults = (bindings, req = {}) => {
   };
 };
 
+// OctoBus runtime wraps global.fetch and recognizes these TLS skip options;
+// they are NOT silently ignored as with bare Node.js native fetch (undici).
+const buildTlsOptions = (skipTls) => skipTls ? { insecureSkipVerify: true, tlsInsecureSkipVerify: true } : {};
+
 // ── JWT auth ───────────────────────────────────────────────────────────────
 
 const jwtCacheMap = new Map();
@@ -122,6 +129,8 @@ const getJwtToken = async (endpoint, machineId, password, timeout, skipTls) => {
   if (cached && cached.expiresAt > now + 30_000) {
     return cached.token;
   }
+  // Evict expired entry to prevent unbounded memory growth
+  if (cached) jwtCacheMap.delete(cacheKey);
 
   const url = `${endpoint}/v1/watchers/login`;
   const loginBody = JSON.stringify({ machine_id: machineId, password });
@@ -134,12 +143,14 @@ const getJwtToken = async (endpoint, machineId, password, timeout, skipTls) => {
       headers: { 'Content-Type': 'application/json', 'User-Agent': 'crowdsec-octobus/v1.0' },
       body: loginBody,
       signal: controller.signal,
+      ...buildTlsOptions(skipTls),
     });
     clearTimeout(timer);
     const resBody = await res.text();
 
     if (!res.ok) {
-      const body = JSON.parse(resBody).catch ? JSON.parse(resBody) : {};
+      let body = {};
+      try { body = JSON.parse(resBody); } catch { /* not JSON, use empty */ }
       const mapped = mapHttpStatus(res.status, body);
       if (mapped) throw mapped;
       throw errorWithCode('UNAUTHENTICATED', `login failed: ${res.status}`);
@@ -151,7 +162,7 @@ const getJwtToken = async (endpoint, machineId, password, timeout, skipTls) => {
 
     let expiresAt = now + 3600_000;
     try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
+      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
       if (payload.exp) expiresAt = payload.exp * 1000;
     } catch { /* use default */ }
 
@@ -208,7 +219,7 @@ const crowdsecFetch = async (endpoint, path, { method = 'GET', query, body, auth
   const timer = setTimeout(() => controller.abort(), timeout);
 
   try {
-    const res = await fetch(url, fetchOpts);
+    const res = await fetch(url, { ...fetchOpts, ...buildTlsOptions(skipTls) });
     clearTimeout(timer);
 
     const contentType = res.headers.get('content-type') || '';
@@ -495,7 +506,9 @@ export const handlers = {
 };
 
 export const _test = {
+  buildTlsOptions,
   errorWithCode,
+  getReqField,
   mergedBindings,
   resolveCallContext,
   registerHandlers,
