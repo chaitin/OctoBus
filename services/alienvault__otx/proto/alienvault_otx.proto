@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package AlienVault_OTX;
+
+import "google/protobuf/wrappers.proto";
+
+option go_package = "miner/grpc-service/AlienVault_OTX";
+
+service AlienVault_OTX {
+  rpc CheckIP(CheckIPRequest) returns (CheckIPResponse) {}
+  rpc CheckDomain(CheckDomainRequest) returns (CheckDomainResponse) {}
+}
+
+message CheckIPRequest {
+  string ip = 1;
+}
+
+message CheckIPResponse {
+  int32 code = 1;
+  string message = 2;
+  string ip = 3;
+  int32 reputation = 4;
+  string asn = 5;
+  string country_name = 6;
+  string country_code = 7;
+  float latitude = 8;
+  float longitude = 9;
+  int32 malware_sample_count = 10;
+}
+
+message CheckDomainRequest {
+  string domain = 1;
+}
+
+message CheckDomainResponse {
+  int32 code = 1;
+  string message = 2;
+  string domain = 3;
+  int32 malware_sample_count = 4;
+}
