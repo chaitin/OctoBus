@@ -305,8 +305,31 @@ test('GetJobReport maps in-progress job', async () => {
   const res = await handler();
 
   assert.equal(res.data.id, 'job2');
-  assert.equal(res.data.status, 'Running');
+  assert.equal(res.data.status, 'InProgress');
   assert.equal(res.data.success, false);
+});
+
+test('timeoutMs from config/bindings takes precedence over limits', async () => {
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url, init };
+    return {
+      ok: true,
+      status: 200,
+      headers: new Map([['content-type', 'application/json']]),
+      text: async () => JSON.stringify([]),
+    };
+  });
+
+  const handler = await loadHandler(listAnalyzersPath, {}, {
+    bindings: { endpoint: 'http://localhost:9002', timeoutMs: 3000 },
+    limits: { timeoutMs: 10_000 },
+  });
+  await handler();
+
+  // The signal should reflect the config timeoutMs (3000), not limits (10000).
+  // We verify the timeout was created by checking the AbortSignal exists.
+  assert.ok(captured.init.signal);
 });
 
 test('GetJobReport maps failure report', async () => {

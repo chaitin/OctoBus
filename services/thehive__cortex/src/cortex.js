@@ -107,7 +107,7 @@ const pickStringField = (req, keys) => {
 export function rpcdef(ctx) {
   const bindings = mergedBindings(ctx);
   const restBaseUrl = bindings.restBaseUrl || bindings.rest_base_url || bindings.baseUrl || bindings.base_url || bindings.endpoint || '';
-  const timeoutMs = ctx.limits?.timeoutMs || DEFAULT_TIMEOUT_MS;
+  const timeoutMs = bindings.timeoutMs || ctx.limits?.timeoutMs || DEFAULT_TIMEOUT_MS;
   const baseHeaders = parseHeaders(bindings.headers);
   const meta = ctx.meta || {};
   const skipTlsVerify = Boolean(bindings.tlsInsecureSkipVerify || bindings.skipTlsVerify || bindings.skip_tls_verify || bindings.tls_insecure_skip_verify);
@@ -175,7 +175,7 @@ export function rpcdef(ctx) {
     try {
       return await fetch(url, {
         ...init,
-        timeoutMs,
+        signal: AbortSignal.timeout(timeoutMs),
         ...tlsOptions(),
       });
     } catch (e) {
@@ -360,9 +360,11 @@ export function rpcdef(ctx) {
 
     if (typeof report === 'string') {
       // Job still running: "Running" or "Waiting" etc.
+      // Use the actual job status, not the report string, to stay within
+      // the proto-defined enum (Waiting/InProgress/Success/Failure).
       return {
         id: String(job?.id ?? job?._id ?? ''),
-        status: String(report),
+        status: String(job?.status ?? ''),
         success: false,
         summary: {},
         full: {},
