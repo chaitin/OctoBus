@@ -1,0 +1,81 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "answer-platform",
+  "displayName": "Chaitin Answer-Platform V25.05.001",
+  "description": "OctoBus package for Chaitin Answer-Platform Advanced Threat Analysis and Warning System — alarm search, block rules, firewall blacklist, and asset management.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/answer_platform.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Answer_Platform.Answer_Platform/Login": {
+          "name": "login",
+          "description": "Login to Answer-Platform and return a session token."
+        },
+        "Answer_Platform.Answer_Platform/SearchAlarms": {
+          "name": "search-alarms",
+          "description": "Search threat alarms with filters."
+        },
+        "Answer_Platform.Answer_Platform/GetAlarm": {
+          "name": "get-alarm",
+          "description": "Get detailed information for a single alarm."
+        },
+        "Answer_Platform.Answer_Platform/SearchBlockRules": {
+          "name": "search-block-rules",
+          "description": "Search block/response rules."
+        },
+        "Answer_Platform.Answer_Platform/CreateBlockRule": {
+          "name": "create-block-rule",
+          "description": "Create a new block rule."
+        },
+        "Answer_Platform.Answer_Platform/UpdateBlockRuleStatus": {
+          "name": "update-block-rule-status",
+          "description": "Enable or disable a block rule."
+        },
+        "Answer_Platform.Answer_Platform/DeleteBlockRule": {
+          "name": "delete-block-rule",
+          "description": "Delete a block rule."
+        },
+        "Answer_Platform.Answer_Platform/ListFirewalls": {
+          "name": "list-firewalls",
+          "description": "List linked firewall devices."
+        },
+        "Answer_Platform.Answer_Platform/CreateBlackList": {
+          "name": "create-blacklist",
+          "description": "Add IPs to the blacklist for blocking."
+        },
+        "Answer_Platform.Answer_Platform/DeleteBlackList": {
+          "name": "delete-blacklist",
+          "description": "Remove IPs from the blacklist."
+        },
+        "Answer_Platform.Answer_Platform/SearchBlackList": {
+          "name": "search-blacklist",
+          "description": "Search the blacklist."
+        },
+        "Answer_Platform.Answer_Platform/GetSystemStatus": {
+          "name": "get-system-status",
+          "description": "Get system health and status information."
+        },
+        "Answer_Platform.Answer_Platform/SearchAssets": {
+          "name": "search-assets",
+          "description": "Search enterprise assets."
+        },
+        "Answer_Platform.Answer_Platform/Logout": {
+          "name": "logout",
+          "description": "Logout and invalidate the session."
+        },
+        "Answer_Platform.Answer_Platform/GetAgentGroups": {
+          "name": "get-agent-groups",
+          "description": "Get available agent/probe groups (required for platform-mode deployments)."
+        }
+      }
+    }
+  }
+}
