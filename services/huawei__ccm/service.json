@@ -1,0 +1,33 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "huawei-ccm",
+  "displayName": "Huawei CCM Certificate",
+  "description": "OctoBus package for Huawei Cloud CCM (Cloud Certificate Manager) query APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/huawei_ccm.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Huawei_CCM.Huawei_CCM/ListCertificates": {
+          "name": "list-certificates",
+          "description": "List all SSL certificates in the Huawei Cloud account."
+        },
+        "Huawei_CCM.Huawei_CCM/GetCertificate": {
+          "name": "get-certificate",
+          "description": "Get detailed info for a specific certificate."
+        }
+      }
+    }
+  }
+}

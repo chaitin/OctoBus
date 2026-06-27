@@ -189,6 +189,10 @@ const services = {
     entryFile: "../wd__k01/bin/wd-k01.js",
     serviceModule: "../wd__k01/src/service.js",
   },
+  "huawei-ccm": {
+    entryFile: "../huawei__ccm/bin/huawei-ccm.js",
+    serviceModule: "../huawei__ccm/src/service.js",
+  },
 };
 
 const serviceNames = Object.keys(services);
