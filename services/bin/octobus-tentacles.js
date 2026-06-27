@@ -9,6 +9,10 @@ const services = {
     entryFile: "../alibaba-cloud__simple-application-server-firewall/bin/alibaba-cloud-simple-application-server-firewall.js",
     serviceModule: "../alibaba-cloud__simple-application-server-firewall/src/service.js",
   },
+  "answer-platform": {
+    entryFile: "../chaitin__answer-platform_v25-05-001/bin/answer-platform.js",
+    serviceModule: "../chaitin__answer-platform_v25-05-001/src/service.js",
+  },
   "safeline-waf": {
     entryFile: "../chaitin__safeline-waf/bin/safeline-waf.js",
     serviceModule: "../chaitin__safeline-waf/src/service.js",

@@ -6,6 +6,7 @@
   "bin": {
     "octobus-tentacles": "bin/octobus-tentacles.js",
     "alibaba-cloud-simple-application-server-firewall": "bin/alibaba-cloud-simple-application-server-firewall.js",
+    "answer-platform": "bin/answer-platform.js",
     "das-gateway-v3": "bin/das-gateway-v3.js",
     "das-tgfw-v6": "bin/das-tgfw-v6.js",
     "defectdojo": "bin/defectdojo.js",
@@ -54,6 +55,7 @@
   },
   "files": [
     "bin/alibaba-cloud-simple-application-server-firewall.js",
+    "bin/answer-platform.js",
     "bin/das-gateway-v3.js",
     "bin/das-tgfw-v6.js",
     "bin/defectdojo.js",
