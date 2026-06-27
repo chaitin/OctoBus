@@ -189,6 +189,10 @@ const services = {
     entryFile: "../wd__k01/bin/wd-k01.js",
     serviceModule: "../wd__k01/src/service.js",
   },
+  "security-engine": {
+    entryFile: "../crowdsec__security-engine/bin/security-engine.js",
+    serviceModule: "../crowdsec__security-engine/src/service.js",
+  },
 };
 
 const serviceNames = Object.keys(services);

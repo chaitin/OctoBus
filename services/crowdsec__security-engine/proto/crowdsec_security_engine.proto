@@ -1,0 +1,207 @@
+syntax = "proto3";
+
+package Crowdsec_SECURITY_ENGINE;
+
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Crowdsec_SECURITY_ENGINE";
+
+service Crowdsec_SECURITY_ENGINE {
+  // 查询安全告警，支持按场景/IP/时间/来源等过滤
+  rpc ListAlerts(ListAlertsRequest) returns (ListAlertsResponse) {}
+
+  // 获取指定告警详情
+  rpc GetAlert(GetAlertRequest) returns (GetAlertResponse) {}
+
+  // 列出当前活跃的处置决策（封禁 IP/网段等）
+  rpc ListDecisions(ListDecisionsRequest) returns (ListDecisionsResponse) {}
+
+  // 封禁 IP：创建手动决策（通过创建含 decision 的 alert 实现）
+  rpc BlockIP(BlockIPRequest) returns (BlockIPResponse) {}
+
+  // 解封 IP：删除匹配 IP/网段的决策
+  rpc UnblockIP(UnblockIPRequest) returns (UnblockIPResponse) {}
+
+  // 按 ID 删除指定决策
+  rpc DeleteDecision(DeleteDecisionRequest) returns (DeleteDecisionResponse) {}
+}
+
+// --- ListAlerts ---
+
+message ListAlertsRequest {
+  // 以下字段支持请求级覆盖，为空时使用 secret 绑定值
+  string machine_id = 1;   // JWT 认证用 machine ID
+  string password = 2;     // JWT 认证用密码
+  string api_key = 3;      // Bouncer API Key（ListDecisions 用）
+
+  string scope = 10;       // 过滤来源 scope（ip, range 等）
+  string value = 11;       // 过滤来源 value（与 scope 搭配）
+  string scenario = 12;    // 按场景名称过滤
+  string ip = 13;          // 等效于 scope=ip&value=
+  string range = 14;       // 等效于 scope=range&value=
+  string since = 15;       // 告警新于此时间（Go duration: 1h, 24h, 7d）
+  string until = 16;       // 告警旧于此时间
+  google.protobuf.BoolValue simulated = 17;   // 包含模拟告警
+  google.protobuf.BoolValue has_active_decision = 18; // 仅含未过期决策的告警
+  string decision_type = 19; // 按决策类型过滤（ban, captcha 等）
+  google.protobuf.Int64Value limit = 20;      // 最大返回条数
+  string origin = 21;      // 按来源过滤（crowdsec, cscli, CAPI, lists）
+}
+
+message ListAlertsResponse {
+  repeated Alert alerts = 1;
+}
+
+message Alert {
+  int64 id = 1;
+  string uuid = 2;
+  string machine_id = 3;
+  string created_at = 4;
+  string scenario = 5;
+  string scenario_hash = 6;
+  string scenario_version = 7;
+  string message = 8;
+  int64 events_count = 9;
+  string start_at = 10;
+  string stop_at = 11;
+  int64 capacity = 12;
+  string leakspeed = 13;
+  bool simulated = 14;
+  AlertSource source = 15;
+  repeated AlertEvent events = 16;
+  repeated AlertDecision decisions = 17;
+  repeated KeyValue meta = 18;
+  bool remediation = 19;
+  string kind = 20;
+}
+
+message AlertSource {
+  string scope = 1;
+  string value = 2;
+  string ip = 3;
+  string range = 4;
+  string as_number = 5;
+  string as_name = 6;
+  string cn = 7;
+  double latitude = 8;
+  double longitude = 9;
+}
+
+message AlertEvent {
+  string timestamp = 1;
+  repeated KeyValue meta = 2;
+}
+
+message AlertDecision {
+  int64 id = 1;
+  string uuid = 2;
+  string origin = 3;
+  string type = 4;
+  string scope = 5;
+  string value = 6;
+  string duration = 7;
+  string scenario = 8;
+  bool simulated = 9;
+}
+
+message KeyValue {
+  string key = 1;
+  string value = 2;
+}
+
+// --- GetAlert ---
+
+message GetAlertRequest {
+  string machine_id = 1;
+  string password = 2;
+  string api_key = 3;
+
+  int64 alert_id = 10;     // 告警 ID，必填
+}
+
+message GetAlertResponse {
+  Alert alert = 1;
+}
+
+// --- ListDecisions ---
+
+message ListDecisionsRequest {
+  string machine_id = 1;
+  string password = 2;
+  string api_key = 3;
+
+  string scope = 10;       // 决策 scope（ip, range 等）
+  string value = 11;       // scope 值
+  string type = 12;        // 决策类型（ban, captcha 等）
+  string ip = 13;          // 等效于 scope=ip&value=
+  string range = 14;       // 等效于 scope=range&value=
+  google.protobuf.BoolValue contains = 15;    // 匹配包含或被包含的值
+  string origins = 16;     // 逗号分隔的 origin 过滤
+  string scenarios_containing = 17;           // 场景名需包含的关键词
+  string scenarios_not_containing = 18;       // 场景名不含的关键词
+}
+
+message ListDecisionsResponse {
+  repeated Decision decisions = 1;
+}
+
+message Decision {
+  int64 id = 1;
+  string uuid = 2;
+  string origin = 3;
+  string type = 4;
+  string scope = 5;
+  string value = 6;
+  string duration = 7;
+  string scenario = 8;
+  bool simulated = 9;
+}
+
+// --- BlockIP ---
+
+message BlockIPRequest {
+  string machine_id = 1;
+  string password = 2;
+  string api_key = 3;
+
+  string target_ip = 10;     // 待封禁的 IP 地址，必填
+  string duration = 11;      // 封禁时长（Go duration: 4h, 24h, 7d），默认 "4h"
+  string decision_type = 12; // 决策类型，默认 "ban"；允许 ban/captcha
+  string reason = 13;        // 封禁原因/描述，默认 "manual block via OctoBus"
+}
+
+message BlockIPResponse {
+  int64 alert_id = 1;        // 创建的告警 ID
+  string uuid = 2;           // 告警 UUID
+  Decision decision = 3;     // 创建的决策详情
+}
+
+// --- UnblockIP ---
+
+message UnblockIPRequest {
+  string machine_id = 1;
+  string password = 2;
+  string api_key = 3;
+
+  string target_ip = 10;     // 待解封的 IP 地址，必填
+  string scope = 11;         // 决策 scope，默认 "ip"
+}
+
+message UnblockIPResponse {
+  int64 deleted_count = 1;   // 被删除的决策数量
+}
+
+// --- DeleteDecision ---
+
+message DeleteDecisionRequest {
+  string machine_id = 1;
+  string password = 2;
+  string api_key = 3;
+
+  int64 decision_id = 10;    // 决策 ID，必填
+}
+
+message DeleteDecisionResponse {
+  int64 deleted_count = 1;   // 被删除的决策数量
+}

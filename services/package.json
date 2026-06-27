@@ -50,7 +50,8 @@
     "topsec-waf-v3-2294-20238": "bin/topsec-waf-v3-2294-20238.js",
     "venus-ads-v3-6": "bin/venus-ads-v3-6.js",
     "wangsu-label-ip": "bin/wangsu-label-ip.js",
-    "wd-k01": "bin/wd-k01.js"
+    "wd-k01": "bin/wd-k01.js",
+    "security-engine": "bin/security-engine.js"
   },
   "files": [
     "bin/alibaba-cloud-simple-application-server-firewall.js",
@@ -146,7 +147,9 @@
     "wd__k01",
     "wangsu__label-ip",
     "scripts",
-    "bin/octobus-tentacles.js"
+    "bin/octobus-tentacles.js",
+    "bin/security-engine.js",
+    "crowdsec__security-engine"
   ],
   "scripts": {
     "validate": "node scripts/validate-service-package.mjs",

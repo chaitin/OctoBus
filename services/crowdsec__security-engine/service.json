@@ -1,0 +1,49 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "security-engine",
+  "displayName": "Crowdsec Security Engine",
+  "description": "OctoBus package for Crowdsec Security Engine LAPI — alerts, decisions, IP block/unblock.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/crowdsec_security_engine.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Crowdsec_SECURITY_ENGINE.Crowdsec_SECURITY_ENGINE/ListAlerts": {
+          "name": "list-alerts",
+          "description": "List Crowdsec security alerts."
+        },
+        "Crowdsec_SECURITY_ENGINE.Crowdsec_SECURITY_ENGINE/GetAlert": {
+          "name": "get-alert",
+          "description": "Get a Crowdsec alert by ID."
+        },
+        "Crowdsec_SECURITY_ENGINE.Crowdsec_SECURITY_ENGINE/ListDecisions": {
+          "name": "list-decisions",
+          "description": "List Crowdsec active decisions (blocked IPs/ranges)."
+        },
+        "Crowdsec_SECURITY_ENGINE.Crowdsec_SECURITY_ENGINE/BlockIP": {
+          "name": "block-ip",
+          "description": "Block an IP address by creating a manual Crowdsec decision."
+        },
+        "Crowdsec_SECURITY_ENGINE.Crowdsec_SECURITY_ENGINE/UnblockIP": {
+          "name": "unblock-ip",
+          "description": "Unblock an IP address by deleting matching Crowdsec decisions."
+        },
+        "Crowdsec_SECURITY_ENGINE.Crowdsec_SECURITY_ENGINE/DeleteDecision": {
+          "name": "delete-decision",
+          "description": "Delete a specific Crowdsec decision by ID."
+        }
+      }
+    }
+  }
+}
