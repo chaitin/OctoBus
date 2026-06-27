@@ -485,7 +485,13 @@ const listSessions = async (requestOrContext = {}, maybeContext) => {
     // InvalidParameterValue regardless of parameters. Return an empty list instead of
     // failing, so the method remains usable on all instance types.
     if (e.legacyCode === 'FAILED_PRECONDITION' && e.tencentCode === 'InvalidParameterValue') {
-      logFlow(context.meta || {}, 'SearchSession:unavailable', { note: 'instance may not support session search, returning empty' });
+      // Log full error info for debugging — the condition is broad, and genuine
+      // parameter errors may also match; the log helps distinguish "unsupported"
+      // from "bad params" in production.
+      logFlow(context.meta || {}, 'SearchSession:unavailable', {
+        note: 'instance may not support session search, returning empty',
+        originalError: { message: e.message, code: e.code, tencentCode: e.tencentCode },
+      });
       return { items: [], total_count: 0 };
     }
     throw e;
