@@ -1,0 +1,45 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "siem",
+  "displayName": "Wazuh SIEM",
+  "description": "OctoBus package for Wazuh SIEM alert query, vulnerability detection, and agent monitoring APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/wazuh_siem.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Wazuh_SIEM.Wazuh_SIEM/ListAlerts": {
+          "name": "list-alerts",
+          "description": "Query Wazuh security alerts with filtering by query syntax, time range, severity level, and pagination."
+        },
+        "Wazuh_SIEM.Wazuh_SIEM/GetAlertSummary": {
+          "name": "get-alert-summary",
+          "description": "Get Wazuh alert overview statistics grouped by severity level."
+        },
+        "Wazuh_SIEM.Wazuh_SIEM/ListVulnerabilities": {
+          "name": "list-vulnerabilities",
+          "description": "Query vulnerability detection results for a specific Wazuh agent."
+        },
+        "Wazuh_SIEM.Wazuh_SIEM/GetVulnerabilitySummary": {
+          "name": "get-vulnerability-summary",
+          "description": "Get vulnerability detection summary for a specific Wazuh agent."
+        },
+        "Wazuh_SIEM.Wazuh_SIEM/ListAgents": {
+          "name": "list-agents",
+          "description": "List Wazuh agents with status and OS information."
+        }
+      }
+    }
+  }
+}

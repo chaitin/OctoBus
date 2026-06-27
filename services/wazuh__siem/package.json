@@ -1,0 +1,13 @@
+{
+  "name": "siem",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "siem": "bin/siem.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.5.0",
+    "undici": "^7.0.0"
+  }
+}

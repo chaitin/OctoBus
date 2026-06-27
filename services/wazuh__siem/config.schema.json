@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "endpoint": {
+      "type": "string",
+      "description": "Wazuh Manager API URL (JWT auth), for example https://wazuh.example.com:55000. Required for ListAgents."
+    },
+    "indexerEndpoint": {
+      "type": "string",
+      "description": "Wazuh Indexer URL (OpenSearch), for example https://wazuh.example.com:9200. Required for ListAlerts/GetAlertSummary/ListVulnerabilities/GetVulnerabilitySummary."
+    },
+    "restBaseUrl": {
+      "type": "string",
+      "description": "Legacy alias for endpoint."
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "Legacy alias for endpoint."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional extra HTTP headers sent to Wazuh API."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for private Wazuh deployments."
+    }
+  }
+}
