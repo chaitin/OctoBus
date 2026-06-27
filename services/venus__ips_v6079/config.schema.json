@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "description": "IPSV6079 REST base URL, for example https://192.0.2.10."
+    },
+    "restBaseUrl": {
+      "type": "string",
+      "description": "Alias for baseUrl."
+    },
+    "host": {
+      "type": "string",
+      "description": "Alias for baseUrl."
+    },
+    "username": {
+      "type": "string",
+      "description": "Optional default IPSV6079 login username."
+    },
+    "user": {
+      "type": "string",
+      "description": "Alias for username."
+    },
+    "deviceType": {
+      "type": "string",
+      "description": "Device-Type request header identifying the caller platform, such as SOC, IDS, WAF, or CSP."
+    },
+    "device_type": {
+      "type": "string",
+      "description": "Alias for deviceType."
+    },
+    "authHeaderPrefix": {
+      "type": "string",
+      "default": "Bearer",
+      "description": "Authorization header prefix. Defaults to Bearer."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 8000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for private deployments."
+    },
+    "tlsInsecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Legacy alias for skipTlsVerify."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional additional HTTP headers."
+    }
+  }
+}
