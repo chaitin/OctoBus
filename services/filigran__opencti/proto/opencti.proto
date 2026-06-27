@@ -1,0 +1,171 @@
+syntax = "proto3";
+
+package Filigran_OPENCTI;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
+
+option go_package = "miner/grpc-service/Filigran_OPENCTI";
+
+service Filigran_OPENCTI {
+  // 搜索威胁指标（IOC），支持关键字、类型过滤与分页
+  rpc SearchIndicators(SearchIndicatorsRequest) returns (SearchIndicatorsResponse) {}
+
+  // 搜索网络可观测对象（IP/域名/Hash/URL 等）
+  rpc SearchObservables(SearchObservablesRequest) returns (SearchObservablesResponse) {}
+
+  // 搜索威胁报告
+  rpc SearchReports(SearchReportsRequest) returns (SearchReportsResponse) {}
+
+  // 创建威胁指标
+  rpc CreateIndicator(CreateIndicatorRequest) returns (CreateIndicatorResponse) {}
+
+  // 创建网络可观测对象
+  rpc CreateObservable(CreateObservableRequest) returns (CreateObservableResponse) {}
+
+  // 创建威胁报告
+  rpc CreateReport(CreateReportRequest) returns (CreateReportResponse) {}
+}
+
+// ── 通用记录 ────────────────────────────────────────────
+
+message IndicatorRecord {
+  string id = 1;                    // OpenCTI 内部 ID
+  string standard_id = 2;           // STIX standard_id
+  string name = 3;                  // 指标名称
+  string pattern_type = 4;          // 模式类型（stix, sigma, pcre 等）
+  string pattern = 5;               // 检测模式表达式
+  string valid_from = 6;            // 生效时间（ISO 8601）
+  string valid_until = 7;           // 失效时间（ISO 8601）
+  repeated string indicator_types = 8; // 指标类型（malicious-activity, anomaly 等）
+  string description = 9;           // 描述
+  string score = 10;                // 评分
+}
+
+message ObservableRecord {
+  string id = 1;                    // OpenCTI 内部 ID
+  string standard_id = 2;           // STIX standard_id
+  string entity_type = 3;           // 实体类型（IPv4-Addr, Domain-Name, File 等）
+  string observable_value = 4;      // 可观测值（IP/域名/Hash 等）
+}
+
+message ReportRecord {
+  string id = 1;                    // OpenCTI 内部 ID
+  string standard_id = 2;           // STIX standard_id
+  string name = 3;                  // 报告名称
+  string description = 4;           // 报告描述
+  string published = 5;             // 发布时间（ISO 8601）
+  repeated string report_types = 6; // 报告类型（threat-report, internal-report 等）
+}
+
+// ── SearchIndicators ────────────────────────────────────
+
+message SearchIndicatorsRequest {
+  // 搜索关键字（IP、域名、指标名等）
+  string search = 1;
+  // 指标类型过滤：malicious-activity, anomaly, attribution, compromise 等
+  repeated string indicator_types = 2;
+  // 每页数量，默认 20
+  google.protobuf.Int64Value first = 3;
+  // 分页游标
+  string cursor = 4;
+}
+
+message SearchIndicatorsResponse {
+  repeated IndicatorRecord items = 1;
+  int64 total = 2;
+  bool has_next_page = 3;
+}
+
+// ── SearchObservables ───────────────────────────────────
+
+message SearchObservablesRequest {
+  // 搜索关键字（IP、域名、Hash 等）
+  string search = 1;
+  // 实体类型过滤：IPv4-Addr, IPv6-Addr, Domain-Name, Url, File, Hostname 等
+  repeated string entity_types = 2;
+  // 每页数量，默认 20
+  google.protobuf.Int64Value first = 3;
+  // 分页游标
+  string cursor = 4;
+}
+
+message SearchObservablesResponse {
+  repeated ObservableRecord items = 1;
+  int64 total = 2;
+  bool has_next_page = 3;
+}
+
+// ── SearchReports ───────────────────────────────────────
+
+message SearchReportsRequest {
+  // 搜索关键字
+  string search = 1;
+  // 报告类型过滤：threat-report, internal-report 等
+  repeated string report_types = 2;
+  // 每页数量，默认 20
+  google.protobuf.Int64Value first = 3;
+  // 分页游标
+  string cursor = 4;
+}
+
+message SearchReportsResponse {
+  repeated ReportRecord items = 1;
+  int64 total = 2;
+  bool has_next_page = 3;
+}
+
+// ── CreateIndicator ─────────────────────────────────────
+
+message CreateIndicatorRequest {
+  // 指标名称（必填）
+  string name = 1;
+  // 模式类型（必填）：stix, sigma, pcre, snort, yara 等
+  string pattern_type = 2;
+  // 检测模式表达式（必填）
+  string pattern = 3;
+  // 生效时间（ISO 8601），可选，默认当前时间
+  string valid_from = 4;
+  // 指标类型（必填）：malicious-activity, anomaly 等
+  repeated string indicator_types = 5;
+  // 描述，可选
+  string description = 6;
+  // 失效时间（ISO 8601），可选
+  string valid_until = 7;
+  // 评分，可选
+  google.protobuf.Int64Value score = 8;
+}
+
+message CreateIndicatorResponse {
+  IndicatorRecord indicator = 1;
+}
+
+// ── CreateObservable ────────────────────────────────────
+
+message CreateObservableRequest {
+  // 可观测对象类型（必填）：IPv4-Addr, IPv6-Addr, Domain-Name, Url, File, Hostname, Email-Addr 等
+  string type = 1;
+  // 可观测值（必填）：IP 地址、域名、URL、Hash 等
+  string value = 2;
+}
+
+message CreateObservableResponse {
+  ObservableRecord observable = 1;
+}
+
+// ── CreateReport ────────────────────────────────────────
+
+message CreateReportRequest {
+  // 报告名称（必填）
+  string name = 1;
+  // 报告描述，可选
+  string description = 2;
+  // 发布时间（ISO 8601，必填）
+  string published = 3;
+  // 报告类型：threat-report, internal-report 等
+  repeated string report_types = 4;
+}
+
+message CreateReportResponse {
+  ReportRecord report = 1;
+}
