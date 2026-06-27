@@ -1,0 +1,49 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "tencent-bh",
+  "displayName": "Tencent Cloud Bastion Host",
+  "description": "OctoBus package for Tencent Cloud T-Sec Bastion Host (堡垒机) session, asset, and user management APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/tencent_bh.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Tencent_BH.Tencent_BH/ListSessions": {
+          "name": "list-sessions",
+          "description": "List Bastion Host sessions with filters."
+        },
+        "Tencent_BH.Tencent_BH/KillSession": {
+          "name": "kill-session",
+          "description": "Force terminate a Bastion Host session."
+        },
+        "Tencent_BH.Tencent_BH/ListDevices": {
+          "name": "list-devices",
+          "description": "List managed devices/assets."
+        },
+        "Tencent_BH.Tencent_BH/ListUsers": {
+          "name": "list-users",
+          "description": "List managed users."
+        },
+        "Tencent_BH.Tencent_BH/LockUser": {
+          "name": "lock-user",
+          "description": "Lock a Bastion Host user account."
+        },
+        "Tencent_BH.Tencent_BH/UnlockUser": {
+          "name": "unlock-user",
+          "description": "Unlock a Bastion Host user account."
+        }
+      }
+    }
+  }
+}

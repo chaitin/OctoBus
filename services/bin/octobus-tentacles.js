@@ -189,6 +189,10 @@ const services = {
     entryFile: "../wd__k01/bin/wd-k01.js",
     serviceModule: "../wd__k01/src/service.js",
   },
+  "tencent-bh": {
+    entryFile: "../tencent__bh/bin/tencent-bh.js",
+    serviceModule: "../tencent__bh/src/service.js",
+  },
 };
 
 const serviceNames = Object.keys(services);

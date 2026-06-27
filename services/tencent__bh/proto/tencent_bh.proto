@@ -1,0 +1,155 @@
+syntax = "proto3";
+
+package Tencent_BH;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
+
+option go_package = "miner/grpc-service/Tencent_BH";
+
+service Tencent_BH {
+  // 查询堡垒机会话列表
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse) {}
+  // 强制关闭会话
+  rpc KillSession(KillSessionRequest) returns (KillSessionResponse) {}
+  // 查询堡垒机托管的资产/设备列表
+  rpc ListDevices(ListDevicesRequest) returns (ListDevicesResponse) {}
+  // 查询用户列表
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse) {}
+  // 锁定用户
+  rpc LockUser(LockUserRequest) returns (LockUserResponse) {}
+  // 解锁用户
+  rpc UnlockUser(UnlockUserRequest) returns (UnlockUserResponse) {}
+}
+
+// ── 会话管理 ───────────────────────────────────────────
+
+message ListSessionsRequest {
+  // 页码，从 0 开始
+  google.protobuf.Int64Value offset = 1;
+  // 每页数量，默认 20，最大 200
+  google.protobuf.Int64Value limit = 2;
+  // 过滤条件：按状态筛选（如 "ACTIVE", "FINISHED"）
+  repeated string status = 3;
+  // 过滤条件：按用户名模糊搜索
+  string user_name = 4;
+  // 过滤条件：按资产名称模糊搜索
+  string device_name = 5;
+}
+
+message ListSessionsResponse {
+  // 会话列表
+  repeated SessionRecord items = 1;
+  // 总数
+  int64 total_count = 2;
+}
+
+message SessionRecord {
+  // 会话 ID
+  string id = 1;
+  // 用户名
+  string user_name = 2;
+  // 资产/设备名
+  string device_name = 3;
+  // 会话状态（ACTIVE / FINISHED）
+  string status = 4;
+  // 开始时间
+  string start_time = 5;
+  // 结束时间
+  string end_time = 6;
+}
+
+message KillSessionRequest {
+  // 会话 ID（必填）
+  string session_id = 1;
+}
+
+message KillSessionResponse {
+  // 操作结果
+  google.protobuf.Value err = 1;
+  google.protobuf.Value msg = 2;
+}
+
+// ── 资产管理 ───────────────────────────────────────────
+
+message ListDevicesRequest {
+  google.protobuf.Int64Value offset = 1;
+  google.protobuf.Int64Value limit = 2;
+  // 过滤：资产名称模糊搜索
+  string name = 3;
+  // 过滤：资产 IP
+  string ip = 4;
+}
+
+message ListDevicesResponse {
+  repeated DeviceRecord items = 1;
+  int64 total_count = 2;
+}
+
+message DeviceRecord {
+  // 资产 ID
+  string id = 1;
+  // 资产名称
+  string name = 2;
+  // 资产 IP
+  string ip = 3;
+  // 资产类型
+  string type = 4;
+  // 资产状态
+  string state = 5;
+  // 部门
+  string department = 6;
+}
+
+// ── 用户管理 ───────────────────────────────────────────
+
+message ListUsersRequest {
+  google.protobuf.Int64Value offset = 1;
+  google.protobuf.Int64Value limit = 2;
+  // 过滤：用户名模糊搜索
+  string name = 3;
+  // 过滤：用户状态
+  string status = 4;
+}
+
+message ListUsersResponse {
+  repeated UserRecord items = 1;
+  int64 total_count = 2;
+}
+
+message UserRecord {
+  // 用户 ID
+  string id = 1;
+  // 用户名
+  string user_name = 2;
+  // 真实姓名
+  string real_name = 3;
+  // 手机号
+  string phone = 4;
+  // 邮箱
+  string email = 5;
+  // 状态（NORMAL / LOCKED / DISABLED）
+  string status = 6;
+  // 部门
+  string department = 7;
+}
+
+message LockUserRequest {
+  // 用户 ID（必填）
+  string user_id = 1;
+}
+
+message LockUserResponse {
+  google.protobuf.Value err = 1;
+  google.protobuf.Value msg = 2;
+}
+
+message UnlockUserRequest {
+  // 用户 ID（必填）
+  string user_id = 1;
+}
+
+message UnlockUserResponse {
+  google.protobuf.Value err = 1;
+  google.protobuf.Value msg = 2;
+}
