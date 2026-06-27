@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "endpoint": {
+      "type": "string",
+      "description": "Crowdsec LAPI base URL, for example http://127.0.0.1:8080."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for Crowdsec deployments with self-signed certificates."
+    }
+  }
+}
