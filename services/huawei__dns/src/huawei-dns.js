@@ -247,7 +247,7 @@ const makeRuntime = (ctx = {}) => {
       create_time: zone.created_at || zone.create_at || '',
     }));
 
-    return { code: 0, message: 'ok', data: items, total: items.length };
+    return { code: 0, message: 'ok', data: items, total: response.metadata?.total_count ?? items.length };
   };
 
   const runListRecordSets = async (req = {}) => {

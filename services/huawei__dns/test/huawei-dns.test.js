@@ -18,6 +18,7 @@ const DNS_ZONES_RESP = {
     { id: 'zone-1', name: 'example.com.', zone_type: 'public', status: 'ACTIVE', ttl: 300, created_at: '2026-01-01T00:00:00Z' },
     { id: 'zone-2', name: 'test.org.', zone_type: 'private', status: 'ACTIVE', ttl: 600, created_at: '2026-02-01T00:00:00Z' },
   ],
+  metadata: { total_count: 2 },
 };
 
 const DNS_RECORDSETS_RESP = {
@@ -84,6 +85,7 @@ test('ListZones returns zone list', async () => {
   });
   const result = await handlers['Huawei_DNS.Huawei_DNS/ListZones']({ ...ctx(), request: {} });
   assert.equal(result.code, 0);
+  assert.equal(result.total, 2);
   assert.equal(result.data.length, 2);
   assert.equal(result.data[0].name, 'example.com.');
   assert.equal(result.data[0].zone_type, 'public');
