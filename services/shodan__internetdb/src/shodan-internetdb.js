@@ -1,3 +1,4 @@
+import net from 'node:net';
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
 // ---- Method paths ----
@@ -55,9 +56,9 @@ const parseJson = (text) => {
 };
 
 const mapHttpError = (res, bodyText) => {
-  const text = String(bodyText || '');
-  if (res.status >= 400 && res.status < 500) throw errorWithCode('FAILED_PRECONDITION', `upstream http ${res.status}: ${text}`);
-  throw errorWithCode('UNAVAILABLE', `upstream http ${res.status}: ${text}`);
+  const snippet = String(bodyText || '').slice(0, 200);
+  if (res.status >= 400 && res.status < 500) throw errorWithCode('FAILED_PRECONDITION', `upstream http ${res.status}`);
+  throw errorWithCode('UNAVAILABLE', `upstream http ${res.status}`);
 };
 
 const fetchJson = async (url, init, { bindings = {}, timeoutMs }) => {
@@ -99,6 +100,7 @@ const makeRuntime = (ctx = {}) => {
   const runLookup = async (req = {}) => {
     const ip = unwrapString(firstDefined(req.ip)).trim();
     if (!ip) throw errorWithCode('INVALID_ARGUMENT', 'ip is required');
+    if (!net.isIP(ip)) throw errorWithCode('INVALID_ARGUMENT', 'invalid IP address format');
 
     const url = `${API_BASE}/${encodeURIComponent(ip)}`;
 
