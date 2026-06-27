@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package Shodan_InternetDB;
+
+option go_package = "miner/grpc-service/Shodan_InternetDB";
+
+service Shodan_InternetDB {
+  rpc LookupIP(LookupIPRequest) returns (LookupIPResponse) {}
+}
+
+message LookupIPRequest {
+  string ip = 1;
+}
+
+message LookupIPResponse {
+  int32 code = 1;
+  string message = 2;
+  string ip = 3;
+  repeated string hostnames = 4;
+  repeated int32 ports = 5;
+  repeated string cpes = 6;
+  repeated string tags = 7;
+  repeated string vulns = 8;
+}

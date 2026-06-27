@@ -5,6 +5,7 @@
   "type": "module",
   "bin": {
     "octobus-tentacles": "bin/octobus-tentacles.js",
+    "shodan-internetdb": "bin/shodan-internetdb.js",
     "das-gateway-v3": "bin/das-gateway-v3.js",
     "das-tgfw-v6": "bin/das-tgfw-v6.js",
     "dingtalk-group-robot": "bin/dingtalk-group-robot.js",
@@ -45,6 +46,7 @@
     "wd-k01": "bin/wd-k01.js"
   },
   "files": [
+    "bin/shodan-internetdb.js",
     "bin/das-gateway-v3.js",
     "bin/das-tgfw-v6.js",
     "bin/dingtalk-group-robot.js",
@@ -122,7 +124,8 @@
     "wd__k01",
     "wangsu__label-ip",
     "scripts",
-    "bin/octobus-tentacles.js"
+    "bin/octobus-tentacles.js",
+    "shodan__internetdb"
   ],
   "scripts": {
     "validate": "node scripts/validate-service-package.mjs",
