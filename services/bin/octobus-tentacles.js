@@ -5,6 +5,10 @@ import { runServiceMain } from "@chaitin-ai/octobus-sdk";
 import { Command } from "commander";
 
 const services = {
+  "shodan-internetdb": {
+    entryFile: "../shodan__internetdb/bin/shodan-internetdb.js",
+    serviceModule: "../shodan__internetdb/src/service.js",
+  },
   "alienvault-otx": {
     entryFile: "../alienvault__otx/bin/alienvault-otx.js",
     serviceModule: "../alienvault__otx/src/service.js",

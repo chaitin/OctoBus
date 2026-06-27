@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "bin": {
+    "shodan-internetdb": "bin/shodan-internetdb.js",
     "alienvault-otx": "bin/alienvault-otx.js",
     "octobus-tentacles": "bin/octobus-tentacles.js",
     "dbappsecurity-mingyu-waf": "bin/dbappsecurity-mingyu-waf.js",
@@ -93,6 +94,8 @@
     "api7-enterprise-v3-10-2": "bin/api7-enterprise-v3-10-2.js"
   },
   "files": [
+    "shodan__internetdb",
+    "bin/shodan-internetdb.js",
     "alienvault__otx",
     "bin/alienvault-otx.js",
     "dbappsecurity__mingyu-waf",

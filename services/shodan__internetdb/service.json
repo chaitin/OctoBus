@@ -1,0 +1,29 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "shodan-internetdb",
+  "displayName": "Shodan InternetDB",
+  "description": "OctoBus package for Shodan InternetDB — free IP intelligence (ports, hostnames, CVEs) without API key.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/shodan_internetdb.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Shodan_InternetDB.Shodan_InternetDB/LookupIP": {
+          "name": "lookup-ip",
+          "description": "Look up IP intelligence from Shodan InternetDB (ports, hostnames, CVEs)."
+        }
+      }
+    }
+  }
+}
