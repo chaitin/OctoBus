@@ -232,7 +232,7 @@ const callCCMAPI = async (method, uri, queryParams, { meta, bindings, timeoutMs 
     throw err;
   }
 
-  logInfo(meta, `${method}:success`, { url, raw_response: result.json });
+  logInfo(meta, `${method}:success`, { url });
   return result.json || {};
 };
 
