@@ -42,7 +42,11 @@
     "topsec-fw-2u": "bin/topsec-fw-2u.js",
     "venus-ads-v3-6": "bin/venus-ads-v3-6.js",
     "wangsu-label-ip": "bin/wangsu-label-ip.js",
-    "wd-k01": "bin/wd-k01.js"
+    "wd-k01": "bin/wd-k01.js",
+    "tencent-bh": "bin/tencent-bh.js",
+    "alibaba-sas": "bin/alibaba-sas.js",
+    "misp": "bin/misp.js",
+    "opencti": "bin/opencti.js"
   },
   "files": [
     "bin/das-gateway-v3.js",
@@ -82,6 +86,10 @@
     "bin/topsec-fw-v3-7-6.js",
     "bin/venus-ads-v3-6.js",
     "bin/wd-k01.js",
+    "bin/tencent-bh.js",
+    "bin/alibaba-sas.js",
+    "bin/misp.js",
+    "bin/opencti.js",
     "bin/wangsu-label-ip.js",
     "das__gateway_v3",
     "das__tgfw_v6",
@@ -120,6 +128,10 @@
     "topsec__fw_v3-7-6",
     "venus__ads_v3-6",
     "wd__k01",
+    "tencent__bh",
+    "alibaba__sas",
+    "misp__misp",
+    "filigran__opencti",
     "wangsu__label-ip",
     "scripts",
     "bin/octobus-tentacles.js"

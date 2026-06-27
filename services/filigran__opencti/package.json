@@ -1,0 +1,12 @@
+{
+  "name": "opencti",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "opencti": "bin/opencti.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.5.0"
+  }
+}
