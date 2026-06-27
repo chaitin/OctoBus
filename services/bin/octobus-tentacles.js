@@ -5,6 +5,10 @@ import { runServiceMain } from "@chaitin-ai/octobus-sdk";
 import { Command } from "commander";
 
 const services = {
+  "reportedip": {
+    entryFile: "../reportedip__reportedip/bin/reportedip.js",
+    serviceModule: "../reportedip__reportedip/src/service.js",
+  },
   "safeline-waf": {
     entryFile: "../chaitin__safeline-waf/bin/safeline-waf.js",
     serviceModule: "../chaitin__safeline-waf/src/service.js",
