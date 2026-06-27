@@ -1,0 +1,45 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "venus-ips-v6079",
+  "displayName": "Venus IPSV6079",
+  "description": "OctoBus package for Venus IPSV6079 REST authentication, generic REST calls, system information, update/configuration, backup, block policy, and white policy workflows.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/venus_ips_v6079.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Venus_IPSV6079.IPSV6079Service/Request": {
+          "name": "request",
+          "description": "Call any IPSV6079 REST API endpoint."
+        },
+        "Venus_IPSV6079.IPSV6079Service/GetLicense": {
+          "name": "get-license",
+          "description": "Get IPSV6079 license information."
+        },
+        "Venus_IPSV6079.IPSV6079Service/ListBlockPolicy": {
+          "name": "list-block-policy",
+          "description": "List IPSV6079 block policies."
+        },
+        "Venus_IPSV6079.IPSV6079Service/AddBlockPolicy": {
+          "name": "add-block-policy",
+          "description": "Add an IPSV6079 block policy."
+        },
+        "Venus_IPSV6079.IPSV6079Service/ListWhitePolicy": {
+          "name": "list-white-policy",
+          "description": "List IPSV6079 white policies."
+        }
+      }
+    }
+  }
+}
