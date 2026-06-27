@@ -13,7 +13,7 @@ import { rpcdef } from '../src/hfish.js';
 
 const endpoint = process.env.HFISH_ENDPOINT;
 const apiKey = process.env.HFISH_API_KEY;
-const skipTls = process.env.SKIP_TLS !== 'false'; // default true for self-signed certs
+const skipTls = process.env.SKIP_TLS === 'true'; // default false; set SKIP_TLS=true to skip for self-signed certs
 
 if (!endpoint || !apiKey) {
   console.error('❌ 请设置环境变量 HFISH_ENDPOINT 和 HFISH_API_KEY');
@@ -35,7 +35,7 @@ const results = [];
 const testMethod = async (name, path, req = {}) => {
   try {
     const handlerCtx = { ...ctx, req };
-    const res = await rpcdef(handlerCtx)[path]();
+    const res = await rpcdef(handlerCtx)[path](req);
     console.log(`✅ ${name}: success`, JSON.stringify(res).slice(0, 200));
     results.push({ name, status: 'PASS' });
     return res;
@@ -61,3 +61,8 @@ for (const r of results) {
 }
 const passCount = results.filter(r => r.status === 'PASS').length;
 console.log(`\n通过: ${passCount}/${results.length}`);
+
+if (passCount !== results.length) {
+  console.error(`❌ 存在 ${results.length - passCount} 个测试失败`);
+  process.exit(1);
+}
