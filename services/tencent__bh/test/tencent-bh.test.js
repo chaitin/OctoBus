@@ -525,6 +525,26 @@ test('SDK handlers accept both single-arg (ctx) and two-arg (req, ctx) style', a
 
 // ── Multiple error status codes ───────────────────────────
 
+test('SearchSession InvalidParameterValue degrades gracefully to empty list', async () => {
+  // Simulate Tencent API returning InvalidParameterValue (basic/free tier instances
+  // that do not support SearchSession). The handler should return an empty list
+  // instead of throwing, ensuring the method remains usable on all instance types.
+  setFetch(async () => ({
+    ok: true,
+    status: 200,
+    headers: new Map([['content-type', 'application/json']]),
+    text: async () => JSON.stringify({
+      Response: {
+        Error: { Code: 'InvalidParameterValue', Message: 'InvalidParameterValue' },
+      },
+    }),
+  }));
+
+  const handler = await loadHandler({}, listSessionsPath);
+  const res = await handler();
+  assert.deepEqual(res, { items: [], total_count: 0 });
+});
+
 test('HTTP error codes are mapped correctly', async () => {
   setFetch(async () => ({
     ok: false,
