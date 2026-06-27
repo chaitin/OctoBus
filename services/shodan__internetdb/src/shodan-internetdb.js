@@ -56,7 +56,6 @@ const parseJson = (text) => {
 };
 
 const mapHttpError = (res, bodyText) => {
-  const snippet = String(bodyText || '').slice(0, 200);
   if (res.status >= 400 && res.status < 500) throw errorWithCode('FAILED_PRECONDITION', `upstream http ${res.status}`);
   throw errorWithCode('UNAVAILABLE', `upstream http ${res.status}`);
 };
