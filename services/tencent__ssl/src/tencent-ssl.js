@@ -41,9 +41,10 @@ const errorWithCode = (code, message) => {
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj ?? {}, key);
 const firstDefined = (...values) => values.find((v) => v !== undefined && v !== null);
 
-const unwrapString = (source) => {
+const unwrapString = (source, depth = 0) => {
+  if (depth > 10) return '';
   if (source === undefined || source === null) return '';
-  if (typeof source === 'object' && source !== null && hasOwn(source, 'value')) return unwrapString(source.value);
+  if (typeof source === 'object' && source !== null && hasOwn(source, 'value')) return unwrapString(source.value, depth + 1);
   return String(source);
 };
 
@@ -120,6 +121,7 @@ const parseJson = (text) => {
 
 const mapHttpError = (res, bodyText) => {
   if (res.status === 401 || res.status === 403) throw errorWithCode('PERMISSION_DENIED', `upstream http ${res.status}`);
+  if (res.status === 429) throw errorWithCode('UNAVAILABLE', `upstream http ${res.status}`);
   if (res.status >= 400 && res.status < 500) throw errorWithCode('FAILED_PRECONDITION', `upstream http ${res.status}`);
   throw errorWithCode('UNAVAILABLE', `upstream http ${res.status}`);
 };
