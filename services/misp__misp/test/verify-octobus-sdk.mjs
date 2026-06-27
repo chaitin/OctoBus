@@ -11,13 +11,18 @@
 import { handlers } from '../src/misp.js';
 
 const config = {
-  endpoint: 'https://127.0.0.1:8444',
-  skipTlsVerify: true,
+  endpoint: process.env.MISP_ENDPOINT || 'https://127.0.0.1:8444',
+  skipTlsVerify: process.env.MISP_SKIP_TLS_VERIFY === 'true',
   timeoutMs: 10000,
 };
 const secret = {
-  api_key: 'e750b3f3064a8f31560a1fcad3b06c988a2d7878',
+  api_key: process.env.MISP_API_KEY || '',
 };
+
+if (!secret.api_key) {
+  console.error('❌ 请设置环境变量 MISP_API_KEY');
+  process.exit(1);
+}
 
 const baseCtx = {
   config,
