@@ -1,0 +1,111 @@
+syntax = "proto3";
+
+package Venus_IPSV6079;
+
+option go_package = "miner/grpc-service/Venus_IPSV6079";
+
+service IPSV6079Service {
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse) {}
+  rpc Login(LoginRequest) returns (LoginResponse) {}
+  rpc Request(RestRequest) returns (RestResponse) {}
+
+  rpc GetLicense(JSONRequest) returns (JSONResponse) {}
+  rpc ImportLicense(JSONRequest) returns (JSONResponse) {}
+  rpc GetSystemResourceInfo(JSONRequest) returns (JSONResponse) {}
+
+  rpc ConfigFeatureUpdateOntime(JSONRequest) returns (JSONResponse) {}
+  rpc GetFeatureUpdateConfig(JSONRequest) returns (JSONResponse) {}
+  rpc ConfigFeatureUpdateConfig(JSONRequest) returns (JSONResponse) {}
+  rpc StartFeatureUpdate(JSONRequest) returns (JSONResponse) {}
+  rpc ConfigSoftwareUpdateOntime(JSONRequest) returns (JSONResponse) {}
+  rpc GetSoftwareUpdateOntime(JSONRequest) returns (JSONResponse) {}
+  rpc GetSoftwareUpdateConfig(JSONRequest) returns (JSONResponse) {}
+  rpc ConfigSoftwareUpdateConfig(JSONRequest) returns (JSONResponse) {}
+  rpc GetSoftwareStatus(JSONRequest) returns (JSONResponse) {}
+  rpc StartSoftwareUpdate(JSONRequest) returns (JSONResponse) {}
+
+  rpc GetSyslogServer(JSONRequest) returns (JSONResponse) {}
+  rpc ConfigSyslogServer(JSONRequest) returns (JSONResponse) {}
+  rpc GetKafkaServer(JSONRequest) returns (JSONResponse) {}
+  rpc ConfigKafkaServer(JSONRequest) returns (JSONResponse) {}
+
+  rpc GetNtpConfig(JSONRequest) returns (JSONResponse) {}
+  rpc ConfigNtpConfig(JSONRequest) returns (JSONResponse) {}
+  rpc GetDnsConfig(JSONRequest) returns (JSONResponse) {}
+  rpc ConfigDnsConfig(JSONRequest) returns (JSONResponse) {}
+  rpc ExportBackup(JSONRequest) returns (RestResponse) {}
+  rpc ImportBackup(ImportBackupRequest) returns (JSONResponse) {}
+  rpc GetSnmpConfig(JSONRequest) returns (JSONResponse) {}
+  rpc GetManagementAccessConfig(JSONRequest) returns (JSONResponse) {}
+  rpc ConfigTimeout(JSONRequest) returns (JSONResponse) {}
+  rpc GetPasswordPolicy(JSONRequest) returns (JSONResponse) {}
+  rpc ConfigPasswordPolicy(JSONRequest) returns (JSONResponse) {}
+  rpc GetLoginBlockConfig(JSONRequest) returns (JSONResponse) {}
+  rpc GetRadiusConfig(JSONRequest) returns (JSONResponse) {}
+  rpc GetAlarmConfig(JSONRequest) returns (JSONResponse) {}
+  rpc ConfigAlarmConfig(JSONRequest) returns (JSONResponse) {}
+  rpc GetHttpProxy(JSONRequest) returns (JSONResponse) {}
+  rpc ConfigHttpProxy(JSONRequest) returns (JSONResponse) {}
+
+  rpc SystemOperate(JSONRequest) returns (JSONResponse) {}
+
+  rpc ListBlockPolicy(JSONRequest) returns (JSONResponse) {}
+  rpc AddBlockPolicy(JSONRequest) returns (JSONResponse) {}
+  rpc DeleteBlockPolicy(JSONRequest) returns (JSONResponse) {}
+  rpc BatchAddBlockPolicy(JSONRequest) returns (JSONResponse) {}
+  rpc ListWhitePolicy(JSONRequest) returns (JSONResponse) {}
+  rpc AddWhitePolicy(JSONRequest) returns (JSONResponse) {}
+  rpc DeleteWhitePolicy(JSONRequest) returns (JSONResponse) {}
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  bool ok = 1;
+  string message = 2;
+}
+
+message LoginRequest {}
+
+message LoginResponse {
+  bool authenticated = 1;
+  string authorization = 2;
+  string message = 3;
+}
+
+message JSONRequest {
+  map<string, string> query = 1;
+  string json_body = 2;
+  string request_id = 3;
+  string feature_type = 4;
+}
+
+message JSONResponse {
+  string json_body = 1;
+  string request_id = 2;
+}
+
+message RestRequest {
+  string method = 1;
+  string path = 2;
+  map<string, string> query = 3;
+  map<string, string> headers = 4;
+  string json_body = 5;
+  string raw_body_base64 = 6;
+  string content_type = 7;
+  string request_id = 8;
+}
+
+message RestResponse {
+  int32 status_code = 1;
+  map<string, string> headers = 2;
+  string json_body = 3;
+  string raw_body_base64 = 4;
+  string request_id = 5;
+}
+
+message ImportBackupRequest {
+  string file_name = 1;
+  string file_base64 = 2;
+  string request_id = 3;
+}
