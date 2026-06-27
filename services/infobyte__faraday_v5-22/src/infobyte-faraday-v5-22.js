@@ -259,7 +259,7 @@ const buildUrl = (baseUrl, path, query) => {
 
 const encodePathSegment = (value) => {
   const segment = requireString(value, 'workspace_name');
-  if (segment === '.' || segment === '..' || segment.includes('..') || segment.includes('/') || segment.includes('\\')) {
+  if (segment === '.' || segment === '..' || segment.includes('/') || segment.includes('\\')) {
     throw errorWithCode('INVALID_ARGUMENT', 'workspace_name must be a safe single path segment');
   }
   return encodeURIComponent(segment);

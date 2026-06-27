@@ -67,10 +67,11 @@ test('helpers normalize bindings, protobuf values, query strings, and headers', 
   assert.equal(_test.encodeQueryPairs({ a: 'x y', empty: '', missing: undefined }), 'a=x%20y');
   assert.equal(_test.buildUrl('http://x/', '/_api/v3/ws', { histogram: true }), 'http://x/_api/v3/ws?histogram=true');
   assert.equal(_test.encodePathSegment('demo workspace'), 'demo%20workspace');
+  assert.equal(_test.encodePathSegment('demo..hosts'), 'demo..hosts');
+  assert.equal(_test.encodePathSegment('v1.2.3'), 'v1.2.3');
   assert.throws(() => _test.encodePathSegment('.'), /safe single path segment/);
   assert.throws(() => _test.encodePathSegment('..'), /safe single path segment/);
   assert.throws(() => _test.encodePathSegment('demo/hosts'), /safe single path segment/);
-  assert.throws(() => _test.encodePathSegment('demo..hosts'), /safe single path segment/);
   assert.throws(
     () => _test.assertSupportedTlsConfig({ skipTlsVerify: true }),
     /skipTlsVerify is not supported/,
