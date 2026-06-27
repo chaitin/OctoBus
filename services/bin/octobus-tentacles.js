@@ -49,6 +49,10 @@ const services = {
     entryFile: "../aliyun__cloudfw/bin/aliyun-cloudfw.js",
     serviceModule: "../aliyun__cloudfw/src/service.js",
   },
+  "answer-platform": {
+    entryFile: "../chaitin__answer-platform_v25-05-001/bin/answer-platform.js",
+    serviceModule: "../chaitin__answer-platform_v25-05-001/src/service.js",
+  },
   "safeline-waf": {
     entryFile: "../chaitin__safeline-waf/bin/safeline-waf.js",
     serviceModule: "../chaitin__safeline-waf/src/service.js",

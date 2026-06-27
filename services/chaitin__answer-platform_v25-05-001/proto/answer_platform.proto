@@ -1,0 +1,243 @@
+syntax = "proto3";
+
+package Answer_Platform;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Answer_Platform";
+
+service Answer_Platform {
+  rpc Login(LoginRequest) returns (LoginResponse) {}
+  rpc SearchAlarms(SearchAlarmsRequest) returns (SearchAlarmsResponse) {}
+  rpc GetAlarm(GetAlarmRequest) returns (GetAlarmResponse) {}
+  rpc SearchBlockRules(SearchBlockRulesRequest) returns (SearchBlockRulesResponse) {}
+  rpc CreateBlockRule(CreateBlockRuleRequest) returns (CreateBlockRuleResponse) {}
+  rpc UpdateBlockRuleStatus(UpdateBlockRuleStatusRequest) returns (UpdateBlockRuleStatusResponse) {}
+  rpc DeleteBlockRule(DeleteBlockRuleRequest) returns (DeleteBlockRuleResponse) {}
+  rpc ListFirewalls(ListFirewallsRequest) returns (ListFirewallsResponse) {}
+  rpc CreateBlackList(CreateBlackListRequest) returns (CreateBlackListResponse) {}
+  rpc DeleteBlackList(DeleteBlackListRequest) returns (DeleteBlackListResponse) {}
+  rpc SearchBlackList(SearchBlackListRequest) returns (SearchBlackListResponse) {}
+  rpc GetSystemStatus(GetSystemStatusRequest) returns (GetSystemStatusResponse) {}
+  rpc SearchAssets(SearchAssetsRequest) returns (SearchAssetsResponse) {}
+  rpc Logout(LogoutRequest) returns (LogoutResponse) {}
+  rpc GetAgentGroups(GetAgentGroupsRequest) returns (GetAgentGroupsResponse) {}
+}
+
+// --- Login ---
+
+message LoginRequest {}
+
+message LoginResponse {
+  int32 code = 1;
+  string msg = 2;
+  string session_token = 3;
+  google.protobuf.Struct permissions = 4;
+  string product_version = 5;
+}
+
+// --- Search Alarms ---
+
+message SearchAlarmsRequest {
+  string session_token = 1;
+  // Filter params as JSON-like fields (all optional)
+  string threat_level = 2;     // e.g. "1" (high), "2" (medium), "3" (low)
+  string attack_result = 3;    // e.g. "success", "failed"
+  string keyword = 4;          // source IP or keyword search
+  string start_time = 5;       // ISO 8601
+  string end_time = 6;         // ISO 8601
+  int32 page = 7;
+  int32 page_size = 8;
+}
+
+message SearchAlarmsResponse {
+  int32 code = 1;
+  string msg = 2;
+  repeated google.protobuf.Struct items = 3;
+  int32 total_count = 4;
+  google.protobuf.Struct raw = 5;
+}
+
+// --- Get Alarm Detail ---
+
+message GetAlarmRequest {
+  string session_token = 1;
+  string alarm_id = 2;
+}
+
+message GetAlarmResponse {
+  int32 code = 1;
+  string msg = 2;
+  google.protobuf.Struct alarm = 3;
+  google.protobuf.Struct raw = 4;
+}
+
+// --- Block Rules ---
+
+message SearchBlockRulesRequest {
+  string session_token = 1;
+  string agent_id = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+  string status = 5;
+}
+
+message SearchBlockRulesResponse {
+  int32 code = 1;
+  string msg = 2;
+  repeated google.protobuf.Struct items = 3;
+  int32 total_count = 4;
+}
+
+message CreateBlockRuleRequest {
+  string session_token = 1;
+  string agent_id = 2;
+  string name = 3;
+  string description = 4;
+  string src_ip = 5;
+  string dst_ip = 6;
+  string protocol = 7;
+  string action = 8;
+  string duration = 9;
+}
+
+message CreateBlockRuleResponse {
+  int32 code = 1;
+  string msg = 2;
+  string rule_id = 3;
+  google.protobuf.Struct raw = 4;
+}
+
+message UpdateBlockRuleStatusRequest {
+  string session_token = 1;
+  string agent_id = 2;
+  string rule_id = 3;
+  bool enabled = 4;
+}
+
+message UpdateBlockRuleStatusResponse {
+  int32 code = 1;
+  string msg = 2;
+  google.protobuf.Struct raw = 3;
+}
+
+message DeleteBlockRuleRequest {
+  string session_token = 1;
+  string agent_id = 2;
+  string rule_id = 3;
+}
+
+message DeleteBlockRuleResponse {
+  int32 code = 1;
+  string msg = 2;
+  google.protobuf.Struct raw = 3;
+}
+
+// --- Firewall (联动设备) ---
+
+message ListFirewallsRequest {
+  string session_token = 1;
+  string agent_id = 2;
+}
+
+message ListFirewallsResponse {
+  int32 code = 1;
+  string msg = 2;
+  repeated google.protobuf.Struct items = 3;
+}
+
+message CreateBlackListRequest {
+  string session_token = 1;
+  string agent_id = 2;
+  repeated string ips = 3;
+  string firewall_id = 4;
+  string description = 5;
+}
+
+message CreateBlackListResponse {
+  int32 code = 1;
+  string msg = 2;
+  google.protobuf.Struct raw = 3;
+}
+
+message DeleteBlackListRequest {
+  string session_token = 1;
+  string agent_id = 2;
+  repeated string ids = 3;
+}
+
+message DeleteBlackListResponse {
+  int32 code = 1;
+  string msg = 2;
+  google.protobuf.Struct raw = 3;
+}
+
+message SearchBlackListRequest {
+  string session_token = 1;
+  string agent_id = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+  string ip_keyword = 5;
+}
+
+message SearchBlackListResponse {
+  int32 code = 1;
+  string msg = 2;
+  repeated google.protobuf.Struct items = 3;
+  int32 total_count = 4;
+}
+
+// --- System Status ---
+
+message GetSystemStatusRequest {
+  string session_token = 1;
+}
+
+message GetSystemStatusResponse {
+  int32 code = 1;
+  string msg = 2;
+  string cpu_usage = 3;
+  string memory_usage = 4;
+  string disk_usage = 5;
+  string uptime = 6;
+  google.protobuf.Struct raw = 7;
+}
+
+// --- Assets ---
+
+message SearchAssetsRequest {
+  string session_token = 1;
+  string keyword = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message SearchAssetsResponse {
+  int32 code = 1;
+  string msg = 2;
+  repeated google.protobuf.Struct items = 3;
+  int32 total_count = 4;
+}
+
+// --- Logout ---
+
+message LogoutRequest {
+  string session_token = 1;
+}
+
+message LogoutResponse {
+  int32 code = 1;
+  string msg = 2;
+}
+
+// --- Agent Groups ---
+
+message GetAgentGroupsRequest {
+  string session_token = 1;
+}
+
+message GetAgentGroupsResponse {
+  int32 code = 1;
+  string msg = 2;
+  repeated google.protobuf.Struct items = 3;
+}
