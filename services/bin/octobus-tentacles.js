@@ -189,6 +189,10 @@ const services = {
     entryFile: "../wd__k01/bin/wd-k01.js",
     serviceModule: "../wd__k01/src/service.js",
   },
+  "huawei-dns": {
+    entryFile: "../huawei__dns/bin/huawei-dns.js",
+    serviceModule: "../huawei__dns/src/service.js",
+  },
 };
 
 const serviceNames = Object.keys(services);
