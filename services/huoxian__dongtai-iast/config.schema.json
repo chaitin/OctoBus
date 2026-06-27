@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "endpoint": {
+      "type": "string",
+      "description": "DongTai IAST REST API base URL, for example http://dongtai.example.com:9090."
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "Legacy alias for endpoint."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional extra HTTP headers sent to DongTai IAST."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for private DongTai deployments."
+    }
+  }
+}

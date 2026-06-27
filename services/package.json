@@ -50,7 +50,8 @@
     "topsec-waf-v3-2294-20238": "bin/topsec-waf-v3-2294-20238.js",
     "venus-ads-v3-6": "bin/venus-ads-v3-6.js",
     "wangsu-label-ip": "bin/wangsu-label-ip.js",
-    "wd-k01": "bin/wd-k01.js"
+    "wd-k01": "bin/wd-k01.js",
+    "dongtai-iast": "bin/dongtai-iast.js"
   },
   "files": [
     "bin/alibaba-cloud-simple-application-server-firewall.js",
@@ -145,6 +146,7 @@
     "venus__ads_v3-6",
     "wd__k01",
     "wangsu__label-ip",
+    "huoxian__dongtai-iast",
     "scripts",
     "bin/octobus-tentacles.js"
   ],

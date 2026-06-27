@@ -189,6 +189,10 @@ const services = {
     entryFile: "../wd__k01/bin/wd-k01.js",
     serviceModule: "../wd__k01/src/service.js",
   },
+  "dongtai-iast": {
+    entryFile: "../huoxian__dongtai-iast/bin/dongtai-iast.js",
+    serviceModule: "../huoxian__dongtai-iast/src/service.js",
+  },
 };
 
 const serviceNames = Object.keys(services);

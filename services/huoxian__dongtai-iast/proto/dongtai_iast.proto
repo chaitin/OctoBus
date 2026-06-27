@@ -1,0 +1,264 @@
+syntax = "proto3";
+
+package Huoxian_IAST_DONGTAI;
+
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Huoxian_IAST_DONGTAI";
+
+service Huoxian_IAST_DONGTAI {
+  // 获取漏洞列表，支持按等级/类型/项目/状态筛选与分页
+  rpc ListVulnerabilities(ListVulnerabilitiesRequest) returns (ListVulnerabilitiesResponse) {}
+
+  // 获取漏洞详情
+  rpc GetVulnerability(GetVulnerabilityRequest) returns (GetVulnerabilityResponse) {}
+
+  // 更新漏洞状态（确认/忽略/重开/误报）
+  rpc UpdateVulnStatus(UpdateVulnStatusRequest) returns (UpdateVulnStatusResponse) {}
+
+  // 获取漏洞汇总统计
+  rpc GetVulnSummary(GetVulnSummaryRequest) returns (GetVulnSummaryResponse) {}
+
+  // 获取项目列表
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse) {}
+
+  // 获取项目详情
+  rpc GetProject(GetProjectRequest) returns (GetProjectResponse) {}
+
+  // 创建项目
+  rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse) {}
+
+  // 删除项目
+  rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse) {}
+
+  // 获取 Agent 列表
+  rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse) {}
+
+  // 获取系统信息
+  rpc GetSystemInfo(GetSystemInfoRequest) returns (GetSystemInfoResponse) {}
+
+  // 获取策略列表
+  rpc ListStrategies(ListStrategiesRequest) returns (ListStrategiesResponse) {}
+
+  // 获取 SCA 组件漏洞详情
+  rpc GetScaDetail(GetScaDetailRequest) returns (GetScaDetailResponse) {}
+}
+
+// ============ 漏洞相关 ============
+
+message ListVulnerabilitiesRequest {
+  string token = 1; // 认证 Token，必填
+  google.protobuf.Int64Value project_id = 2; // 项目 ID，可选
+  google.protobuf.Int64Value level_id = 3; // 漏洞等级 ID（1高危 2中危 3低危 4无风险 5提示），可选
+  google.protobuf.StringValue vul_type = 4; // 漏洞类型，可选
+  google.protobuf.StringValue state = 5; // 漏洞状态，可选
+  google.protobuf.Int64Value page = 6; // 分页页码，可选，默认 1
+  google.protobuf.Int64Value page_size = 7; // 分页大小，可选，默认 20
+}
+
+message VulnerabilityRecord {
+  int64 id = 1; // 漏洞 ID
+  string vul_name = 2; // 漏洞名称
+  string vul_type = 3; // 漏洞类型
+  int64 level_id = 4; // 漏洞等级 ID
+  string level_name = 5; // 漏洞等级名称
+  string state = 6; // 漏洞状态
+  string url = 7; // 请求 URL
+  string req_header = 8; // 请求头
+  string req_data = 9; // 请求体
+  string res_header = 10; // 响应头
+  string res_data = 11; // 响应体
+  string full_stack = 12; // 完整调用栈
+  string top_stack = 13; // 顶部调用栈
+  string bottom_stack = 14; // 底部调用栈
+  int64 project_id = 15; // 项目 ID
+  string project_name = 16; // 项目名称
+  int64 agent_id = 17; // Agent ID
+  string language = 18; // 编程语言
+  string first_time = 19; // 首次发现时间
+  string latest_time = 20; // 最近发现时间
+  int64 count = 21; // 发现次数
+}
+
+message ListVulnerabilitiesResponse {
+  repeated VulnerabilityRecord vulns = 1;
+  int64 total = 2; // 总数
+  int64 num_pages = 3; // 总页数
+  int64 page_size = 4; // 每页条数
+}
+
+message GetVulnerabilityRequest {
+  string token = 1; // 认证 Token，必填
+  int64 id = 2; // 漏洞 ID，必填
+}
+
+message GetVulnerabilityResponse {
+  VulnerabilityRecord vuln = 1;
+  google.protobuf.Struct raw = 2; // DongTai 原始返回数据
+}
+
+message UpdateVulnStatusRequest {
+  string token = 1; // 认证 Token，必填
+  int64 id = 2; // 漏洞 ID，必填
+  string status = 3; // 目标状态（confirmed/ignored/recheck/fake），必填
+}
+
+message UpdateVulnStatusResponse {
+  google.protobuf.Struct raw = 1; // DongTai 原始返回数据
+}
+
+message GetVulnSummaryRequest {
+  string token = 1; // 认证 Token，必填
+  google.protobuf.Int64Value project_id = 2; // 项目 ID，可选
+}
+
+message VulnSummaryLevel {
+  string level = 1; // 等级名称
+  int64 level_id = 2; // 等级 ID
+  int64 count = 3; // 数量
+}
+
+message VulnSummaryType {
+  string vul_type = 1; // 漏洞类型
+  int64 count = 2; // 数量
+}
+
+message GetVulnSummaryResponse {
+  repeated VulnSummaryLevel levels = 1;
+  repeated VulnSummaryType types = 2;
+}
+
+// ============ 项目相关 ============
+
+message ListProjectsRequest {
+  string token = 1; // 认证 Token，必填
+  google.protobuf.StringValue name = 2; // 项目名称搜索，可选
+  google.protobuf.Int64Value page = 3; // 分页页码，可选
+  google.protobuf.Int64Value page_size = 4; // 分页大小，可选
+}
+
+message ProjectRecord {
+  int64 id = 1; // 项目 ID
+  string name = 2; // 项目名称
+  string mode = 3; // 模式名称
+  int64 agent_count = 4; // Agent 数量
+  string owner = 5; // 拥有者
+  string latest_time = 6; // 最近活动时间
+  repeated string agent_language = 7; // Agent 语言列表
+  int64 vul_count = 8; // 漏洞总数（聚合）
+  int64 status = 9; // 项目状态
+  string version_name = 10; // 当前版本名
+}
+
+message ListProjectsResponse {
+  repeated ProjectRecord projects = 1;
+  int64 total = 2;
+  int64 num_pages = 3;
+  int64 page_size = 4;
+}
+
+message GetProjectRequest {
+  string token = 1; // 认证 Token，必填
+  int64 id = 2; // 项目 ID，必填
+}
+
+message GetProjectResponse {
+  ProjectRecord project = 1;
+  google.protobuf.Struct raw = 2; // DongTai 原始返回数据
+}
+
+message CreateProjectRequest {
+  string token = 1; // 认证 Token，必填
+  string name = 2; // 项目名称，必填
+  google.protobuf.StringValue mode = 3; // 模式名称，可选
+  google.protobuf.StringValue version_name = 4; // 版本名称，可选
+  google.protobuf.StringValue description = 5; // 描述，可选
+}
+
+message CreateProjectResponse {
+  int64 id = 1; // 创建的项目 ID
+  string name = 2; // 项目名称
+}
+
+message DeleteProjectRequest {
+  string token = 1; // 认证 Token，必填
+  int64 id = 2; // 项目 ID，必填
+}
+
+message DeleteProjectResponse {
+  google.protobuf.Struct raw = 1; // DongTai 原始返回数据
+}
+
+// ============ Agent 相关 ============
+
+message ListAgentsRequest {
+  string token = 1; // 认证 Token，必填
+  google.protobuf.Int64Value project_id = 2; // 项目 ID，可选
+  google.protobuf.StringValue state = 3; // Agent 状态，可选
+  google.protobuf.Int64Value page = 4; // 分页页码，可选
+  google.protobuf.Int64Value page_size = 5; // 分页大小，可选
+}
+
+message AgentRecord {
+  int64 id = 1; // Agent ID
+  string token_value = 2; // Agent Token
+  string alias = 3; // Agent 别名
+  string language = 4; // 编程语言
+  string state = 5; // Agent 状态
+  int64 project_id = 6; // 项目 ID
+  string project_name = 7; // 项目名称
+  string server = 8; // 服务器地址
+  string runtime = 9; // 运行时版本
+  string latest_time = 10; // 最近活跃时间
+}
+
+message ListAgentsResponse {
+  repeated AgentRecord agents = 1;
+  int64 total = 2;
+  int64 num_pages = 3;
+  int64 page_size = 4;
+}
+
+// ============ 系统信息 ============
+
+message GetSystemInfoRequest {
+  string token = 1; // 认证 Token，必填
+}
+
+message GetSystemInfoResponse {
+  google.protobuf.Struct raw = 1; // DongTai system/info 原始返回数据
+}
+
+// ============ 策略相关 ============
+
+message ListStrategiesRequest {
+  string token = 1; // 认证 Token，必填
+  google.protobuf.StringValue vul_type = 2; // 漏洞类型筛选，可选
+  google.protobuf.Int64Value level_id = 3; // 等级筛选，可选
+  google.protobuf.StringValue state = 4; // 状态筛选（enable/disable），可选
+}
+
+message StrategyRecord {
+  int64 id = 1; // 策略 ID
+  string vul_type = 2; // 漏洞类型
+  string vul_name = 3; // 漏洞名称
+  string vul_desc = 4; // 漏洞描述
+  int64 level_id = 5; // 等级 ID
+  string state = 6; // 状态
+}
+
+message ListStrategiesResponse {
+  repeated StrategyRecord strategies = 1;
+}
+
+// ============ SCA 组件漏洞 ============
+
+message GetScaDetailRequest {
+  string token = 1; // 认证 Token，必填
+  int64 id = 2; // SCA 漏洞 ID，必填
+}
+
+message GetScaDetailResponse {
+  google.protobuf.Struct raw = 1; // DongTai SCA 原始返回数据
+}
