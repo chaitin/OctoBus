@@ -89,6 +89,10 @@ const services = {
     entryFile: "../nsfocus__nips_v5-6-r11/bin/nsfocus-nips-v5-6-r11.js",
     serviceModule: "../nsfocus__nips_v5-6-r11/src/service.js",
   },
+  "owasp-dependency-track-sca-v5-0": {
+    entryFile: "../owasp__dependency-track-sca_v5-0/bin/owasp-dependency-track-sca-v5-0.js",
+    serviceModule: "../owasp__dependency-track-sca_v5-0/src/service.js",
+  },
   "panabit-tang-r1": {
     entryFile: "../panabit__tang-r1/bin/panabit-tang-r1.js",
     serviceModule: "../panabit__tang-r1/src/service.js",

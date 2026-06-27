@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "dependency_track_base_url": {
+      "type": "string",
+      "description": "Dependency-Track API server base URL, for example http://localhost:8080."
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "Alias for dependency_track_base_url."
+    },
+    "restBaseUrl": {
+      "type": "string",
+      "description": "Alias for dependency_track_base_url."
+    },
+    "apiPrefix": {
+      "type": "string",
+      "default": "/api/v1",
+      "description": "Dependency-Track API prefix. Default is /api/v1."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "headers": {
+      "type": [
+        "object",
+        "string"
+      ],
+      "description": "Optional JSON object or JSON string with extra HTTP headers."
+    }
+  }
+}

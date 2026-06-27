@@ -1,0 +1,45 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "owasp-dependency-track-sca-v5-0",
+  "displayName": "OWASP Dependency-Track SCA v5.0",
+  "description": "OctoBus package for OWASP Dependency-Track SCA project, BOM, metrics, and findings APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/owasp_dependency_track_sca_v5_0.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "OWASP_DependencyTrack_SCA_V5.OWASP_DependencyTrack_SCA_V5/ListProjects": {
+          "name": "list-projects",
+          "description": "List Dependency-Track projects."
+        },
+        "OWASP_DependencyTrack_SCA_V5.OWASP_DependencyTrack_SCA_V5/CreateProject": {
+          "name": "create-project",
+          "description": "Create or update a Dependency-Track project."
+        },
+        "OWASP_DependencyTrack_SCA_V5.OWASP_DependencyTrack_SCA_V5/GetProjectMetrics": {
+          "name": "get-project-metrics",
+          "description": "Get current metrics for a Dependency-Track project."
+        },
+        "OWASP_DependencyTrack_SCA_V5.OWASP_DependencyTrack_SCA_V5/UploadBom": {
+          "name": "upload-bom",
+          "description": "Upload a CycloneDX BOM to Dependency-Track."
+        },
+        "OWASP_DependencyTrack_SCA_V5.OWASP_DependencyTrack_SCA_V5/ListFindings": {
+          "name": "list-findings",
+          "description": "List Dependency-Track findings for a project."
+        }
+      }
+    }
+  }
+}
