@@ -17,6 +17,13 @@ const METHOD_LIST_VULNERABILITIES = '/Wazuh_SIEM.Wazuh_SIEM/ListVulnerabilities'
 const METHOD_GET_VULNERABILITY_SUMMARY = '/Wazuh_SIEM.Wazuh_SIEM/GetVulnerabilitySummary';
 const METHOD_LIST_AGENTS = '/Wazuh_SIEM.Wazuh_SIEM/ListAgents';
 
+// ─── Module-level JWT token cache ──────────────────────────────────
+// Shared across all rpcdef() calls so that the cache persists between
+// requests. Keyed by endpoint+username to avoid cross-instance leaks.
+const jwtTokenCache = new Map();
+
+const tokenCacheKey = (baseUrl, username) => `${baseUrl}|${username}`;
+
 // ─── Error helpers ────────────────────────────────────────────────────
 
 const grpcCodeFor = (code) => ({
@@ -223,13 +230,10 @@ export function rpcdef(ctx) {
   const indexerUsername = firstDefined(bindings.indexerUsername, bindings.indexer_username) || 'admin';
   const indexerPassword = firstDefined(bindings.indexerPassword, bindings.indexer_password) || '';
 
-  const timeoutMs = ctx.limits?.timeoutMs || DEFAULT_TIMEOUT_MS;
+  const timeoutMs = bindings.timeoutMs || ctx.limits?.timeoutMs || DEFAULT_TIMEOUT_MS;
   const baseHeaders = parseHeaders(bindings.headers);
   const meta = ctx.meta || {};
   const skipTlsVerify = Boolean(bindings.tlsInsecureSkipVerify || bindings.skipTlsVerify || bindings.skip_tls_verify || bindings.tls_insecure_skip_verify);
-
-  // JWT token cache (for Manager API)
-  const tokenCache = { token: null, expiresAt: 0 };
 
   const requestWithDefaults = (req = {}) => {
     const username = firstDefined(req?.username, bindings.username);
@@ -283,9 +287,9 @@ export function rpcdef(ctx) {
 
   // ─── JWT Authentication (Manager API) ────────────────────────────
 
-  const authenticate = async () => {
-    const username = firstDefined(bindings.username);
-    const password = firstDefined(bindings.password);
+  const authenticate = async (reqOverride = {}) => {
+    const username = firstDefined(reqOverride.username, bindings.username);
+    const password = firstDefined(reqOverride.password, bindings.password);
 
     if (!username || !password) {
       throw errorWithCode('INVALID_ARGUMENT', 'username and password are required for Wazuh JWT authentication');
@@ -293,6 +297,7 @@ export function rpcdef(ctx) {
 
     const baseUrl = getManagerBaseUrl();
     const url = `${baseUrl}/security/user/authenticate`;
+    const cacheKey = tokenCacheKey(baseUrl, username);
 
     logFlow('authenticate:start', { url: `${baseUrl}/security/user/authenticate` });
 
@@ -308,7 +313,7 @@ export function rpcdef(ctx) {
       const res = await fetch(url, {
         method: 'POST',
         headers,
-        timeoutMs,
+        signal: AbortSignal.timeout(timeoutMs),
         ...(skipTlsVerify ? { dispatcher: getDispatcher() } : {}),
       });
 
@@ -335,7 +340,7 @@ export function rpcdef(ctx) {
       // Wazuh JWT token default TTL is 900s; parse expiry or assume 900s
       let expiresIn = 900;
       try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
+        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
         if (payload?.exp) {
           expiresIn = Math.max(payload.exp - Math.floor(Date.now() / 1000), 60);
         }
@@ -343,8 +348,7 @@ export function rpcdef(ctx) {
         // If we can't parse the JWT, use default 900s
       }
 
-      tokenCache.token = token;
-      tokenCache.expiresAt = Date.now() + expiresIn * 1000;
+      jwtTokenCache.set(cacheKey, { token, expiresAt: Date.now() + expiresIn * 1000 });
 
       logFlow('authenticate:done', { expiresIn });
 
@@ -356,11 +360,15 @@ export function rpcdef(ctx) {
     }
   };
 
-  const ensureToken = async () => {
-    if (tokenCache.token && Date.now() < tokenCache.expiresAt - TOKEN_REFRESH_MARGIN_MS) {
-      return tokenCache.token;
+  const ensureToken = async (reqOverride = {}) => {
+    const username = firstDefined(reqOverride.username, bindings.username);
+    const baseUrl = getManagerBaseUrl();
+    const cacheKey = tokenCacheKey(baseUrl, username);
+    const cached = jwtTokenCache.get(cacheKey);
+    if (cached && cached.token && Date.now() < cached.expiresAt - TOKEN_REFRESH_MARGIN_MS) {
+      return cached.token;
     }
-    return authenticate();
+    return authenticate(reqOverride);
   };
 
   // ─── Manager API request (JWT Bearer) ────────────────────────────
@@ -369,7 +377,7 @@ export function rpcdef(ctx) {
     try {
       return await fetch(url, {
         ...init,
-        timeoutMs,
+        signal: AbortSignal.timeout(timeoutMs),
         ...(skipTlsVerify ? { dispatcher: getDispatcher() } : {}),
       });
     } catch (e) {
@@ -403,8 +411,8 @@ export function rpcdef(ctx) {
     }
   };
 
-  const wazuhGet = async (path, params = {}, retryOn401 = true) => {
-    const token = await ensureToken();
+  const wazuhGet = async (path, params = {}, retryOn401 = true, reqOverride = {}) => {
+    const token = await ensureToken(reqOverride);
     const baseUrl = getManagerBaseUrl();
 
     const url = new URL(`${baseUrl}${path}`);
@@ -429,9 +437,15 @@ export function rpcdef(ctx) {
     // Retry once on 401 (token expired)
     if (res.status === 401 && retryOn401) {
       logFlow('wazuhGet:tokenExpired', { path });
-      tokenCache.token = null;
-      tokenCache.expiresAt = 0;
-      return wazuhGet(path, params, false);
+      const username = firstDefined(reqOverride.username, bindings.username);
+      const baseUrl2 = getManagerBaseUrl();
+      const cacheKey = tokenCacheKey(baseUrl2, username);
+      const cached = jwtTokenCache.get(cacheKey);
+      if (cached) {
+        cached.token = null;
+        cached.expiresAt = 0;
+      }
+      return wazuhGet(path, params, false, reqOverride);
     }
 
     return readJsonResponse(res);
@@ -706,7 +720,7 @@ export function rpcdef(ctx) {
     if (q) params.q = q;
 
     logFlow('ListAgents:start', { status, limit, offset });
-    const json = await wazuhGet('/agents', params);
+    const json = await wazuhGet('/agents', params, true, req);
     logFlow('ListAgents:done', {});
 
     const extracted = extractAffectedItems(json);
@@ -793,6 +807,7 @@ export const handlers = {
 
 export const _test = {
   buildAlertsOpenSearchQuery,
+  clearJwtCache: () => jwtTokenCache.clear(),
   errorWithCode,
   extractAffectedItems,
   extractOpenSearchHits,

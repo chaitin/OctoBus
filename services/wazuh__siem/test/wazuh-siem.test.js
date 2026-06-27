@@ -635,6 +635,9 @@ test('ListAgents queries Manager API and maps agent data', async () => {
 // ─── JWT Authentication (Manager API) ──────────────────────────────
 
 test('authenticate obtains JWT token via Basic Auth for Manager API', async () => {
+  const { _test } = await import('../src/wazuh-siem.js');
+  _test.clearJwtCache();
+
   const calls = mockWithAuth('test-jwt-token-123');
 
   const handler = await loadHandler(listAgentsPath, {}, defaultManagerSecretCtx);
@@ -685,6 +688,8 @@ test('Indexer HTTP 500 maps to UNAVAILABLE', async () => {
 });
 
 test('Manager API HTTP 422 maps to FAILED_PRECONDITION', async () => {
+  const { _test } = await import('../src/wazuh-siem.js');
+  _test.clearJwtCache();
   mockAuthOkApiFail('test-token', 422, 'invalid request');
 
   const handler = await loadHandler(listAgentsPath, {}, defaultManagerSecretCtx);
@@ -726,9 +731,10 @@ test('SDK handlers accept single context with dual endpoint config', async () =>
 });
 
 test('SDK handlers accept request plus inner context arguments (Manager API)', async () => {
+  const { _test } = await import('../src/wazuh-siem.js');
+  _test.clearJwtCache();
   const calls = mockWithAuth('inner-token');
 
-  const { _test } = await import('../src/wazuh-siem.js');
   const registered = _test.registerHandlers({
     bindings: { endpoint: 'http://base' },
   });
