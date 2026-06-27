@@ -1,0 +1,33 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "alienvault-otx",
+  "displayName": "AlienVault OTX",
+  "description": "OctoBus package for AlienVault OTX (Open Threat Exchange) — free IP and domain threat intelligence without API key.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/alienvault_otx.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "AlienVault_OTX.AlienVault_OTX/CheckIP": {
+          "name": "check-ip",
+          "description": "Check IP reputation, ASN, geolocation via AlienVault OTX."
+        },
+        "AlienVault_OTX.AlienVault_OTX/CheckDomain": {
+          "name": "check-domain",
+          "description": "Check domain intelligence via AlienVault OTX."
+        }
+      }
+    }
+  }
+}
