@@ -32,9 +32,10 @@ const errorWithCode = (code, message) => {
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj ?? {}, key);
 const firstDefined = (...values) => values.find((v) => v !== undefined && v !== null);
 
-const unwrapString = (source) => {
+const unwrapString = (source, depth = 0) => {
+  if (depth > 10) return '';
   if (source === undefined || source === null) return '';
-  if (typeof source === 'object' && source !== null && hasOwn(source, 'value')) return unwrapString(source.value);
+  if (typeof source === 'object' && source !== null && hasOwn(source, 'value')) return unwrapString(source.value, depth + 1);
   return String(source);
 };
 
