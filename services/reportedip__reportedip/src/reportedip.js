@@ -10,11 +10,11 @@ const grpcCodeFor = (c) => ({ FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITIO
 const errorWithCode = (code, msg) => { const e = new GrpcError(grpcCodeFor(code), `${code}: ${msg}`); e.legacyCode = code; return e; };
 const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o ?? {}, k);
 const firstDefined = (...v) => v.find(x => x !== undefined && x !== null);
-const unwrapString = (s) => { if (s === undefined || s === null) return ''; if (typeof s === 'object' && hasOwn(s, 'value')) return unwrapString(s.value); return String(s); };
+const unwrapString = (s, depth = 0) => { if (depth > 10) return ''; if (s === undefined || s === null) return ''; if (typeof s === 'object' && hasOwn(s, 'value')) return unwrapString(s.value, depth + 1); return String(s); };
 const logInfo = (m, a, p) => { try { console.log(`[${SDK_REF}][${a}]`, JSON.stringify(p)); } catch { console.log(`[${SDK_REF}][${a}]`, p); } };
 const logError = (m, a, p) => { try { console.error(`[${SDK_REF}][${a}]`, JSON.stringify(p)); } catch { console.error(`[${SDK_REF}][${a}]`, p); } };
 const parseJson = (t) => { if (!String(t || '').trim()) return null; try { return JSON.parse(t); } catch { throw errorWithCode('UNKNOWN', 'response is not valid JSON'); } };
-const mapHttpError = (res, bt) => { if (res.status >= 400 && res.status < 500) throw errorWithCode('FAILED_PRECONDITION', `upstream http ${res.status}`); throw errorWithCode('UNAVAILABLE', `upstream http ${res.status}`); };
+const mapHttpError = (res, bt) => { if (res.status === 403) throw errorWithCode('PERMISSION_DENIED', `upstream http ${res.status}`); if (res.status === 429) throw errorWithCode('UNAVAILABLE', `upstream http ${res.status}`); if (res.status >= 400 && res.status < 500) throw errorWithCode('FAILED_PRECONDITION', `upstream http ${res.status}`); throw errorWithCode('UNAVAILABLE', `upstream http ${res.status}`); };
 const mergedBindings = (ctx = {}) => ({ ...(ctx.config ?? {}), ...(ctx.secret ?? {}), ...(ctx.bindings ?? {}) });
 const resolveCallContext = (ctx = {}) => ({ ...ctx, bindings: mergedBindings(ctx), limits: ctx.limits ?? {}, meta: ctx.meta ?? {}, req: ctx.req ?? ctx.request ?? {} });
 const resolveTimeoutMs = (ctx = {}, b = {}) => firstDefined(ctx.limits?.timeoutMs, b.timeoutMs, DEFAULT_TIMEOUT_MS);
