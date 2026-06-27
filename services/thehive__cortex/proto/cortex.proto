@@ -1,0 +1,176 @@
+syntax = "proto3";
+
+package TheHive_CORTEX;
+
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/TheHive_CORTEX";
+
+service TheHive_CORTEX {
+  // 列出可用分析器，可选按 observable 类型过滤
+  rpc ListAnalyzers(ListAnalyzersRequest) returns (ListAnalyzersResponse) {}
+
+  // 提交 observable 到指定分析器进行分析
+  rpc AnalyzeObservable(AnalyzeObservableRequest) returns (AnalyzeObservableResponse) {}
+
+  // 获取分析任务完整报告
+  rpc GetJobReport(GetJobReportRequest) returns (GetJobReportResponse) {}
+
+  // 列出分析任务，支持多种过滤条件
+  rpc ListJobs(ListJobsRequest) returns (ListJobsResponse) {}
+
+  // 查询分析任务状态（支持单个和批量）
+  rpc GetJobStatus(GetJobStatusRequest) returns (GetJobStatusResponse) {}
+}
+
+// ==================== ListAnalyzers ====================
+
+message ListAnalyzersRequest {
+  string username = 1;                          // Cortex 用户名，可选（优先用 secret）
+  string password = 2;                          // Cortex 密码，可选（优先用 secret）
+  string api_key = 3;                           // Cortex API Key，可选（优先于 Basic Auth）
+  string data_type = 4;                         // observable 类型过滤，可选（ip/domain/url/hash/file/mail/fqdn/other/uri/autonomous-system/path/filename）
+}
+
+message ListAnalyzersResponse {
+  google.protobuf.Value err = 1;                // 错误信息
+  google.protobuf.Value msg = 2;                // 消息
+  AnalyzerListResult data = 3;                  // 分析器列表结果
+}
+
+message AnalyzerListResult {
+  repeated AnalyzerRecord analyzers = 1;        // 分析器列表
+}
+
+message AnalyzerRecord {
+  string id = 1;                                // 分析器实例 ID
+  string name = 2;                              // 分析器名称
+  string analyzer_definition_id = 3;            // 分析器定义 ID（如 VirusTotal_3_0）
+  string description = 4;                       // 分析器描述
+  repeated string data_type_list = 5;           // 支持的 observable 类型列表
+  string version = 6;                           // 分析器版本
+  int64 tlp = 7;                                // TLP 级别（0-3）
+  string state = 8;                             // 分析器状态
+  google.protobuf.Struct raw = 9;               // 原始数据透传
+}
+
+// ==================== AnalyzeObservable ====================
+
+message AnalyzeObservableRequest {
+  string username = 1;                          // Cortex 用户名，可选
+  string password = 2;                          // Cortex 密码，可选
+  string api_key = 3;                           // Cortex API Key，可选
+  string analyzer_id = 4;                       // 分析器 ID（必填，如 "VirusTotal_3_0_XXX"）
+  string data = 5;                              // observable 值（必填，如 "8.8.8.8"）
+  string data_type = 6;                         // observable 类型（必填，如 "ip"/"domain"/"url"）
+  google.protobuf.Int64Value tlp = 7;           // TLP 级别（0-3），可选，默认 2
+  string message = 8;                           // 附加消息，可选
+  google.protobuf.Struct parameters = 9;        // 分析器参数，可选
+}
+
+message AnalyzeObservableResponse {
+  google.protobuf.Value err = 1;                // 错误信息
+  google.protobuf.Value msg = 2;                // 消息
+  JobData data = 3;                             // 创建的任务数据
+}
+
+message JobData {
+  string id = 1;                                // 任务 ID
+  string analyzer_id = 2;                       // 分析器实例 ID
+  string analyzer_name = 3;                     // 分析器名称
+  string analyzer_definition_id = 4;            // 分析器定义 ID
+  string status = 5;                            // 任务状态（Waiting/InProgress/Success/Failure）
+  string data_type = 6;                         // observable 类型
+  string data = 7;                              // observable 值
+  string message = 8;                           // 任务消息
+  int64 tlp = 9;                                // TLP 级别
+  string date = 10;                             // 任务创建日期
+  string start_date = 11;                       // 分析开始日期
+  string end_date = 12;                         // 分析结束日期
+  google.protobuf.Struct raw = 13;              // 原始数据透传
+}
+
+// ==================== GetJobReport ====================
+
+message GetJobReportRequest {
+  string username = 1;                          // Cortex 用户名，可选
+  string password = 2;                          // Cortex 密码，可选
+  string api_key = 3;                           // Cortex API Key，可选
+  string job_id = 4;                            // 任务 ID（必填）
+}
+
+message GetJobReportResponse {
+  google.protobuf.Value err = 1;                // 错误信息
+  google.protobuf.Value msg = 2;                // 消息
+  JobReportData data = 3;                       // 报告数据
+}
+
+message JobReportData {
+  string id = 1;                                // 任务 ID
+  string status = 2;                            // 任务状态
+  bool success = 3;                             // 是否成功
+  google.protobuf.Struct summary = 4;           // 报告摘要（taxonomies 等）
+  google.protobuf.Struct full = 5;              // 完整报告
+  google.protobuf.Value operations = 6;         // 操作建议
+  repeated ArtifactRecord artifacts = 7;        // 报告关联的 artifact
+  string error_message = 8;                     // 失败时的错误消息
+  string input = 9;                             // 分析器输入数据
+  google.protobuf.Struct raw = 10;              // 原始数据透传
+}
+
+message ArtifactRecord {
+  string data = 1;                              // artifact 数据
+  string data_type = 2;                         // artifact 类型
+  string message = 3;                           // artifact 消息
+  repeated string tags = 4;                     // artifact 标签
+  int64 tlp = 5;                                // TLP 级别
+  google.protobuf.Struct raw = 6;               // 原始数据透传
+}
+
+// ==================== ListJobs ====================
+
+message ListJobsRequest {
+  string username = 1;                          // Cortex 用户名，可选
+  string password = 2;                          // Cortex 密码，可选
+  string api_key = 3;                           // Cortex API Key，可选
+  string data_type = 4;                         // observable 类型过滤，可选
+  string data = 5;                              // observable 值过滤，可选
+  string analyzer = 6;                          // 分析器名过滤，可选
+  string range = 7;                             // 时间范围过滤，可选（如 "all"/"0-100"）
+}
+
+message ListJobsResponse {
+  google.protobuf.Value err = 1;                // 错误信息
+  google.protobuf.Value msg = 2;                // 消息
+  JobListResult data = 3;                       // 任务列表结果
+}
+
+message JobListResult {
+  repeated JobData jobs = 1;                    // 任务列表
+}
+
+// ==================== GetJobStatus ====================
+
+message GetJobStatusRequest {
+  string username = 1;                          // Cortex 用户名，可选
+  string password = 2;                          // Cortex 密码，可选
+  string api_key = 3;                           // Cortex API Key，可选
+  string job_id = 4;                            // 单个任务 ID，可选（与 job_ids 互斥）
+  repeated string job_ids = 5;                  // 批量任务 ID 列表，可选
+}
+
+message GetJobStatusResponse {
+  google.protobuf.Value err = 1;                // 错误信息
+  google.protobuf.Value msg = 2;                // 消息
+  JobStatusResult data = 3;                     // 状态结果
+}
+
+message JobStatusResult {
+  repeated JobStatusRecord statuses = 1;        // 任务状态列表
+}
+
+message JobStatusRecord {
+  string job_id = 1;                            // 任务 ID
+  string status = 2;                            // 任务状态（Waiting/InProgress/Success/Failure/Deleted）
+}
