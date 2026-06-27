@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "faraday_base_url": {
+      "type": "string",
+      "description": "Faraday base URL, for example http://localhost:5985."
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "Alias for faraday_base_url."
+    },
+    "restBaseUrl": {
+      "type": "string",
+      "description": "Legacy alias for faraday_base_url."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional extra HTTP headers sent to Faraday."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000,
+      "description": "HTTP timeout in milliseconds."
+    }
+  }
+}
