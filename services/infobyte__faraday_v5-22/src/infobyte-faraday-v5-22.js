@@ -257,7 +257,13 @@ const buildUrl = (baseUrl, path, query) => {
   return qs ? `${joined}?${qs}` : joined;
 };
 
-const encodePathSegment = (value) => encodeURIComponent(requireString(value, 'workspace_name'));
+const encodePathSegment = (value) => {
+  const segment = requireString(value, 'workspace_name');
+  if (segment === '.' || segment === '..' || segment.includes('..') || segment.includes('/') || segment.includes('\\')) {
+    throw errorWithCode('INVALID_ARGUMENT', 'workspace_name must be a safe single path segment');
+  }
+  return encodeURIComponent(segment);
+};
 
 const tryParseJson = (text) => {
   try {
@@ -433,7 +439,9 @@ const maybeSetBool = (body, key, value) => maybeSet(body, key, toOptionalBool(va
 const applyExtraFields = (body, extraFields) => {
   const extra = protobufValueToPlain(extraFields);
   if (extra && typeof extra === 'object' && !Array.isArray(extra)) {
-    Object.assign(body, extra);
+    for (const [key, value] of Object.entries(extra)) {
+      if (!hasOwn(body, key)) body[key] = value;
+    }
   }
   return body;
 };

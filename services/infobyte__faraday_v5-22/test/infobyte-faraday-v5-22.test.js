@@ -66,7 +66,11 @@ test('helpers normalize bindings, protobuf values, query strings, and headers', 
   assert.deepEqual(_test.protobufValueToPlain({ 0: 'one', 1: 'two' }), ['one', 'two']);
   assert.equal(_test.encodeQueryPairs({ a: 'x y', empty: '', missing: undefined }), 'a=x%20y');
   assert.equal(_test.buildUrl('http://x/', '/_api/v3/ws', { histogram: true }), 'http://x/_api/v3/ws?histogram=true');
-  assert.equal(_test.encodePathSegment('demo/workspace'), 'demo%2Fworkspace');
+  assert.equal(_test.encodePathSegment('demo workspace'), 'demo%20workspace');
+  assert.throws(() => _test.encodePathSegment('.'), /safe single path segment/);
+  assert.throws(() => _test.encodePathSegment('..'), /safe single path segment/);
+  assert.throws(() => _test.encodePathSegment('demo/hosts'), /safe single path segment/);
+  assert.throws(() => _test.encodePathSegment('demo..hosts'), /safe single path segment/);
   assert.throws(
     () => _test.assertSupportedTlsConfig({ skipTlsVerify: true }),
     /skipTlsVerify is not supported/,
@@ -179,7 +183,12 @@ test('CreateWorkspace sends required and optional JSON body', async () => {
     active: { value: true },
     public: false,
     importance: { value: 2 },
-    extra_fields: { fields: { readonly: { boolValue: false } } },
+    extra_fields: {
+      fields: {
+        name: { stringValue: 'overridden-name' },
+        readonly: { boolValue: false },
+      },
+    },
   });
   const res = await handler();
 
@@ -299,7 +308,13 @@ test('ListVulnerabilities, GetVulnerability, and CreateVulnerability map API cal
     confirmed: true,
     cve: { values: [{ stringValue: 'CVE-2026-0001' }] },
     metadata: { fields: { source: { stringValue: 'octobus' } } },
-    extra_fields: { fields: { custom_field: { stringValue: 'kept' } } },
+    extra_fields: {
+      fields: {
+        name: { stringValue: 'overridden-vuln' },
+        severity: { stringValue: 'low' },
+        custom_field: { stringValue: 'kept' },
+      },
+    },
   });
   const createRes = await createHandler();
 
@@ -330,6 +345,9 @@ test('validates required fields before downstream calls', async () => {
 
   const noWorkspaceName = await loadHandler(listHostsPath, {});
   await assert.rejects(() => noWorkspaceName(), /workspace_name is required/);
+
+  const unsafeWorkspaceName = await loadHandler(listHostsPath, { workspace_name: '../hosts' });
+  await assert.rejects(() => unsafeWorkspaceName(), /safe single path segment/);
 
   const badVulnId = await loadHandler(getVulnPath, { workspace_name: 'octobus-ws', object_id: 0 });
   await assert.rejects(() => badVulnId(), /object_id must be a positive integer/);
