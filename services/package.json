@@ -8,6 +8,7 @@
     "alibaba-cloud-simple-application-server-firewall": "bin/alibaba-cloud-simple-application-server-firewall.js",
     "das-gateway-v3": "bin/das-gateway-v3.js",
     "das-tgfw-v6": "bin/das-tgfw-v6.js",
+    "cortex": "bin/cortex.js",
     "defectdojo": "bin/defectdojo.js",
     "dingtalk-group-robot": "bin/dingtalk-group-robot.js",
     "dptech-eds": "bin/dptech-eds.js",
@@ -54,6 +55,7 @@
   },
   "files": [
     "bin/alibaba-cloud-simple-application-server-firewall.js",
+    "bin/cortex.js",
     "bin/das-gateway-v3.js",
     "bin/das-tgfw-v6.js",
     "bin/defectdojo.js",
@@ -102,6 +104,7 @@
     "alibaba-cloud__simple-application-server-firewall",
     "das__gateway_v3",
     "das__tgfw_v6",
+    "thehive__cortex",
     "defectdojo__defectdojo",
     "dingtalk__group-robot",
     "dptech__eds",

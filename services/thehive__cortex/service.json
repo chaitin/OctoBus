@@ -1,0 +1,45 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "cortex",
+  "displayName": "Cortex Observable Analysis Engine",
+  "description": "OctoBus package for Cortex observable analysis: analyzer listing, observable submission, and job report retrieval.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/cortex.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "TheHive_CORTEX.TheHive_CORTEX/ListAnalyzers": {
+          "name": "list-analyzers",
+          "description": "List Cortex analyzers, optionally filtered by observable type."
+        },
+        "TheHive_CORTEX.TheHive_CORTEX/AnalyzeObservable": {
+          "name": "analyze-observable",
+          "description": "Submit an observable to a Cortex analyzer for analysis."
+        },
+        "TheHive_CORTEX.TheHive_CORTEX/GetJobReport": {
+          "name": "get-job-report",
+          "description": "Get full analysis report for a completed job."
+        },
+        "TheHive_CORTEX.TheHive_CORTEX/ListJobs": {
+          "name": "list-jobs",
+          "description": "List analysis jobs with filtering."
+        },
+        "TheHive_CORTEX.TheHive_CORTEX/GetJobStatus": {
+          "name": "get-job-status",
+          "description": "Get status of analysis jobs (single or batch)."
+        }
+      }
+    }
+  }
+}

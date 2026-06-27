@@ -25,6 +25,10 @@ const services = {
     entryFile: "../das__tgfw_v6/bin/das-tgfw-v6.js",
     serviceModule: "../das__tgfw_v6/src/service.js",
   },
+  "cortex": {
+    entryFile: "../thehive__cortex/bin/cortex.js",
+    serviceModule: "../thehive__cortex/src/service.js",
+  },
   "defectdojo": {
     entryFile: "../defectdojo__defectdojo/bin/defectdojo.js",
     serviceModule: "../defectdojo__defectdojo/src/service.js",
