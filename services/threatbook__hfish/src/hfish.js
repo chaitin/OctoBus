@@ -94,10 +94,24 @@ export function rpcdef(ctx) {
   const meta = ctx.meta || {};
   const skipTlsVerify = Boolean(bindings.tlsInsecureSkipVerify || bindings.skipTlsVerify || bindings.skip_tls_verify || bindings.tls_insecure_skip_verify);
 
-  // Node.js native fetch (undici) ignores insecureSkipVerify/tlsInsecureSkipVerify
-  // options; must disable TLS verification at the process level when requested.
+  // TLS skip must be configured at the process level (e.g. OctoBus daemon sets
+  // NODE_TLS_REJECT_UNAUTHORIZED=0 before spawning the subprocess), NOT by
+  // mutating process.env inside rpcdef. Mutating process.env is a global,
+  // irreversible side effect that disables TLS verification for the entire
+  // Node.js process — affecting all services, handlers, and even third-party
+  // library HTTPS calls. If different instances have different skipTlsVerify
+  // configs, one instance's skip would break another's security.
+  // The insecureSkipVerify/tlsInsecureSkipVerify fetch options below are kept
+  // as OctoBus runtime conventions; the daemon may intercept them or set the
+  // env var externally before process start.
   if (skipTlsVerify && process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0') {
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+    const inst = meta.instance_id || meta.instanceId || 'unknown';
+    console.warn(
+      `[ThreatBook_HFISH][TLS] skipTlsVerify=true but NODE_TLS_REJECT_UNAUTHORIZED is not set. ` +
+      `TLS certificate verification will NOT be skipped. ` +
+      `Set NODE_TLS_REJECT_UNAUTHORIZED=0 at process startup (e.g. via OctoBus daemon config) or export it before running. ` +
+      `[inst=${inst}]`,
+    );
   }
 
   const logFlow = (action, details) => {
