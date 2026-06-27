@@ -1,0 +1,17 @@
+{
+  "name": "reportedip",
+  "displayName": "ReportedIP",
+  "description": "OctoBus package for ReportedIP — EU-hosted IP reputation service.",
+  "schema": "chaitin.octobus.service.v1",
+  "runtime": {"mode": "long-running"},
+  "proto": {"roots": ["proto"], "files": ["proto/reportedip.proto"]},
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "ReportedIP.ReportedIP/CheckIP": {"name": "check-ip", "description": "Check IP reputation against ReportedIP database."}
+      }
+    }
+  }
+}

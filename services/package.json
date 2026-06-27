@@ -118,7 +118,8 @@
     "ctyun-accessone": "bin/ctyun-accessone.js",
     "lighthouse-firewall": "bin/tencent-lighthouse-firewall.js",
     "qianxin-skyeye-v3-0-14-0": "bin/qianxin-skyeye-v3-0-14-0.js",
-    "tencent-ssl": "bin/tencent-ssl.js"
+    "tencent-ssl": "bin/tencent-ssl.js",
+    "reportedip": "bin/reportedip.js"
   },
   "files": [
     "bin/huawei-ccm.js",
@@ -235,6 +236,7 @@
     "bin/qianxin-caasm.js",
     "bin/api7-enterprise-v3-10-2.js",
     "bin/wangsu-label-ip.js",
+    "bin/reportedip.js",
     "bin/anyi-cloud-native-security.js",
     "alibaba-cloud__simple-application-server-firewall",
     "aliyun__cloudfw",
@@ -330,6 +332,7 @@
     "api7__enterprise_v3-10-2",
     "fofa__network-space-mapper",
     "wangsu__label-ip",
+    "reportedip__reportedip",
     "anyi__cloud-native-security",
     "scripts",
     "aliyun__waf3",

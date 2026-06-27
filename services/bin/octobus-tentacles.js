@@ -253,6 +253,10 @@ const services = {
     entryFile: "../qingteng__hids_v5/bin/qingteng-hids-v5.js",
     serviceModule: "../qingteng__hids_v5/src/service.js",
   },
+  "reportedip": {
+    entryFile: "../reportedip__reportedip/bin/reportedip.js",
+    serviceModule: "../reportedip__reportedip/src/service.js",
+  },
   "ray-waf-v6-1-2": {
     entryFile: "../ray__waf_v6-1-2/bin/ray-waf-v6-1-2.js",
     serviceModule: "../ray__waf_v6-1-2/src/service.js",

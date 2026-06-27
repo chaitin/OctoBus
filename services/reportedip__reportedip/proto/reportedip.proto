@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package ReportedIP;
+
+import "google/protobuf/wrappers.proto";
+
+option go_package = "miner/grpc-service/ReportedIP";
+
+service ReportedIP {
+  rpc CheckIP(CheckIPRequest) returns (CheckIPResponse) {}
+}
+
+message CheckIPRequest {
+  string ip = 1;
+}
+
+message CheckIPResponse {
+  int32 code = 1;
+  string message = 2;
+  string ip = 3;
+  int32 abuse_confidence_percentage = 4;
+  string country_code = 5;
+  string usage_type = 6;
+  string isp = 7;
+  string domain = 8;
+  repeated string hostnames = 9;
+}
