@@ -55,12 +55,17 @@ test('internal helpers', async () => {
   assert.equal(_test.toPositiveInt(-1), null);
   assert.equal(_test.toPositiveInt({ value: 3 }), 3);
 
-  // extractApiKey: from req first, then bindings/secret
-  assert.equal(_test.extractApiKey({ api_key: 'req-key' }, { apiKey: 'secret' }), 'req-key');
-  assert.equal(_test.extractApiKey({ apiKey: 'req-key' }, { apiKey: 'secret' }), 'req-key');
+  // extractApiKey: bindings/secret first (authoritative), then req
+  // Rationale: gRPC proto string fields default to "" which firstDefined
+  // treats as defined, shadowing the real secret value from bindings.
+  assert.equal(_test.extractApiKey({ api_key: 'req-key' }, { apiKey: 'secret' }), 'secret');
+  assert.equal(_test.extractApiKey({ apiKey: 'req-key' }, { apiKey: 'secret' }), 'secret');
   assert.equal(_test.extractApiKey({}, { apiKey: 'secret-key' }), 'secret-key');
   assert.equal(_test.extractApiKey({}, { api_key: 'secret-key-old' }), 'secret-key-old');
   assert.equal(_test.extractApiKey({}, {}), null);
+  // when bindings has no apiKey, fall back to req
+  assert.equal(_test.extractApiKey({ apiKey: 'req-fallback' }, {}), 'req-fallback');
+  assert.equal(_test.extractApiKey({ api_key: 'req-fallback' }, {}), 'req-fallback');
 
   // firstDefined
   assert.equal(_test.firstDefined(undefined, null, 1, 2), 1);

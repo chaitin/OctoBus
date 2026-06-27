@@ -78,7 +78,10 @@ const pickStringField = (req, keys) => {
 };
 
 const extractApiKey = (req, bindings) => {
-  const key = firstDefined(req?.api_key, req?.apiKey, bindings?.api_key, bindings?.apiKey);
+  // Prefer bindings (secret/config) over request, because gRPC proto
+  // string fields default to "" which firstDefined treats as defined,
+  // shadowing the real secret value from bindings.
+  const key = firstDefined(bindings?.apiKey, bindings?.api_key, req?.api_key, req?.apiKey);
   if (!key) return null;
   return String(key).trim();
 };
@@ -90,6 +93,12 @@ export function rpcdef(ctx) {
   const baseHeaders = parseHeaders(bindings.headers);
   const meta = ctx.meta || {};
   const skipTlsVerify = Boolean(bindings.tlsInsecureSkipVerify || bindings.skipTlsVerify || bindings.skip_tls_verify || bindings.tls_insecure_skip_verify);
+
+  // Node.js native fetch (undici) ignores insecureSkipVerify/tlsInsecureSkipVerify
+  // options; must disable TLS verification at the process level when requested.
+  if (skipTlsVerify && process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0') {
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+  }
 
   const logFlow = (action, details) => {
     const inst = meta.instance_id || meta.instanceId;
