@@ -1,0 +1,218 @@
+syntax = "proto3";
+
+package MISP;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
+
+option go_package = "miner/grpc-service/MISP";
+
+service MISP {
+  // 搜索威胁事件
+  rpc SearchEvents(SearchEventsRequest) returns (SearchEventsResponse) {}
+  // 获取事件详情
+  rpc GetEvent(GetEventRequest) returns (GetEventResponse) {}
+  // 创建威胁事件
+  rpc CreateEvent(CreateEventRequest) returns (CreateEventResponse) {}
+  // 搜索 IoC 属性
+  rpc SearchAttributes(SearchAttributesRequest) returns (SearchAttributesResponse) {}
+  // 添加属性/IoC 到事件
+  rpc AddAttribute(AddAttributeRequest) returns (AddAttributeResponse) {}
+  // 搜索标签
+  rpc SearchTags(SearchTagsRequest) returns (SearchTagsResponse) {}
+}
+
+// ── 事件搜索 ─────────────────────────────────────────────
+
+message SearchEventsRequest {
+  // 搜索值（IP、域名、Hash 等）
+  string value = 1;
+  // 属性类型过滤：ip-src, ip-dst, domain, md5, sha1, sha256, url, 等
+  repeated string type = 2;
+  // 类别过滤
+  repeated string category = 3;
+  // 包含标签（支持 AND: && / OR: ,）
+  repeated string tags = 4;
+  // 排除标签
+  repeated string not_tags = 5;
+  // 组织过滤
+  string org = 6;
+  // 时间范围：起始 (YYYY-MM-DD)
+  string from = 7;
+  // 时间范围：结束 (YYYY-MM-DD)
+  string to = 8;
+  // 快捷时间：5d, 12h, 30m
+  string last = 9;
+  // 每页数量
+  google.protobuf.Int64Value limit = 10;
+  // 页码
+  google.protobuf.Int64Value page = 11;
+  // 是否只返回元数据（不含属性）
+  bool metadata = 12;
+  // 是否包含附件
+  bool with_attachments = 13;
+}
+
+message SearchEventsResponse {
+  repeated EventRecord items = 1;
+}
+
+message EventRecord {
+  // 事件 ID
+  string id = 1;
+  // 事件名称/描述
+  string info = 2;
+  // 事件日期
+  string date = 3;
+  // 发布状态
+  bool published = 4;
+  // 威胁等级：1=低, 2=中, 3=高, 4=致命
+  int32 threat_level_id = 5;
+  // 分析阶段：0=初始, 1=进行中, 2=已完成
+  int32 analysis = 6;
+  // 创建组织
+  string org = 7;
+  // 创建组织名称
+  string org_name = 8;
+  // 标签列表
+  repeated string tags = 9;
+  // 属性数量
+  int32 attribute_count = 10;
+  // 事件 UUID
+  string uuid = 11;
+  // 时间戳
+  string timestamp = 12;
+}
+
+// ── 获取事件详情 ─────────────────────────────────────────
+
+message GetEventRequest {
+  // 事件 ID（必填）
+  string event_id = 1;
+}
+
+message GetEventResponse {
+  EventRecord event = 1;
+  repeated AttributeRecord attributes = 2;
+}
+
+// ── 创建事件 ─────────────────────────────────────────────
+
+message CreateEventRequest {
+  // 事件名称/描述（必填）
+  string info = 1;
+  // 事件日期，默认当天
+  string date = 2;
+  // 威胁等级：1=低, 2=中, 3=高, 4=致命
+  google.protobuf.Int64Value threat_level_id = 3;
+  // 分析阶段：0=初始, 1=进行中, 2=已完成
+  google.protobuf.Int64Value analysis = 4;
+  // 发布状态
+  google.protobuf.BoolValue published = 5;
+  // 分发范围：0=您的组织, 1=此社区, 2=连接的社区, 3=所有社区
+  google.protobuf.Int64Value distribution = 6;
+}
+
+message CreateEventResponse {
+  EventRecord event = 1;
+}
+
+// ── 属性搜索 ─────────────────────────────────────────────
+
+message SearchAttributesRequest {
+  // 搜索值
+  string value = 1;
+  // 属性类型
+  repeated string type = 2;
+  // 类别
+  repeated string category = 3;
+  // 包含标签
+  repeated string tags = 4;
+  // 排除标签
+  repeated string not_tags = 5;
+  // 事件 ID 过滤
+  string event_id = 6;
+  // 时间范围
+  string from = 7;
+  string to = 8;
+  string last = 9;
+  // 分页
+  google.protobuf.Int64Value limit = 10;
+  google.protobuf.Int64Value page = 11;
+  // 是否包含事件信息
+  bool include_event = 12;
+  // 仅含 to_ids=true 的属性
+  bool to_ids = 13;
+}
+
+message SearchAttributesResponse {
+  repeated AttributeRecord items = 1;
+}
+
+message AttributeRecord {
+  // 属性 ID
+  string id = 1;
+  // 属性值（IP / Domain / Hash 等）
+  string value = 2;
+  // 属性类型
+  string type = 3;
+  // 类别
+  string category = 4;
+  // 所属事件 ID
+  string event_id = 5;
+  // 是否用于 IDS 规则
+  bool to_ids = 6;
+  // 标签列表
+  repeated string tags = 7;
+  // 评论
+  string comment = 8;
+  // UUID
+  string uuid = 9;
+  // 事件信息（当 include_event=true）
+  string event_info = 10;
+}
+
+// ── 添加属性 ─────────────────────────────────────────────
+
+message AddAttributeRequest {
+  // 事件 ID（必填）
+  string event_id = 1;
+  // 属性值（必填）
+  string value = 2;
+  // 属性类型（必填）：ip-src, ip-dst, domain, md5, sha256, url 等
+  string type = 3;
+  // 类别
+  string category = 4;
+  // 是否用于 IDS
+  google.protobuf.BoolValue to_ids = 5;
+  // 评论
+  string comment = 6;
+  // 分发范围
+  google.protobuf.Int64Value distribution = 7;
+}
+
+message AddAttributeResponse {
+  AttributeRecord attribute = 1;
+}
+
+// ── 标签搜索 ─────────────────────────────────────────────
+
+message SearchTagsRequest {
+  // 标签名称搜索（必填）
+  string name = 1;
+}
+
+message SearchTagsResponse {
+  repeated TagRecord items = 1;
+}
+
+message TagRecord {
+  // 标签 ID
+  string id = 1;
+  // 标签名称
+  string name = 2;
+  // 标签颜色
+  string colour = 3;
+  // 标签数量
+  int64 count = 4;
+}
