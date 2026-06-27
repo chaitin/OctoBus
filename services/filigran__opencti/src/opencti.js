@@ -71,6 +71,11 @@ const errorWithCode = (code, message) => {
 
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj ?? {}, key);
 
+// Escape a string for use inside a GraphQL string literal.
+// Must escape backslashes first (before quotes) to avoid creating
+// unintended escape sequences, and then escape double quotes.
+const gqlEscape = (s) => String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\\"');
+
 const firstDefined = (...values) => values.find((v) => v !== undefined && v !== null);
 
 const toTrimmedString = (value) => {
@@ -273,7 +278,9 @@ const mapIndicator = (node) => ({
   valid_until: String(node?.valid_until ?? ''),
   indicator_types: Array.isArray(node?.indicator_types) ? node.indicator_types : [],
   description: String(node?.description ?? ''),
-  x_opencti_score: String(node?.x_opencti_score ?? ''),
+  // Proto field is "score" (field #10), not "x_opencti_score".
+  // Map from the OpenCTI GraphQL field x_opencti_score → proto score.
+  score: String(node?.x_opencti_score ?? ''),
 });
 
 const mapObservable = (node) => ({
@@ -301,10 +308,10 @@ const buildSearchIndicatorsQuery = (req) => {
   const indicatorTypes = req.indicator_types ?? [];
 
   const args = [`first: ${first}`];
-  if (search) args.push(`search: "${search.replace(/"/g, '\\"')}"`);
-  if (cursor) args.push(`after: "${cursor.replace(/"/g, '\\"')}"`);
+  if (search) args.push(`search: "${gqlEscape(search)}"`);
+  if (cursor) args.push(`after: "${gqlEscape(cursor)}"`);
   if (indicatorTypes.length > 0) {
-    const filterStr = indicatorTypes.map(t => `"${t.replace(/"/g, '\\"')}"`).join(', ');
+    const filterStr = indicatorTypes.map(t => `"${gqlEscape(t)}"`).join(', ');
     args.push(`filters: [{key: "indicator_types", values: [${filterStr}]}]`);
   }
 
@@ -318,10 +325,10 @@ const buildSearchObservablesQuery = (req) => {
   const entityTypes = req.entity_types ?? [];
 
   const args = [`first: ${first}`];
-  if (search) args.push(`search: "${search.replace(/"/g, '\\"')}"`);
-  if (cursor) args.push(`after: "${cursor.replace(/"/g, '\\"')}"`);
+  if (search) args.push(`search: "${gqlEscape(search)}"`);
+  if (cursor) args.push(`after: "${gqlEscape(cursor)}"`);
   if (entityTypes.length > 0) {
-    const filterStr = entityTypes.map(t => `"${t.replace(/"/g, '\\"')}"`).join(', ');
+    const filterStr = entityTypes.map(t => `"${gqlEscape(t)}"`).join(', ');
     args.push(`filters: [{key: "entity_type", values: [${filterStr}]}]`);
   }
 
@@ -335,10 +342,10 @@ const buildSearchReportsQuery = (req) => {
   const reportTypes = req.report_types ?? [];
 
   const args = [`first: ${first}`];
-  if (search) args.push(`search: "${search.replace(/"/g, '\\"')}"`);
-  if (cursor) args.push(`after: "${cursor.replace(/"/g, '\\"')}"`);
+  if (search) args.push(`search: "${gqlEscape(search)}"`);
+  if (cursor) args.push(`after: "${gqlEscape(cursor)}"`);
   if (reportTypes.length > 0) {
-    const filterStr = reportTypes.map(t => `"${t.replace(/"/g, '\\"')}"`).join(', ');
+    const filterStr = reportTypes.map(t => `"${gqlEscape(t)}"`).join(', ');
     args.push(`filters: [{key: "report_types", values: [${filterStr}]}]`);
   }
 
@@ -405,23 +412,23 @@ const createIndicator = async (req = {}, ctx = {}) => {
   }
 
   const inputFields = [];
-  inputFields.push(`name: "${name.replace(/"/g, '\\"')}"`);
-  inputFields.push(`pattern_type: "${patternType.replace(/"/g, '\\"')}"`);
-  inputFields.push(`pattern: "${pattern.replace(/"/g, '\\"')}"`);
+  inputFields.push(`name: "${gqlEscape(name)}"`);
+  inputFields.push(`pattern_type: "${gqlEscape(patternType)}"`);
+  inputFields.push(`pattern: "${gqlEscape(pattern)}"`);
 
   const validFrom = toTrimmedString(firstDefined(req.valid_from, req.validFrom));
-  if (validFrom) inputFields.push(`valid_from: "${validFrom.replace(/"/g, '\\"')}"`);
+  if (validFrom) inputFields.push(`valid_from: "${gqlEscape(validFrom)}"`);
 
   const validUntil = toTrimmedString(firstDefined(req.valid_until, req.validUntil));
-  if (validUntil) inputFields.push(`valid_until: "${validUntil.replace(/"/g, '\\"')}"`);
+  if (validUntil) inputFields.push(`valid_until: "${gqlEscape(validUntil)}"`);
 
   const description = toTrimmedString(firstDefined(req.description));
-  if (description) inputFields.push(`description: "${description.replace(/"/g, '\\"')}"`);
+  if (description) inputFields.push(`description: "${gqlEscape(description)}"`);
 
   const score = toInt64(req.score);
   if (score !== null) inputFields.push(`x_opencti_score: ${score}`);
 
-  inputFields.push(`indicator_types: [${indicatorTypes.map(t => `"${t.replace(/"/g, '\\"')}"`).join(', ')}]`);
+  inputFields.push(`indicator_types: [${indicatorTypes.map(t => `"${gqlEscape(t)}"`).join(', ')}]`);
 
   const query = `mutation { indicatorAdd(input: {${inputFields.join(', ')}}) { id standard_id name pattern_type pattern valid_from valid_until indicator_types description x_opencti_score } }`;
 
@@ -445,12 +452,24 @@ const createObservable = async (req = {}, ctx = {}) => {
   }
 
   // Build mutation with type-specific value field
-  const escapedValue = value.replace(/"/g, '\\"');
+  const escapedValue = gqlEscape(value);
 
-  // File type needs special handling (hashes), others use simple {value: "..."}
+  // File type: auto-detect hash algorithm from value length.
+  // MD5 = 32 hex chars, SHA256 = 64 hex chars, SHA1 = 40 hex chars.
+  // For non-hash values (e.g. filenames), use simple {value: "..."}.
   let fieldValueArg;
   if (type === 'File') {
-    fieldValueArg = `{ hashes: { MD5: "${escapedValue}", SHA256: "${escapedValue}" } }`;
+    const hexOnly = value.replace(/[^0-9a-fA-F]/g, '');
+    if (hexOnly.length === 32) {
+      fieldValueArg = `{ hashes: { MD5: "${escapedValue}" } }`;
+    } else if (hexOnly.length === 40) {
+      fieldValueArg = `{ hashes: { SHA1: "${escapedValue}" } }`;
+    } else if (hexOnly.length === 64) {
+      fieldValueArg = `{ hashes: { SHA256: "${escapedValue}" } }`;
+    } else {
+      // Not a recognized hash format; treat as filename/identifier
+      fieldValueArg = `{ value: "${escapedValue}" }`;
+    }
   } else {
     fieldValueArg = `{ value: "${escapedValue}" }`;
   }
@@ -471,15 +490,15 @@ const createReport = async (req = {}, ctx = {}) => {
   if (!published) throw errorWithCode('INVALID_ARGUMENT', 'published is required');
 
   const inputFields = [];
-  inputFields.push(`name: "${name.replace(/"/g, '\\"')}"`);
-  inputFields.push(`published: "${published.replace(/"/g, '\\"')}"`);
+  inputFields.push(`name: "${gqlEscape(name)}"`);
+  inputFields.push(`published: "${gqlEscape(published)}"`);
 
   const description = toTrimmedString(firstDefined(req.description));
-  if (description) inputFields.push(`description: "${description.replace(/"/g, '\\"')}"`);
+  if (description) inputFields.push(`description: "${gqlEscape(description)}"`);
 
   const reportTypes = req.report_types ?? req.reportTypes ?? [];
   if (Array.isArray(reportTypes) && reportTypes.length > 0) {
-    inputFields.push(`report_types: [${reportTypes.map(t => `"${t.replace(/"/g, '\\"')}"`).join(', ')}]`);
+    inputFields.push(`report_types: [${reportTypes.map(t => `"${gqlEscape(t)}"`).join(', ')}]`);
   }
 
   const query = `mutation { reportAdd(input: {${inputFields.join(', ')}}) { id standard_id name description published report_types } }`;
@@ -559,6 +578,7 @@ export const _test = {
   callOpenCTI,
   errorWithCode,
   firstDefined,
+  gqlEscape,
   hasOwn,
   logFlow,
   mergedBindings,
