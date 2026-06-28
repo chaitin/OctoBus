@@ -62,6 +62,46 @@
         "Sangfor_FW_V8095.Sangfor_FW_V8095/SetBlockTime": {
           "name": "set-block-time",
           "description": "Set the automatic attacker block duration."
+        },
+        "Sangfor_FW_V8095.Sangfor_FW_V8095/ListIPGroups": {
+          "name": "list-ip-groups",
+          "description": "List Sangfor network objects from /ipgroups."
+        },
+        "Sangfor_FW_V8095.Sangfor_FW_V8095/GetIPGroup": {
+          "name": "get-ip-group",
+          "description": "Get one Sangfor network object by name."
+        },
+        "Sangfor_FW_V8095.Sangfor_FW_V8095/AddIPGroup": {
+          "name": "add-ip-group",
+          "description": "Create one Sangfor network object."
+        },
+        "Sangfor_FW_V8095.Sangfor_FW_V8095/DeleteIPGroup": {
+          "name": "delete-ip-group",
+          "description": "Delete one Sangfor network object by name."
+        },
+        "Sangfor_FW_V8095.Sangfor_FW_V8095/BusinessBlockIP": {
+          "name": "business-block-ip",
+          "description": "Temporarily block entries with BUSINESS scope."
+        },
+        "Sangfor_FW_V8095.Sangfor_FW_V8095/BusinessUnblockIP": {
+          "name": "business-unblock-ip",
+          "description": "Remove BUSINESS-scope temporary blocked entries."
+        },
+        "Sangfor_FW_V8095.Sangfor_FW_V8095/QuerySessions": {
+          "name": "query-sessions",
+          "description": "Query sessions with the Sangfor sessions filter object."
+        },
+        "Sangfor_FW_V8095.Sangfor_FW_V8095/BlockSession": {
+          "name": "block-session",
+          "description": "Block one session by five-tuple."
+        },
+        "Sangfor_FW_V8095.Sangfor_FW_V8095/ListSecurityPolicies": {
+          "name": "list-security-policies",
+          "description": "List security protection policies in read-only mode."
+        },
+        "Sangfor_FW_V8095.Sangfor_FW_V8095/GetSecurityPolicy": {
+          "name": "get-security-policy",
+          "description": "Get one security protection policy by name in read-only mode."
         }
       }
     }

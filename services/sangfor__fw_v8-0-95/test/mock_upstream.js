@@ -31,6 +31,31 @@ export const startMockUpstream = async () => {
     blacklist: [],
     blockIp: [],
     blockTime: "1d",
+    ipGroups: [
+      {
+        name: "all",
+        businessType: "IP",
+        addressType: "IPV4",
+        ipRanges: [{ start: "0.0.0.0", end: "255.255.255.255" }],
+      },
+    ],
+    sessions: [
+      {
+        id: 1001,
+        policyName: "allow-web",
+        flow0: { srcIp: "198.51.100.10", dstIp: "203.0.113.10", srcPort: 12345, dstPort: 443, proto: 6 },
+      },
+    ],
+    blockedSessions: [],
+    securityPolicies: [
+      {
+        name: "allow-web",
+        enable: true,
+        policyType: "INTERNET_ACCESS",
+        srcZones: ["trust"],
+        dstZones: ["untrust"],
+      },
+    ],
     requests: [],
   };
 
@@ -104,6 +129,61 @@ export const startMockUpstream = async () => {
           const body = await readJson(req);
           state.blockTime = body.blockTime;
           return send(res, 200, { code: 0, message: "success", data: { blockTime: state.blockTime } });
+        }
+      }
+
+      if (url.pathname.includes("/ipgroups")) {
+        const name = decodeURIComponent(url.pathname.split("/").pop());
+        const isCollection = url.pathname.endsWith("/ipgroups");
+        if (req.method === "GET" && isCollection) {
+          return send(res, 200, { code: 0, message: "success", data: { items: state.ipGroups, itemLength: state.ipGroups.length } });
+        }
+        if (req.method === "GET") {
+          const item = state.ipGroups.find((entry) => entry.name === name);
+          return send(res, 200, { code: item ? 0 : 1004, message: item ? "success" : "not found", data: item || "" });
+        }
+        if (req.method === "POST" && isCollection) {
+          const body = await readJson(req);
+          state.ipGroups.push(body);
+          return send(res, 200, { code: 0, message: "success", data: body });
+        }
+        if (req.method === "DELETE") {
+          const item = state.ipGroups.find((entry) => entry.name === name);
+          state.ipGroups = state.ipGroups.filter((entry) => entry.name !== name);
+          return send(res, 200, { code: item ? 0 : 1004, message: item ? "success" : "not found", data: item || { name } });
+        }
+      }
+
+      if (url.pathname.endsWith("/sessions/status") && req.method === "PATCH") {
+        const body = await readJson(req);
+        state.blockedSessions.push(body);
+        return send(res, 200, { code: 0, message: "success", data: "ok" });
+      }
+
+      if (url.pathname.endsWith("/sessions") && req.method === "POST") {
+        const body = await readJson(req);
+        if (url.searchParams.get("_method") === "get") {
+          return send(res, 200, {
+            code: 0,
+            message: "success",
+            data: { items: state.sessions, itemLength: state.sessions.length, filter: body },
+          });
+        }
+        if (url.searchParams.get("_method") === "delete") {
+          state.sessions = [];
+          return send(res, 200, { code: 0, message: "success", data: "ok" });
+        }
+      }
+
+      if (url.pathname.includes("/securitys")) {
+        const name = decodeURIComponent(url.pathname.split("/").pop());
+        const isCollection = url.pathname.endsWith("/securitys");
+        if (req.method === "GET" && isCollection) {
+          return send(res, 200, { code: 0, message: "success", data: { items: state.securityPolicies, itemLength: state.securityPolicies.length } });
+        }
+        if (req.method === "GET") {
+          const item = state.securityPolicies.find((entry) => entry.name === name);
+          return send(res, 200, { code: item ? 0 : 1004, message: item ? "success" : "not found", data: item || "" });
         }
       }
 

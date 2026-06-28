@@ -12,6 +12,16 @@ export const METHOD_BLOCK_IP_FULL = "Sangfor_FW_V8095.Sangfor_FW_V8095/BlockIP";
 export const METHOD_UNBLOCK_IP_FULL = "Sangfor_FW_V8095.Sangfor_FW_V8095/UnblockIP";
 export const METHOD_GET_BLOCK_TIME_FULL = "Sangfor_FW_V8095.Sangfor_FW_V8095/GetBlockTime";
 export const METHOD_SET_BLOCK_TIME_FULL = "Sangfor_FW_V8095.Sangfor_FW_V8095/SetBlockTime";
+export const METHOD_LIST_IP_GROUPS_FULL = "Sangfor_FW_V8095.Sangfor_FW_V8095/ListIPGroups";
+export const METHOD_GET_IP_GROUP_FULL = "Sangfor_FW_V8095.Sangfor_FW_V8095/GetIPGroup";
+export const METHOD_ADD_IP_GROUP_FULL = "Sangfor_FW_V8095.Sangfor_FW_V8095/AddIPGroup";
+export const METHOD_DELETE_IP_GROUP_FULL = "Sangfor_FW_V8095.Sangfor_FW_V8095/DeleteIPGroup";
+export const METHOD_BUSINESS_BLOCK_IP_FULL = "Sangfor_FW_V8095.Sangfor_FW_V8095/BusinessBlockIP";
+export const METHOD_BUSINESS_UNBLOCK_IP_FULL = "Sangfor_FW_V8095.Sangfor_FW_V8095/BusinessUnblockIP";
+export const METHOD_QUERY_SESSIONS_FULL = "Sangfor_FW_V8095.Sangfor_FW_V8095/QuerySessions";
+export const METHOD_BLOCK_SESSION_FULL = "Sangfor_FW_V8095.Sangfor_FW_V8095/BlockSession";
+export const METHOD_LIST_SECURITY_POLICIES_FULL = "Sangfor_FW_V8095.Sangfor_FW_V8095/ListSecurityPolicies";
+export const METHOD_GET_SECURITY_POLICY_FULL = "Sangfor_FW_V8095.Sangfor_FW_V8095/GetSecurityPolicy";
 
 const DEFAULT_NAMESPACE = "public";
 const DEFAULT_TIMEOUT_MS = 5000;
@@ -76,6 +86,25 @@ const asArray = (value) => {
 
 const stringList = (value) => asArray(value).map(trim).filter(Boolean);
 
+const plainObject = (value) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  if (value.fields && typeof value.fields === "object") {
+    return Object.fromEntries(Object.entries(value.fields).map(([key, field]) => [key, fromProtoValue(field)]));
+  }
+  return value;
+};
+
+const fromProtoValue = (value) => {
+  if (!value || typeof value !== "object") return value;
+  if (hasOwn(value, "stringValue")) return value.stringValue;
+  if (hasOwn(value, "numberValue")) return value.numberValue;
+  if (hasOwn(value, "boolValue")) return value.boolValue;
+  if (hasOwn(value, "nullValue")) return null;
+  if (hasOwn(value, "listValue")) return asArray(value.listValue?.values).map(fromProtoValue);
+  if (hasOwn(value, "structValue")) return plainObject(value.structValue);
+  return value;
+};
+
 const normalizeBaseUrl = (value) => {
   const baseUrl = trim(value).replace(/\/+$/, "");
   if (!/^https?:\/\//i.test(baseUrl)) return "";
@@ -133,6 +162,12 @@ const buildQuery = (params) => {
   }
   const text = query.toString();
   return text ? `?${text}` : "";
+};
+
+const nameSegment = (value, field = "name") => {
+  const name = trim(value);
+  if (!name) throw fail("INVALID_ARGUMENT", `${field} is required`);
+  return encodeURIComponent(name);
 };
 
 const getSkipTlsVerifyDispatcher = () => {
@@ -312,6 +347,7 @@ const blockIP = async (req = {}, runtimeCtx = {}) => {
     ...(toInt(req.dst_port ?? req.dstPort, 0) > 0 ? { dstPort: toInt(req.dst_port ?? req.dstPort, 0) } : {}),
     blockTime: trim(req.block_time || req.blockTime) || "1d",
     attack: trim(req.attack) || DEFAULT_ATTACK,
+    ...(trim(req.scope) ? { scope: trim(req.scope) } : {}),
   };
   const response = await apiFetch(ctx, "POST", batchPath(ctx, "/blockip"), {
     token,
@@ -319,6 +355,10 @@ const blockIP = async (req = {}, runtimeCtx = {}) => {
     query: { creator: trim(req.creator) || DEFAULT_CREATOR },
   });
   return assertApiSuccess(response, IDEMPOTENT_ADD_CODES, "BlockIP");
+};
+
+const businessBlockIP = async (req = {}, runtimeCtx = {}) => {
+  return blockIP({ ...req, scope: "BUSINESS" }, runtimeCtx);
 };
 
 const unblockIP = async (req = {}, runtimeCtx = {}) => {
@@ -341,6 +381,13 @@ const unblockIP = async (req = {}, runtimeCtx = {}) => {
   return assertApiSuccess(response, IDEMPOTENT_DELETE_CODES, "UnblockIP");
 };
 
+const businessUnblockIP = async (req = {}, runtimeCtx = {}) => {
+  return unblockIP({
+    ...req,
+    items: asArray(req.items).map((item) => ({ ...item, scope: "BUSINESS" })),
+  }, runtimeCtx);
+};
+
 const getBlockTime = async (req = {}, runtimeCtx = {}) => {
   const { ctx, token } = await withToken(req, runtimeCtx);
   const response = await apiFetch(ctx, "GET", path(ctx, "/blockiptime"), { token });
@@ -358,6 +405,138 @@ const setBlockTime = async (req = {}, runtimeCtx = {}) => {
   return assertApiSuccess(response, SUCCESS_CODES, "SetBlockTime");
 };
 
+const listIPGroups = async (req = {}, runtimeCtx = {}) => {
+  const { ctx, token } = await withToken(req, runtimeCtx);
+  const response = await apiFetch(ctx, "GET", path(ctx, "/ipgroups"), {
+    token,
+    query: {
+      _search: trim(req.search),
+      __nameprefix: trim(req.name_prefix || req.namePrefix),
+      _start: toInt(req.start, undefined),
+      _length: toInt(req.length, undefined),
+      businessType: trim(req.business_type || req.businessType),
+      addressType: trim(req.address_type || req.addressType),
+      important: trim(req.important),
+      _order: trim(req.order),
+      _sortby: trim(req.sort_by || req.sortBy),
+      _select: trim(req.select),
+      hasref: trim(req.has_ref || req.hasRef),
+      excludeAll: trim(req.exclude_all || req.excludeAll),
+      hasSensitiveData: trim(req.has_sensitive_data || req.hasSensitiveData),
+      getRefBy: trim(req.get_ref_by || req.getRefBy),
+      excludeOobManagePeerIPGroup: firstDefined(req.exclude_oob_manage_peer_ip_group, req.excludeOobManagePeerIPGroup),
+    },
+  });
+  return assertApiSuccess(response, SUCCESS_CODES, "ListIPGroups");
+};
+
+const getIPGroup = async (req = {}, runtimeCtx = {}) => {
+  const { ctx, token } = await withToken(req, runtimeCtx);
+  const response = await apiFetch(ctx, "GET", `${path(ctx, "/ipgroups")}/${nameSegment(req.name)}`, {
+    token,
+    query: { _search: trim(req.search) },
+  });
+  return assertApiSuccess(response, SUCCESS_CODES, "GetIPGroup");
+};
+
+const buildIPGroupBody = (req = {}) => {
+  const name = trim(req.name);
+  if (!name) throw fail("INVALID_ARGUMENT", "name is required");
+  const ipRanges = asArray(req.ip_ranges || req.ipRanges).map((range) => ({
+    start: trim(range.start),
+    ...(trim(range.end) ? { end: trim(range.end) } : {}),
+    ...(toInt(range.bits, 0) > 0 ? { bits: toInt(range.bits, 0) } : {}),
+  })).filter((range) => range.start);
+  const domains = stringList(req.domains);
+  const refIpGroup = stringList(req.ref_ip_group || req.refIpGroup);
+  if (ipRanges.length + domains.length + refIpGroup.length === 0) {
+    throw fail("INVALID_ARGUMENT", "one of ip_ranges, domains, or ref_ip_group is required");
+  }
+  return {
+    name,
+    businessType: trim(req.business_type || req.businessType) || "IP",
+    ...(trim(req.description) ? { description: trim(req.description) } : {}),
+    addressType: trim(req.address_type || req.addressType) || "IPV4",
+    ...(ipRanges.length ? { ipRanges } : {}),
+    ...(domains.length ? { domains } : {}),
+    ...(trim(req.domains_detect_mode || req.domainsDetectMode) ? { domainsDetectMode: trim(req.domains_detect_mode || req.domainsDetectMode) } : {}),
+    ...(refIpGroup.length ? { refIpGroup } : {}),
+    ...(trim(req.important) ? { important: trim(req.important) } : {}),
+    ...(trim(req.data_status || req.dataStatus) ? { dataStatus: trim(req.data_status || req.dataStatus) } : {}),
+  };
+};
+
+const addIPGroup = async (req = {}, runtimeCtx = {}) => {
+  const { ctx, token } = await withToken(req, runtimeCtx);
+  const response = await apiFetch(ctx, "POST", path(ctx, "/ipgroups"), {
+    token,
+    body: buildIPGroupBody(req),
+  });
+  return assertApiSuccess(response, IDEMPOTENT_ADD_CODES, "AddIPGroup");
+};
+
+const deleteIPGroup = async (req = {}, runtimeCtx = {}) => {
+  const { ctx, token } = await withToken(req, runtimeCtx);
+  const response = await apiFetch(ctx, "DELETE", `${path(ctx, "/ipgroups")}/${nameSegment(req.name)}`, { token });
+  return assertApiSuccess(response, IDEMPOTENT_DELETE_CODES, "DeleteIPGroup");
+};
+
+const querySessions = async (req = {}, runtimeCtx = {}) => {
+  const { ctx, token } = await withToken(req, runtimeCtx);
+  const response = await apiFetch(ctx, "POST", path(ctx, "/sessions"), {
+    token,
+    query: {
+      _method: "get",
+      _start: toInt(req.start, undefined),
+      _length: toInt(req.length, undefined),
+      _privateoffset: trim(req.private_offset || req.privateOffset),
+    },
+    body: plainObject(req.filter),
+  });
+  return assertApiSuccess(response, SUCCESS_CODES, "QuerySessions");
+};
+
+const blockSession = async (req = {}, runtimeCtx = {}) => {
+  const body = {
+    srcIp: trim(req.src_ip || req.srcIp),
+    dstIp: trim(req.dst_ip || req.dstIp),
+    proto: toInt(req.proto, 0),
+    srcPort: toInt(req.src_port || req.srcPort, 0),
+    dstPort: toInt(req.dst_port || req.dstPort, 0),
+  };
+  for (const [key, value] of Object.entries(body)) {
+    if (!value) throw fail("INVALID_ARGUMENT", `${key} is required`);
+  }
+  const { ctx, token } = await withToken(req, runtimeCtx);
+  const response = await apiFetch(ctx, "PATCH", path(ctx, "/sessions/status"), { token, body });
+  return assertApiSuccess(response, SUCCESS_CODES, "BlockSession");
+};
+
+const listSecurityPolicies = async (req = {}, runtimeCtx = {}) => {
+  const { ctx, token } = await withToken(req, runtimeCtx);
+  const response = await apiFetch(ctx, "GET", path(ctx, "/securitys"), {
+    token,
+    query: {
+      _search: trim(req.search),
+      _start: toInt(req.start, undefined),
+      _length: toInt(req.length, undefined),
+      policyType: trim(req.policy_type || req.policyType),
+      srcip: trim(req.srcip || req.src_ip || req.srcIp),
+      dstip: trim(req.dstip || req.dst_ip || req.dstIp),
+      _order: trim(req.order),
+      _sortby: trim(req.sort_by || req.sortBy),
+      _select: trim(req.select),
+    },
+  });
+  return assertApiSuccess(response, SUCCESS_CODES, "ListSecurityPolicies");
+};
+
+const getSecurityPolicy = async (req = {}, runtimeCtx = {}) => {
+  const { ctx, token } = await withToken(req, runtimeCtx);
+  const response = await apiFetch(ctx, "GET", `${path(ctx, "/securitys")}/${nameSegment(req.name)}`, { token });
+  return assertApiSuccess(response, SUCCESS_CODES, "GetSecurityPolicy");
+};
+
 export const handlers = {
   [METHOD_LOGIN_FULL]: login,
   [METHOD_KEEP_ALIVE_FULL]: keepAlive,
@@ -370,9 +549,20 @@ export const handlers = {
   [METHOD_UNBLOCK_IP_FULL]: unblockIP,
   [METHOD_GET_BLOCK_TIME_FULL]: getBlockTime,
   [METHOD_SET_BLOCK_TIME_FULL]: setBlockTime,
+  [METHOD_LIST_IP_GROUPS_FULL]: listIPGroups,
+  [METHOD_GET_IP_GROUP_FULL]: getIPGroup,
+  [METHOD_ADD_IP_GROUP_FULL]: addIPGroup,
+  [METHOD_DELETE_IP_GROUP_FULL]: deleteIPGroup,
+  [METHOD_BUSINESS_BLOCK_IP_FULL]: businessBlockIP,
+  [METHOD_BUSINESS_UNBLOCK_IP_FULL]: businessUnblockIP,
+  [METHOD_QUERY_SESSIONS_FULL]: querySessions,
+  [METHOD_BLOCK_SESSION_FULL]: blockSession,
+  [METHOD_LIST_SECURITY_POLICIES_FULL]: listSecurityPolicies,
+  [METHOD_GET_SECURITY_POLICY_FULL]: getSecurityPolicy,
 };
 
 export const _test = {
+  buildIPGroupBody,
   buildBlacklistEntries,
   buildQuery,
   createContext,

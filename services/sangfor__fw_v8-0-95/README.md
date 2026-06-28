@@ -19,8 +19,18 @@ Implemented methods:
 - `Sangfor_FW_V8095.Sangfor_FW_V8095/UnblockIP`
 - `Sangfor_FW_V8095.Sangfor_FW_V8095/GetBlockTime`
 - `Sangfor_FW_V8095.Sangfor_FW_V8095/SetBlockTime`
+- `Sangfor_FW_V8095.Sangfor_FW_V8095/ListIPGroups`
+- `Sangfor_FW_V8095.Sangfor_FW_V8095/GetIPGroup`
+- `Sangfor_FW_V8095.Sangfor_FW_V8095/AddIPGroup`
+- `Sangfor_FW_V8095.Sangfor_FW_V8095/DeleteIPGroup`
+- `Sangfor_FW_V8095.Sangfor_FW_V8095/BusinessBlockIP`
+- `Sangfor_FW_V8095.Sangfor_FW_V8095/BusinessUnblockIP`
+- `Sangfor_FW_V8095.Sangfor_FW_V8095/QuerySessions`
+- `Sangfor_FW_V8095.Sangfor_FW_V8095/BlockSession`
+- `Sangfor_FW_V8095.Sangfor_FW_V8095/ListSecurityPolicies`
+- `Sangfor_FW_V8095.Sangfor_FW_V8095/GetSecurityPolicy`
 
-The first version intentionally avoids security policy, NAT, routing, and other high-risk configuration APIs.
+Security policy support is intentionally read-only. NAT, routing, and other high-risk configuration APIs are not implemented.
 
 ## API Mapping
 
@@ -32,6 +42,10 @@ The first version intentionally avoids security policy, NAT, routing, and other 
 - Blocked attacker list: `/api/v1/namespaces/{namespace}/blockip`
 - Batch block/unblock attacker: `/api/batch/v1/namespaces/{namespace}/blockip`
 - Block time: `/api/v1/namespaces/{namespace}/blockiptime`
+- Network objects: `/api/v1/namespaces/{namespace}/ipgroups`
+- Session query endpoint: `POST /api/v1/namespaces/{namespace}/sessions?_method=get`
+- Session block endpoint: `PATCH /api/v1/namespaces/{namespace}/sessions/status`
+- Security protection policies, read-only: `GET /api/v1/namespaces/{namespace}/securitys`
 
 The Sangfor API requires a WEB API enabled administrator account. Login returns `data.loginResult.token`; later calls send it as `Cookie: token=<token>`.
 
@@ -63,6 +77,10 @@ Example secret:
 
 - `AddBlacklist` and `RemoveBlacklist` modify the global custom blacklist.
 - `BlockIP` and `UnblockIP` modify temporary attacker block entries.
+- `BusinessBlockIP` and `BusinessUnblockIP` modify temporary attacker block entries with `scope: BUSINESS`.
+- `AddIPGroup` and `DeleteIPGroup` modify network objects under `/ipgroups`.
+- `BlockSession` blocks one session by five-tuple; `QuerySessions` is read-only.
+- `ListSecurityPolicies` and `GetSecurityPolicy` are read-only and do not expose policy create/update/delete methods.
 - `SetBlockTime` changes the global automatic attacker block duration.
 - The Sangfor documentation marks these APIs as not supported in virtual system mode; confirm behavior on the target appliance.
 - Use a dedicated WEB API account with minimum required permissions.
