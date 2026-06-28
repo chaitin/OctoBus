@@ -117,6 +117,26 @@ test('QueryDomainList: with filters', async () => {
   assert.match(captured.url, /page_size=10/);
 });
 
+test('QueryDomainList: query string participates in GET signature', async () => {
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url: String(url), init };
+    return response(200, { statusCode: 100000, returnObj: { total: 0 } });
+  });
+
+  await handlers[RPC_DOMAIN_LIST]({
+    domain: 'test-jzb.ctcdn.cn',
+    product_code: '020',
+    page: 1,
+    page_size: 10,
+  }, buildCtx({ meta: { instance_id: 'inst', request_id: 'req-fixed' } }));
+
+  const requestId = captured.init.headers['ctyun-eop-request-id'];
+  const eopDate = captured.init.headers['Eop-date'];
+  const expected = _test.makeEopSignature('valid_ak', 'valid_sk', eopDate, requestId, '', 'domain=test-jzb.ctcdn.cn&page=1&page_size=10&product_code=020');
+  assert.equal(captured.init.headers['Eop-Authorization'], expected);
+});
+
 test('QueryDomainList: missing AK', async () => {
   await expectGrpcError(
     () => handlers[RPC_DOMAIN_LIST]({}, buildCtx({ secret: { ctyun_ak: '', ctyun_sk: 's' } })),
@@ -268,13 +288,19 @@ test('InsertAccessControl: success (basic)', async () => {
   const result = await handlers[RPC_INSERT_ACCESS_CONTROL]({
     domains: ['test-jzb.ctcdn.cn'],
     product_code: '020',
-    configs: [{ mod: 'ON', act: 'LOG', rule_name: 'hermes_test' }],
+    configs: [{
+      mod: 'ON',
+      act: 'LOG',
+      rule_name: 'hermes_test',
+      public_range: [{ zone: 'IP', equal: 'TRUE', public_content: '192.0.2.10' }],
+    }],
   }, buildCtx());
   assert.equal(result.http_status, 200);
   assert.match(captured.url, /accessControlInsert/);
   const body = JSON.parse(captured.init.body);
   assert.equal(body.productCode, '020');
   assert.equal(body.accessControlConfigs[0].ruleName, 'hermes_test');
+  assert.equal(body.accessControlConfigs[0].publicRange[0].publicContent, '192.0.2.10');
 });
 
 test('InsertAccessControl: success (with publicRange)', async () => {
@@ -291,12 +317,15 @@ test('InsertAccessControl: success (with publicRange)', async () => {
       mod: 'ON',
       act: 'LOG',
       rule_name: 'allow_office',
-      public_range: [{ items: [{ zone: 'BODY', equal: 'contain', public_content: '10.0.0.1' }] }],
+      rule_desc: 'office allow rule',
+      public_range: [{ zone: 'HEADER', equal: 'TRUE', key_name: 'STR', key_content: 'X-Forwarded-For', value_name: 'STR', value_content: '10.0.0.1' }],
     }],
   }, buildCtx());
   assert.equal(result.http_status, 200);
   const body = JSON.parse(captured.init.body);
-  assert.equal(body.accessControlConfigs[0].publicRange[0][0].publicContent, '10.0.0.1');
+  assert.equal(body.accessControlConfigs[0].ruleDesc, 'office allow rule');
+  assert.equal(body.accessControlConfigs[0].publicRange[0].keyContent, 'X-Forwarded-For');
+  assert.equal(body.accessControlConfigs[0].publicRange[0].valueContent, '10.0.0.1');
 });
 
 test('InsertAccessControl: SDK camelCase request shape is normalized', async () => {
@@ -314,7 +343,8 @@ test('InsertAccessControl: SDK camelCase request shape is normalized', async () 
         mod: 'ON',
         act: 'LOG',
         ruleName: 'camel_case_ok',
-        publicRange: [{ items: [{ zone: 'BODY', equal: 'contain', publicContent: '10.0.0.2' }] }],
+        ruleDesc: 'camelCase payload',
+        publicRange: [{ zone: 'IP', equal: 'TRUE', publicContent: '192.0.2.20' }],
       }],
     },
     ...buildCtx(),
@@ -323,7 +353,8 @@ test('InsertAccessControl: SDK camelCase request shape is normalized', async () 
   const body = JSON.parse(captured.init.body);
   assert.equal(body.productCode, '020');
   assert.equal(body.accessControlConfigs[0].ruleName, 'camel_case_ok');
-  assert.equal(body.accessControlConfigs[0].publicRange[0][0].publicContent, '10.0.0.2');
+  assert.equal(body.accessControlConfigs[0].ruleDesc, 'camelCase payload');
+  assert.equal(body.accessControlConfigs[0].publicRange[0].publicContent, '192.0.2.20');
 });
 
 test('InsertAccessControl: missing domains', async () => {
@@ -350,25 +381,33 @@ test('InsertAccessControl: missing configs', async () => {
   );
 });
 
-test('InsertAccessControl: invalid mod (must be ON or OFF)', async () => {
+test('InsertAccessControl: invalid mod OFF is rejected in favor of CLOSE', async () => {
   await expectGrpcError(
-    () => handlers[RPC_INSERT_ACCESS_CONTROL]({ domains: ['a.com'], product_code: '020', configs: [{ mod: 'CLOSE', act: 'LOG', rule_name: 'x' }] }, buildCtx()),
+    () => handlers[RPC_INSERT_ACCESS_CONTROL]({ domains: ['a.com'], product_code: '020', configs: [{ mod: 'OFF', act: 'LOG', rule_name: 'x', public_range: [{ zone: 'IP', equal: 'TRUE', public_content: '192.0.2.30' }] }] }, buildCtx()),
     'INVALID_ARGUMENT',
-    (e) => assert.match(e.message, /"ON" or "OFF"/),
+    (e) => assert.match(e.message, /CLOSE/),
+  );
+});
+
+test('InsertAccessControl: invalid act DENY is rejected in favor of BLOCK', async () => {
+  await expectGrpcError(
+    () => handlers[RPC_INSERT_ACCESS_CONTROL]({ domains: ['a.com'], product_code: '020', configs: [{ mod: 'ON', act: 'DENY', rule_name: 'x', public_range: [{ zone: 'IP', equal: 'TRUE', public_content: '192.0.2.31' }] }] }, buildCtx()),
+    'INVALID_ARGUMENT',
+    (e) => assert.match(e.message, /BLOCK/),
   );
 });
 
 test('InsertAccessControl: domains limit exceeded', async () => {
   const manyDomains = Array.from({ length: 51 }, (_, i) => `d${i}.com`);
   await expectGrpcError(
-    () => handlers[RPC_INSERT_ACCESS_CONTROL]({ domains: manyDomains, product_code: '020', configs: [{ mod: 'ON', act: 'LOG', rule_name: 'x' }] }, buildCtx()),
+    () => handlers[RPC_INSERT_ACCESS_CONTROL]({ domains: manyDomains, product_code: '020', configs: [{ mod: 'ON', act: 'LOG', rule_name: 'x', public_range: [{ zone: 'IP', equal: 'TRUE', public_content: '192.0.2.40' }] }] }, buildCtx()),
     'INVALID_ARGUMENT',
     (e) => assert.match(e.message, /domains limit exceeded/),
   );
 });
 
 test('InsertAccessControl: configs limit exceeded', async () => {
-  const manyConfigs = Array.from({ length: 21 }, (_, i) => ({ mod: 'ON', act: 'LOG', rule_name: `rule_${i}` }));
+  const manyConfigs = Array.from({ length: 21 }, (_, i) => ({ mod: 'ON', act: 'LOG', rule_name: `rule_${i}`, public_range: [{ zone: 'IP', equal: 'TRUE', public_content: `192.0.2.${(i % 200) + 1}` }] }));
   await expectGrpcError(
     () => handlers[RPC_INSERT_ACCESS_CONTROL]({ domains: ['a.com'], product_code: '020', configs: manyConfigs }, buildCtx()),
     'INVALID_ARGUMENT',
@@ -403,7 +442,9 @@ test('UpdateAccessControlSwitch: success ON', async () => {
   }, buildCtx());
   assert.equal(result.http_status, 200);
   assert.match(captured.url, /updateAccessControlAct/);
-  assert.equal(JSON.parse(captured.init.body).mod, 'ON');
+  const body = JSON.parse(captured.init.body);
+  assert.equal(body.productCode, '020');
+  assert.equal(body.mod, 'ON');
 });
 
 test('UpdateAccessControlSwitch: success CLOSE', async () => {
@@ -419,14 +460,24 @@ test('UpdateAccessControlSwitch: success CLOSE', async () => {
     mod: 'CLOSE',
   }, buildCtx());
   assert.equal(result.http_status, 200);
-  assert.equal(JSON.parse(captured.init.body).mod, 'CLOSE');
+  const body = JSON.parse(captured.init.body);
+  assert.equal(body.productCode, '020');
+  assert.equal(body.mod, 'CLOSE');
 });
 
 test('UpdateAccessControlSwitch: invalid mod', async () => {
   await expectGrpcError(
     () => handlers[RPC_UPDATE_ACCESS_CONTROL_SWITCH]({ domain: 'x.com', product_code: '020', mod: 'INVALID' }, buildCtx()),
     'INVALID_ARGUMENT',
-    (e) => assert.match(e.message, /mod must be "ON" or "CLOSE"/),
+    (e) => assert.match(e.message, /ON, CLOSE/),
+  );
+});
+
+test('UpdateAccessControlSwitch: missing product_code', async () => {
+  await expectGrpcError(
+    () => handlers[RPC_UPDATE_ACCESS_CONTROL_SWITCH]({ domain: 'x.com', product_code: '', mod: 'ON' }, buildCtx()),
+    'INVALID_ARGUMENT',
+    (e) => assert.match(e.message, /product_code/),
   );
 });
 
@@ -700,7 +751,7 @@ test('mock upstream: all 10 endpoints', { skip: skipIntegration }, async () => {
     const acs = await handlers[RPC_ACCESS_CONTROL_SWITCH]({ domain: 'test.com', product_code: '020' }, ctx);
     assert.equal(acs.http_status, 200);
 
-    const iac = await handlers[RPC_INSERT_ACCESS_CONTROL]({ domains: ['test.com'], product_code: '020', configs: [{ mod: 'ON', act: 'LOG', rule_name: 'mock_test' }] }, ctx);
+    const iac = await handlers[RPC_INSERT_ACCESS_CONTROL]({ domains: ['test.com'], product_code: '020', configs: [{ mod: 'ON', act: 'LOG', rule_name: 'mock_test', public_range: [{ zone: 'IP', equal: 'TRUE', public_content: '192.0.2.50' }] }] }, ctx);
     assert.equal(iac.http_status, 200);
 
     const uacs = await handlers[RPC_UPDATE_ACCESS_CONTROL_SWITCH]({ domain: 'test.com', product_code: '020', mod: 'ON' }, ctx);

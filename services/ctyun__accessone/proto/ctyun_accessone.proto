@@ -75,25 +75,34 @@ message InsertAccessControlRequest {
   repeated AccessControlConfig configs = 3; // 规则配置列表
 }
 message AccessControlConfig {
-  string mod = 1;             // 规则开关: "ON" | "OFF"
-  string act = 2;             // 处置动作: "LOG" | "DENY" | ...
+  string mod = 1;             // 规则开关: "ON" | "CLOSE"
+  string act = 2;             // 处置动作: "LOG" | "ACCEPT" | "BLOCK" | "DROP" | "CHECK" | "JUMP" | "JCJS" | "PIC"
   string rule_name = 3;       // 规则名称
-  repeated PublicRangeGroup public_range = 4; // IP/区域条件 (双重嵌套)
-}
-message PublicRangeGroup {
-  repeated PublicRangeItem items = 1;  // 同一组内的 AND 关系
+  string rule_desc = 4;       // 规则描述（可选）
+  string jump_url = 5;        // act=JUMP 时必填
+  repeated PublicRangeItem public_range = 6; // 访问控制内容（官方文档: Array of Objects）
 }
 message PublicRangeItem {
-  string zone = 1;           // "IP" | "AREA"
-  string equal = 2;          // "true" | "false"
-  string public_content = 3; // IP地址或区域代码
+  string zone = 1;              // 例如 IP / GEO / URI / REQUEST_URI / HEADER / ARGS / FMT_TIME ...
+  string equal = 2;             // "TRUE" | "FALSE"
+  string public_content = 3;    // 内容；多数 zone 必填
+  string operator = 4;          // REGEX | STR（部分 zone 生效）
+  string key_name = 5;          // REGEX | STR（zone=HEADER/ARGS）
+  string key_content = 6;       // zone=HEADER/ARGS
+  string value_name = 7;        // REGEX | STR（zone=HEADER/ARGS）
+  string value_content = 8;     // zone=HEADER/ARGS
+  repeated GeoZoneItem geo_zone = 9; // zone=GEO 时必填
+  string date_period = 10;      // zone=FMT_TIME 时必填: day/week/month
+}
+message GeoZoneItem {
+  repeated string sub_geo = 1; // 例如 ["EU", "EU_DE"]
 }
 
 // ── 更新访问控制域级开关 (POST /ctapi/v1/scdn/domain/updateAccessControlAct) ──
 message UpdateAccessControlSwitchRequest {
   string domain = 1;
-  string product_code = 2;
-  string mod = 3;  // "ON" 开启, "CLOSE" 关闭
+  string product_code = 2;  // 真实联调要求，厂商返回: productCode不允许为空
+  string mod = 3;           // "ON" 开启, "CLOSE" 关闭
 }
 
 // ── 资源包列表 (POST /ctapi/v1/accessone/purchase/queryResourcePackages) ──

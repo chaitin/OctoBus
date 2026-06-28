@@ -72,10 +72,25 @@ const mergedBindings = (ctx = {}) => ({
 const hmacSha256 = (key, data) => crypto.createHmac('sha256', key).update(data).digest();
 const sha256Hex = (data) => crypto.createHash('sha256').update(data).digest('hex');
 
-const makeEopSignature = (ak, sk, eopDate, requestId, bodyStr) => {
+const makeCanonicalQueryString = (queryParams) => {
+  if (!queryParams) return '';
+  const pairs = [];
+  for (const [key, rawValue] of Object.entries(queryParams)) {
+    if (rawValue === undefined || rawValue === null) continue;
+    const values = Array.isArray(rawValue) ? rawValue : [rawValue];
+    for (const value of values) {
+      const str = String(value);
+      pairs.push([key, encodeURIComponent(str).replace(/[!'()*]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`)]);
+    }
+  }
+  pairs.sort((a, b) => (a[0] === b[0] ? a[1].localeCompare(b[1]) : a[0].localeCompare(b[0])));
+  return pairs.map(([key, val]) => `${key}=${val}`).join('&');
+};
+
+const makeEopSignature = (ak, sk, eopDate, requestId, bodyStr, canonicalQueryString = '') => {
   const headerStr = `ctyun-eop-request-id:${requestId}\neop-date:${eopDate}\n`;
   const bodyHash = sha256Hex(bodyStr);
-  const signStr = `${headerStr}\n\n${bodyHash}`;
+  const signStr = `${headerStr}\n${canonicalQueryString}\n${bodyHash}`;
 
   const kTime = hmacSha256(sk, eopDate);
   const kAk = hmacSha256(kTime, ak);
@@ -262,16 +277,15 @@ const signedPost = async (gateway, path, bodyObj, ak, sk, ctx) => {
 const signedGet = async (gateway, path, queryParams, ak, sk, ctx) => {
   const eopDate = eopDateNow();
   const requestId = uuid();
-  // GET signs with empty body
-  const auth = makeEopSignature(ak, sk, eopDate, requestId, '');
+  const canonicalQueryString = makeCanonicalQueryString(queryParams);
+  const auth = makeEopSignature(ak, sk, eopDate, requestId, '', canonicalQueryString);
   const timeoutMs = resolveTimeoutMs(ctx);
   const skipTlsVerify = shouldSkipTlsVerify(mergedBindings(ctx));
 
   const scheme = /^(127\.0\.0\.1|localhost)(:\d+)?$/.test(gateway) ? 'http' : 'https';
   let url = `${scheme}://${gateway}${path}`;
-  if (queryParams) {
-    const qs = new URLSearchParams(queryParams).toString();
-    if (qs) url += `?${qs}`;
+  if (canonicalQueryString) {
+    url += `?${canonicalQueryString}`;
   }
   const init = {
     method: 'GET',
@@ -330,6 +344,94 @@ const requireString = (value, name) => {
   return v;
 };
 
+const optionalString = (value) => {
+  const v = toTrimmedString(value);
+  return v || undefined;
+};
+
+const ACCESS_CONTROL_MODS = new Set(['ON', 'CLOSE']);
+const ACCESS_CONTROL_ACTS = new Set(['LOG', 'ACCEPT', 'BLOCK', 'DROP', 'CHECK', 'JUMP', 'JCJS', 'PIC']);
+const ACCESS_CONTROL_EQUALS = new Set(['TRUE', 'FALSE']);
+const ACCESS_CONTROL_MATCH_MODES = new Set(['REGEX', 'STR']);
+
+const normalizeEnum = (value, name, allowed, hints = {}) => {
+  const normalized = requireString(value, name).toUpperCase();
+  if (allowed.has(normalized)) return normalized;
+
+  const hint = hints[normalized] ? `; ${hints[normalized]}` : '';
+  throw errorWithCode(
+    'INVALID_ARGUMENT',
+    `${name} must be one of ${Array.from(allowed).join(', ')}, got "${value}"${hint}`,
+  );
+};
+
+const normalizeOptionalMatchMode = (value, name) => {
+  if (value === undefined || value === null || String(value).trim() === '') return undefined;
+  return normalizeEnum(value, name, ACCESS_CONTROL_MATCH_MODES);
+};
+
+const normalizeGeoZone = (geoZone, name) => {
+  if (!Array.isArray(geoZone) || !geoZone.length) {
+    throw errorWithCode('INVALID_ARGUMENT', `${name} must be a non-empty array`);
+  }
+  return geoZone.map((item, idx) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw errorWithCode('INVALID_ARGUMENT', `${name}[${idx}] must be an object`);
+    }
+    const subGeo = Array.isArray(item.sub_geo) ? item.sub_geo : item.subGeo;
+    if (!Array.isArray(subGeo) || !subGeo.length) {
+      throw errorWithCode('INVALID_ARGUMENT', `${name}[${idx}].sub_geo must be a non-empty array`);
+    }
+    return {
+      subGeo: subGeo.map((entry, subIdx) => requireString(entry, `${name}[${idx}].sub_geo[${subIdx}]`)),
+    };
+  });
+};
+
+const normalizeAccessControlRangeItem = (item, index) => {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) {
+    throw errorWithCode('INVALID_ARGUMENT', `public_range[${index}] must be an object`);
+  }
+
+  const zone = requireString(item.zone, `public_range[${index}].zone`).toUpperCase();
+  const equal = normalizeEnum(item.equal, `public_range[${index}].equal`, ACCESS_CONTROL_EQUALS);
+  const publicContent = optionalString(item.public_content ?? item.publicContent);
+  const operator = normalizeOptionalMatchMode(item.operator, `public_range[${index}].operator`);
+  const keyName = normalizeOptionalMatchMode(item.key_name ?? item.keyName, `public_range[${index}].key_name`);
+  const valueName = normalizeOptionalMatchMode(item.value_name ?? item.valueName, `public_range[${index}].value_name`);
+  const keyContent = optionalString(item.key_content ?? item.keyContent);
+  const valueContent = optionalString(item.value_content ?? item.valueContent);
+  const datePeriod = optionalString(item.date_period ?? item.datePeriod);
+  const geoZoneRaw = item.geo_zone ?? item.geoZone;
+
+  if (!['GEO', 'ARGS', 'HEADER'].includes(zone) && !publicContent) {
+    throw errorWithCode('INVALID_ARGUMENT', `public_range[${index}].public_content is required when zone=${zone}`);
+  }
+  if (zone === 'FMT_TIME') {
+    if (!publicContent) {
+      throw errorWithCode('INVALID_ARGUMENT', `public_range[${index}].public_content is required when zone=FMT_TIME`);
+    }
+    if (!datePeriod) {
+      throw errorWithCode('INVALID_ARGUMENT', `public_range[${index}].date_period is required when zone=FMT_TIME`);
+    }
+  }
+
+  const normalized = { zone, equal };
+  if (publicContent) normalized.publicContent = publicContent;
+  if (operator) normalized.operator = operator;
+  if (keyName) normalized.keyName = keyName;
+  if (keyContent) normalized.keyContent = keyContent;
+  if (valueName) normalized.valueName = valueName;
+  if (valueContent) normalized.valueContent = valueContent;
+  if (datePeriod) normalized.datePeriod = datePeriod;
+
+  if (zone === 'GEO') {
+    normalized.geoZone = normalizeGeoZone(geoZoneRaw, `public_range[${index}].geo_zone`);
+  }
+
+  return normalized;
+};
+
 const normalizeRequestShape = (value) => {
   if (Array.isArray(value)) {
     return value.map((item) => normalizeRequestShape(item));
@@ -347,8 +449,17 @@ const normalizeRequestShape = (value) => {
     ['pageSize', 'page_size'],
     ['requestId', 'request_id'],
     ['ruleName', 'rule_name'],
+    ['ruleDesc', 'rule_desc'],
+    ['jumpUrl', 'jump_url'],
     ['publicRange', 'public_range'],
     ['publicContent', 'public_content'],
+    ['keyName', 'key_name'],
+    ['keyContent', 'key_content'],
+    ['valueName', 'value_name'],
+    ['valueContent', 'value_content'],
+    ['geoZone', 'geo_zone'],
+    ['subGeo', 'sub_geo'],
+    ['datePeriod', 'date_period'],
   ]) {
     if (out[snakeKey] === undefined && out[camelKey] !== undefined) {
       out[snakeKey] = out[camelKey];
@@ -448,26 +559,53 @@ const handleInsertAccessControl = async (req, ctx = {}) => {
   if (req.configs.length > 20) throw errorWithCode('INVALID_ARGUMENT', `configs limit exceeded: max 20, got ${req.configs.length}`);
 
   const accessControlConfigs = req.configs.map((c) => {
-    const mod = requireString(c.mod, 'config.mod');
-    if (!['ON', 'OFF'].includes(mod)) {
-      throw errorWithCode('INVALID_ARGUMENT', `config.mod must be "ON" or "OFF", got "${mod}"`);
+    const mod = normalizeEnum(c.mod, 'config.mod', ACCESS_CONTROL_MODS, { OFF: 'official API uses CLOSE instead of OFF' });
+    const act = normalizeEnum(c.act, 'config.act', ACCESS_CONTROL_ACTS, { DENY: 'official API uses BLOCK instead of DENY' });
+    const ruleName = requireString(c.rule_name, 'config.rule_name');
+    const ruleDesc = optionalString(c.rule_desc ?? c.ruleDesc);
+    const jumpUrl = optionalString(c.jump_url ?? c.jumpUrl);
+
+    if (act === 'JUMP' && !jumpUrl) {
+      throw errorWithCode('INVALID_ARGUMENT', 'config.jump_url is required when config.act=JUMP');
     }
+    const rawPublicRange = Array.isArray(c.public_range) ? c.public_range : null;
+    if (!rawPublicRange || !rawPublicRange.length) {
+      throw errorWithCode('INVALID_ARGUMENT', 'config.public_range is required (at least one public range item)');
+    }
+
+    const flattenedPublicRange = rawPublicRange.flatMap((item, groupIndex) => {
+      if (item && typeof item === 'object' && !Array.isArray(item) && Array.isArray(item.items)) {
+        if (!item.items.length) {
+          throw errorWithCode('INVALID_ARGUMENT', `config.public_range[${groupIndex}].items must contain at least one item`);
+        }
+        return item.items;
+      }
+      return [item];
+    });
+
+    const normalizedItems = flattenedPublicRange.map((item, index) => normalizeAccessControlRangeItem(item, index));
     const cfg = {
       mod,
-      act: requireString(c.act, 'config.act'),
-      ruleName: requireString(c.rule_name, 'config.rule_name'),
+      act,
+      ruleName,
+      publicRange: normalizedItems.map((item) => {
+        const out = {
+          zone: item.zone,
+          equal: String(item.equal).toLowerCase(),
+        };
+        if (item.publicContent) out.publicContent = item.publicContent;
+        if (item.operator) out.operator = item.operator;
+        if (item.keyName) out.keyName = item.keyName;
+        if (item.keyContent) out.keyContent = item.keyContent;
+        if (item.valueName) out.valueName = item.valueName;
+        if (item.valueContent) out.valueContent = item.valueContent;
+        if (item.datePeriod) out.datePeriod = item.datePeriod;
+        if (item.geoZone) out.geoZone = item.geoZone;
+        return out;
+      }),
     };
-    if (c.public_range?.length) {
-      cfg.publicRange = c.public_range.map((grp) => {
-        const items = Array.isArray(grp.items) ? grp.items : (Array.isArray(grp) ? grp : null);
-        if (!items) throw errorWithCode('INVALID_ARGUMENT', 'public_range element must be {items:[...]} or [[...]]');
-        return items.map((it) => ({
-          zone: requireString(it.zone, 'publicRange.zone'),
-          equal: requireString(it.equal, 'publicRange.equal'),
-          publicContent: requireString(it.public_content, 'publicRange.public_content'),
-        }));
-      });
-    }
+    if (ruleDesc) cfg.ruleDesc = ruleDesc;
+    if (jumpUrl) cfg.jumpUrl = jumpUrl;
     return cfg;
   });
 
@@ -485,10 +623,7 @@ const handleUpdateAccessControlSwitch = async (req, ctx = {}) => {
   const { ak, sk } = requireAuth(bindings);
   requireString(req.domain, 'domain');
   requireString(req.product_code, 'product_code');
-  const mod = requireString(req.mod, 'mod');
-  if (!['ON', 'CLOSE'].includes(mod)) {
-    throw errorWithCode('INVALID_ARGUMENT', `mod must be "ON" or "CLOSE", got "${mod}"`);
-  }
+  const mod = normalizeEnum(req.mod, 'mod', ACCESS_CONTROL_MODS, { OFF: 'official API uses CLOSE instead of OFF' });
 
   return signedPost(gateway, HTTP_UPDATE_ACCESS_CONTROL_SWITCH, {
     domain: req.domain,
@@ -549,6 +684,7 @@ export const _test = {
   makeEopSignature,
   uuid,
   sha256Hex,
+  makeCanonicalQueryString,
   resolveGateway,
   resolveAk,
   resolveSk,

@@ -1,0 +1,21 @@
+{
+  "domains": [
+    "test-jzb.ctcdn.cn"
+  ],
+  "product_code": "020",
+  "configs": [
+    {
+      "mod": "ON",
+      "act": "BLOCK",
+      "rule_name": "block_bad_ip",
+      "rule_desc": "block suspicious source ip",
+      "public_range": [
+        {
+          "zone": "IP",
+          "equal": "TRUE",
+          "public_content": "1.2.3.4"
+        }
+      ]
+    }
+  ]
+}
