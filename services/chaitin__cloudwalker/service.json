@@ -1,0 +1,61 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "cloudwalker",
+  "displayName": "CloudWalker",
+  "description": "OctoBus package for Chaitin CloudWalker CWPP host assets and security event JSON-RPC APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/cloudwalker.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Chaitin_CloudWalker.Chaitin_CloudWalker/GetCurrentTime": {
+          "name": "get-current-time",
+          "description": "Call CloudwalkerSettingService.GetCurrentTime."
+        },
+        "Chaitin_CloudWalker.Chaitin_CloudWalker/ListHosts": {
+          "name": "list-hosts",
+          "description": "Call HostAssetService.GetHostAssetList."
+        },
+        "Chaitin_CloudWalker.Chaitin_CloudWalker/GetHostDetail": {
+          "name": "get-host-detail",
+          "description": "Call HostAssetService.GetHostInfoDetail."
+        },
+        "Chaitin_CloudWalker.Chaitin_CloudWalker/ListMalwareEvents": {
+          "name": "list-malware-events",
+          "description": "Call MalwareEventService.GetEventList."
+        },
+        "Chaitin_CloudWalker.Chaitin_CloudWalker/ListBruteForceEvents": {
+          "name": "list-brute-force-events",
+          "description": "Call BruteForceService.GetEventList."
+        },
+        "Chaitin_CloudWalker.Chaitin_CloudWalker/ListWebshellEvents": {
+          "name": "list-webshell-events",
+          "description": "Call WebshellEventService.GetEventList."
+        },
+        "Chaitin_CloudWalker.Chaitin_CloudWalker/ListRevshellEvents": {
+          "name": "list-revshell-events",
+          "description": "Call RevshellEventService.GetEventList."
+        },
+        "Chaitin_CloudWalker.Chaitin_CloudWalker/ListAbnormalLoginEvents": {
+          "name": "list-abnormal-login-events",
+          "description": "Call AbnormalLoginEventService.GetEventList."
+        },
+        "Chaitin_CloudWalker.Chaitin_CloudWalker/ListRealTimeThreatEvents": {
+          "name": "list-real-time-threat-events",
+          "description": "Call ThreatOverviewService.ListRealTimeEvents."
+        }
+      }
+    }
+  }
+}

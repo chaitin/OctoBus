@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "endpoint": {
+      "type": "string",
+      "description": "CloudWalker server endpoint, for example https://192.168.1.3."
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "Alias of endpoint."
+    },
+    "host": {
+      "type": "string",
+      "description": "Alias of endpoint."
+    },
+    "orgId": {
+      "type": "string",
+      "description": "Optional CloudWalker organization ID, sent as X-CW-OID."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "Optional extra HTTP headers sent to CloudWalker."
+    },
+    "proxyUrl": {
+      "type": "string",
+      "description": "Optional HTTP(S) proxy URL used by local validation or proxied deployments."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 15000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for private CloudWalker deployments."
+    },
+    "tlsInsecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Alias of skipTlsVerify."
+    },
+    "insecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Alias of skipTlsVerify."
+    }
+  },
+  "anyOf": [
+    { "required": ["endpoint"] },
+    { "required": ["baseUrl"] },
+    { "required": ["host"] }
+  ]
+}

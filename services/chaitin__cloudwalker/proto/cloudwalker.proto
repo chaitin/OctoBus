@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package Chaitin_CloudWalker;
+
+option go_package = "miner/grpc-service/Chaitin_CloudWalker";
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
+
+service Chaitin_CloudWalker {
+  rpc GetCurrentTime(EmptyRequest) returns (CloudWalkerResponse);
+  rpc ListHosts(ListRequest) returns (CloudWalkerResponse);
+  rpc GetHostDetail(HostDetailRequest) returns (CloudWalkerResponse);
+  rpc ListMalwareEvents(ListRequest) returns (CloudWalkerResponse);
+  rpc ListBruteForceEvents(ListRequest) returns (CloudWalkerResponse);
+  rpc ListWebshellEvents(ListRequest) returns (CloudWalkerResponse);
+  rpc ListRevshellEvents(ListRequest) returns (CloudWalkerResponse);
+  rpc ListAbnormalLoginEvents(ListRequest) returns (CloudWalkerResponse);
+  rpc ListRealTimeThreatEvents(RealTimeThreatEventsRequest) returns (CloudWalkerResponse);
+}
+
+message EmptyRequest {}
+
+message ListRequest {
+  google.protobuf.Int64Value count = 1;
+  google.protobuf.Int64Value offset = 2;
+  google.protobuf.Struct filters = 3;
+  google.protobuf.Struct order_by = 4;
+}
+
+message HostDetailRequest {
+  int64 id = 1;
+}
+
+message RealTimeThreatEventsRequest {
+  google.protobuf.Int64Value count = 1;
+  google.protobuf.Int64Value offset = 2;
+  google.protobuf.Struct filters = 3;
+}
+
+message CloudWalkerResponse {
+  int32 http_status = 1;
+  string raw_body = 2;
+  google.protobuf.Struct result = 3;
+}
