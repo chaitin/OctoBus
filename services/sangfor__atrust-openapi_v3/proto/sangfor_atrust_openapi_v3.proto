@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package Sangfor_Atrust_OpenAPI_V3;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Sangfor_Atrust_OpenAPI_V3";
+
+service Sangfor_Atrust_OpenAPI_V3 {
+  rpc ListOnlineUsers(ListOnlineUsersRequest) returns (ApiResponse) {}
+  rpc KickoutUsers(KickoutUsersRequest) returns (ApiResponse) {}
+  rpc QueryUser(QueryEntityRequest) returns (ApiResponse) {}
+  rpc ListUsers(ListByBodyRequest) returns (ApiResponse) {}
+  rpc QueryGroup(QueryEntityRequest) returns (ApiResponse) {}
+  rpc ListGroups(ListByBodyRequest) returns (ApiResponse) {}
+  rpc QueryRole(QueryEntityRequest) returns (ApiResponse) {}
+  rpc ListRoles(ListByBodyRequest) returns (ApiResponse) {}
+  rpc ListResources(ListByQueryRequest) returns (ApiResponse) {}
+  rpc QueryResource(QueryEntityRequest) returns (ApiResponse) {}
+  rpc ListResourceGroups(ListByQueryRequest) returns (ApiResponse) {}
+  rpc ListUserDirectories(ListByQueryRequest) returns (ApiResponse) {}
+  rpc QueryUserDirectory(QueryEntityRequest) returns (ApiResponse) {}
+  rpc ListDevices(ListByQueryRequest) returns (ApiResponse) {}
+  rpc QueryDevice(QueryEntityRequest) returns (ApiResponse) {}
+}
+
+message ListOnlineUsersRequest {
+  int32 page_size = 1;
+  int32 page_index = 2;
+  string search_value = 3;
+}
+
+message KickoutUser {
+  string name = 1;
+  string user_directory_name = 2;
+}
+
+message KickoutUsersRequest {
+  repeated string id_list = 1;
+  repeated KickoutUser user_list = 2;
+}
+
+message QueryEntityRequest {
+  string directory_domain = 1;
+  string id = 2;
+  string name = 3;
+  string external_id = 4;
+  string full_path = 5;
+  map<string, string> query = 6;
+}
+
+message ListByBodyRequest {
+  string directory_domain = 1;
+  int32 page_size = 2;
+  int32 page_index = 3;
+  string search_by_path = 4;
+  int32 recursive = 5;
+  google.protobuf.Struct body = 6;
+}
+
+message ListByQueryRequest {
+  int32 page_size = 1;
+  int32 page_index = 2;
+  string search_value = 3;
+  string filter = 4;
+  string id = 5;
+  string name = 6;
+  map<string, string> query = 7;
+}
+
+message ApiResponse {
+  int32 http_status = 1;
+  string code = 2;
+  string msg = 3;
+  string trace_id = 4;
+  google.protobuf.Value data = 5;
+  string raw_json = 6;
+}

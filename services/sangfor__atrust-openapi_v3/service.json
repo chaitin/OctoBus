@@ -1,0 +1,85 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "sangfor-atrust-openapi-v3",
+  "displayName": "深信服_零信任访问控制系统aTrust_2.5.16（Sangfor_aTrust_2.5.16）",
+  "description": "OctoBus package for Sangfor aTrust 2.5.16 OpenAPI V3 HMAC-signed user, organization, role, resource, user-directory, device, and online-session operations.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/sangfor_atrust_openapi_v3.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Sangfor_Atrust_OpenAPI_V3.Sangfor_Atrust_OpenAPI_V3/ListOnlineUsers": {
+          "name": "list-online-users",
+          "description": "List online users via /api/v1/monitor/getUserStatus."
+        },
+        "Sangfor_Atrust_OpenAPI_V3.Sangfor_Atrust_OpenAPI_V3/KickoutUsers": {
+          "name": "kickout-users",
+          "description": "Kick out online users via /api/v1/monitor/kickoutUsers."
+        },
+        "Sangfor_Atrust_OpenAPI_V3.Sangfor_Atrust_OpenAPI_V3/QueryUser": {
+          "name": "query-user",
+          "description": "Query a user by id, name, or external id."
+        },
+        "Sangfor_Atrust_OpenAPI_V3.Sangfor_Atrust_OpenAPI_V3/ListUsers": {
+          "name": "list-users",
+          "description": "List users via /api/v3/user/queryAll."
+        },
+        "Sangfor_Atrust_OpenAPI_V3.Sangfor_Atrust_OpenAPI_V3/QueryGroup": {
+          "name": "query-group",
+          "description": "Query an organization by id, full path, or external id."
+        },
+        "Sangfor_Atrust_OpenAPI_V3.Sangfor_Atrust_OpenAPI_V3/ListGroups": {
+          "name": "list-groups",
+          "description": "List organizations via /api/v3/group/queryAll."
+        },
+        "Sangfor_Atrust_OpenAPI_V3.Sangfor_Atrust_OpenAPI_V3/QueryRole": {
+          "name": "query-role",
+          "description": "Query a role by id, name, or external id."
+        },
+        "Sangfor_Atrust_OpenAPI_V3.Sangfor_Atrust_OpenAPI_V3/ListRoles": {
+          "name": "list-roles",
+          "description": "List roles via /api/v3/role/queryAll."
+        },
+        "Sangfor_Atrust_OpenAPI_V3.Sangfor_Atrust_OpenAPI_V3/ListResources": {
+          "name": "list-resources",
+          "description": "List applications via /api/v3/resource/queryAll."
+        },
+        "Sangfor_Atrust_OpenAPI_V3.Sangfor_Atrust_OpenAPI_V3/QueryResource": {
+          "name": "query-resource",
+          "description": "Query an application by id or name."
+        },
+        "Sangfor_Atrust_OpenAPI_V3.Sangfor_Atrust_OpenAPI_V3/ListResourceGroups": {
+          "name": "list-resource-groups",
+          "description": "List application categories via /api/v3/resourceGroup/queryAll."
+        },
+        "Sangfor_Atrust_OpenAPI_V3.Sangfor_Atrust_OpenAPI_V3/ListUserDirectories": {
+          "name": "list-user-directories",
+          "description": "List user directories via /api/v1/userDirectory/queryAll."
+        },
+        "Sangfor_Atrust_OpenAPI_V3.Sangfor_Atrust_OpenAPI_V3/QueryUserDirectory": {
+          "name": "query-user-directory",
+          "description": "Query one user directory via /api/v1/userDirectory/query."
+        },
+        "Sangfor_Atrust_OpenAPI_V3.Sangfor_Atrust_OpenAPI_V3/ListDevices": {
+          "name": "list-devices",
+          "description": "List devices via /api/v1/device/queryAll."
+        },
+        "Sangfor_Atrust_OpenAPI_V3.Sangfor_Atrust_OpenAPI_V3/QueryDevice": {
+          "name": "query-device",
+          "description": "Query one device via /api/v1/device/query."
+        }
+      }
+    }
+  }
+}

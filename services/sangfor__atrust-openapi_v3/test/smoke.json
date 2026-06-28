@@ -1,0 +1,12 @@
+{
+  "method": "Sangfor_Atrust_OpenAPI_V3.Sangfor_Atrust_OpenAPI_V3/ListOnlineUsers",
+  "request": {},
+  "expectUpstream": true,
+  "requireBusinessSuccess": true,
+  "requireUpstreamPerProtocol": true,
+  "protocols": ["connect", "grpc", "mcp"],
+  "upstream": {
+    "method": "GET",
+    "path": "/api/v1/monitor/getUserStatus"
+  }
+}
