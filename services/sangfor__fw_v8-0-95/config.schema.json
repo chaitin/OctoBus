@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "host": {
+      "type": "string",
+      "description": "Sangfor AF/FW HTTP(S) base URL, for example https://192.168.1.1."
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "Alias for host."
+    },
+    "restBaseUrl": {
+      "type": "string",
+      "description": "Alias for host."
+    },
+    "namespace": {
+      "type": "string",
+      "default": "public",
+      "description": "Sangfor API namespace. The API document examples use public."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for lab or private deployments."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional additional HTTP headers."
+    }
+  }
+}

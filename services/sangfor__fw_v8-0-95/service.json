@@ -1,0 +1,69 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "sangfor-fw-v8-0-95",
+  "displayName": "深信服_下一代防火墙_AF 8.0.95（Sangfor_NGAF 8.0.95）",
+  "description": "OctoBus package for 深信服_下一代防火墙_AF 8.0.95（Sangfor_NGAF 8.0.95） REST API login, blacklist, block IP, and block-time operations.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/sangfor_fw_v8_0_95.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Sangfor_FW_V8095.Sangfor_FW_V8095/Login": {
+          "name": "login",
+          "description": "Log in and return a Sangfor REST API token."
+        },
+        "Sangfor_FW_V8095.Sangfor_FW_V8095/KeepAlive": {
+          "name": "keep-alive",
+          "description": "Refresh the current Sangfor REST API token timestamp."
+        },
+        "Sangfor_FW_V8095.Sangfor_FW_V8095/Logout": {
+          "name": "logout",
+          "description": "Log out and invalidate a Sangfor REST API token."
+        },
+        "Sangfor_FW_V8095.Sangfor_FW_V8095/ListBlackWhiteList": {
+          "name": "list-black-white-list",
+          "description": "List Sangfor custom black/white list entries."
+        },
+        "Sangfor_FW_V8095.Sangfor_FW_V8095/AddBlacklist": {
+          "name": "add-blacklist",
+          "description": "Add one or more blacklist entries."
+        },
+        "Sangfor_FW_V8095.Sangfor_FW_V8095/RemoveBlacklist": {
+          "name": "remove-blacklist",
+          "description": "Remove one or more blacklist entries."
+        },
+        "Sangfor_FW_V8095.Sangfor_FW_V8095/ListBlockedIP": {
+          "name": "list-blocked-ip",
+          "description": "List temporary blocked attackers."
+        },
+        "Sangfor_FW_V8095.Sangfor_FW_V8095/BlockIP": {
+          "name": "block-ip",
+          "description": "Temporarily block source, destination, DNS, or URL entries."
+        },
+        "Sangfor_FW_V8095.Sangfor_FW_V8095/UnblockIP": {
+          "name": "unblock-ip",
+          "description": "Remove temporary blocked attacker entries."
+        },
+        "Sangfor_FW_V8095.Sangfor_FW_V8095/GetBlockTime": {
+          "name": "get-block-time",
+          "description": "Get the automatic attacker block duration."
+        },
+        "Sangfor_FW_V8095.Sangfor_FW_V8095/SetBlockTime": {
+          "name": "set-block-time",
+          "description": "Set the automatic attacker block duration."
+        }
+      }
+    }
+  }
+}
