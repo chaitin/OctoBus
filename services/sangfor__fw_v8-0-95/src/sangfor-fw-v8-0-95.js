@@ -23,6 +23,8 @@ const SUCCESS_CODES = new Set([0]);
 const IDEMPOTENT_ADD_CODES = new Set([0, 17]);
 const IDEMPOTENT_DELETE_CODES = new Set([0, 1004]);
 
+let skipTlsVerifyDispatcher;
+
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj ?? {}, key);
 
 const firstDefined = (...values) => values.find((value) => value !== undefined && value !== null);
@@ -133,6 +135,11 @@ const buildQuery = (params) => {
   return text ? `?${text}` : "";
 };
 
+const getSkipTlsVerifyDispatcher = () => {
+  skipTlsVerifyDispatcher ??= new Agent({ connect: { rejectUnauthorized: false } });
+  return skipTlsVerifyDispatcher;
+};
+
 const createContext = (runtimeCtx = {}) => {
   const config = runtimeCtx.config ?? {};
   const secret = runtimeCtx.secret ?? {};
@@ -142,7 +149,7 @@ const createContext = (runtimeCtx = {}) => {
   const namespace = normalizeNamespace(bindings.namespace);
   const timeoutMs = Math.max(1, toInt(firstDefined(runtimeCtx.limits?.timeoutMs, bindings.timeoutMs), DEFAULT_TIMEOUT_MS));
   const headers = bindings.headers && typeof bindings.headers === "object" ? bindings.headers : {};
-  const dispatcher = toBool(bindings.skipTlsVerify) ? new Agent({ connect: { rejectUnauthorized: false } }) : undefined;
+  const dispatcher = toBool(bindings.skipTlsVerify) ? getSkipTlsVerifyDispatcher() : undefined;
   return { baseUrl, namespace, timeoutMs, headers, dispatcher, secret, token: trim(bindings.token) };
 };
 
@@ -281,21 +288,27 @@ const listBlockedIP = async (req = {}, runtimeCtx = {}) => {
 };
 
 const blockIP = async (req = {}, runtimeCtx = {}) => {
-  const { ctx, token } = await withToken(req, runtimeCtx);
   const srcIP = stringList(req.src_ips || req.srcIP || req.srcIp);
   const dstIP = stringList(req.dst_ips || req.dstIP || req.dstIp);
   const dns = stringList(req.dns);
   const url = stringList(req.urls || req.url);
-  if (srcIP.length + dstIP.length + dns.length + url.length === 0) {
+  const targetTypes = [
+    ["SRC", "srcIP", srcIP],
+    ["DST", "dstIP", dstIP],
+    ["DNS", "dns", dns],
+    ["URL", "url", url],
+  ].filter(([, , values]) => values.length > 0);
+  if (targetTypes.length === 0) {
     throw fail("INVALID_ARGUMENT", "one of src_ips, dst_ips, dns, or urls is required");
   }
-  const ipType = srcIP.length ? "SRC" : dstIP.length ? "DST" : dns.length ? "DNS" : "URL";
+  if (targetTypes.length > 1) {
+    throw fail("INVALID_ARGUMENT", "only one target type can be used per BlockIP request");
+  }
+  const { ctx, token } = await withToken(req, runtimeCtx);
+  const [ipType, targetKey, targetValues] = targetTypes[0];
   const body = {
     ipType,
-    ...(srcIP.length ? { srcIP } : {}),
-    ...(dstIP.length ? { dstIP } : {}),
-    ...(dns.length ? { dns } : {}),
-    ...(url.length ? { url } : {}),
+    [targetKey]: targetValues,
     ...(toInt(req.dst_port ?? req.dstPort, 0) > 0 ? { dstPort: toInt(req.dst_port ?? req.dstPort, 0) } : {}),
     blockTime: trim(req.block_time || req.blockTime) || "1d",
     attack: trim(req.attack) || DEFAULT_ATTACK,
@@ -363,6 +376,7 @@ export const _test = {
   buildBlacklistEntries,
   buildQuery,
   createContext,
+  getSkipTlsVerifyDispatcher,
   handlers,
   mapResponse,
   normalizeBaseUrl,

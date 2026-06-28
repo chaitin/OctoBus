@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { handlers } from "../src/sangfor-fw-v8-0-95.js";
+import { grpcStatus } from "@chaitin-ai/octobus-sdk";
+
+import { _test, handlers } from "../src/sangfor-fw-v8-0-95.js";
 import { startMockUpstream } from "./mock_upstream.js";
 
 const baseCtx = (baseUrl) => ({
@@ -88,6 +90,43 @@ test("block IP, unblock IP, and block time map documented operation center APIs"
     }, ctx);
     assert.equal(unblock.code, 0);
     assert.equal(upstream.state.blockIp.length, 0);
+  } finally {
+    await upstream.close();
+  }
+});
+
+test("skipTlsVerify reuses one dispatcher", () => {
+  const ctx = {
+    config: {
+      host: "https://example.test",
+      skipTlsVerify: true,
+    },
+  };
+
+  const first = _test.createContext(ctx).dispatcher;
+  const second = _test.createContext(ctx).dispatcher;
+
+  assert.ok(first);
+  assert.equal(first, second);
+});
+
+test("block IP rejects mixed target types", async () => {
+  const upstream = await startMockUpstream();
+  try {
+    const ctx = baseCtx(upstream.baseUrl);
+
+    await assert.rejects(
+      handlers["Sangfor_FW_V8095.Sangfor_FW_V8095/BlockIP"]({
+        src_ips: ["198.51.100.10"],
+        dst_ips: ["198.51.100.20"],
+      }, ctx),
+      (err) => {
+        assert.equal(err.code, grpcStatus.INVALID_ARGUMENT);
+        assert.match(err.message, /only one target type/);
+        return true;
+      },
+    );
+    assert.equal(upstream.state.requests.length, 0);
   } finally {
     await upstream.close();
   }
