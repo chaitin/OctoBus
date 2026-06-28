@@ -51,3 +51,17 @@ Validated against `https://192.168.1.3/rpc` on 2026-06-28:
 
 Local validation succeeds with direct access. `proxyUrl` is only needed in
 environments that must reach CloudWalker through an HTTP(S) proxy.
+
+OctoBus live validation on 2026-06-28:
+
+- OctoBus host: `10.2.37.211`.
+- Service: `cloudwalker`.
+- Instance: `cloudwalker-live`.
+- Capset: `cloudwalker-proof`.
+- `GetCurrentTime` through Connect RPC returned HTTP 200.
+- `ListHosts` through Connect RPC returned HTTP 200 and one host:
+  `renchenhe-virtual-machine` at `192.168.1.3`.
+- Access logs recorded `grpc_code=OK` for both calls.
+- Evidence:
+  - `evidence/live-validation-2026-06-28.txt`
+  - `evidence/cloudwalker-platform-overview-2026-06-28.png`

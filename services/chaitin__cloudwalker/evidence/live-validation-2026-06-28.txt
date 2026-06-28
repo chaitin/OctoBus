@@ -1,0 +1,42 @@
+# CloudWalker OctoBus live validation
+validated_at: 2026-06-28T22:41:40+08:00
+octobus_host: 10.2.37.211
+capset: cloudwalker-proof
+instance: cloudwalker-live
+
+## Instance
+{
+  "ConfigJSON": {
+    "endpoint": "https://127.0.0.1:10443",
+    "skipTlsVerify": true,
+    "timeoutMs": 15000
+  },
+  "ConfigSHA256": "cbc096944af58cd3b81bd96c6a5064302c3e5c0cd24973cf45f6604c6409234f",
+  "CreatedAt": "2026-06-28T14:23:06.710135022Z",
+  "Enabled": true,
+  "HasSecret": true,
+  "ID": "cloudwalker-live",
+  "ListenAddr": "127.0.0.1:46249",
+  "Name": "CloudWalkerLive",
+  "NodeEntry": "bin/cloudwalker.js",
+  "PID": 2359,
+  "SecretSHA256": "******",
+  "ServiceID": "cloudwalker",
+  "Status": "running",
+  "UpdatedAt": "2026-06-28T14:31:38.505333102Z"
+}
+
+## GetCurrentTime
+{"httpStatus":200, "rawBody":"{\"jsonrpc\":\"2.0\",\"result\":{\"current_time\":1782657700},\"id\":\"CloudwalkerSettingService.GetCurrentTime:1782657700567\"}\n", "result":{"current_time":1782657700}}
+HTTP_STATUS=200
+
+## ListHosts
+{"httpStatus":200, "rawBody":"{\"jsonrpc\":\"2.0\",\"result\":{\"total\":1,\"result\":[{\"id\":9,\"host_ip\":\"192.168.1.3\",\"internal_ip\":\"192.168.1.3\",\"exposed_ip\":\"192.168.1.3\",\"host_name\":\"renchenhe-virtual-machine\",\"os_release_name\":\"Ubuntu\",\"os_release_version\":\"20.04\",\"cpu_core\":4,\"mem_size\":\"9.7 GB\",\"tags\":[],\"kernel_version\":\"5.15.0-139-generic\",\"cpu\":1.8658942,\"memory\":0.014571683,\"host_cpu\":5.104645,\"host_memory\":0.46640465,\"up_time\":26640,\"last_seen_at\":1782657654.000000,\"created_at\":1782630864.000000,\"comment\":\"\",\"host_state\":\"online\",\"bash_state\":\"0\",\"version\":\"CLOUDWALKER-AGENTX-24.09.026\",\"lua_runner_version\":\"CLOUDWALKER-LUA-RUNNER-24.09.016\",\"plugin_version\":\"SKYEYE-24.09.002_r13\",\"upgrading\":false,\"latest_version\":\"CLOUDWALKER-AGENTX-24.09.026\",\"latest_lua_runner_version\":\"CLOUDWALKER-LUA-RUNNER-24.09.016\",\"latest_plugin_version\":\"SKYEYE-24.09.002_r13\",\"group_id\":1,\"group_name\":\"根分组\",\"host_uptime\":27158,\"custom_attr\":[{\"attr_name\":\"固定资产编号\",\"attr_value\":[]},{\"attr_name\":\"资产等级\",\"attr_value\":[]},{\"attr_name\":\"负责人\",\"attr_value\":[]},{\"attr_name\":\"负责人邮箱\",\"attr_value\":[]},{\"attr_name\":\"机房位置\",\"attr_value\":[]}]}]},\"id\":\"HostAssetService.GetHostAssetList:1782657700892\"}\n", "result":{"result":[{"bash_state":"0", "comment":"", "cpu":1.8658942, "cpu_core":4, "created_at":1782630864, "custom_attr":[{"attr_name":"固定资产编号", "attr_value":[]}, {"attr_name":"资产等级", "attr_value":[]}, {"attr_name":"负责人", "attr_value":[]}, {"attr_name":"负责人邮箱", "attr_value":[]}, {"attr_name":"机房位置", "attr_value":[]}], "exposed_ip":"192.168.1.3", "group_id":1, "group_name":"根分组", "host_cpu":5.104645, "host_ip":"192.168.1.3", "host_memory":0.46640465, "host_name":"renchenhe-virtual-machine", "host_state":"online", "host_uptime":27158, "id":9, "internal_ip":"192.168.1.3", "kernel_version":"5.15.0-139-generic", "last_seen_at":1782657654, "latest_lua_runner_version":"CLOUDWALKER-LUA-RUNNER-24.09.016", "latest_plugin_version":"SKYEYE-24.09.002_r13", "latest_version":"CLOUDWALKER-AGENTX-24.09.026", "lua_runner_version":"CLOUDWALKER-LUA-RUNNER-24.09.016", "mem_size":"9.7 GB", "memory":0.014571683, "os_release_name":"Ubuntu", "os_release_version":"20.04", "plugin_version":"SKYEYE-24.09.002_r13", "tags":[], "up_time":26640, "upgrading":false, "version":"CLOUDWALKER-AGENTX-24.09.026"}], "total":1}}
+HTTP_STATUS=200
+
+## Access logs
+{"ts":"2026-06-28T14:32:06.490829704Z","protocol":"connect","capset":"cloudwalker-proof","service":"cloudwalker","instance":"cloudwalker-live","method":"Chaitin_CloudWalker.Chaitin_CloudWalker/GetCurrentTime","tool":"","route":"/capsets/cloudwalker-proof/connect/cloudwalker-live/Chaitin_CloudWalker.Chaitin_CloudWalker/GetCurrentTime","http_method":"POST","http_status":200,"grpc_code":"OK","duration_ms":304,"remote_addr":"127.0.0.1:59950","user_agent":"curl/8.5.0"}
+{"ts":"2026-06-28T14:34:45.258590323Z","protocol":"connect","capset":"cloudwalker-proof","service":"cloudwalker","instance":"cloudwalker-live","method":"Chaitin_CloudWalker.Chaitin_CloudWalker/ListHosts","tool":"","route":"/capsets/cloudwalker-proof/connect/cloudwalker-live/Chaitin_CloudWalker.Chaitin_CloudWalker/ListHosts","http_method":"POST","http_status":200,"grpc_code":"OK","duration_ms":321,"remote_addr":"127.0.0.1:42064","user_agent":"curl/8.5.0"}
+{"ts":"2026-06-28T14:35:25.727303248Z","protocol":"connect","capset":"cloudwalker-proof","service":"cloudwalker","instance":"cloudwalker-live","method":"Chaitin_CloudWalker.Chaitin_CloudWalker/ListHosts","tool":"","route":"/capsets/cloudwalker-proof/connect/cloudwalker-live/Chaitin_CloudWalker.Chaitin_CloudWalker/ListHosts","http_method":"POST","http_status":200,"grpc_code":"OK","duration_ms":330,"remote_addr":"127.0.0.1:34824","user_agent":"curl/8.5.0"}
+{"ts":"2026-06-28T14:41:40.87194432Z","protocol":"connect","capset":"cloudwalker-proof","service":"cloudwalker","instance":"cloudwalker-live","method":"Chaitin_CloudWalker.Chaitin_CloudWalker/GetCurrentTime","tool":"","route":"/capsets/cloudwalker-proof/connect/cloudwalker-live/Chaitin_CloudWalker.Chaitin_CloudWalker/GetCurrentTime","http_method":"POST","http_status":200,"grpc_code":"OK","duration_ms":308,"remote_addr":"127.0.0.1:55468","user_agent":"curl/8.5.0"}
+{"ts":"2026-06-28T14:41:41.195666786Z","protocol":"connect","capset":"cloudwalker-proof","service":"cloudwalker","instance":"cloudwalker-live","method":"Chaitin_CloudWalker.Chaitin_CloudWalker/ListHosts","tool":"","route":"/capsets/cloudwalker-proof/connect/cloudwalker-live/Chaitin_CloudWalker.Chaitin_CloudWalker/ListHosts","http_method":"POST","http_status":200,"grpc_code":"OK","duration_ms":306,"remote_addr":"127.0.0.1:55470","user_agent":"curl/8.5.0"}
