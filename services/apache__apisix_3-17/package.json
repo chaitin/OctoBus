@@ -1,0 +1,9 @@
+{
+  "name": "@chaitin-ai/octobus-service-apache-apisix-3-17",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "apache-apisix-3-17": "bin/apache-apisix-3-17.js"
+  }
+}

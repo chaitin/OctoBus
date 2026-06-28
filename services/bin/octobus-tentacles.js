@@ -49,6 +49,10 @@ const services = {
     entryFile: "../aliyun__waf3/bin/aliyun-waf3.js",
     serviceModule: "../aliyun__waf3/src/service.js",
   },
+  "apache-apisix-3-17": {
+    entryFile: "../apache__apisix_3-17/bin/apache-apisix-3-17.js",
+    serviceModule: "../apache__apisix_3-17/src/service.js",
+  },
   "alibaba-cloud-simple-application-server-firewall": {
     entryFile: "../alibaba-cloud__simple-application-server-firewall/bin/alibaba-cloud-simple-application-server-firewall.js",
     serviceModule: "../alibaba-cloud__simple-application-server-firewall/src/service.js",

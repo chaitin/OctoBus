@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "description": "Apache APISIX Admin API base URL, for example http://127.0.0.1:9180."
+    },
+    "restBaseUrl": {
+      "type": "string",
+      "description": "Legacy alias for baseUrl."
+    },
+    "endpoint": {
+      "type": "string",
+      "description": "Legacy alias for baseUrl."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "tlsRejectUnauthorized": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether to reject invalid TLS certificates for HTTPS Admin API endpoints."
+    },
+    "allowedIdPrefix": {
+      "type": "string",
+      "default": "octobus-test-",
+      "description": "Required ID prefix for write/delete methods. Keep this narrow during real-device validation."
+    }
+  },
+  "required": [
+    "baseUrl"
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "apache-apisix-3-17",
+  "displayName": "Apache APISIX 3.17",
+  "description": "OctoBus package for Apache APISIX 3.17 Admin API Route and Upstream management.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/apisix.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Apache_APISIX.Apache_APISIX/ListRoutes": {
+          "name": "list-routes",
+          "description": "List APISIX routes."
+        },
+        "Apache_APISIX.Apache_APISIX/GetRoute": {
+          "name": "get-route",
+          "description": "Get an APISIX route."
+        },
+        "Apache_APISIX.Apache_APISIX/UpsertRoute": {
+          "name": "upsert-route",
+          "description": "Create or replace an APISIX route."
+        },
+        "Apache_APISIX.Apache_APISIX/DeleteRoute": {
+          "name": "delete-route",
+          "description": "Delete an APISIX route."
+        },
+        "Apache_APISIX.Apache_APISIX/ListUpstreams": {
+          "name": "list-upstreams",
+          "description": "List APISIX upstreams."
+        },
+        "Apache_APISIX.Apache_APISIX/GetUpstream": {
+          "name": "get-upstream",
+          "description": "Get an APISIX upstream."
+        },
+        "Apache_APISIX.Apache_APISIX/UpsertUpstream": {
+          "name": "upsert-upstream",
+          "description": "Create or replace an APISIX upstream."
+        },
+        "Apache_APISIX.Apache_APISIX/DeleteUpstream": {
+          "name": "delete-upstream",
+          "description": "Delete an APISIX upstream."
+        }
+      }
+    }
+  }
+}

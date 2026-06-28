@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+package Apache_APISIX;
+
+option go_package = "miner/grpc-service/Apache_APISIX";
+
+service Apache_APISIX {
+  // List APISIX routes through the Admin API.
+  rpc ListRoutes(ListResourcesRequest) returns (ListResourcesResponse) {}
+
+  // Get one APISIX route by ID.
+  rpc GetRoute(GetResourceRequest) returns (ResourceResponse) {}
+
+  // Create or replace one APISIX route by ID.
+  rpc UpsertRoute(UpsertResourceRequest) returns (ResourceResponse) {}
+
+  // Delete one APISIX route by ID.
+  rpc DeleteRoute(DeleteResourceRequest) returns (DeleteResourceResponse) {}
+
+  // List APISIX upstreams through the Admin API.
+  rpc ListUpstreams(ListResourcesRequest) returns (ListResourcesResponse) {}
+
+  // Get one APISIX upstream by ID.
+  rpc GetUpstream(GetResourceRequest) returns (ResourceResponse) {}
+
+  // Create or replace one APISIX upstream by ID.
+  rpc UpsertUpstream(UpsertResourceRequest) returns (ResourceResponse) {}
+
+  // Delete one APISIX upstream by ID.
+  rpc DeleteUpstream(DeleteResourceRequest) returns (DeleteResourceResponse) {}
+}
+
+message ListResourcesRequest {
+  // Optional APISIX Admin API list page number.
+  int64 page = 1;
+
+  // Optional APISIX Admin API page size.
+  int64 page_size = 2;
+}
+
+message GetResourceRequest {
+  string id = 1;
+}
+
+message UpsertResourceRequest {
+  string id = 1;
+
+  // Native APISIX Admin API JSON body. Example route:
+  // {"uri":"/octobus-test","upstream_id":"octobus-test-upstream"}
+  string body_json = 2;
+}
+
+message DeleteResourceRequest {
+  string id = 1;
+}
+
+message ResourceRecord {
+  string id = 1;
+  string raw_json = 2;
+}
+
+message ListResourcesResponse {
+  repeated ResourceRecord items = 1;
+  int64 total = 2;
+  string raw_json = 3;
+}
+
+message ResourceResponse {
+  string id = 1;
+  string raw_json = 2;
+}
+
+message DeleteResourceResponse {
+  string id = 1;
+  bool deleted = 2;
+  string raw_json = 3;
+}
