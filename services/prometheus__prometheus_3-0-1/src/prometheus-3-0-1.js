@@ -1,4 +1,5 @@
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const METHOD_INSTANT_QUERY_FULL = 'CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/InstantQuery';
 export const METHOD_RANGE_QUERY_FULL = 'CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/RangeQuery';
