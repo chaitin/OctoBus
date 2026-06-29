@@ -9,6 +9,6 @@ Recommended first checks:
 - `ListIndices`
 
 Replace placeholder values in `config.example.json` with the
-customer's actual baseUrl, username/password (or bearer token) before
-running the service entry. The bundled SDK is the same version used to
-build the service package and ships in `sdk/chaitin-ai-octobus-sdk-0.5.0.tgz`.
+customer's actual baseUrl and username/password before running the
+service entry. The bundled SDK is the same version used to build
+the service package and ships in `sdk/chaitin-ai-octobus-sdk-0.5.0.tgz`.

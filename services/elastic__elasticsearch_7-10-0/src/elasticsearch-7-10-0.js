@@ -198,7 +198,25 @@ const buildLogPrefix = (ctx = {}, action) => {
 
 const logFlow = (ctx, action, details) => {
   const prefix = buildLogPrefix(ctx, action);
-  try { console.log(prefix, JSON.stringify(details)); } catch { console.log(prefix, details); }
+  const sanitized = details && typeof details === 'object' && details.url
+    ? { ...details, url: stripUrlUserinfo(details.url) }
+    : details;
+  try { console.log(prefix, JSON.stringify(sanitized)); } catch { console.log(prefix, sanitized); }
+};
+
+const stripUrlUserinfo = (raw) => {
+  const value = String(raw ?? '');
+  if (!value) return value;
+  try {
+    const u = new URL(value);
+    if (u.username || u.password) {
+      u.username = '';
+      u.password = '';
+    }
+    return u.toString();
+  } catch {
+    return value.replace(/\/\/[^/@]*@/, '//');
+  }
 };
 
 const attachResponse = (err, response) => { err.response = response; return err; };
@@ -289,7 +307,7 @@ const normalizeBytes = (req = {}) => {
   const bytes = toTrimmedString(req.bytes).toLowerCase();
   if (!bytes) return DEFAULT_LIST_NODES_BYTES;
   if (!VALID_BYTES_UNITS.has(bytes)) {
-    throw errorWithCode('INVALID_ARGUMENT', `bytes must be one of b|kb|mb|gb, got "${bytes}"`);
+    throw errorWithCode('INVALID_ARGUMENT', `bytes must be one of b|k|kb|m|mb|g|gb, got "${bytes}"`);
   }
   return bytes;
 };
