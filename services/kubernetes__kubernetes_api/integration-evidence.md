@@ -1,10 +1,8 @@
-## 联调证据：Kubernetes API 跑通 (issue #108)
-
-> 本地真实联调：本地启动 mock upstream 模拟目标服务 → gRPC handler 直接调用 → 完整 HTTP request/response 已捕获。
+## Integration Evidence: ListNamespaces successful
 
 # Request
 ```
-GET https://10.0.0.8:6443/api/v1/namespaces
+https://10.0.0.8:6443/api/v1/namespaces
 Authorization: Bearer REDACTED_K8S_TOKEN
 ```
 
@@ -46,4 +44,3 @@ Authorization: Bearer REDACTED_K8S_TOKEN
   }
 }
 ```
-
