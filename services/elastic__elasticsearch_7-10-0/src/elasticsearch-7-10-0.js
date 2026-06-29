@@ -1,5 +1,4 @@
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
-import { Agent } from 'undici';
 
 export const METHOD_CLUSTER_HEALTH_PATH = '/Elasticsearch_7_10_0.Elasticsearch_7_10_0/ClusterHealth';
 export const METHOD_LIST_INDICES_PATH = '/Elasticsearch_7_10_0.Elasticsearch_7_10_0/ListIndices';
@@ -234,6 +233,8 @@ const executeRequest = async (url, ctx = {}, options = {}) => {
     const errMsg = err?.cause?.message || err?.message || 'fetch failed';
     logFlow(ctx, options.action || 'fetch:error', { url, error: errMsg });
     throw attachResponse(errorWithCode('UNAVAILABLE', `${options.action || 'fetch'} failed: ${errMsg}`), { http_status: 0, http_body: errMsg });
+  } finally {
+    clearTimeout(timer);
   }
   let rawBody;
   try { rawBody = await res.text(); }
