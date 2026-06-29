@@ -4,7 +4,7 @@
   "displayName": "F5 AWAF",
   "description": "OctoBus package for F5 Advanced WAF IP management and policy control via iControl REST API.",
   "runtime": {
-    "mode": "long-running"
+    "mode": "on-demand"
   },
   "proto": {
     "roots": ["proto"],

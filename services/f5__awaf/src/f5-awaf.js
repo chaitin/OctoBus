@@ -168,11 +168,11 @@ async function applyPolicy(policyId, token, baseUrl, doFetch, timeoutMs) {
 }
 
 async function doBlockIP(req, bindings, baseUrl, doFetch, timeoutMs) {
-  const { token, addresses = [], policy_name, description } = req;
+  const { token, addresses = [], policy_name, policyName: policyNameCamel, description } = req;
   if (!token) throw new GrpcError(grpcStatus.INVALID_ARGUMENT, 'token is required');
   if (!addresses.length) throw new GrpcError(grpcStatus.INVALID_ARGUMENT, 'addresses must not be empty');
 
-  const policyName = policy_name || bindings.default_policy_name;
+  const policyName = policy_name || policyNameCamel || bindings.default_policy_name;
   if (!policyName) {
     throw new GrpcError(grpcStatus.INVALID_ARGUMENT, 'policy_name is required (or set config.default_policy_name)');
   }
@@ -406,7 +406,7 @@ export function rpcdef(ctx) {
   const skipTlsVerify = !(bindings.verify_ssl ?? false); // schema default: false → skip
   const timeoutMs = ctx.limits?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const doFetch = makeFetcher(skipTlsVerify);
-  const req = ctx.req ?? {};
+  const req = ctx.request ?? ctx.req ?? {};
 
   return {
     [LOGIN_PATH]:         () => doLogin(req, bindings, baseUrl, doFetch, timeoutMs),
