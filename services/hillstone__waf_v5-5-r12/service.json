@@ -1,0 +1,37 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "hillstone-waf-v5-5-r12",
+  "displayName": "Hillstone WAF V5.5R12",
+  "description": "OctoBus adapter for Hillstone WAF V5.5R12 REST APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/hillstone_waf_v5_5_r12.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "HILLSTONE_WAF_V55R12.HILLSTONE_WAF_V55R12/Login": { "name": "login", "description": "Login to Hillstone WAF." },
+        "HILLSTONE_WAF_V55R12.HILLSTONE_WAF_V55R12/GetLoginStatus": { "name": "get-login-status", "description": "Get current login status." },
+        "HILLSTONE_WAF_V55R12.HILLSTONE_WAF_V55R12/Logout": { "name": "logout", "description": "Logout current WAF session." },
+        "HILLSTONE_WAF_V55R12.HILLSTONE_WAF_V55R12/ListWebsites": { "name": "list-websites", "description": "List websites." },
+        "HILLSTONE_WAF_V55R12.HILLSTONE_WAF_V55R12/GetWebsite": { "name": "get-website", "description": "Get website details." },
+        "HILLSTONE_WAF_V55R12.HILLSTONE_WAF_V55R12/CreateWebsite": { "name": "create-website", "description": "Create website." },
+        "HILLSTONE_WAF_V55R12.HILLSTONE_WAF_V55R12/UpdateWebsite": { "name": "update-website", "description": "Update website." },
+        "HILLSTONE_WAF_V55R12.HILLSTONE_WAF_V55R12/DeleteWebsite": { "name": "delete-website", "description": "Delete website." },
+        "HILLSTONE_WAF_V55R12.HILLSTONE_WAF_V55R12/QueryWafPolicy": { "name": "query-waf-policy", "description": "Query WAF policy." },
+        "HILLSTONE_WAF_V55R12.HILLSTONE_WAF_V55R12/UpdateWafPolicy": { "name": "update-waf-policy", "description": "Update WAF policy." },
+        "HILLSTONE_WAF_V55R12.HILLSTONE_WAF_V55R12/GetSysInfo": { "name": "get-sys-info", "description": "Get system info." },
+        "HILLSTONE_WAF_V55R12.HILLSTONE_WAF_V55R12/GetWebSecurityLog": { "name": "get-web-security-log", "description": "Get web security log." }
+      }
+    }
+  }
+}

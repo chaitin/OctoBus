@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package HILLSTONE_WAF_V55R12;
+
+import "google/protobuf/struct.proto";
+
+service HILLSTONE_WAF_V55R12 {
+  rpc Login(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc GetLoginStatus(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc Logout(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc ListWebsites(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc GetWebsite(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc CreateWebsite(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc UpdateWebsite(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc DeleteWebsite(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc QueryWafPolicy(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc UpdateWafPolicy(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc QueryWafAcPolicy(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc UpdateWafAcPolicy(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc ListBlocklist(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc ListAllowlist(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc ListExceptionList(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc GetSysInfo(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc ListVsys(google.protobuf.Struct) returns (google.protobuf.Struct);
+  rpc GetWebSecurityLog(google.protobuf.Struct) returns (google.protobuf.Struct);
+}
