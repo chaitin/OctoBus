@@ -1,0 +1,11 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "vulnplatform-vuln",
+  "displayName": "Vulnerability Platform Service",
+  "description": "漏洞管控平台集成服务，提供漏洞管理、资产管理、情报管理等能力",
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/vulnerability.proto"]
+  },
+  "secretSchema": "secret.schema.json"
+}
