@@ -38,6 +38,10 @@
         "Prometheus_Alertmanager_0_27_0.Prometheus_Alertmanager_0_27_0/GetStatus": {
           "name": "get-status",
           "description": "Get Alertmanager runtime status."
+        },
+        "Prometheus_Alertmanager_0_27_0.Prometheus_Alertmanager_0_27_0/ListReceivers": {
+          "name": "list-receivers",
+          "description": "List Alertmanager receivers (notification integrations)."
         }
       }
     }
