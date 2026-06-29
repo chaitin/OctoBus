@@ -93,6 +93,8 @@ test("GetAccessToken posts AppID and AppSecret to official token endpoint", asyn
 
   assert.equal(captured.url, "https://bots.qq.com/app/getAppAccessToken");
   assert.equal(captured.init.method, "POST");
+  assert.ok(captured.init.signal instanceof AbortSignal);
+  assert.equal("timeoutMs" in captured.init, false);
   assert.deepEqual(JSON.parse(captured.init.body), {
     appId: "app-1",
     clientSecret: "secret-1",
@@ -126,7 +128,11 @@ test("SendC2CMessage fetches token and posts to /v2/users/{openid}/messages", as
   });
 
   assert.equal(calls.length, 2);
+  assert.ok(calls[0].init.signal instanceof AbortSignal);
+  assert.equal("timeoutMs" in calls[0].init, false);
   assert.equal(calls[1].url, "https://api.sgroup.qq.com/v2/users/USER_OPENID/messages");
+  assert.ok(calls[1].init.signal instanceof AbortSignal);
+  assert.equal("timeoutMs" in calls[1].init, false);
   assert.equal(calls[1].init.headers.authorization, "QQBot access-1");
   assert.deepEqual(JSON.parse(calls[1].init.body), {
     msg_type: 0,
@@ -280,6 +286,8 @@ test("Gateway receiver starts, buffers messages, polls, and acks", async () => {
   const start = await rpcdef(ctx)[METHOD_START_GATEWAY_PATH]({});
   assert.equal(start.running, true);
   assert.equal(fetchCalls[0].url, "https://api.sgroup.qq.com/gateway/bot");
+  assert.ok(fetchCalls[0].init.signal instanceof AbortSignal);
+  assert.equal("timeoutMs" in fetchCalls[0].init, false);
 
   const socket = FakeWebSocket.instances[0];
   socket.emit("message", {
@@ -340,6 +348,67 @@ test("Gateway receiver starts, buffers messages, polls, and acks", async () => {
 
   const stopped = await rpcdef(ctx)[METHOD_STOP_GATEWAY_PATH]({});
   assert.equal(stopped.running, false);
+});
+
+test("Gateway ignores stale close events after reconnecting a newer socket", async () => {
+  setFetch(async () => response(200, JSON.stringify({
+    url: "wss://api.sgroup.qq.com/websocket",
+    shards: 1,
+  })));
+
+  class FakeWebSocket {
+    static OPEN = 1;
+    static instances = [];
+
+    constructor(url) {
+      this.url = url;
+      this.readyState = FakeWebSocket.OPEN;
+      this.listeners = new Map();
+      FakeWebSocket.instances.push(this);
+      queueMicrotask(() => this.emit("open", {}));
+    }
+
+    addEventListener(name, callback) {
+      const listeners = this.listeners.get(name) || [];
+      listeners.push(callback);
+      this.listeners.set(name, listeners);
+    }
+
+    send() {}
+
+    close() {
+      this.readyState = 3;
+      queueMicrotask(() => this.emit("close", {}));
+    }
+
+    emit(name, event) {
+      for (const callback of this.listeners.get(name) || []) callback(event);
+    }
+  }
+
+  globalThis.WebSocket = FakeWebSocket;
+
+  const ctx = buildCtx({
+    secret: { accessToken: "gateway-token" },
+    config: {
+      baseUrl: "https://api.sgroup.qq.com",
+      gatewayReconnectMs: 100,
+    },
+  });
+
+  await rpcdef(ctx)[METHOD_START_GATEWAY_PATH]({});
+  const firstSocket = FakeWebSocket.instances[0];
+  assert.equal(_test.gatewayState.ws, firstSocket);
+
+  await _test.connectGateway();
+  const secondSocket = FakeWebSocket.instances[1];
+  assert.equal(FakeWebSocket.instances.length, 2);
+  assert.equal(_test.gatewayState.ws, secondSocket);
+
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(_test.gatewayState.ws, secondSocket);
+  assert.equal(_test.gatewayState.reconnectTimer, null);
+  assert.equal(_test.gatewayState.reconnectCount, 0);
 });
 
 test("SDK handlers read ctx.request", async () => {

@@ -51,6 +51,7 @@ const gatewayState = {
   reconnectTimer: null,
   ctx: null,
   localMessageSeq: 0,
+  connectionId: 0,
 };
 
 const grpcCodeFor = (code) => ({
@@ -131,6 +132,19 @@ const resolveTimeoutMs = (ctx = {}) => {
   const bindings = ctx.bindings || mergedBindings(ctx);
   return optionalUint32(ctx.limits?.timeoutMs) ?? optionalUint32(bindings.timeoutMs) ?? optionalUint32(bindings.timeout_ms) ?? DEFAULT_TIMEOUT_MS;
 };
+
+const createTimeoutSignal = (timeoutMs) => {
+  if (typeof globalThis.AbortSignal?.timeout === "function") return globalThis.AbortSignal.timeout(timeoutMs);
+  const controller = new globalThis.AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  timer.unref?.();
+  return controller.signal;
+};
+
+const fetchWithTimeout = (url, init = {}, timeoutMs = DEFAULT_TIMEOUT_MS) => fetch(url, {
+  ...init,
+  signal: init.signal ?? createTimeoutSignal(timeoutMs),
+});
 
 const optionalIntWithDefault = (value, fallback, minimum = 0) => {
   const parsed = optionalUint32(value);
@@ -259,15 +273,14 @@ const fetchAppAccessToken = async (ctx = {}, forceRefresh = false) => {
 
   let response;
   try {
-    response = await fetch(tokenUrl, {
+    response = await fetchWithTimeout(tokenUrl, {
       method: "POST",
-      timeoutMs: resolveTimeoutMs(callCtx),
       headers: {
         "content-type": "application/json",
         accept: "application/json, */*;q=0.8",
       },
       body: JSON.stringify({ appId, clientSecret: appSecret }),
-    });
+    }, resolveTimeoutMs(callCtx));
   } catch (err) {
     throw upstreamError("UNAVAILABLE", "qq bot access token request failed", {
       httpStatus: 0,
@@ -333,8 +346,10 @@ const clearGatewayTimers = () => {
 const closeGatewaySocket = () => {
   const ws = gatewayState.ws;
   gatewayState.ws = null;
+  clearGatewayTimers();
   if (!ws) return;
   try {
+    ws.__octobusIntentionalClose = true;
     ws.close();
   } catch {
     // Ignore best-effort close errors.
@@ -368,14 +383,13 @@ const enqueueGatewayMessage = async (payload) => {
 
 const fetchGatewayInfo = async (ctx = {}, accessToken) => {
   const baseUrl = resolveApiBaseUrl(resolveCallContext(ctx).bindings || {});
-  const response = await fetch(buildApiUrl(baseUrl, "gateway/bot"), {
+  const response = await fetchWithTimeout(buildApiUrl(baseUrl, "gateway/bot"), {
     method: "GET",
-    timeoutMs: resolveTimeoutMs(ctx),
     headers: {
       authorization: `QQBot ${accessToken}`,
       accept: "application/json, */*;q=0.8",
     },
-  });
+  }, resolveTimeoutMs(ctx));
   const httpStatus = Number(response.status || 0);
   const httpBody = String((await response.text()) ?? "");
   const body = parseJsonBody(httpBody, "gateway response");
@@ -461,6 +475,8 @@ const handleGatewayPayload = async (payload, accessToken) => {
 
 const connectGateway = async () => {
   if (!gatewayState.running || !gatewayState.ctx) return;
+  const connectionId = gatewayState.connectionId + 1;
+  gatewayState.connectionId = connectionId;
   gatewayState.state = "connecting";
   gatewayState.ready = false;
   gatewayState.lastError = "";
@@ -480,11 +496,13 @@ const connectGateway = async () => {
   gatewayState.ws = ws;
 
   ws.addEventListener("open", () => {
+    if (gatewayState.ws !== ws || gatewayState.connectionId !== connectionId) return;
     gatewayState.state = "open";
   });
   ws.addEventListener("message", (event) => {
     Promise.resolve()
       .then(async () => {
+        if (gatewayState.ws !== ws || gatewayState.connectionId !== connectionId) return;
         const payload = JSON.parse(String(event.data));
         await handleGatewayPayload(payload, accessToken);
       })
@@ -493,11 +511,19 @@ const connectGateway = async () => {
       });
   });
   ws.addEventListener("error", (event) => {
+    if (gatewayState.ws !== ws || gatewayState.connectionId !== connectionId) return;
     gatewayState.lastError = event?.message || "gateway websocket error";
   });
   ws.addEventListener("close", () => {
+    const intentional = ws.__octobusIntentionalClose === true;
+    if (gatewayState.ws !== ws || gatewayState.connectionId !== connectionId) return;
+    gatewayState.ws = null;
     gatewayState.ready = false;
     clearGatewayTimers();
+    if (intentional) {
+      if (!gatewayState.running) gatewayState.state = "stopped";
+      return;
+    }
     if (gatewayState.running) scheduleGatewayReconnect();
     else gatewayState.state = "stopped";
   });
@@ -608,16 +634,15 @@ const callOpenApi = async (ctx = {}, path, payload = {}) => {
 
   let response;
   try {
-    response = await fetch(url, {
+    response = await fetchWithTimeout(url, {
       method: "POST",
-      timeoutMs: resolveTimeoutMs(callCtx),
       headers: {
         authorization: `QQBot ${accessToken}`,
         "content-type": "application/json",
         accept: "application/json, */*;q=0.8",
       },
       body: JSON.stringify(payload),
-    });
+    }, resolveTimeoutMs(callCtx));
   } catch (err) {
     throw upstreamError("UNAVAILABLE", "qq bot openapi request failed", {
       httpStatus: 0,
