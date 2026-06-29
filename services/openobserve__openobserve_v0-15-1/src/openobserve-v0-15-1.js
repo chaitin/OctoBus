@@ -79,7 +79,12 @@ const logFlow = (ctx, action, details) => { try { console.log(buildLogPrefix(ctx
 const executeRequest = async (url, ctx = {}, options = {}) => {
   const timeoutMs = resolveTimeoutMs(ctx);
   const headers = { Accept: 'application/json', ...(options.headers ?? {}) };
-  const init = { method: options.method || 'GET', headers, timeoutMs, ...buildTlsOptions(ctx.bindings || {}), ...(options.body !== undefined ? { body: options.body } : {}) };
+
+  const controller = new AbortController();
+
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  const init = { method: options.method || 'GET', headers, signal: controller.signal, ...buildTlsOptions(ctx.bindings || {}), ...(options.body !== undefined ? { body: options.body } : {}) };
   let res;
   try { res = await fetch(url, init); }
   catch (err) { const m = err?.cause?.message || err?.message || 'fetch failed'; logFlow(ctx, options.action || 'fetch:error', { url, error: m }); throw attachResponse(errorWithCode('UNAVAILABLE', `${options.action || 'fetch'} failed: ${m}`), { http_status: 0, http_body: m }); }
