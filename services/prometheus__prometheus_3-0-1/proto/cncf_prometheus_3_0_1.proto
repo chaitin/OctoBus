@@ -15,6 +15,11 @@ service CNCF_Prometheus_3_0_1 {
   rpc GetLabelValues(GetLabelValuesRequest) returns (GetLabelValuesResponse);
   rpc GetStatusConfig(GetStatusConfigRequest) returns (GetStatusConfigResponse);
   rpc GetStatusBuildinfo(GetStatusBuildinfoRequest) returns (GetStatusBuildinfoResponse);
+  rpc GetStatusFlags(GetStatusFlagsRequest) returns (GetStatusFlagsResponse);
+  rpc ListAlertmanagers(ListAlertmanagersRequest) returns (ListAlertmanagersResponse);
+  rpc ListScrapePools(ListScrapePoolsRequest) returns (ListScrapePoolsResponse);
+  rpc ListTargetsMetadata(ListTargetsMetadataRequest) returns (ListTargetsMetadataResponse);
+  rpc ListMetadata(ListMetadataRequest) returns (ListMetadataResponse);
 }
 
 message InstantQueryRequest {
@@ -224,5 +229,85 @@ message BuildInfo {
 message GetStatusBuildinfoResponse {
   string status = 1;
   BuildInfo build_info = 2;
+  string raw_body = 3;
+}
+
+message GetStatusFlagsRequest {}
+
+message FlagInfo {
+  string name = 1;
+  string value = 2;
+  string raw_json = 3;
+}
+
+message GetStatusFlagsResponse {
+  string status = 1;
+  repeated FlagInfo flags = 2;
+  string raw_body = 3;
+}
+
+message ListAlertmanagersRequest {}
+
+message ActiveAlertmanager {
+  string url = 1;
+  string raw_json = 2;
+}
+
+message ListAlertmanagersResponse {
+  string status = 1;
+  repeated ActiveAlertmanagers active_alertmanagers = 2;
+  repeated string dropped_alertmanagers = 3;
+  string raw_body = 4;
+}
+
+message ListScrapePoolsRequest {}
+
+message ScrapePool {
+  string name = 1;
+  string raw_json = 2;
+}
+
+message ListScrapePoolsResponse {
+  string status = 1;
+  repeated ScrapePool data = 2;
+  string raw_body = 3;
+}
+
+message ListTargetsMetadataRequest {
+  string match_target = 1;
+  string metric = 2;
+  int32 limit = 3;
+}
+
+message TargetMetadata {
+  string target = 1;
+  string type = 2;
+  string help = 3;
+  string unit = 4;
+  string raw_json = 5;
+}
+
+message ListTargetsMetadataResponse {
+  string status = 1;
+  repeated TargetMetadata data = 2;
+  string raw_body = 3;
+}
+
+message ListMetadataRequest {
+  string match_target = 1;
+  string metric = 2;
+  int32 limit = 3;
+}
+
+message MetricMetadata {
+  string type = 1;
+  string help = 2;
+  string unit = 3;
+  string raw_json = 4;
+}
+
+message ListMetadataResponse {
+  string status = 1;
+  map<string, repeated MetricMetadata> data = 2;
   string raw_body = 3;
 }

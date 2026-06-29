@@ -1,5 +1,4 @@
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
-import { Agent } from 'undici';
 
 export const METHOD_INSTANT_QUERY_FULL = 'CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/InstantQuery';
 export const METHOD_RANGE_QUERY_FULL = 'CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/RangeQuery';
@@ -83,7 +82,7 @@ const executeRequest = async (url, ctx = {}, options = {}) => {
 
   const init = { method: options.method || 'GET', headers, signal: controller.signal, ...buildTlsOptions(ctx.bindings || {}), ...(options.body !== undefined ? { body: options.body } : {}) };
   let res;
-  try { res = await fetch(url, init); } catch (err) { const m = err?.cause?.message || err?.message || 'fetch failed'; throw attachResponse(errorWithCode('UNAVAILABLE', `${options.action || 'fetch'} failed: ${m}`), { http_status: 0, http_body: m }); }
+  try { res = await fetch(url, init); } catch (err) { const m = err?.cause?.message || err?.message || 'fetch failed'; throw attachResponse(errorWithCode('UNAVAILABLE', `${options.action || 'fetch'} failed: ${m}`), { http_status: 0, http_body: m }); } finally { clearTimeout(timer); }
   let rawBody;
   try { rawBody = await res.text(); } catch (err) { const m = err?.message || 'response read failed'; throw attachResponse(errorWithCode('UNAVAILABLE', `response read failed: ${m}`), { http_status: Number(res.status || 0), http_body: m }); }
   const httpStatus = Number(res.status || 0);
