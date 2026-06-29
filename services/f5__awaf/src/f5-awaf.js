@@ -223,11 +223,11 @@ async function doBlockIP(req, bindings, baseUrl, doFetch, timeoutMs) {
 }
 
 async function doUnblockIP(req, bindings, baseUrl, doFetch, timeoutMs) {
-  const { token, addresses = [], policy_name } = req;
+  const { token, addresses = [], policy_name, policyName: policyNameCamel } = req;
   if (!token) throw new GrpcError(grpcStatus.INVALID_ARGUMENT, 'token is required');
   if (!addresses.length) throw new GrpcError(grpcStatus.INVALID_ARGUMENT, 'addresses must not be empty');
 
-  const policyName = policy_name || bindings.default_policy_name;
+  const policyName = policy_name || policyNameCamel || bindings.default_policy_name;
   if (!policyName) {
     throw new GrpcError(grpcStatus.INVALID_ARGUMENT, 'policy_name is required (or set config.default_policy_name)');
   }
@@ -265,11 +265,11 @@ async function doUnblockIP(req, bindings, baseUrl, doFetch, timeoutMs) {
 }
 
 async function doAllowIP(req, bindings, baseUrl, doFetch, timeoutMs) {
-  const { token, addresses = [], policy_name, description } = req;
+  const { token, addresses = [], policy_name, policyName: policyNameCamel, description } = req;
   if (!token) throw new GrpcError(grpcStatus.INVALID_ARGUMENT, 'token is required');
   if (!addresses.length) throw new GrpcError(grpcStatus.INVALID_ARGUMENT, 'addresses must not be empty');
 
-  const policyName = policy_name || bindings.default_policy_name;
+  const policyName = policy_name || policyNameCamel || bindings.default_policy_name;
   if (!policyName) {
     throw new GrpcError(grpcStatus.INVALID_ARGUMENT, 'policy_name is required (or set config.default_policy_name)');
   }
@@ -321,13 +321,13 @@ async function doAllowIP(req, bindings, baseUrl, doFetch, timeoutMs) {
 const VALID_MODES = new Set(['blocking', 'transparent']);
 
 async function doSetEnforcementMode(req, bindings, baseUrl, doFetch, timeoutMs) {
-  const { token, policy_name, mode } = req;
+  const { token, policy_name, policyName: policyNameCamel, mode } = req;
   if (!token) throw new GrpcError(grpcStatus.INVALID_ARGUMENT, 'token is required');
   if (!mode || !VALID_MODES.has(mode)) {
     throw new GrpcError(grpcStatus.INVALID_ARGUMENT, 'mode must be "blocking" or "transparent"');
   }
 
-  const policyName = policy_name || bindings.default_policy_name;
+  const policyName = policy_name || policyNameCamel || bindings.default_policy_name;
   if (!policyName) {
     throw new GrpcError(grpcStatus.INVALID_ARGUMENT, 'policy_name is required (or set config.default_policy_name)');
   }
