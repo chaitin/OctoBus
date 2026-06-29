@@ -1,5 +1,4 @@
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
-import { Agent } from 'undici';
 
 export const METHOD_LIST_NODES_PATH = '/Proxmox_VE_8_3_5.Proxmox_VE_8_3_5/ListNodes';
 export const METHOD_LIST_QEMU_VMS_PATH = '/Proxmox_VE_8_3_5.Proxmox_VE_8_3_5/ListQemuVMs';
@@ -286,9 +285,9 @@ const proxmoxRequest = async (ctx, segments, { method = 'GET', query, allowHttp 
     const message = err?.cause?.message || err?.message || 'fetch failed';
     logFlow(callCtx, 'fetch:error', { url, error: message });
     throw engineError('UNAVAILABLE', `upstream fetch failed: ${message}`);
+  } finally {
+    clearTimeout(timer);
   }
-
-  clearTimeout(timer);
   let text;
   try {
     text = await response.text();
