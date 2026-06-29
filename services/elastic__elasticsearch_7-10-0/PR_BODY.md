@@ -1,8 +1,9 @@
 ## 联调证据：ClusterHealth 跑通
 
 # Request
-GET https://<es-host>:9200/_cluster/health
-Authorization: Basic elastic:REDACTED
+GET https://10.0.0.1:9200/_cluster/health
+Basic elastic:REDACTED
+
 
 
 
