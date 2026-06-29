@@ -137,6 +137,10 @@ const services = {
     entryFile: "../tencent__qyweixin-group-robot/bin/tencent-qyweixin-group-robot.js",
     serviceModule: "../tencent__qyweixin-group-robot/src/service.js",
   },
+  "tencent-weixin-personal": {
+    entryFile: "../tencent__weixin-personal/bin/tencent-weixin-personal.js",
+    serviceModule: "../tencent__weixin-personal/src/service.js",
+  },
   "tencent-tsec-v2-5-1": {
     entryFile: "../tencent__tsec_v2-5-1/bin/tencent-tsec-v2-5-1.js",
     serviceModule: "../tencent__tsec_v2-5-1/src/service.js",

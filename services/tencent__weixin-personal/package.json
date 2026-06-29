@@ -1,0 +1,13 @@
+{
+  "name": "tencent-weixin-personal",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "tencent-weixin-personal": "bin/tencent-weixin-personal.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.5.0",
+    "qrcode-terminal": "0.12.0"
+  }
+}
