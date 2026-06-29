@@ -289,7 +289,14 @@ const proxmoxRequest = async (ctx, segments, { method = 'GET', query, allowHttp 
   }
 
   clearTimeout(timer);
-  const text = await response.text();
+  let text;
+  try {
+    text = await response.text();
+  } catch (err) {
+    const message = err?.cause?.message || err?.message || 'response read failed';
+    logFlow(callCtx, 'fetch:error', { url, error: message });
+    throw engineError('UNAVAILABLE', `upstream response read failed: ${message}`);
+  }
   const httpStatus = Number(response.status || 0);
   logFlow(callCtx, 'fetch:response', { url, httpStatus, bodyLength: text?.length || 0 });
 
