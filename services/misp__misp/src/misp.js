@@ -175,8 +175,10 @@ const callMisp = async (ctx, method, path, body, queryParams) => {
     'x-request-id': meta.request_id || meta.requestId || 'unknown',
   };
 
-  // OctoBus runtime wraps global.fetch and recognizes these TLS skip options;
-  // they are NOT silently ignored as with bare Node.js native fetch (undici).
+  // OctoBus runtime wraps globalThis.fetch and recognizes these TLS skip options.
+  // In bare Node.js (undici), these options are silently ignored, so TLS skip
+  // relies on the OctoBus daemon setting NODE_TLS_REJECT_UNAUTHORIZED=0 before
+  // process startup.
   const skipVerify = toBoolean(bindings.skipTlsVerify) || toBoolean(bindings.tlsInsecureSkipVerify);
   const tlsOptions = skipVerify ? { insecureSkipVerify: true, tlsInsecureSkipVerify: true } : {};
 

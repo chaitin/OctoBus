@@ -433,6 +433,10 @@ const services = {
     entryFile: "../dbappsecurity__mingyu-waf/bin/dbappsecurity-mingyu-waf.js",
     serviceModule: "../dbappsecurity__mingyu-waf/src/service.js",
   },
+   "misp": {
+     entryFile: "../misp__misp/bin/misp.js",
+     serviceModule: "../misp__misp/src/service.js",
+  },
   "opencti": {
     entryFile: "../filigran__opencti/bin/opencti.js",
     serviceModule: "../filigran__opencti/src/service.js",
