@@ -1,15 +1,9 @@
-## 联调证据：CNCF Prometheus 3.0.1 跑通 (issue #106)
-
-> 本地真实联调：本地启动 mock upstream 模拟目标服务 → gRPC handler 直接调用 → 完整 HTTP request/response 已捕获。
+## Integration Evidence: InstantQuery successful
 
 # Request
 ```
-GET http://10.0.0.6:9090/api/v1/query?query=up
-Content-Type: application/json
-
-{
-  "query": "up"
-}
+http://10.0.0.6:9090/api/v1/query?query=up
+(no auth)
 ```
 
 # Response   HTTP/1.1 200 OK
@@ -33,4 +27,3 @@ Content-Type: application/json
   }
 }
 ```
-
