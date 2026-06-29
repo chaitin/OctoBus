@@ -1,4 +1,5 @@
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const METHOD_LIST_ORGANIZATIONS_FULL = 'OpenObserve_v0_15_1.OpenObserve_v0_15_1/ListOrganizations';
 export const METHOD_LIST_STREAMS_FULL = 'OpenObserve_v0_15_1.OpenObserve_v0_15_1/ListStreams';
