@@ -102,7 +102,7 @@ const makeRuntime = (ctx = {}) => {
   const runCheckIP = async (req = {}) => {
     const ip = unwrapString(firstDefined(req.ip)).trim();
     if (!ip) throw errorWithCode('INVALID_ARGUMENT', 'ip is required');
-    if (!net.isIP(ip)) throw errorWithCode('INVALID_ARGUMENT', 'invalid IP address format');
+    if (net.isIP(ip) !== 4) throw errorWithCode('INVALID_ARGUMENT', 'only IPv4 addresses are supported');
 
     const general = await callOTX(`/indicators/IPv4/${encodeURIComponent(ip)}/general`, { meta, bindings, timeoutMs });
     const malware = await callOTX(`/indicators/IPv4/${encodeURIComponent(ip)}/malware`, { meta, bindings, timeoutMs });
