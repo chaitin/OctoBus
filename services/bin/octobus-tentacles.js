@@ -425,6 +425,10 @@ const services = {
     entryFile: "../venus__tar/bin/venus-tar.js",
     serviceModule: "../venus__tar/src/service.js",
   },
+  "alertmanager-0-27-0": {
+    entryFile: "../prometheus__alertmanager_0-27-0/bin/alertmanager-0-27-0.js",
+    serviceModule: "../prometheus__alertmanager_0-27-0/src/service.js",
+  },
   "wangsu-label-ip": {
     entryFile: "../wangsu__label-ip/bin/wangsu-label-ip.js",
     serviceModule: "../wangsu__label-ip/src/service.js",
