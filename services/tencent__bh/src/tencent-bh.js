@@ -130,7 +130,6 @@ const tc3Sign = (params, secretId, secretKey, region, endpoint, action) => {
 
   const stringToSign = 'TC3-HMAC-SHA256\n' + timestamp + '\n' + credentialScope + '\n' + sha256(canonicalRequest);
 
-  const dateCompact = y + m + d;
   const kDate = hmacSha256('TC3' + secretKey, dateStr); // NOTE: SDK uses YYYY-MM-DD format, not YYYYMMDD
   const kService = hmacSha256(kDate, service);
   const kSigning = hmacSha256(kService, 'tc3_request');
@@ -484,15 +483,26 @@ const listSessions = async (requestOrContext = {}, maybeContext) => {
     // Some BH instances (e.g. basic/free tier) do not support SearchSession and return
     // InvalidParameterValue regardless of parameters. Return an empty list instead of
     // failing, so the method remains usable on all instance types.
+    // NOTE: InvalidParameterValue is a generic error code. To reduce the risk of
+    // swallowing genuine parameter errors, we additionally check whether the error
+    // message contains keywords suggesting the *action* is unsupported (not just a
+    // bad parameter value). If the message does NOT mention "unsupported"/"不支持",
+    // we re-throw so the caller sees the real error.
     if (e.legacyCode === 'FAILED_PRECONDITION' && e.tencentCode === 'InvalidParameterValue') {
-      // Log full error info for debugging — the condition is broad, and genuine
-      // parameter errors may also match; the log helps distinguish "unsupported"
-      // from "bad params" in production.
-      logFlow(context.meta || {}, 'SearchSession:unavailable', {
-        note: 'instance may not support session search, returning empty',
+      const msg = (e.message || '').toLowerCase();
+      const isUnsupported = /unsupported|不支持|not support|not found|undefined|no such/i.test(msg);
+      // Log full error info for debugging
+      logFlow(context.meta || {}, 'SearchSession:degradation', {
+        note: isUnsupported
+          ? 'instance likely does not support SearchSession, returning empty list'
+          : 'InvalidParameterValue caught but message suggests a genuine parameter error, re-throwing',
         originalError: { message: e.message, code: e.code, tencentCode: e.tencentCode },
       });
-      return { items: [], total_count: 0 };
+      if (isUnsupported) {
+        return { items: [], total_count: 0 };
+      }
+      // Genuine parameter error — do not swallow
+      throw e;
     }
     throw e;
   }

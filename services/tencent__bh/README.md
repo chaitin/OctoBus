@@ -122,21 +122,18 @@ octobus service import --id tencent-bh ./services//tencent__bh
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `user_id` | string | Yes | User ID to lock |
+| `user_id` | string (integer) | Yes | User ID to lock (must be a valid integer) |
 
 **UnlockUser** — Unlock a user account:
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `user_id` | string | Yes | User ID to unlock |
+| `user_id` | string (integer) | Yes | User ID to unlock (must be a valid integer) |
 
 ## Behavior Notes
 
 - All API calls use **POST** to `bh.tencentcloudapi.com` with TC3-HMAC-SHA256 signing.
 - HTTP 401 maps to `UNAUTHENTICATED`; HTTP 403 maps to `PERMISSION_DENIED`.
-- Other HTTP 4xx maps to `FAILED_PRECONDITION`.
-- HTTP 5xx and network errors map to `UNAVAILABLE`.
-- Tencent Cloud API `AuthFailure` errors map to `UNAUTHENTICATED` or `PERMISSION_DENIED`.
 - Other HTTP 4xx maps to `FAILED_PRECONDITION`.
 - HTTP 5xx and network errors map to `UNAVAILABLE`.
 - Tencent Cloud API `AuthFailure` errors map to `UNAUTHENTICATED` or `PERMISSION_DENIED`.

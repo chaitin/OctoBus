@@ -525,17 +525,17 @@ test('SDK handlers accept both single-arg (ctx) and two-arg (req, ctx) style', a
 
 // ── Multiple error status codes ───────────────────────────
 
-test('SearchSession InvalidParameterValue degrades gracefully to empty list', async () => {
-  // Simulate Tencent API returning InvalidParameterValue (basic/free tier instances
-  // that do not support SearchSession). The handler should return an empty list
-  // instead of throwing, ensuring the method remains usable on all instance types.
+test('SearchSession InvalidParameterValue degrades gracefully to empty list (unsupported)', async () => {
+  // Simulate Tencent API returning InvalidParameterValue with an "unsupported" message
+  // (basic/free tier instances that do not support SearchSession).
+  // The handler should return an empty list instead of throwing.
   setFetch(async () => ({
     ok: true,
     status: 200,
     headers: new Map([['content-type', 'application/json']]),
     text: async () => JSON.stringify({
       Response: {
-        Error: { Code: 'InvalidParameterValue', Message: 'InvalidParameterValue' },
+        Error: { Code: 'InvalidParameterValue', Message: 'SearchSession action is not supported on this instance' },
       },
     }),
   }));
@@ -543,6 +543,29 @@ test('SearchSession InvalidParameterValue degrades gracefully to empty list', as
   const handler = await loadHandler({}, listSessionsPath);
   const res = await handler();
   assert.deepEqual(res, { items: [], total_count: 0 });
+});
+
+test('SearchSession InvalidParameterValue with genuine param error re-throws', async () => {
+  // Simulate Tencent API returning InvalidParameterValue with a message that does NOT
+  // indicate the action is unsupported. The handler should re-throw to avoid
+  // swallowing genuine parameter errors.
+  setFetch(async () => ({
+    ok: true,
+    status: 200,
+    headers: new Map([['content-type', 'application/json']]),
+    text: async () => JSON.stringify({
+      Response: {
+        Error: { Code: 'InvalidParameterValue', Message: 'Invalid filter value for Status' },
+      },
+    }),
+  }));
+
+  const handler = await loadHandler({}, listSessionsPath);
+  await assert.rejects(() => handler(), (err) => {
+    assert.equal(err.legacyCode, 'FAILED_PRECONDITION');
+    assert.equal(err.tencentCode, 'InvalidParameterValue');
+    return true;
+  });
 });
 
 test('HTTP error codes are mapped correctly', async () => {
