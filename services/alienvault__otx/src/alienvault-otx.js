@@ -1,3 +1,4 @@
+import net from 'node:net';
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
 const METHOD_IP_FULL = 'AlienVault_OTX.AlienVault_OTX/CheckIP';
@@ -101,6 +102,7 @@ const makeRuntime = (ctx = {}) => {
   const runCheckIP = async (req = {}) => {
     const ip = unwrapString(firstDefined(req.ip)).trim();
     if (!ip) throw errorWithCode('INVALID_ARGUMENT', 'ip is required');
+    if (!net.isIP(ip)) throw errorWithCode('INVALID_ARGUMENT', 'invalid IP address format');
 
     const general = await callOTX(`/indicators/IPv4/${encodeURIComponent(ip)}/general`, { meta, bindings, timeoutMs });
     const malware = await callOTX(`/indicators/IPv4/${encodeURIComponent(ip)}/malware`, { meta, bindings, timeoutMs });
