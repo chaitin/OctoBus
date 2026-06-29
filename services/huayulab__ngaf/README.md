@@ -1,6 +1,6 @@
-# CTDSG DPDK V3 OctoBus Service
+# HuayuLab NGAF OctoBus Service
 
-Read-only OctoBus adapter for CTDSG / DPDK 3.0 security operations APIs.
+Read-only OctoBus adapter for HuayuLab NGAF security operations APIs.
 
 The service wraps the vendor API behind a stable OctoBus contract. It handles
 login signing, token and session-cookie reuse, bounded query parameters, fixed
@@ -11,33 +11,33 @@ expose destructive device actions or a raw upstream proxy.
 
 | Item | Value |
 | --- | --- |
-| Service ID | `ctdsg-dpdk-v3` |
-| Directory | `services/ctdsg__dpdk_v3` |
+| Service ID | `huayulab-ngaf` |
+| Directory | `services/huayulab__ngaf` |
 | Runtime | `long-running` |
-| API document | `DPDK接口文档-V1.0_2026-05-27.docx` |
+| API document | `HuayuLab NGAF API document` |
 | Operation class | Read-only |
 | Implemented RPCs | 9 |
 | Unit tests | Local mock upstream |
 | Real-device validation | Login and representative read-only calls were validated during integration testing |
 
-Use this service as the safe first production integration point for a CTDSG /
-DPDK device. It is designed for inventory, health checks, security log review,
+Use this service as the safe first production integration point for a HuayuLab
+NGAF device. It is designed for inventory, health checks, security log review,
 resource metrics, report dictionaries, and read-only policy-object visibility.
 
 ## Capability
 
 ```proto
-service CTDSG_DPDK_V3 {
+service HUAYULAB_NGAF {
   rpc GetUserInfo(GetUserInfoRequest) returns (GetUserInfoResponse) {}
-  rpc QuerySecurityLog(SecurityLogRequest) returns (DpdkJsonResponse) {}
-  rpc QueryBehaviorLog(BehaviorLogRequest) returns (DpdkJsonResponse) {}
-  rpc QueryAuditLog(AuditLogRequest) returns (DpdkJsonResponse) {}
+  rpc QuerySecurityLog(SecurityLogRequest) returns (NgafJsonResponse) {}
+  rpc QueryBehaviorLog(BehaviorLogRequest) returns (NgafJsonResponse) {}
+  rpc QueryAuditLog(AuditLogRequest) returns (NgafJsonResponse) {}
   rpc QuerySecurityStatistic(SecurityStatisticRequest)
-      returns (DpdkJsonResponse) {}
-  rpc QueryFlowAnalysis(FlowAnalysisRequest) returns (DpdkJsonResponse) {}
-  rpc QueryResourceMetric(ResourceMetricRequest) returns (DpdkJsonResponse) {}
-  rpc QueryReferenceData(ReferenceDataRequest) returns (DpdkJsonResponse) {}
-  rpc ListPolicyObjects(PolicyObjectListRequest) returns (DpdkJsonResponse) {}
+      returns (NgafJsonResponse) {}
+  rpc QueryFlowAnalysis(FlowAnalysisRequest) returns (NgafJsonResponse) {}
+  rpc QueryResourceMetric(ResourceMetricRequest) returns (NgafJsonResponse) {}
+  rpc QueryReferenceData(ReferenceDataRequest) returns (NgafJsonResponse) {}
+  rpc ListPolicyObjects(PolicyObjectListRequest) returns (NgafJsonResponse) {}
 }
 ```
 
@@ -92,7 +92,7 @@ At runtime:
 
 | Field | Required | Default | Notes |
 | --- | --- | --- | --- |
-| `endpoint` | Yes | none | CTDSG / DPDK API base URL. Console URLs ending in `/index.php` are normalized to `/api.php`. |
+| `endpoint` | Yes | none | HuayuLab NGAF API base URL. Console URLs ending in `/index.php` are normalized to `/api.php`. |
 | `lan` | No | `zh_CN` | One of `zh_CN`, `zh_TW`, `en_US`. |
 | `timeoutMs` | No | `5000` | Bounded by schema: 500 to 30000 ms. |
 | `skipTlsVerify` | No | `false` | Use only for lab devices with self-signed certificates. |
@@ -115,10 +115,10 @@ session cookies.
 Run from the repository root:
 
 ```bash
-node --check services/ctdsg__dpdk_v3/src/ctdsg-dpdk-v3.js
-node --check services/ctdsg__dpdk_v3/src/service.js
-node --check services/ctdsg__dpdk_v3/bin/ctdsg-dpdk-v3.js
-node --test services/ctdsg__dpdk_v3/test/ctdsg-dpdk-v3.test.js
+node --check services/huayulab__ngaf/src/huayulab-ngaf.js
+node --check services/huayulab__ngaf/src/service.js
+node --check services/huayulab__ngaf/bin/huayulab-ngaf.js
+node --test services/huayulab__ngaf/test/huayulab-ngaf.test.js
 ```
 
 The unit tests cover:
@@ -135,14 +135,14 @@ The unit tests cover:
 ## OctoBus Import
 
 ```bash
-octobus service import ctdsg-dpdk-v3 services/ctdsg__dpdk_v3
+octobus service import huayulab-ngaf services/huayulab__ngaf
 ```
 
 Create a real-device instance:
 
 ```bash
-octobus instance create ctdsg-dpdk-readonly \
-  --service ctdsg-dpdk-v3 \
+octobus instance create huayulab-ngaf-readonly \
+  --service huayulab-ngaf \
   --config-json '{"endpoint":"https://DEVICE_HOST:PORT/api.php","lan":"zh_CN","timeoutMs":5000,"skipTlsVerify":true,"allowInsecureHttp":false}' \
   --secret-json '{"username":"API_USERNAME","apiSecret":"API_SECRET"}'
 ```
@@ -150,25 +150,25 @@ octobus instance create ctdsg-dpdk-readonly \
 Add it to a capset:
 
 ```bash
-octobus capset add-instance local ctdsg-dpdk-readonly
+octobus capset add-instance local huayulab-ngaf-readonly
 ```
 
 Refresh the capset membership after re-importing a service if newly added
 methods do not appear:
 
 ```bash
-octobus capset remove-instance local ctdsg-dpdk-readonly
-octobus capset add-instance local ctdsg-dpdk-readonly
+octobus capset remove-instance local huayulab-ngaf-readonly
+octobus capset add-instance local huayulab-ngaf-readonly
 ```
 
 Generate a test token and call through OctoBus:
 
 ```bash
 TOKEN="$(openssl rand -hex 32)"
-printf '%s' "$TOKEN" | octobus capset add-token local "ctdsg-test-$(date +%s)" --token-stdin
+printf '%s' "$TOKEN" | octobus capset add-token local "huayulab-ngaf-test-$(date +%s)" --token-stdin
 
 curl -sS -X POST \
-  'http://127.0.0.1:9000/capsets/local/connect/ctdsg-dpdk-readonly/CTDSG_DPDK_V3.CTDSG_DPDK_V3/GetUserInfo' \
+  'http://127.0.0.1:9000/capsets/local/connect/huayulab-ngaf-readonly/HUAYULAB_NGAF.HUAYULAB_NGAF/GetUserInfo' \
   -H 'Content-Type: application/json' \
   -H "Authorization: Bearer $TOKEN" \
   --data '{}'
@@ -178,7 +178,7 @@ Representative read-only metric call:
 
 ```bash
 curl -sS -X POST \
-  'http://127.0.0.1:9000/capsets/local/connect/ctdsg-dpdk-readonly/CTDSG_DPDK_V3.CTDSG_DPDK_V3/QueryResourceMetric' \
+  'http://127.0.0.1:9000/capsets/local/connect/huayulab-ngaf-readonly/HUAYULAB_NGAF.HUAYULAB_NGAF/QueryResourceMetric' \
   -H 'Content-Type: application/json' \
   -H "Authorization: Bearer $TOKEN" \
   --data '{"type":"RESOURCE_METRIC_CPU","query":{"page":1,"pageSize":10}}'
@@ -219,10 +219,10 @@ This package intentionally keeps a narrow security boundary:
 Before handing off or opening a pull request:
 
 ```bash
-node --test services/ctdsg__dpdk_v3/test/ctdsg-dpdk-v3.test.js
-rg -n 'REAL_DEVICE_IP|REAL_API_USERNAME|REAL_API_SECRET|[A-Fa-f0-9]{64}' services/ctdsg__dpdk_v3 || true
-tar --exclude='node_modules' -czf ctdsg-dpdk-v3.tar.gz -C services ctdsg__dpdk_v3
-sha256sum ctdsg-dpdk-v3.tar.gz
+node --test services/huayulab__ngaf/test/huayulab-ngaf.test.js
+rg -n 'REAL_DEVICE_IP|REAL_API_USERNAME|REAL_API_SECRET|[A-Fa-f0-9]{64}' services/huayulab__ngaf || true
+tar --exclude='node_modules' -czf huayulab-ngaf.tar.gz -C services huayulab__ngaf
+sha256sum huayulab-ngaf.tar.gz
 ```
 
 The archive should contain only the service package files: manifest, schemas,

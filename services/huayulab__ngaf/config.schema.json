@@ -8,7 +8,7 @@
   "properties": {
     "endpoint": {
       "type": "string",
-      "description": "CTDSG DPDK API base URL, for example https://ctdsg.example:9091/api.php."
+      "description": "HuayuLab NGAF API base URL, for example https://ngaf.example:9091/api.php."
     },
     "lan": {
       "type": "string",
@@ -18,7 +18,7 @@
         "en_US"
       ],
       "default": "zh_CN",
-      "description": "Language header sent to CTDSG DPDK APIs."
+      "description": "Language header sent to HuayuLab NGAF APIs."
     },
     "timeoutMs": {
       "type": "integer",

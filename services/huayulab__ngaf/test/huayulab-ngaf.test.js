@@ -8,7 +8,7 @@ import {
   METHOD_QUERY_SECURITY_LOG_FULL,
   _test,
   handlers,
-} from "../src/ctdsg-dpdk-v3.js";
+} from "../src/huayulab-ngaf.js";
 import { createMockUpstream } from "./mock_upstream.js";
 
 function contextFor(baseUrl, overrides = {}) {

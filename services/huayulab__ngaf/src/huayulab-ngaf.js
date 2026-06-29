@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import http from "node:http";
 import https from "node:https";
 
-const SERVICE_FULL_NAME = "CTDSG_DPDK_V3.CTDSG_DPDK_V3";
+const SERVICE_FULL_NAME = "HUAYULAB_NGAF.HUAYULAB_NGAF";
 
 export const METHOD_GET_USER_INFO_FULL =
   `${SERVICE_FULL_NAME}/GetUserInfo`;

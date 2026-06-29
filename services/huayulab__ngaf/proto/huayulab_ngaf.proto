@@ -1,10 +1,10 @@
 syntax = "proto3";
 
-package CTDSG_DPDK_V3;
+package HUAYULAB_NGAF;
 
-option go_package = "miner/grpc-service/CTDSG_DPDK_V3";
+option go_package = "miner/grpc-service/HUAYULAB_NGAF";
 
-service CTDSG_DPDK_V3 {
+service HUAYULAB_NGAF {
   // Get the current logged-in API user information.
   //
   // This is the first read-only MVP method. It authenticates through
@@ -14,33 +14,33 @@ service CTDSG_DPDK_V3 {
 
   // Query read-only security event logs such as IPS, DDoS, AV, WAF, TI, WPP,
   // outbound, regional-access, and industrial-control logs.
-  rpc QuerySecurityLog(SecurityLogRequest) returns (DpdkJsonResponse) {}
+  rpc QuerySecurityLog(SecurityLogRequest) returns (NgafJsonResponse) {}
 
   // Query read-only user behavior logs such as web, email, IM, login,
   // file-outbound, session, alarm, and proxy-bypass logs.
-  rpc QueryBehaviorLog(BehaviorLogRequest) returns (DpdkJsonResponse) {}
+  rpc QueryBehaviorLog(BehaviorLogRequest) returns (NgafJsonResponse) {}
 
   // Query read-only protocol audit and system/jr audit logs.
-  rpc QueryAuditLog(AuditLogRequest) returns (DpdkJsonResponse) {}
+  rpc QueryAuditLog(AuditLogRequest) returns (NgafJsonResponse) {}
 
   // Query read-only security analytics such as IPS vulnerability statistics,
   // antivirus rankings, DDoS rankings, and proxy-bypass rankings.
   rpc QuerySecurityStatistic(SecurityStatisticRequest)
-      returns (DpdkJsonResponse) {}
+      returns (NgafJsonResponse) {}
 
   // Query read-only traffic and behavior analytics by user, service, site,
   // terminal, location, or online equivalents.
-  rpc QueryFlowAnalysis(FlowAnalysisRequest) returns (DpdkJsonResponse) {}
+  rpc QueryFlowAnalysis(FlowAnalysisRequest) returns (NgafJsonResponse) {}
 
   // Query read-only resource metrics such as CPU, memory, sessions, online
   // users, and physical interfaces.
-  rpc QueryResourceMetric(ResourceMetricRequest) returns (DpdkJsonResponse) {}
+  rpc QueryResourceMetric(ResourceMetricRequest) returns (NgafJsonResponse) {}
 
   // Query read-only selector/reference data used by reports.
-  rpc QueryReferenceData(ReferenceDataRequest) returns (DpdkJsonResponse) {}
+  rpc QueryReferenceData(ReferenceDataRequest) returns (NgafJsonResponse) {}
 
   // List read-only policy objects whose endpoints are documented as getList.
-  rpc ListPolicyObjects(PolicyObjectListRequest) returns (DpdkJsonResponse) {}
+  rpc ListPolicyObjects(PolicyObjectListRequest) returns (NgafJsonResponse) {}
 }
 
 message GetUserInfoRequest {
@@ -59,7 +59,7 @@ message GetUserInfoResponse {
   int32 http_status = 4;
 }
 
-message DpdkQuery {
+message NgafQuery {
   uint32 page = 1;
   uint32 page_size = 2;
   string start_time = 3;
@@ -71,7 +71,7 @@ message DpdkQuery {
   string filters_json = 7;
 }
 
-message DpdkJsonResponse {
+message NgafJsonResponse {
   int64 code = 1;
   string message = 2;
   string data_json = 3;
@@ -95,7 +95,7 @@ enum SecurityLogType {
 
 message SecurityLogRequest {
   SecurityLogType type = 1;
-  DpdkQuery query = 2;
+  NgafQuery query = 2;
 }
 
 enum BehaviorLogType {
@@ -122,7 +122,7 @@ enum BehaviorLogType {
 
 message BehaviorLogRequest {
   BehaviorLogType type = 1;
-  DpdkQuery query = 2;
+  NgafQuery query = 2;
 }
 
 enum AuditLogType {
@@ -159,7 +159,7 @@ enum AuditLogType {
 
 message AuditLogRequest {
   AuditLogType type = 1;
-  DpdkQuery query = 2;
+  NgafQuery query = 2;
 }
 
 enum SecurityStatisticType {
@@ -183,7 +183,7 @@ enum SecurityStatisticType {
 
 message SecurityStatisticRequest {
   SecurityStatisticType type = 1;
-  DpdkQuery query = 2;
+  NgafQuery query = 2;
 }
 
 enum FlowAnalysisType {
@@ -210,7 +210,7 @@ enum FlowAnalysisType {
 
 message FlowAnalysisRequest {
   FlowAnalysisType type = 1;
-  DpdkQuery query = 2;
+  NgafQuery query = 2;
 }
 
 enum ResourceMetricType {
@@ -226,7 +226,7 @@ enum ResourceMetricType {
 
 message ResourceMetricRequest {
   ResourceMetricType type = 1;
-  DpdkQuery query = 2;
+  NgafQuery query = 2;
 }
 
 enum ReferenceDataType {
@@ -255,7 +255,7 @@ enum ReferenceDataType {
 
 message ReferenceDataRequest {
   ReferenceDataType type = 1;
-  DpdkQuery query = 2;
+  NgafQuery query = 2;
 }
 
 enum PolicyObjectType {
@@ -267,5 +267,5 @@ enum PolicyObjectType {
 
 message PolicyObjectListRequest {
   PolicyObjectType type = 1;
-  DpdkQuery query = 2;
+  NgafQuery query = 2;
 }

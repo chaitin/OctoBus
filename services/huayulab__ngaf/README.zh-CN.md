@@ -1,6 +1,6 @@
-# CTDSG DPDK V3 OctoBus Service 交付说明
+# HuayuLab NGAF OctoBus Service 交付说明
 
-这是 CTDSG / DPDK 3.0 设备接入 OctoBus 的只读型 Service。它把厂商 API
+这是 HuayuLab NGAF 设备接入 OctoBus 的只读型 Service。它把厂商 API
 封装成稳定的 OctoBus RPC，负责登录签名、token 与 session cookie 维护、
 固定 endpoint 映射、查询参数边界控制、超时处理和响应归一化。
 
@@ -11,10 +11,10 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| Service ID | `ctdsg-dpdk-v3` |
-| 目录 | `services/ctdsg__dpdk_v3` |
+| Service ID | `huayulab-ngaf` |
+| 目录 | `services/huayulab__ngaf` |
 | 运行模式 | `long-running` |
-| 依据文档 | `DPDK接口文档-V1.0_2026-05-27.docx` |
+| 依据文档 | `HuayuLab NGAF API document` |
 | 操作类型 | 只读 |
 | 已实现 RPC | 9 个 |
 | 本地测试 | mock upstream 单元测试 |
@@ -22,7 +22,7 @@
 
 适用场景：
 
-- 验证 OctoBus 网关是否能连通 CTDSG / DPDK 设备；
+- 验证 OctoBus 网关是否能连通 HuayuLab NGAF 设备；
 - 验证 API 账号、签名算法和设备 session 是否可用；
 - 给上层 Agent / SOAR 提供受控的日志、指标、统计和对象列表读取能力；
 - 在不暴露设备密钥给上层系统的前提下，完成安全运营数据查询。
@@ -30,17 +30,17 @@
 ## 已实现功能
 
 ```proto
-service CTDSG_DPDK_V3 {
+service HUAYULAB_NGAF {
   rpc GetUserInfo(GetUserInfoRequest) returns (GetUserInfoResponse) {}
-  rpc QuerySecurityLog(SecurityLogRequest) returns (DpdkJsonResponse) {}
-  rpc QueryBehaviorLog(BehaviorLogRequest) returns (DpdkJsonResponse) {}
-  rpc QueryAuditLog(AuditLogRequest) returns (DpdkJsonResponse) {}
+  rpc QuerySecurityLog(SecurityLogRequest) returns (NgafJsonResponse) {}
+  rpc QueryBehaviorLog(BehaviorLogRequest) returns (NgafJsonResponse) {}
+  rpc QueryAuditLog(AuditLogRequest) returns (NgafJsonResponse) {}
   rpc QuerySecurityStatistic(SecurityStatisticRequest)
-      returns (DpdkJsonResponse) {}
-  rpc QueryFlowAnalysis(FlowAnalysisRequest) returns (DpdkJsonResponse) {}
-  rpc QueryResourceMetric(ResourceMetricRequest) returns (DpdkJsonResponse) {}
-  rpc QueryReferenceData(ReferenceDataRequest) returns (DpdkJsonResponse) {}
-  rpc ListPolicyObjects(PolicyObjectListRequest) returns (DpdkJsonResponse) {}
+      returns (NgafJsonResponse) {}
+  rpc QueryFlowAnalysis(FlowAnalysisRequest) returns (NgafJsonResponse) {}
+  rpc QueryResourceMetric(ResourceMetricRequest) returns (NgafJsonResponse) {}
+  rpc QueryReferenceData(ReferenceDataRequest) returns (NgafJsonResponse) {}
+  rpc ListPolicyObjects(PolicyObjectListRequest) returns (NgafJsonResponse) {}
 }
 ```
 
@@ -69,7 +69,7 @@ sign = md5(md5(apiSecret) + "-api-!*195")
 运行流程：
 
 1. 上层 Agent / SOAR / MCP client 调用 OctoBus capset endpoint。
-2. OctoBus 根据 instance 找到 `ctdsg-dpdk-v3` Service。
+2. OctoBus 根据 instance 找到 `huayulab-ngaf` Service。
 3. Service 将 `endpoint` 规范化到 `/api.php`。
 4. 如果内存中没有可用 session，则调用
    `POST /api.php/Login/uInterlogin` 登录。
@@ -83,7 +83,7 @@ sign = md5(md5(apiSecret) + "-api-!*195")
 ## 文件结构
 
 ```text
-services/ctdsg__dpdk_v3/
+services/huayulab__ngaf/
 ├── README.md
 ├── README.zh-CN.md
 ├── package.json
@@ -91,28 +91,28 @@ services/ctdsg__dpdk_v3/
 ├── config.schema.json
 ├── secret.schema.json
 ├── proto/
-│   └── ctdsg_dpdk_v3.proto
+│   └── huayulab_ngaf.proto
 ├── bin/
-│   └── ctdsg-dpdk-v3.js
+│   └── huayulab-ngaf.js
 ├── src/
 │   ├── service.js
-│   └── ctdsg-dpdk-v3.js
+│   └── huayulab-ngaf.js
 └── test/
-    ├── ctdsg-dpdk-v3.test.js
+    ├── huayulab-ngaf.test.js
     └── mock_upstream.js
 ```
 
 | 文件 | 作用 |
 | --- | --- |
 | `service.json` | OctoBus manifest，声明 Service ID、proto、schema 和 CLI command。 |
-| `proto/ctdsg_dpdk_v3.proto` | 向上层暴露的 RPC contract。 |
+| `proto/huayulab_ngaf.proto` | 向上层暴露的 RPC contract。 |
 | `config.schema.json` | 非敏感配置 schema，例如 endpoint、语言、超时、TLS 开关。 |
 | `secret.schema.json` | 敏感配置 schema，例如 username、apiSecret。 |
-| `src/ctdsg-dpdk-v3.js` | 核心逻辑：签名、登录、session 缓存、请求、重试和响应处理。 |
+| `src/huayulab-ngaf.js` | 核心逻辑：签名、登录、session 缓存、请求、重试和响应处理。 |
 | `src/service.js` | 按 OctoBus SDK 方式导出 Service。 |
-| `bin/ctdsg-dpdk-v3.js` | long-running entrypoint。 |
-| `test/mock_upstream.js` | 本地模拟 CTDSG / DPDK API。 |
-| `test/ctdsg-dpdk-v3.test.js` | 自动化测试。 |
+| `bin/huayulab-ngaf.js` | long-running entrypoint。 |
+| `test/mock_upstream.js` | 本地模拟 HuayuLab NGAF API。 |
+| `test/huayulab-ngaf.test.js` | 自动化测试。 |
 
 ## 配置
 
@@ -130,7 +130,7 @@ services/ctdsg__dpdk_v3/
 
 | 字段 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `endpoint` | 是 | 无 | CTDSG / DPDK API 地址。粘贴 `/index.php` 控制台地址时会自动规范化为 `/api.php`。 |
+| `endpoint` | 是 | 无 | HuayuLab NGAF API 地址。粘贴 `/index.php` 控制台地址时会自动规范化为 `/api.php`。 |
 | `lan` | 否 | `zh_CN` | 设备语言请求头，可选 `zh_CN`、`zh_TW`、`en_US`。 |
 | `timeoutMs` | 否 | `5000` | 上游 HTTP 超时，schema 限制为 500 到 30000 毫秒。 |
 | `skipTlsVerify` | 否 | `false` | 仅实验室自签证书设备建议开启。 |
@@ -153,10 +153,10 @@ services/ctdsg__dpdk_v3/
 在仓库根目录执行：
 
 ```bash
-node --check services/ctdsg__dpdk_v3/src/ctdsg-dpdk-v3.js
-node --check services/ctdsg__dpdk_v3/src/service.js
-node --check services/ctdsg__dpdk_v3/bin/ctdsg-dpdk-v3.js
-node --test services/ctdsg__dpdk_v3/test/ctdsg-dpdk-v3.test.js
+node --check services/huayulab__ngaf/src/huayulab-ngaf.js
+node --check services/huayulab__ngaf/src/service.js
+node --check services/huayulab__ngaf/bin/huayulab-ngaf.js
+node --test services/huayulab__ngaf/test/huayulab-ngaf.test.js
 ```
 
 测试覆盖范围：
@@ -176,14 +176,14 @@ node --test services/ctdsg__dpdk_v3/test/ctdsg-dpdk-v3.test.js
 导入 Service：
 
 ```bash
-octobus service import ctdsg-dpdk-v3 services/ctdsg__dpdk_v3
+octobus service import huayulab-ngaf services/huayulab__ngaf
 ```
 
 创建真实设备 instance：
 
 ```bash
-octobus instance create ctdsg-dpdk-readonly \
-  --service ctdsg-dpdk-v3 \
+octobus instance create huayulab-ngaf-readonly \
+  --service huayulab-ngaf \
   --config-json '{"endpoint":"https://DEVICE_HOST:PORT/api.php","lan":"zh_CN","timeoutMs":5000,"skipTlsVerify":true,"allowInsecureHttp":false}' \
   --secret-json '{"username":"API_USERNAME","apiSecret":"API_SECRET"}'
 ```
@@ -191,28 +191,28 @@ octobus instance create ctdsg-dpdk-readonly \
 加入 capset：
 
 ```bash
-octobus capset add-instance local ctdsg-dpdk-readonly
+octobus capset add-instance local huayulab-ngaf-readonly
 ```
 
 如果重新导入 Service 后新增方法看不到，刷新 capset membership：
 
 ```bash
-octobus capset remove-instance local ctdsg-dpdk-readonly
-octobus capset add-instance local ctdsg-dpdk-readonly
+octobus capset remove-instance local huayulab-ngaf-readonly
+octobus capset add-instance local huayulab-ngaf-readonly
 ```
 
 生成测试 token：
 
 ```bash
 TOKEN="$(openssl rand -hex 32)"
-printf '%s' "$TOKEN" | octobus capset add-token local "ctdsg-test-$(date +%s)" --token-stdin
+printf '%s' "$TOKEN" | octobus capset add-token local "huayulab-ngaf-test-$(date +%s)" --token-stdin
 ```
 
 调用用户信息接口：
 
 ```bash
 curl -sS -X POST \
-  'http://127.0.0.1:9000/capsets/local/connect/ctdsg-dpdk-readonly/CTDSG_DPDK_V3.CTDSG_DPDK_V3/GetUserInfo' \
+  'http://127.0.0.1:9000/capsets/local/connect/huayulab-ngaf-readonly/HUAYULAB_NGAF.HUAYULAB_NGAF/GetUserInfo' \
   -H 'Content-Type: application/json' \
   -H "Authorization: Bearer $TOKEN" \
   --data '{}'
@@ -222,7 +222,7 @@ curl -sS -X POST \
 
 ```bash
 curl -sS -X POST \
-  'http://127.0.0.1:9000/capsets/local/connect/ctdsg-dpdk-readonly/CTDSG_DPDK_V3.CTDSG_DPDK_V3/QueryResourceMetric' \
+  'http://127.0.0.1:9000/capsets/local/connect/huayulab-ngaf-readonly/HUAYULAB_NGAF.HUAYULAB_NGAF/QueryResourceMetric' \
   -H 'Content-Type: application/json' \
   -H "Authorization: Bearer $TOKEN" \
   --data '{"type":"RESOURCE_METRIC_CPU","query":{"page":1,"pageSize":10}}'
@@ -232,7 +232,7 @@ curl -sS -X POST \
 
 ```bash
 curl -sS -X POST \
-  'http://127.0.0.1:9000/capsets/local/connect/ctdsg-dpdk-readonly/CTDSG_DPDK_V3.CTDSG_DPDK_V3/QuerySecurityLog' \
+  'http://127.0.0.1:9000/capsets/local/connect/huayulab-ngaf-readonly/HUAYULAB_NGAF.HUAYULAB_NGAF/QuerySecurityLog' \
   -H 'Content-Type: application/json' \
   -H "Authorization: Bearer $TOKEN" \
   --data '{"type":"SECURITY_LOG_IPS","query":{"page":1,"pageSize":5,"order":"desc"}}'
@@ -268,10 +268,10 @@ curl -sS -X POST \
 ## 交付前检查
 
 ```bash
-node --test services/ctdsg__dpdk_v3/test/ctdsg-dpdk-v3.test.js
-rg -n 'REAL_DEVICE_IP|REAL_API_USERNAME|REAL_API_SECRET|[A-Fa-f0-9]{64}' services/ctdsg__dpdk_v3 || true
-tar --exclude='node_modules' -czf ctdsg-dpdk-v3.tar.gz -C services ctdsg__dpdk_v3
-sha256sum ctdsg-dpdk-v3.tar.gz
+node --test services/huayulab__ngaf/test/huayulab-ngaf.test.js
+rg -n 'REAL_DEVICE_IP|REAL_API_USERNAME|REAL_API_SECRET|[A-Fa-f0-9]{64}' services/huayulab__ngaf || true
+tar --exclude='node_modules' -czf huayulab-ngaf.tar.gz -C services huayulab__ngaf
+sha256sum huayulab-ngaf.tar.gz
 ```
 
 归档包应包含 Service 全部代码和配置：manifest、schema、proto、runtime
