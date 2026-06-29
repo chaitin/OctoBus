@@ -433,6 +433,10 @@ const services = {
     entryFile: "../prometheus__alertmanager_0-27-0/bin/alertmanager-0-27-0.js",
     serviceModule: "../prometheus__alertmanager_0-27-0/src/service.js",
   },
+  "openobserve-v0-15-1": {
+    entryFile: "../openobserve__openobserve_v0-15-1/bin/openobserve-v0-15-1.js",
+    serviceModule: "../openobserve__openobserve_v0-15-1/src/service.js",
+  },
   "wangsu-label-ip": {
     entryFile: "../wangsu__label-ip/bin/wangsu-label-ip.js",
     serviceModule: "../wangsu__label-ip/src/service.js",
