@@ -172,7 +172,8 @@ const handleListTargets = async (req = {}, ctx = {}) => {
   const baseUrl = requireBaseUrl(callCtx);
   const params = {};
   if (req.state) params.state = toTrimmedString(req.state);
-  if (req.scrape_pool) params.scrape_pool = 'true';
+  const scrapePool = toTrimmedString(req.scrape_pool);
+  if (scrapePool) params.scrapePool = scrapePool;
   const qs = encodeQueryParams(params);
   const url = `${baseUrl}/api/v1/targets${qs ? '?' + qs : ''}`;
   const headers = buildAuthHeaders(callCtx.bindings);

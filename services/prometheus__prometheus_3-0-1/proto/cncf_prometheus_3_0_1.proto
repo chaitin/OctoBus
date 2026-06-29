@@ -65,7 +65,7 @@ message QueryResponse {
 
 message ListTargetsRequest {
   string state = 1;
-  bool scrape_pool = 2;
+  string scrape_pool = 2;
 }
 
 message TargetLabel {
