@@ -1,4 +1,5 @@
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const METHOD_LIST_NODES_PATH = '/Proxmox_VE_8_3_5.Proxmox_VE_8_3_5/ListNodes';
 export const METHOD_LIST_QEMU_VMS_PATH = '/Proxmox_VE_8_3_5.Proxmox_VE_8_3_5/ListQemuVMs';
