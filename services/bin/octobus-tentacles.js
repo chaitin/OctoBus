@@ -352,6 +352,10 @@ const services = {
     entryFile: "../volcengine__waf/bin/volcengine-waf.js",
     serviceModule: "../volcengine__waf/src/service.js",
   },
+  "leadsec-waf": {
+    entryFile: "../leadsec__waf/bin/leadsec-waf.js",
+    serviceModule: "../leadsec__waf/src/service.js",
+  },
   "wangsu-label-ip": {
     entryFile: "../wangsu__label-ip/bin/wangsu-label-ip.js",
     serviceModule: "../wangsu__label-ip/src/service.js",

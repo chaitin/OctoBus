@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["baseUrl"],
+  "additionalProperties": false,
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "description": "WAF base URL, for example https://waf.example.local"
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000,
+      "description": "Upstream request timeout in milliseconds"
+    },
+    "insecureSkipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Allow self-signed certificates in demo or lab environments"
+    }
+  }
+}

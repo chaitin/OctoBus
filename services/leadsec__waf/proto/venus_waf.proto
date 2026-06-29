@@ -1,0 +1,169 @@
+syntax = "proto3";
+
+package Venus_WAF;
+
+option go_package = "miner/grpc-service/Venus_WAF";
+
+service Venus_WAF {
+  // Login probe. It verifies base URL, username/password and upstream availability.
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse) {}
+
+  // List global access blacklist rules.
+  rpc ListBlacklists(ListBlacklistsRequest) returns (ListRulesResponse) {}
+
+  // List selectable interface, address object, and service object options used by blacklist/whitelist rules.
+  rpc ListAccessOptions(ListAccessOptionsRequest) returns (ListAccessOptionsResponse) {}
+
+  // Create an IPv4 host address object.
+  rpc CreateAddressObject(CreateAddressObjectRequest) returns (OperationResponse) {}
+
+  // Create a global access blacklist rule from an IP. If no address object contains the IP, the service creates one.
+  rpc BlockIP(IPAccessRuleRequest) returns (OperationResponse) {}
+
+  // Delete a global access blacklist rule by rule name.
+  rpc DeleteBlockedIP(DeleteRuleRequest) returns (OperationResponse) {}
+
+  // Create a global access blacklist rule.
+  rpc CreateBlacklist(UpsertRuleRequest) returns (OperationResponse) {}
+
+  // Update a global access blacklist rule by name.
+  rpc UpdateBlacklist(UpsertRuleRequest) returns (OperationResponse) {}
+
+  // Enable or disable a blacklist rule by name.
+  rpc SetBlacklistEnabled(SetRuleEnabledRequest) returns (OperationResponse) {}
+
+  // Delete a blacklist rule by name.
+  rpc DeleteBlacklist(DeleteRuleRequest) returns (OperationResponse) {}
+
+  // Enable or disable blacklist priority globally.
+  rpc SetBlacklistPriority(SetPriorityRequest) returns (OperationResponse) {}
+
+  // List global access whitelist rules.
+  rpc ListWhitelists(ListWhitelistsRequest) returns (ListRulesResponse) {}
+
+  // Create a global access whitelist rule from an IP. If no address object contains the IP, the service creates one.
+  rpc AllowIP(IPAccessRuleRequest) returns (OperationResponse) {}
+
+  // Delete a global access whitelist rule by rule name.
+  rpc DeleteAllowedIP(DeleteRuleRequest) returns (OperationResponse) {}
+
+  // Create a global access whitelist rule.
+  rpc CreateWhitelist(UpsertRuleRequest) returns (OperationResponse) {}
+
+  // Update a global access whitelist rule by name.
+  rpc UpdateWhitelist(UpsertRuleRequest) returns (OperationResponse) {}
+
+  // Enable or disable a whitelist rule by name.
+  rpc SetWhitelistEnabled(SetRuleEnabledRequest) returns (OperationResponse) {}
+
+  // Delete a whitelist rule by name.
+  rpc DeleteWhitelist(DeleteRuleRequest) returns (OperationResponse) {}
+
+  // Enable or disable whitelist priority globally.
+  rpc SetWhitelistPriority(SetPriorityRequest) returns (OperationResponse) {}
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  bool ok = 1;
+  int32 code = 2;
+  string message = 3;
+}
+
+message ListBlacklistsRequest {}
+
+message ListWhitelistsRequest {}
+
+message ListAccessOptionsRequest {}
+
+message AddressObject {
+  string name = 1;
+  repeated string hosts = 2;
+  repeated string networks = 3;
+  repeated string ranges = 4;
+}
+
+message ListAccessOptionsResponse {
+  repeated string interfaces = 1;
+  repeated AddressObject address_objects = 2;
+  repeated string service_objects = 3;
+  int32 code = 4;
+  string message = 5;
+}
+
+message ListRulesResponse {
+  int32 global_priority_enabled = 1;
+  repeated AccessRule rules = 2;
+  int32 code = 3;
+  string message = 4;
+}
+
+message AccessRule {
+  string name = 1;
+  string if_in = 2;
+  string src_addrobj = 3;
+  string dst_addrobj = 4;
+  string dst_servobj = 5;
+  int32 log = 6;
+  int32 log_level = 7;
+  int32 enable = 8;
+  string week_day = 9;
+  string day_enable_time = 10;
+  int32 set_periodic = 11;
+}
+
+message UpsertRuleRequest {
+  string name = 1;
+  string if_in = 2;
+  string src_addrobj = 3;
+  string dst_addrobj = 4;
+  string dst_servobj = 5;
+  int32 log = 6;
+  int32 log_level = 7;
+  int32 enable = 8;
+  string week_day = 9;
+  string day_enable_time = 10;
+  int32 set_periodic = 11;
+}
+
+message IPAccessRuleRequest {
+  string ip = 1;
+  string name = 2;
+  string if_in = 3;
+  string dst_addrobj = 4;
+  string dst_servobj = 5;
+  string src_addrobj = 6;
+  int32 log = 7;
+  int32 log_level = 8;
+  int32 enable = 9;
+  string week_day = 10;
+  string day_enable_time = 11;
+  int32 set_periodic = 12;
+  string address_object_name = 13;
+}
+
+message CreateAddressObjectRequest {
+  string ip = 1;
+  string name = 2;
+  string desc = 3;
+}
+
+message SetRuleEnabledRequest {
+  string name = 1;
+  int32 enable = 2;
+}
+
+message DeleteRuleRequest {
+  string name = 1;
+}
+
+message SetPriorityRequest {
+  int32 priority = 1;
+}
+
+message OperationResponse {
+  bool ok = 1;
+  int32 code = 2;
+  string message = 3;
+}

@@ -1,0 +1,19 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "leadsec-waf",
+  "displayName": "Leadsec_waf",
+  "description": "Leadsec WAF global access blacklist and whitelist management",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/venus_waf.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json"
+}
