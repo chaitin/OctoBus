@@ -1,4 +1,5 @@
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const METHOD_CLUSTER_HEALTH_PATH = '/Elasticsearch_7_10_0.Elasticsearch_7_10_0/ClusterHealth';
 export const METHOD_LIST_INDICES_PATH = '/Elasticsearch_7_10_0.Elasticsearch_7_10_0/ListIndices';
