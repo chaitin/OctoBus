@@ -223,7 +223,7 @@ const executeRequest = async (url, ctx = {}, options = {}) => {
   const init = {
     method: options.method || 'GET',
     headers,
-    timeoutMs,
+    signal: controller.signal,
     ...buildTlsOptions(bindings),
     ...(options.body !== undefined ? { body: options.body } : {}),
   };
