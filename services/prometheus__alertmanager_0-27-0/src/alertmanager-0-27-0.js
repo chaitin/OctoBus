@@ -1,4 +1,5 @@
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const METHOD_LIST_ALERTS_FULL = 'Prometheus_Alertmanager_0_27_0.Prometheus_Alertmanager_0_27_0/ListAlerts';
 export const METHOD_GET_ALERT_GROUPS_FULL = 'Prometheus_Alertmanager_0_27_0.Prometheus_Alertmanager_0_27_0/GetAlertGroups';
