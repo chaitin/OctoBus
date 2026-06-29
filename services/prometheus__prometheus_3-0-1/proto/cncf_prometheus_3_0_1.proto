@@ -255,7 +255,7 @@ message ActiveAlertmanager {
 
 message ListAlertmanagersResponse {
   string status = 1;
-  repeated ActiveAlertmanagers active_alertmanagers = 2;
+  repeated ActiveAlertmanager active_alertmanagers = 2;
   repeated string dropped_alertmanagers = 3;
   string raw_body = 4;
 }
@@ -308,6 +308,6 @@ message MetricMetadata {
 
 message ListMetadataResponse {
   string status = 1;
-  map<string, repeated MetricMetadata> data = 2;
+  repeated MetricMetadata data = 2;
   string raw_body = 3;
 }
