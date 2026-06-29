@@ -45,6 +45,7 @@ const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 200;
 const MAX_FILTER_JSON_BYTES = 4096;
 const MAX_FILTER_VALUES = 20;
+const MAX_RESPONSE_BYTES = 10 * 1024 * 1024;
 const SUPPORTED_LAN = new Set(["zh_CN", "zh_TW", "en_US"]);
 
 const SECURITY_LOG_ENDPOINTS = {
@@ -556,7 +557,7 @@ function normalizedJsonPayload(json) {
 }
 
 function cacheKey(config) {
-  return `${config.endpoint}|${config.username}`;
+  return `${config.endpoint}|${config.username}|${config.apiSecret}`;
 }
 
 function clearSession(config) {
@@ -641,7 +642,7 @@ function isAuthFailure(status, json) {
     status === 403 ||
     code === 401 ||
     code === 403 ||
-    /超时退出|登录超时|未登录|session|token/i.test(message)
+    /超时退出|登录超时|未登录/i.test(message)
   );
 }
 
@@ -697,13 +698,46 @@ async function nodeHttpRequest(urlString, init, config) {
       },
       (response) => {
         const chunks = [];
-        response.on("data", (chunk) => chunks.push(chunk));
+        let totalLength = 0;
+        let settled = false;
+        response.on("data", (chunk) => {
+          totalLength += chunk.length;
+          if (totalLength > MAX_RESPONSE_BYTES) {
+            settled = true;
+            response.destroy(
+              makeServiceError(
+                `upstream response exceeds ${MAX_RESPONSE_BYTES} bytes`,
+                "RESOURCE_EXHAUSTED",
+              ),
+            );
+            return;
+          }
+          chunks.push(chunk);
+        });
         response.on("end", () => {
+          if (settled) {
+            return;
+          }
+          settled = true;
           resolve(
             nodeResponse(
               response.statusCode || 0,
               response.headers,
               Buffer.concat(chunks).toString("utf8"),
+            ),
+          );
+        });
+        response.on("error", (error) => {
+          if (settled && error?.code !== "RESOURCE_EXHAUSTED") {
+            return;
+          }
+          settled = true;
+          reject(
+            makeServiceError(
+              `upstream response error: ${error.message}`,
+              error?.code === "RESOURCE_EXHAUSTED"
+                ? "RESOURCE_EXHAUSTED"
+                : "UNAVAILABLE",
             ),
           );
         });

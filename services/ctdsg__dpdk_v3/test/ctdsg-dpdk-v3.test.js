@@ -123,6 +123,90 @@ test("GetUserInfo refreshes token once after an auth failure", async () => {
   }
 });
 
+test("session cache is isolated by apiSecret", async () => {
+  const upstream = await createMockUpstream();
+  try {
+    await handlers[METHOD_GET_USER_INFO_FULL](
+      contextFor(upstream.baseUrl, {
+        secret: {
+          apiSecret: "secret-one",
+        },
+      }),
+    );
+
+    await handlers[METHOD_GET_USER_INFO_FULL](
+      contextFor(upstream.baseUrl, {
+        secret: {
+          apiSecret: "secret-two",
+        },
+      }),
+    );
+
+    assert.equal(upstream.requests.length, 4);
+    assert.equal(upstream.requests[0].url, "/api.php/Login/uInterlogin");
+    assert.equal(upstream.requests[2].url, "/api.php/Login/uInterlogin");
+    assert.equal(
+      new URLSearchParams(upstream.requests[0].body).get("sign"),
+      _test.buildLoginSign("secret-one"),
+    );
+    assert.equal(
+      new URLSearchParams(upstream.requests[2].body).get("sign"),
+      _test.buildLoginSign("secret-two"),
+    );
+  } finally {
+    await upstream.close();
+  }
+});
+
+test("business messages mentioning token or session do not trigger re-login", async () => {
+  const upstream = await createMockUpstream({
+    handler: (request, response) => {
+      if (
+        request.method === "GET" &&
+        request.url.startsWith("/api.php/reporter/safelog/IpsLog/getList")
+      ) {
+        response.writeHead(200, {
+          "content-type": "application/json; charset=utf-8",
+        });
+        response.end(
+          JSON.stringify({
+            code: 0,
+            message: "total session count and token generated",
+            result: {
+              total: 0,
+              rows: [],
+            },
+          }),
+        );
+        return true;
+      }
+      return false;
+    },
+  });
+  try {
+    const response = await handlers[METHOD_QUERY_SECURITY_LOG_FULL]({
+      ...contextFor(upstream.baseUrl),
+      req: {
+        type: "SECURITY_LOG_IPS",
+        query: {
+          page: 1,
+          pageSize: 5,
+        },
+      },
+    });
+
+    assert.equal(response.code, 0);
+    assert.equal(upstream.requests.length, 2);
+    assert.equal(upstream.requests[0].url, "/api.php/Login/uInterlogin");
+    assert.match(
+      upstream.requests[1].url,
+      /^\/api\.php\/reporter\/safelog\/IpsLog\/getList/,
+    );
+  } finally {
+    await upstream.close();
+  }
+});
+
 test("requires endpoint and credentials", async () => {
   await assert.rejects(
     () =>
@@ -178,6 +262,39 @@ test("upstream requests respect bounded timeout", async () => {
       }),
     /upstream request timed out after 500ms/,
   );
+});
+
+test("upstream responses are bounded in size", async () => {
+  const upstream = await createMockUpstream({
+    handler: (request, response) => {
+      if (
+        request.method === "GET" &&
+        request.url.startsWith("/api.php/reporter/safelog/IpsLog/getList")
+      ) {
+        response.writeHead(200, {
+          "content-type": "application/json; charset=utf-8",
+        });
+        response.write("x".repeat(10 * 1024 * 1024 + 1));
+        response.end();
+        return true;
+      }
+      return false;
+    },
+  });
+  try {
+    await assert.rejects(
+      () =>
+        handlers[METHOD_QUERY_SECURITY_LOG_FULL]({
+          ...contextFor(upstream.baseUrl),
+          req: {
+            type: "SECURITY_LOG_IPS",
+          },
+        }),
+      /upstream request failed: upstream response exceeds/,
+    );
+  } finally {
+    await upstream.close();
+  }
 });
 
 test("QuerySecurityLog calls a fixed allowlisted endpoint with bounded filters", async () => {
