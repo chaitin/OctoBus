@@ -33,6 +33,8 @@ export const DEFAULT_BOT_TYPE = "3";
 export const DEFAULT_TIMEOUT_MS = 15000;
 export const DEFAULT_LONG_POLL_TIMEOUT_MS = 35000;
 export const DEFAULT_LOGIN_WAIT_TIMEOUT_MS = 480000;
+export const DEFAULT_LOGIN_SESSION_TTL_MS = 10 * 60 * 1000;
+export const DEFAULT_MAX_LOGIN_SESSIONS = 32;
 export const DEFAULT_MAX_BUFFERED_MESSAGES = 1000;
 export const DEFAULT_RECEIVER_RETRY_MS = 2000;
 export const DEFAULT_BOT_AGENT = "OctoBus/0.1.0";
@@ -44,6 +46,8 @@ export const EP_GET_QR_STATUS = "ilink/bot/get_qrcode_status";
 export const EP_GET_UPDATES = "ilink/bot/getupdates";
 export const EP_SEND_MESSAGE = "ilink/bot/sendmessage";
 
+// OctoBus starts one long-running Node.js process per service instance, so this
+// runtime state is shared by requests to the same instance but not across instances.
 const loginSessions = new Map();
 
 const runtimeCredentials = {
@@ -342,7 +346,11 @@ const fetchWithTimeout = async (url, init = {}, timeoutMs = DEFAULT_TIMEOUT_MS) 
   const timer = timeoutMs > 0 ? setTimeout(() => controller.abort(), timeoutMs) : null;
   const externalSignal = init.signal;
   const onExternalAbort = () => controller.abort();
-  if (externalSignal) externalSignal.addEventListener("abort", onExternalAbort, { once: true });
+  if (externalSignal?.aborted) {
+    controller.abort();
+  } else if (externalSignal) {
+    externalSignal.addEventListener("abort", onExternalAbort, { once: true });
+  }
   try {
     return await fetch(url, {
       ...init,
@@ -463,7 +471,22 @@ const assertBusinessOk = (body = {}, httpStatus = 0, httpBody = "") => {
   return { ret, errcode, errmsg };
 };
 
+const pruneLoginSessions = (now = Date.now()) => {
+  for (const [key, session] of loginSessions) {
+    const startedAt = Number(session?.startedAt || 0);
+    if (!startedAt || now - startedAt > DEFAULT_LOGIN_SESSION_TTL_MS) {
+      loginSessions.delete(key);
+    }
+  }
+  while (loginSessions.size > DEFAULT_MAX_LOGIN_SESSIONS) {
+    const oldestKey = loginSessions.keys().next().value;
+    if (!oldestKey) break;
+    loginSessions.delete(oldestKey);
+  }
+};
+
 const startLogin = async (req = {}, ctx = {}) => {
+  pruneLoginSessions();
   const callCtx = resolveCallContext(ctx);
   const bindings = callCtx.bindings || {};
   const botType = resolveBotType(bindings, req);
@@ -531,6 +554,7 @@ const pollLoginStatus = async (session, ctx = {}, verifyCode = "") => {
 };
 
 const waitLogin = async (req = {}, ctx = {}) => {
+  pruneLoginSessions();
   const sessionKey = requireString(firstDefined(req.session_key, req.sessionKey), "session_key");
   const session = loginSessions.get(sessionKey);
   if (!session) throw errorWithCode("FAILED_PRECONDITION", "login session not found; call StartLogin first");
@@ -1063,6 +1087,7 @@ export async function maybeAutoStartReceiverFromCli(argv = process.argv.slice(2)
   const secret = readRuntimeObject(argv, "--secret", "--secret-json");
   const bindings = { ...config, ...secret };
   if (resolveAutoStartLogin(bindings) && !resolveToken(bindings)) return false;
+  if (!resolveToken(bindings) && !runtimeCredentials.token) return false;
   await startReceiver({}, { config, secret });
   return true;
 }
@@ -1073,6 +1098,8 @@ export const _test = {
   EP_GET_QR_STATUS,
   EP_GET_UPDATES,
   EP_SEND_MESSAGE,
+  DEFAULT_LOGIN_SESSION_TTL_MS,
+  DEFAULT_MAX_LOGIN_SESSIONS,
   ackMessage,
   apiGet,
   apiPost,
@@ -1113,6 +1140,7 @@ export const _test = {
   parseJsonBody,
   pollLoginStatus,
   pollMessages,
+  pruneLoginSessions,
   randomWechatUin,
   receiverState,
   receiverStatus,

@@ -159,6 +159,7 @@ test("WaitLogin returns confirmed credentials", async () => {
     sessionKey: "session-1",
     qrcode: "qr-1",
     qrcodeUrl: "https://scan.example/qr-1",
+    startedAt: Date.now(),
     currentBaseUrl: "https://ilinkai.weixin.qq.com",
   });
   let captured;
@@ -343,6 +344,7 @@ test("login helper covers cached, redirected, expired, and already-bound session
   _test.loginSessions.set("cached", {
     qrcode: "qr-cached",
     qrcodeUrl: "https://scan.example/cached",
+    startedAt: Date.now(),
     httpStatus: 200,
     httpBody: "{}",
   });
@@ -356,6 +358,7 @@ test("login helper covers cached, redirected, expired, and already-bound session
   _test.loginSessions.set("redirect", {
     qrcode: "qr-redirect",
     qrcodeUrl: "",
+    startedAt: Date.now(),
     currentBaseUrl: "https://ilinkai.weixin.qq.com",
   });
   let redirectCaptured;
@@ -378,6 +381,7 @@ test("login helper covers cached, redirected, expired, and already-bound session
 
   _test.loginSessions.set("expired", {
     qrcode: "qr-expired",
+    startedAt: Date.now(),
     currentBaseUrl: "https://ilinkai.weixin.qq.com",
   });
   setFetch(async () => response(200, JSON.stringify({ status: "expired" })));
@@ -390,6 +394,7 @@ test("login helper covers cached, redirected, expired, and already-bound session
 
   _test.loginSessions.set("blocked", {
     qrcode: "qr-blocked",
+    startedAt: Date.now(),
     currentBaseUrl: "https://ilinkai.weixin.qq.com",
   });
   setFetch(async () => response(200, JSON.stringify({ status: "verify_code_blocked" })));
@@ -401,6 +406,7 @@ test("login helper covers cached, redirected, expired, and already-bound session
 
   _test.loginSessions.set("bound", {
     qrcode: "qr-bound",
+    startedAt: Date.now(),
     currentBaseUrl: "https://ilinkai.weixin.qq.com",
   });
   setFetch(async () => response(200, JSON.stringify({ status: "binded_redirect" })));
@@ -412,6 +418,7 @@ test("login helper covers cached, redirected, expired, and already-bound session
 
   _test.loginSessions.set("wait-then-confirm", {
     qrcode: "qr-wait",
+    startedAt: Date.now(),
     currentBaseUrl: "https://ilinkai.weixin.qq.com",
   });
   let waitPolls = 0;
@@ -449,6 +456,19 @@ test("login helper covers cached, redirected, expired, and already-bound session
 });
 
 test("HTTP helpers map network, bad body, and status errors", async () => {
+  const abortedController = new AbortController();
+  abortedController.abort();
+  setFetch(async (_url, init) => {
+    assert.equal(init.signal.aborted, true);
+    const err = new Error("aborted");
+    err.name = "AbortError";
+    throw err;
+  });
+  await assert.rejects(
+    () => _test.fetchWithTimeout("https://ilinkai.weixin.qq.com", { signal: abortedController.signal }, 1000),
+    (err) => err?.name === "AbortError",
+  );
+
   setFetch(async () => {
     throw new Error("network down");
   });
@@ -529,6 +549,14 @@ test("receiver start handles already-running state and auto-start CLI parsing", 
     "serve",
     "--config-json",
     JSON.stringify({ autoStartReceiver: false }),
+  ]), false);
+  assert.equal(await _test.maybeAutoStartReceiverFromCli([
+    "--runtime",
+    "serve",
+    "--config-json",
+    JSON.stringify({ autoStartReceiver: true, autoStartLogin: false }),
+    "--secret-json",
+    JSON.stringify({}),
   ]), false);
 
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "octobus-weixin-test-"));
@@ -671,6 +699,21 @@ test("helper aliases and small scalar branches behave as expected", () => {
   assert.equal(_test.resolveLoginWaitTimeoutMs({ login_wait_timeout_ms: "3333" }), 3333);
   assert.equal(_test.resolveAutoLoginRetryMs({ auto_login_retry_ms: "4444" }), 4444);
   assert.ok(_test.buildTerminalQrCode("hello").includes("▄▄"));
+
+  const now = Date.now();
+  _test.loginSessions.set("fresh", { startedAt: now });
+  _test.loginSessions.set("expired", { startedAt: now - _test.DEFAULT_LOGIN_SESSION_TTL_MS - 1 });
+  _test.loginSessions.set("missing-start", {});
+  _test.pruneLoginSessions(now);
+  assert.equal(_test.loginSessions.has("fresh"), true);
+  assert.equal(_test.loginSessions.has("expired"), false);
+  assert.equal(_test.loginSessions.has("missing-start"), false);
+
+  for (let i = 0; i < _test.DEFAULT_MAX_LOGIN_SESSIONS + 2; i += 1) {
+    _test.loginSessions.set(`session-${i}`, { startedAt: now });
+  }
+  _test.pruneLoginSessions(now);
+  assert.equal(_test.loginSessions.size, _test.DEFAULT_MAX_LOGIN_SESSIONS);
 });
 
 test("normalization and send helpers cover object input, invalid input, aliases, and generated client id", async () => {
@@ -719,6 +762,7 @@ test("more failure branches cover invalid URLs, GET network errors, wait timeout
 
   _test.loginSessions.set("need-code", {
     qrcode: "qr-code",
+    startedAt: Date.now(),
     currentBaseUrl: "https://ilinkai.weixin.qq.com",
   });
   setFetch(async () => response(200, JSON.stringify({ status: "need_verifycode" })));
