@@ -21,8 +21,8 @@ function createMockServer() {
       res.end(JSON.stringify({
         items: [
           {
-            cluster_id: 'cluster-1',
-            cluster_name: 'prod-cluster',
+            id: 'cluster-1',
+            name: 'prod-cluster',
             risk_level: 'high'
           }
         ],
@@ -34,9 +34,15 @@ function createMockServer() {
     if (req.url === '/cluster/cluster_info?cluster_id=cluster-1') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({
-        cluster_id: 'cluster-1',
-        cluster_name: 'prod-cluster',
-        created_at: '2024-01-01T00:00:00Z'
+        data: {
+          data: {
+            cluster_info: {
+              id: 'cluster-1',
+              name: 'prod-cluster',
+              created_at: '2024-01-01T00:00:00Z'
+            }
+          }
+        }
       }));
       return;
     }
@@ -52,9 +58,11 @@ function createMockServer() {
         res.end(JSON.stringify({
           vuln_events: [
             {
-              event_id: 'event-1',
+              id: 'event-1',
               cluster_id: 'cluster-1',
-              package_name: 'openssl'
+              name: 'openssl',
+              service_uid: '',
+              service_name: ''
             }
           ],
           next_page_token: 'cursor-b'
@@ -66,9 +74,11 @@ function createMockServer() {
     if (req.url === '/cluster_vuln/vuln_event_info?id=event-1') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({
-        event_id: 'event-1',
-        cluster_id: 'cluster-1',
-        fixed_version: '3.0.0'
+        data: {
+          id: 'event-1',
+          cluster_id: 'cluster-1',
+          fixed_version: '3.0.0'
+        }
       }));
       return;
     }
@@ -78,9 +88,9 @@ function createMockServer() {
       res.end(JSON.stringify({
         items: [
           {
-            event_id: 'ms-event-1',
-            microservice_id: 'service-1',
-            microservice_name: 'checkout'
+            id: 'ms-event-1',
+            service_uid: 'service-1',
+            service_name: 'checkout'
           }
         ],
         next_page_token: 'cursor-n'
@@ -91,10 +101,12 @@ function createMockServer() {
     if (req.url === '/cluster_microservice/vuln_event_info?id=ms-event-1') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({
-        event_id: 'ms-event-1',
-        microservice_id: 'service-1',
-        microservice_name: 'checkout',
-        package_version: '1.0.0'
+        data: {
+          id: 'ms-event-1',
+          service_uid: 'service-1',
+          service_name: 'checkout',
+          package_version: '1.0.0'
+        }
       }));
       return;
     }
@@ -142,16 +154,21 @@ describe('cloudwalker client', () => {
 
     const response = await client.listClusters({ pageSize: 20, pageToken: 'cursor-1' });
 
-    assert.deepEqual(response, {
-      clusters: [
-        {
-          clusterId: 'cluster-1',
-          clusterName: 'prod-cluster',
-          riskLevel: 'high'
-        }
-      ],
-      nextPageToken: 'cursor-2'
+    assert.deepEqual(response.clusters[0], {
+      clusterId: 'cluster-1',
+      clusterName: 'prod-cluster',
+      status: '',
+      riskLevel: '',
+      createdAt: '',
+      updatedAt: '',
+      apiVersion: '',
+      masterIps: [],
+      moduleStatus: [],
+      clusterType: 0,
+      reachable: 0,
+      integrationStatus: 0,
     });
+    assert.equal(response.nextPageToken, 'cursor-2');
     assert.equal(requests.at(-1).headers.authorization, 'Bearer test-token');
     assert.equal(requests.at(-1).url, '/cluster/cluster_list?page_size=20&offset=cursor-1');
   });
@@ -178,7 +195,7 @@ describe('cloudwalker client', () => {
       pageSize: 10,
       pageToken: 'cursor-a'
     });
-    assert.equal(clusterEvents.vulnEvents[0].packageName, 'openssl');
+    assert.equal(clusterEvents.vulnEvents[0].title, 'openssl');
     assert.equal(clusterEvents.nextPageToken, 'cursor-b');
 
     const microserviceEvents = await client.listMicroserviceVulnEvents({
@@ -200,8 +217,7 @@ describe('cloudwalker client', () => {
 
 describe('cloudwalker handlers', () => {
   it('builds the client from context config, secrets and bindings', async () => {
-    const response = await handlers.ListClusters(
-      { pageSize: 20, pageToken: 'cursor-1' },
+    const response = await handlers['CloudWalker.CloudWalker/ListClusters'](
       {
         config: {
           baseUrl,
@@ -210,7 +226,8 @@ describe('cloudwalker handlers', () => {
         secret: {
           token: 'handler-token',
           cookie: 'session=handler'
-        }
+        },
+        request: { pageSize: 20, pageToken: 'cursor-1' }
       }
     );
 
@@ -222,11 +239,11 @@ describe('cloudwalker handlers', () => {
   });
 
   it('accepts cluster vuln detail requests without clusterId', async () => {
-    const response = await handlers.GetClusterVulnEvent(
-      { eventId: 'event-1' },
+    const response = await handlers['CloudWalker.CloudWalker/GetClusterVulnEvent'](
       {
         config: { baseUrl },
-        secret: { token: 'handler-token' }
+        secret: { token: 'handler-token' },
+        request: { eventId: 'event-1' }
       }
     );
 

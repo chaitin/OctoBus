@@ -49,6 +49,12 @@ message ListVulnEventsResponse {
   string next_page_token = 2;
 }
 
+message ModuleStatus {
+  string version = 1;
+  int32 module_type = 2;
+  int32 status = 3;
+}
+
 message Cluster {
   string cluster_id = 1;
   string cluster_name = 2;
@@ -56,6 +62,14 @@ message Cluster {
   string risk_level = 4;
   string created_at = 5;
   string updated_at = 6;
+
+  // Extended fields from CloudWalker API
+  string api_version = 7;
+  repeated string master_ips = 8;
+  repeated ModuleStatus module_status = 9;
+  int32 cluster_type = 10;
+  int32 reachable = 11;
+  int32 integration_status = 12;
 }
 
 message VulnEvent {
@@ -73,4 +87,20 @@ message VulnEvent {
   string image_name = 12;
   string discovered_at = 13;
   string updated_at = 14;
+
+  // Extended fields for better data coverage
+  string node_name = 15;
+  string cluster_name = 16;
+  int32 risk = 17;
+  int32 original_risk = 18;
+  int32 custom_risk = 19;
+  repeated string characteristic = 20;
+  string service_uid = 21;
+  string service_type = 22;
+  string description = 23;
+  string solution = 24;
+  int32 manage_status = 25;
+  bool node_exist = 26;
+  string first_discovery_time = 27;
+  string last_discovery_time = 28;
 }

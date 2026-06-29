@@ -39,6 +39,62 @@ const toCamelCase = (value) => {
   );
 };
 
+const normalizeCluster = (clusterData) => {
+  const camelData = toCamelCase(clusterData);
+
+  return {
+    clusterId: String(camelData.id || ''),
+    clusterName: camelData.name || '',
+    status: String(camelData.status || ''),
+    riskLevel: '',
+    createdAt: String(camelData.createdAt || ''),
+    updatedAt: String(camelData.updatedAt || ''),
+    // Extended fields
+    apiVersion: camelData.apiVersion || '',
+    masterIps: camelData.masterIps || [],
+    moduleStatus: camelData.moduleStatus || [],
+    clusterType: camelData.clusterType || 0,
+    reachable: camelData.reachable || 0,
+    integrationStatus: camelData.integrationStatus || 0,
+  };
+};
+
+const normalizeVulnEvent = (vulnData) => {
+  const camelData = toCamelCase(vulnData);
+
+  return {
+    eventId: String(camelData.id || ''),
+    clusterId: String(camelData.clusterId || ''),
+    microserviceId: camelData.serviceUid || '',
+    microserviceName: camelData.serviceName || '',
+    level: String(camelData.risk || ''),
+    status: String(camelData.manageStatus || ''),
+    title: camelData.name || '',
+    cve: camelData.cve || '',
+    packageName: '',
+    packageVersion: String(camelData.packageVersion || ''),
+    fixedVersion: String(camelData.fixedVersion || ''),
+    imageName: '',
+    discoveredAt: String(camelData.discoveryTime || camelData.firstDiscoveryTime || ''),
+    updatedAt: String(camelData.lastDiscoveryTime || camelData.discoveryTime || ''),
+    // Extended fields
+    nodeName: camelData.nodeName || '',
+    clusterName: camelData.clusterName || '',
+    risk: camelData.risk || 0,
+    originalRisk: camelData.originalRisk || 0,
+    customRisk: camelData.customRisk || 0,
+    characteristic: camelData.characteristic || [],
+    serviceUid: camelData.serviceUid || '',
+    serviceType: camelData.serviceType || '',
+    description: camelData.description || '',
+    solution: camelData.solution || '',
+    manageStatus: camelData.manageStatus || 0,
+    nodeExist: camelData.nodeExist || false,
+    firstDiscoveryTime: String(camelData.firstDiscoveryTime || ''),
+    lastDiscoveryTime: String(camelData.lastDiscoveryTime || ''),
+  };
+};
+
 const buildPaginationQuery = ({ pageSize, pageToken } = {}) => {
   const query = new URLSearchParams();
 
@@ -56,8 +112,21 @@ const buildPaginationQuery = ({ pageSize, pageToken } = {}) => {
 const normalizeListPayload = (payload, collectionKey) => {
   const camelPayload = toCamelCase(payload);
 
+  // CloudWalker API returns {data: {data: [...]}} format
+  const rawItems = camelPayload?.data?.data || camelPayload.items || camelPayload[collectionKey] || [];
+
+  // Normalize each item based on collection type
+  let items;
+  if (collectionKey === 'clusters') {
+    items = rawItems.map(normalizeCluster);
+  } else if (collectionKey === 'vulnEvents') {
+    items = rawItems.map(normalizeVulnEvent);
+  } else {
+    items = rawItems;
+  }
+
   return {
-    [collectionKey]: camelPayload.items ?? camelPayload[collectionKey] ?? [],
+    [collectionKey]: items,
     nextPageToken: camelPayload.nextPageToken ?? '',
   };
 };
@@ -102,12 +171,14 @@ const buildHttpError = (status, payload) => {
 };
 
 export class CloudWalkerClient {
-  constructor({ baseUrl, token, cookie = '', referer = '', fetchImpl = fetch }) {
+  constructor({ baseUrl, token, cookie = '', referer = '', fetchImpl }) {
     this.baseUrl = String(baseUrl || '').replace(/\/$/, '');
     this.token = token;
     this.cookie = cookie;
     this.referer = referer;
-    this.fetchImpl = fetchImpl;
+    // Use provided fetchImpl or fall back to global fetch
+    // Note: In some environments, global fetch may have issues with HTTPS
+    this.fetchImpl = fetchImpl || fetch;
   }
 
   async get(path, query) {
@@ -161,7 +232,12 @@ export class CloudWalkerClient {
   async getClusterInfo({ clusterId }) {
     const query = new URLSearchParams();
     query.set('cluster_id', clusterId);
-    return toCamelCase(await this.get(endpoints.getClusterInfo, query));
+    const response = await this.get(endpoints.getClusterInfo, query);
+
+    // CloudWalker API returns {data: {data: {cluster_info: {...}}}} format
+    const clusterInfo = response?.data?.data?.cluster_info || response?.clusterInfo || response;
+
+    return normalizeCluster(clusterInfo);
   }
 
   async listClusterVulnEvents({ clusterId, ...request }) {
@@ -175,7 +251,12 @@ export class CloudWalkerClient {
   async getClusterVulnEvent({ eventId }) {
     const query = new URLSearchParams();
     query.set('id', eventId);
-    return toCamelCase(await this.get(endpoints.getClusterVulnEvent, query));
+    const response = await this.get(endpoints.getClusterVulnEvent, query);
+
+    // CloudWalker API returns {data: {...}} format
+    const vulnEventData = response?.data || response;
+
+    return normalizeVulnEvent(vulnEventData);
   }
 
   async listMicroserviceVulnEvents(request) {
@@ -185,7 +266,12 @@ export class CloudWalkerClient {
   async getMicroserviceVulnEvent({ eventId }) {
     const query = new URLSearchParams();
     query.set('id', eventId);
-    return toCamelCase(await this.get(endpoints.getMicroserviceVulnEvent, query));
+    const response = await this.get(endpoints.getMicroserviceVulnEvent, query);
+
+    // CloudWalker API returns {data: {...}} format
+    const vulnEventData = response?.data || response;
+
+    return normalizeVulnEvent(vulnEventData);
   }
 }
 

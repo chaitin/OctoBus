@@ -27,22 +27,28 @@ const buildOptions = (ctx = {}) => ({
 });
 
 export const handlers = {
-  async ListClusters(request, ctx) {
+  async 'CloudWalker.CloudWalker/ListClusters'(ctx) {
+    const request = ctx.request;
     return createClient(buildOptions(ctx)).listClusters(request);
   },
-  async GetClusterInfo(request, ctx) {
+  async 'CloudWalker.CloudWalker/GetClusterInfo'(ctx) {
+    const request = ctx.request;
     return createClient(buildOptions(ctx)).getClusterInfo(request);
   },
-  async ListClusterVulnEvents(request, ctx) {
+  async 'CloudWalker.CloudWalker/ListClusterVulnEvents'(ctx) {
+    const request = ctx.request;
     return createClient(buildOptions(ctx)).listClusterVulnEvents(request);
   },
-  async GetClusterVulnEvent(request, ctx) {
+  async 'CloudWalker.CloudWalker/GetClusterVulnEvent'(ctx) {
+    const request = ctx.request;
     return createClient(buildOptions(ctx)).getClusterVulnEvent(request);
   },
-  async ListMicroserviceVulnEvents(request, ctx) {
+  async 'CloudWalker.CloudWalker/ListMicroserviceVulnEvents'(ctx) {
+    const request = ctx.request;
     return createClient(buildOptions(ctx)).listMicroserviceVulnEvents(request);
   },
-  async GetMicroserviceVulnEvent(request, ctx) {
+  async 'CloudWalker.CloudWalker/GetMicroserviceVulnEvent'(ctx) {
+    const request = ctx.request;
     return createClient(buildOptions(ctx)).getMicroserviceVulnEvent(request);
   },
 };
