@@ -247,9 +247,14 @@ export function rpcdef(ctx) {
 
     const page = toPositiveInt(firstDefined(req?.page, req?.Page)) || DEFAULT_PAGE;
     const limit = toPositiveInt(firstDefined(req?.limit, req?.Limit)) || DEFAULT_LIMIT;
+    const ip = pickStringField(req ?? {}, ['ip']);
+    const type = pickStringField(req ?? {}, ['type']);
 
-    const url = buildApiKeyUrl(baseUrl, '/api/v1/attack/detail', apiKey, { page, limit });
-    logFlow('ListAttackDetails:start', { baseUrl, page, limit });
+    const extraParams = { page, limit };
+    if (ip) extraParams.ip = ip;
+    if (type) extraParams.type = type;
+    const url = buildApiKeyUrl(baseUrl, '/api/v1/attack/detail', apiKey, extraParams);
+    logFlow('ListAttackDetails:start', { baseUrl, page, limit, ip: ip || undefined, type: type || undefined });
 
     const res = await fetchHfish(url, { method: 'POST', headers: { ...baseHeaders, 'content-type': 'application/json' }, body: '{}' });
     const json = await readJsonResponse(res, {});

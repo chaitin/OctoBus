@@ -37,7 +37,7 @@ Use `secret.apiKey` for the HFish API key:
 }
 ```
 
-Requests may still pass `api_key` or `apiKey`; request values take precedence over the configured secret.
+Requests may still pass `api_key` or `apiKey`; configured secret values take precedence over request values (because gRPC proto3 string fields default to `""` which would shadow the real secret).
 
 ## RPC Methods
 
