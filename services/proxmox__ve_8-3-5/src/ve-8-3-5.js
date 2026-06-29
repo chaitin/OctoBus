@@ -269,6 +269,8 @@ const proxmoxRequest = async (ctx, segments, { method = 'GET', query, allowHttp 
   const token = resolveToken(bindings);
   const authHeader = buildAuthHeader(token);
   const timeoutMs = resolveTimeoutMs(callCtx);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   const url = buildUrl(baseUrl, segments, query);
   logFlow(callCtx, 'request', { method, url, segments });
 
@@ -277,7 +279,7 @@ const proxmoxRequest = async (ctx, segments, { method = 'GET', query, allowHttp 
     response = await fetch(url, {
       method,
       headers: buildHeaders(bindings, authHeader),
-      timeoutMs,
+      signal: controller.signal,
       ...buildTlsOptions(bindings),
     });
   } catch (err) {
@@ -286,6 +288,7 @@ const proxmoxRequest = async (ctx, segments, { method = 'GET', query, allowHttp 
     throw engineError('UNAVAILABLE', `upstream fetch failed: ${message}`);
   }
 
+  clearTimeout(timer);
   const text = await response.text();
   const httpStatus = Number(response.status || 0);
   logFlow(callCtx, 'fetch:response', { url, httpStatus, bodyLength: text?.length || 0 });
