@@ -1,10 +1,9 @@
-## 联调证据：Prometheus Alertmanager 0.27.0 跑通 (issue #107)
-
-> 本地真实联调：本地启动 mock upstream 模拟目标服务 → gRPC handler 直接调用 → 完整 HTTP request/response 已捕获。
+## Integration Evidence: ListAlerts successful
 
 # Request
 ```
-GET http://10.0.0.7:9093/api/v2/alerts
+http://10.0.0.7:9093/api/v2/alerts
+(no auth)
 ```
 
 # Response   HTTP/1.1 200 OK
@@ -33,4 +32,3 @@ GET http://10.0.0.7:9093/api/v2/alerts
   }
 ]
 ```
-
