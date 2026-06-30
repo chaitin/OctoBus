@@ -14,6 +14,8 @@ service CloudWalker {
 message ListClustersRequest {
   int32 page_size = 1;
   string page_token = 2;
+  string name = 3;
+  int32 status = 4;
 }
 
 message GetClusterInfoRequest {
@@ -24,6 +26,17 @@ message ListClusterVulnEventsRequest {
   string cluster_id = 1;
   int32 page_size = 2;
   string page_token = 3;
+  string cve = 4;
+  string name = 5;
+  string cnvd = 6;
+  string cnnvd = 7;
+  string node_name = 8;
+  string cluster_name = 9;
+  string order_by = 10;
+  repeated int32 risk = 11;
+  repeated int32 state = 12;
+  repeated string characteristic = 13;
+  int32 order = 14;
 }
 
 message GetClusterVulnEventRequest {
@@ -33,6 +46,18 @@ message GetClusterVulnEventRequest {
 message ListMicroserviceVulnEventsRequest {
   int32 page_size = 1;
   string page_token = 2;
+  string service_name = 3;
+  string service_type = 4;
+  string cluster_name = 5;
+  string name = 6;
+  string cve = 7;
+  string cnvd = 8;
+  string cnnvd = 9;
+  string order_by = 10;
+  repeated string characteristic = 11;
+  repeated int32 risk = 12;
+  repeated int32 state = 13;
+  int32 order = 14;
 }
 
 message GetMicroserviceVulnEventRequest {
@@ -103,4 +128,6 @@ message VulnEvent {
   bool node_exist = 26;
   string first_discovery_time = 27;
   string last_discovery_time = 28;
+  string cnvd = 29;
+  string cnnvd = 30;
 }

@@ -71,6 +71,8 @@ const normalizeVulnEvent = (vulnData) => {
     status: String(camelData.manageStatus || ''),
     title: camelData.name || '',
     cve: camelData.cve || '',
+    cnvd: camelData.cnvd || '',
+    cnnvd: camelData.cnnvd || '',
     packageName: '',
     packageVersion: String(camelData.packageVersion || ''),
     fixedVersion: String(camelData.fixedVersion || ''),
@@ -98,15 +100,179 @@ const normalizeVulnEvent = (vulnData) => {
 const buildPaginationQuery = ({ pageSize, pageToken } = {}) => {
   const query = new URLSearchParams();
 
-  if (pageSize) {
+  if (Number.isInteger(pageSize) && pageSize > 0) {
     query.set('page_size', String(pageSize));
   }
 
   if (pageToken) {
-    query.set('offset', pageToken);
+    query.set('offset', String(pageToken));
   }
 
   return query;
+};
+
+const appendScalarQuery = (query, entries) => {
+  for (const [key, value] of entries) {
+    if (value === undefined || value === null) {
+      continue;
+    }
+    if (typeof value === 'string' && value.trim() === '') {
+      continue;
+    }
+    query.set(key, String(value));
+  }
+
+  return query;
+};
+
+const appendRepeatedQuery = (query, key, values) => {
+  if (!Array.isArray(values) || values.length === 0) {
+    return query;
+  }
+
+  for (const value of values) {
+    if (value === undefined || value === null) {
+      continue;
+    }
+    if (typeof value === 'string' && value.trim() === '') {
+      continue;
+    }
+    query.append(key, String(value));
+  }
+
+  return query;
+};
+
+const hasMeaningfulValue = (value) => {
+  if (value === undefined || value === null) {
+    return false;
+  }
+  if (typeof value === 'string') {
+    return value.trim() !== '';
+  }
+  if (Array.isArray(value)) {
+    return value.some((item) => hasMeaningfulValue(item));
+  }
+  return true;
+};
+
+const isHtmlResponseError = (error) => (
+  error instanceof CloudWalkerError
+  && error.httpStatus === 200
+  && typeof error.details === 'string'
+  && error.details.toLowerCase().includes('<!doctype html>')
+);
+
+const normalizeComparableString = (value) => String(value || '').trim();
+
+const collectFilteredItems = async ({
+  request = {},
+  fetchPage,
+  matchesItem,
+  scanPageSize = 50,
+  maxPages = 10,
+}) => {
+  const targetCount = Number.isInteger(request.pageSize) && request.pageSize > 0 ? request.pageSize : scanPageSize;
+  const pageSize = Math.max(targetCount, scanPageSize);
+  let pageToken = request.pageToken || '';
+  let lastNextPageToken = '';
+  const matched = [];
+
+  for (let page = 0; page < maxPages && matched.length < targetCount; page += 1) {
+    const result = await fetchPage({ pageSize, pageToken });
+    const items = result.items || [];
+    lastNextPageToken = result.nextPageToken || '';
+
+    if (items.length === 0) {
+      break;
+    }
+
+    for (const item of items) {
+      if (await matchesItem(item)) {
+        matched.push(item);
+        if (matched.length >= targetCount) {
+          break;
+        }
+      }
+    }
+
+    if (!lastNextPageToken) {
+      break;
+    }
+
+    pageToken = lastNextPageToken;
+  }
+
+  return {
+    items: matched.slice(0, targetCount),
+    nextPageToken: matched.length >= targetCount ? lastNextPageToken : '',
+  };
+};
+
+const buildListClustersQuery = (request = {}) => {
+  const query = buildPaginationQuery(request);
+  return appendScalarQuery(query, [
+    ['name', request.name],
+    ['status', request.status],
+  ]);
+};
+
+const buildListClusterVulnEventsQuery = ({ clusterId, pageSize, pageToken, cve, name, cnvd, cnnvd, nodeName, clusterName, orderBy, risk, state, characteristic, order } = {}) => {
+  const query = buildPaginationQuery({ pageSize, pageToken });
+
+  appendScalarQuery(query, [
+    ['cluster_id', clusterId],
+    ['cve', cve],
+    ['name', name],
+    ['cnvd', cnvd],
+    ['cnnvd', cnnvd],
+    ['node_name', nodeName],
+    ['cluster_name', clusterName],
+    ['order_by', orderBy],
+    ['order', order],
+  ]);
+
+  appendRepeatedQuery(query, 'risk', risk);
+  appendRepeatedQuery(query, 'state', state);
+  appendRepeatedQuery(query, 'characteristic', characteristic);
+
+  return query;
+};
+
+const buildListMicroserviceVulnEventsQuery = ({ pageSize, pageToken, serviceName, serviceType, clusterName, name, cve, cnvd, cnnvd, orderBy, characteristic, risk, state, order } = {}) => {
+  const query = buildPaginationQuery({ pageSize, pageToken });
+
+  appendScalarQuery(query, [
+    ['service_name', serviceName],
+    ['service_type', serviceType],
+    ['cluster_name', clusterName],
+    ['name', name],
+    ['cve', cve],
+    ['cnvd', cnvd],
+    ['cnnvd', cnnvd],
+    ['order_by', orderBy],
+    ['order', order],
+  ]);
+
+  appendRepeatedQuery(query, 'characteristic', characteristic);
+  appendRepeatedQuery(query, 'risk', risk);
+  appendRepeatedQuery(query, 'state', state);
+
+  return query;
+};
+
+const enrichVulnEventsWithDetails = async (events, detailCache, loadDetail) => {
+  const enriched = [];
+
+  for (const event of events) {
+    if (!detailCache.has(event.eventId)) {
+      detailCache.set(event.eventId, normalizeVulnEvent(await loadDetail(event.eventId)));
+    }
+    const detail = detailCache.get(event.eventId);
+    enriched.push(detail ? { ...detail, ...event, cnvd: detail.cnvd || event.cnvd || '', cnnvd: detail.cnnvd || event.cnnvd || '' } : event);
+  }
+
+  return enriched;
 };
 
 const normalizeListPayload = (payload, collectionKey) => {
@@ -226,7 +392,39 @@ export class CloudWalkerClient {
   }
 
   async listClusters(request) {
-    return normalizeListPayload(await this.get(endpoints.listClusters, buildPaginationQuery(request)), 'clusters');
+    try {
+      return normalizeListPayload(await this.get(endpoints.listClusters, buildListClustersQuery(request)), 'clusters');
+    } catch (error) {
+      if (!isHtmlResponseError(error) || (!hasMeaningfulValue(request?.name) && !hasMeaningfulValue(request?.status))) {
+        throw error;
+      }
+
+      const fallback = await collectFilteredItems({
+        request,
+        fetchPage: async ({ pageSize, pageToken }) => {
+          const payload = await this.get(endpoints.listClusters, buildPaginationQuery({ pageSize, pageToken }));
+          const response = normalizeListPayload(payload, 'clusters');
+          return {
+            items: response.clusters,
+            nextPageToken: response.nextPageToken,
+          };
+        },
+        matchesItem: async (cluster) => {
+          if (hasMeaningfulValue(request.name) && normalizeComparableString(cluster.clusterName) !== normalizeComparableString(request.name)) {
+            return false;
+          }
+          if (hasMeaningfulValue(request.status) && String(cluster.status) !== String(request.status)) {
+            return false;
+          }
+          return true;
+        },
+      });
+
+      return {
+        clusters: fallback.items,
+        nextPageToken: fallback.nextPageToken,
+      };
+    }
   }
 
   async getClusterInfo({ clusterId }) {
@@ -240,38 +438,194 @@ export class CloudWalkerClient {
     return normalizeCluster(clusterInfo);
   }
 
-  async listClusterVulnEvents({ clusterId, ...request }) {
-    const query = buildPaginationQuery(request);
-    if (clusterId) {
-      query.set('cluster_id', clusterId);
-    }
-    return normalizeListPayload(await this.get(endpoints.listClusterVulnEvents, query), 'vulnEvents');
-  }
-
-  async getClusterVulnEvent({ eventId }) {
+  async getClusterVulnEventPayload(eventId) {
     const query = new URLSearchParams();
     query.set('id', eventId);
     const response = await this.get(endpoints.getClusterVulnEvent, query);
-
-    // CloudWalker API returns {data: {...}} format
-    const vulnEventData = response?.data || response;
-
-    return normalizeVulnEvent(vulnEventData);
+    return response?.data || response;
   }
 
-  async listMicroserviceVulnEvents(request) {
-    return normalizeListPayload(await this.get(endpoints.listMicroserviceVulnEvents, buildPaginationQuery(request)), 'vulnEvents');
+  async getClusterVulnEvent({ eventId }) {
+    return normalizeVulnEvent(await this.getClusterVulnEventPayload(eventId));
   }
 
-  async getMicroserviceVulnEvent({ eventId }) {
+  async listClusterVulnEvents(request) {
+    const requiresFallback = hasMeaningfulValue(request?.clusterName) || hasMeaningfulValue(request?.cnvd) || hasMeaningfulValue(request?.cnnvd);
+    const needsDetailEnrichment = hasMeaningfulValue(request?.cnvd) || hasMeaningfulValue(request?.cnnvd);
+    const detailCache = new Map();
+
+    if (!requiresFallback) {
+      return normalizeListPayload(await this.get(endpoints.listClusterVulnEvents, buildListClusterVulnEventsQuery(request)), 'vulnEvents');
+    }
+
+    let directError = null;
+    try {
+      const direct = await this.get(endpoints.listClusterVulnEvents, buildListClusterVulnEventsQuery(request));
+      const normalized = normalizeListPayload(direct, 'vulnEvents');
+      if (!hasMeaningfulValue(request?.clusterName) || normalized.vulnEvents.length > 0) {
+        if (!needsDetailEnrichment) {
+          return normalized;
+        }
+        return {
+          vulnEvents: await enrichVulnEventsWithDetails(normalized.vulnEvents, detailCache, (eventId) => this.getClusterVulnEventPayload(eventId)),
+          nextPageToken: normalized.nextPageToken,
+        };
+      }
+    } catch (error) {
+      directError = error;
+      if (!(isHtmlResponseError(error) || error instanceof CloudWalkerError)) {
+        throw error;
+      }
+    }
+
+    const fallbackRequest = {
+      ...request,
+      clusterName: undefined,
+      cnvd: undefined,
+      cnnvd: undefined,
+    };
+
+    const fallback = await collectFilteredItems({
+      request,
+      fetchPage: async ({ pageSize, pageToken }) => {
+        const payload = await this.get(endpoints.listClusterVulnEvents, buildListClusterVulnEventsQuery({ ...fallbackRequest, pageSize, pageToken }));
+        const response = normalizeListPayload(payload, 'vulnEvents');
+        return {
+          items: response.vulnEvents,
+          nextPageToken: response.nextPageToken,
+        };
+      },
+      matchesItem: async (event) => {
+        let detail = null;
+        if (hasMeaningfulValue(request.clusterName) || hasMeaningfulValue(request.cnvd) || hasMeaningfulValue(request.cnnvd)) {
+          if (!detailCache.has(event.eventId)) {
+            detailCache.set(event.eventId, normalizeVulnEvent(await this.getClusterVulnEventPayload(event.eventId)));
+          }
+          detail = detailCache.get(event.eventId);
+        }
+
+        const candidateClusterName = detail?.clusterName || event.clusterName;
+        if (hasMeaningfulValue(request.clusterName) && normalizeComparableString(candidateClusterName) !== normalizeComparableString(request.clusterName)) {
+          return false;
+        }
+
+        if (hasMeaningfulValue(request.cnvd) && normalizeComparableString(detail?.cnvd) !== normalizeComparableString(request.cnvd)) {
+          return false;
+        }
+        if (hasMeaningfulValue(request.cnnvd) && normalizeComparableString(detail?.cnnvd) !== normalizeComparableString(request.cnnvd)) {
+          return false;
+        }
+
+        return true;
+      },
+    });
+
+    if (fallback.items.length > 0 || directError) {
+      return {
+        vulnEvents: await enrichVulnEventsWithDetails(fallback.items, detailCache, (eventId) => this.getClusterVulnEventPayload(eventId)),
+        nextPageToken: fallback.nextPageToken,
+      };
+    }
+
+    return {
+      vulnEvents: fallback.items,
+      nextPageToken: fallback.nextPageToken,
+    };
+  }
+
+  async getMicroserviceVulnEventPayload(eventId) {
     const query = new URLSearchParams();
     query.set('id', eventId);
     const response = await this.get(endpoints.getMicroserviceVulnEvent, query);
+    return response?.data || response;
+  }
 
-    // CloudWalker API returns {data: {...}} format
-    const vulnEventData = response?.data || response;
+  async getMicroserviceVulnEvent({ eventId }) {
+    return normalizeVulnEvent(await this.getMicroserviceVulnEventPayload(eventId));
+  }
 
-    return normalizeVulnEvent(vulnEventData);
+  async listMicroserviceVulnEvents(request) {
+    const requiresFallback = hasMeaningfulValue(request?.clusterName) || hasMeaningfulValue(request?.cnvd) || hasMeaningfulValue(request?.cnnvd);
+    const needsDetailEnrichment = hasMeaningfulValue(request?.cnvd) || hasMeaningfulValue(request?.cnnvd);
+    const detailCache = new Map();
+
+    if (!requiresFallback) {
+      return normalizeListPayload(await this.get(endpoints.listMicroserviceVulnEvents, buildListMicroserviceVulnEventsQuery(request)), 'vulnEvents');
+    }
+
+    let directError = null;
+    try {
+      const direct = await this.get(endpoints.listMicroserviceVulnEvents, buildListMicroserviceVulnEventsQuery(request));
+      const normalized = normalizeListPayload(direct, 'vulnEvents');
+      if (!hasMeaningfulValue(request?.clusterName) || normalized.vulnEvents.length > 0) {
+        if (!needsDetailEnrichment) {
+          return normalized;
+        }
+        return {
+          vulnEvents: await enrichVulnEventsWithDetails(normalized.vulnEvents, detailCache, (eventId) => this.getMicroserviceVulnEventPayload(eventId)),
+          nextPageToken: normalized.nextPageToken,
+        };
+      }
+    } catch (error) {
+      directError = error;
+      if (!(isHtmlResponseError(error) || error instanceof CloudWalkerError)) {
+        throw error;
+      }
+    }
+
+    const fallbackRequest = {
+      ...request,
+      clusterName: undefined,
+      cnvd: undefined,
+      cnnvd: undefined,
+    };
+
+    const fallback = await collectFilteredItems({
+      request,
+      fetchPage: async ({ pageSize, pageToken }) => {
+        const payload = await this.get(endpoints.listMicroserviceVulnEvents, buildListMicroserviceVulnEventsQuery({ ...fallbackRequest, pageSize, pageToken }));
+        const response = normalizeListPayload(payload, 'vulnEvents');
+        return {
+          items: response.vulnEvents,
+          nextPageToken: response.nextPageToken,
+        };
+      },
+      matchesItem: async (event) => {
+        let detail = null;
+        if (hasMeaningfulValue(request.clusterName) || hasMeaningfulValue(request.cnvd) || hasMeaningfulValue(request.cnnvd)) {
+          if (!detailCache.has(event.eventId)) {
+            detailCache.set(event.eventId, normalizeVulnEvent(await this.getMicroserviceVulnEventPayload(event.eventId)));
+          }
+          detail = detailCache.get(event.eventId);
+        }
+
+        const candidateClusterName = detail?.clusterName || event.clusterName;
+        if (hasMeaningfulValue(request.clusterName) && normalizeComparableString(candidateClusterName) !== normalizeComparableString(request.clusterName)) {
+          return false;
+        }
+
+        if (hasMeaningfulValue(request.cnvd) && normalizeComparableString(detail?.cnvd) !== normalizeComparableString(request.cnvd)) {
+          return false;
+        }
+        if (hasMeaningfulValue(request.cnnvd) && normalizeComparableString(detail?.cnnvd) !== normalizeComparableString(request.cnnvd)) {
+          return false;
+        }
+
+        return true;
+      },
+    });
+
+    if (fallback.items.length > 0 || directError) {
+      return {
+        vulnEvents: await enrichVulnEventsWithDetails(fallback.items, detailCache, (eventId) => this.getMicroserviceVulnEventPayload(eventId)),
+        nextPageToken: fallback.nextPageToken,
+      };
+    }
+
+    return {
+      vulnEvents: fallback.items,
+      nextPageToken: fallback.nextPageToken,
+    };
   }
 }
 

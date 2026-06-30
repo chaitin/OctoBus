@@ -72,6 +72,8 @@
 4. **错误处理**: 完善的错误处理机制，支持 401/404/500 等状态码的友好提示
 5. **分页支持**: 所有列表接口支持分页查询（pageSize + pageToken）
 6. **类型安全**: 使用 protobuf 定义，确保类型安全和接口一致性
+7. **查询增强**: 三个 list 接口支持强类型筛选参数（如 `risk`、`state`、`characteristic`、`serviceName`）
+8. **Fallback 兼容**: 对 `clusterName / cnvd / cnnvd` 等上游不稳定参数，支持自动降级为“列表拉取 + 本地过滤 + 详情补全”
 
 ---
 
@@ -180,10 +182,21 @@ _c_WBKFRo=XqZ9Kzk8IS3PpTuHtiPuWB1B7Iy0XAF2y9KmLGdS; veinmind=1238n3t4lumw00djkqp
 **请求参数**:
 ```json
 {
-  "pageSize": 20,        // 每页数量（可选）
-  "pageToken": "cursor-1" // 分页游标（可选）
+  "pageSize": 20,
+  "pageToken": "cursor-1",
+  "name": "信创集群",
+  "status": 1
 }
 ```
+
+**筛选参数说明**:
+
+| 参数名 | 类型 | 映射到上游 | 说明 | 真实环境状态 |
+|--------|------|-----------|------|-------------|
+| `pageSize` | int | `page_size` | 分页大小 | ✅ |
+| `pageToken` | string | `offset` | 分页游标 | ✅ |
+| `name` | string | `name` | 按集群名称筛选 | ✅ |
+| `status` | int | `status` | 按状态筛选 | ⚠️ demo 上游偶发异常 |
 
 **响应数据**:
 ```json
@@ -245,11 +258,43 @@ _c_WBKFRo=XqZ9Kzk8IS3PpTuHtiPuWB1B7Iy0XAF2y9KmLGdS; veinmind=1238n3t4lumw00djkqp
 **请求参数**:
 ```json
 {
-  "clusterId": "3",    // 集群ID（可选，不指定则查询所有）
-  "pageSize": 10,      // 每页数量
-  "pageToken": "cursor" // 分页游标
+  "clusterId": "3",
+  "pageSize": 10,
+  "pageToken": "cursor",
+  "cve": "CVE-2023-25173",
+  "name": "containerd 安全漏洞",
+  "cnvd": "CNVD-2022-06547",
+  "cnnvd": "CNNVD-202302-1367",
+  "nodeName": "icbc-master1",
+  "clusterName": "K3S集群-内部测试",
+  "orderBy": "risk",
+  "risk": [4, 5],
+  "state": [1],
+  "characteristic": ["EXP"],
+  "order": 2
 }
 ```
+
+**筛选参数说明**:
+
+| 参数名 | 类型 | 映射到上游 | 说明 | 真实环境状态 |
+|--------|------|-----------|------|-------------|
+| `clusterId` | string | `cluster_id` | 集群 ID | ✅ |
+| `pageSize` | int | `page_size` | 分页大小 | ✅ |
+| `pageToken` | string | `offset` | 分页游标 | ✅ |
+| `cve` | string | `cve` | CVE 编号筛选 | ✅ |
+| `name` | string | `name` | 漏洞名称筛选 | ✅ |
+| `cnvd` | string | `cnvd` | CNVD 编号筛选 | ✅ fallback |
+| `cnnvd` | string | `cnnvd` | CNNVD 编号筛选 | ✅ fallback |
+| `nodeName` | string | `node_name` | 节点名筛选 | ✅ |
+| `clusterName` | string | `cluster_name` | 集群名筛选 | ✅ fallback |
+| `orderBy` | string | `order_by` | 排序字段 | ✅ |
+| `risk` | repeated int | `risk` | 风险等级数组 | ✅ |
+| `state` | repeated int | `state` | 处理状态数组 | ✅ |
+| `characteristic` | repeated string | `characteristic` | 特征数组 | ✅ |
+| `order` | int | `order` | 排序方向 | ✅ |
+
+> **Fallback 说明**：当 `clusterName / cnvd / cnnvd` 在上游 demo 环境中直接查询返回 HTML/302/空结果时，service 会自动退化为“先拉基础列表，再本地过滤，并在需要时调用详情接口补全字段”。
 
 **响应数据**:
 ```json
@@ -305,9 +350,40 @@ _c_WBKFRo=XqZ9Kzk8IS3PpTuHtiPuWB1B7Iy0XAF2y9KmLGdS; veinmind=1238n3t4lumw00djkqp
 ```json
 {
   "pageSize": 10,
-  "pageToken": ""
+  "pageToken": "cursor",
+  "serviceName": "cloudwalker-cloudwalker-proxy",
+  "serviceType": "ClusterIP",
+  "clusterName": "K3S集群-内部测试",
+  "name": "InfluxDB JWT Token伪造认证绕过漏洞",
+  "cve": "CVE-2019-20933",
+  "cnvd": "CNVD-2022-06547",
+  "cnnvd": "CNNVD-202011-1660",
+  "orderBy": "risk",
+  "characteristic": ["EXP"],
+  "risk": [4, 5],
+  "state": [1],
+  "order": 2
 }
 ```
+
+**筛选参数说明**:
+
+| 参数名 | 类型 | 映射到上游 | 说明 | 真实环境状态 |
+|--------|------|-----------|------|-------------|
+| `pageSize` | int | `page_size` | 分页大小 | ✅ |
+| `pageToken` | string | `offset` | 分页游标 | ✅ |
+| `serviceName` | string | `service_name` | 微服务名称筛选 | ✅ |
+| `serviceType` | string | `service_type` | 微服务类型筛选 | ✅ |
+| `clusterName` | string | `cluster_name` | 集群名筛选 | ✅ fallback |
+| `name` | string | `name` | 漏洞名称筛选 | ✅ |
+| `cve` | string | `cve` | CVE 编号筛选 | ✅ |
+| `cnvd` | string | `cnvd` | CNVD 编号筛选 | ✅ fallback |
+| `cnnvd` | string | `cnnvd` | CNNVD 编号筛选 | ✅ fallback |
+| `orderBy` | string | `order_by` | 排序字段 | ✅ |
+| `characteristic` | repeated string | `characteristic` | 特征数组 | ✅ |
+| `risk` | repeated int | `risk` | 风险等级数组 | ✅ |
+| `state` | repeated int | `state` | 处理状态数组 | ✅ |
+| `order` | int | `order` | 排序方向 | ✅ |
 
 **响应数据**: 类似 ListClusterVulnEvents，但包含微服务相关字段：
 ```json
@@ -320,11 +396,15 @@ _c_WBKFRo=XqZ9Kzk8IS3PpTuHtiPuWB1B7Iy0XAF2y9KmLGdS; veinmind=1238n3t4lumw00djkqp
       "serviceType": "ClusterIP",
       "title": "InfluxDB JWT Token伪造认证绕过漏洞",
       "cve": "CVE-2019-20933",
+      "cnvd": "CNVD-2022-06547",
+      "cnnvd": "CNNVD-202011-1660",
       "level": "5"
     }
   ]
 }
 ```
+
+> **Fallback 说明**：当 `clusterName / cnvd / cnnvd` 在上游 demo 环境中直接查询返回 HTML/302/空结果时，service 会自动退化为“先拉基础列表，再本地过滤，并在需要时调用详情接口补全字段”。
 
 ---
 
