@@ -152,6 +152,7 @@ message WhiteRulesdeleteRequest {
 message WhiteRulesdeleteResponse {
   bool success = 1 [json_name = "success"];
   repeated string result = 2 [json_name = "result"];
+  bool already_gone = 3 [json_name = "alreadyGone"];
 }
 
 message WhiteRulesswitchRequest {

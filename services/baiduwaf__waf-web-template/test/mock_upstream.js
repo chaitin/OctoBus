@@ -1,5 +1,10 @@
 /* node:coverage disable */
 import http from "node:http";
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+const BCE_CONTENT_TYPE = "application/json;charset=utf-8";
+const BCE_EXPIRE_SECONDS = 1800;
+const BCE_SIGNED_HEADERS = "content-type;host;x-bce-date";
 
 const readBody = (req) => new Promise((resolve, reject) => {
   const chunks = [];
@@ -13,6 +18,82 @@ const sendJson = (res, status, body) => {
   res.end(JSON.stringify(body));
 };
 
+const bceEncode = (value, safe = "-_.~") => {
+  const safeChars = new Set(String(safe).split(""));
+  let result = "";
+  for (const ch of String(value)) {
+    if ((ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") || (ch >= "0" && ch <= "9") || safeChars.has(ch)) {
+      result += ch;
+      continue;
+    }
+    for (const byte of Buffer.from(ch)) {
+      result += `%${byte.toString(16).toUpperCase().padStart(2, "0")}`;
+    }
+  }
+  return result;
+};
+
+const buildCanonicalQueryString = (queryParams = {}) => Object.entries(queryParams)
+  .filter(([, value]) => value !== undefined && value !== null && value !== "")
+  .sort(([a], [b]) => a.localeCompare(b))
+  .map(([key, value]) => `${bceEncode(key)}=${bceEncode(value)}`)
+  .join("&");
+
+const buildCanonicalHeaders = (headersToSign = {}) => Object.entries(headersToSign)
+  .sort(([a], [b]) => a.toLowerCase().localeCompare(b.toLowerCase()))
+  .map(([key, value]) => `${bceEncode(key.toLowerCase(), "-_.~")}:${bceEncode(value)}`)
+  .join("\n");
+
+const buildCanonicalRequest = (method, uri, queryParams, headersToSign) => [
+  String(method || "GET").toUpperCase(),
+  bceEncode(uri, "/-_.~"),
+  buildCanonicalQueryString(queryParams),
+  buildCanonicalHeaders(headersToSign),
+].join("\n");
+
+const buildExpectedAuthorization = ({ accessKey, secretKey, method, pathname, queryParams, host, xBceDate }) => {
+  const headersToSign = {
+    Host: host,
+    "Content-Type": BCE_CONTENT_TYPE,
+    "x-bce-date": xBceDate,
+  };
+  const canonicalRequest = buildCanonicalRequest(method, pathname, queryParams, headersToSign);
+  const authStringPrefix = `bce-auth-v1/${accessKey}/${xBceDate}/${BCE_EXPIRE_SECONDS}`;
+  const signingKey = createHmac("sha256", secretKey).update(authStringPrefix).digest();
+  const signature = createHmac("sha256", signingKey).update(canonicalRequest).digest("hex");
+  return `${authStringPrefix}/${BCE_SIGNED_HEADERS}/${signature}`;
+};
+
+const verifyAuthorization = (req, url) => {
+  const authHeader = String(req.headers.authorization || "");
+  const xBceDate = String(req.headers["x-bce-date"] || "");
+  if (!authHeader.startsWith("bce-auth-v1/test-ak/")) {
+    return "unauthorized: invalid Authorization header";
+  }
+  if (!xBceDate) {
+    return "unauthorized: missing x-bce-date";
+  }
+
+  const queryParams = Object.fromEntries(url.searchParams.entries());
+  const expected = buildExpectedAuthorization({
+    accessKey: "test-ak",
+    secretKey: "test-sk",
+    method: req.method || "GET",
+    pathname: url.pathname,
+    queryParams,
+    host: String(req.headers.host || ""),
+    xBceDate,
+  });
+
+  const actualBuffer = Buffer.from(authHeader);
+  const expectedBuffer = Buffer.from(expected);
+  if (actualBuffer.length !== expectedBuffer.length || !timingSafeEqual(actualBuffer, expectedBuffer)) {
+    return "unauthorized: signature mismatch";
+  }
+
+  return "";
+};
+
 export const createMockServer = async (options = {}) => {
   const requests = [];
 
@@ -22,14 +103,9 @@ export const createMockServer = async (options = {}) => {
       const body = await readBody(req);
       requests.push({ method: req.method, url: String(req.url), body, headers: req.headers });
 
-      const authHeader = String(req.headers.authorization || "");
-      const xBceDate = String(req.headers["x-bce-date"] || "");
-      if (!authHeader.startsWith("bce-auth-v1/test-ak/")) {
-        sendJson(res, 401, { success: false, message: "unauthorized: invalid Authorization header" });
-        return;
-      }
-      if (!xBceDate) {
-        sendJson(res, 401, { success: false, message: "unauthorized: missing x-bce-date" });
+      const authError = verifyAuthorization(req, url);
+      if (authError) {
+        sendJson(res, 401, { success: false, message: authError });
         return;
       }
 

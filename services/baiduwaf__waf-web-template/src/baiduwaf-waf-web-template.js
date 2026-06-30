@@ -364,7 +364,7 @@ const buildBceAuthorization = ({ accessKey, secretKey, method, uri, queryParams 
   };
   const canonicalRequest = buildCanonicalRequest(method, uri, queryParams, headersToSign);
   const authStringPrefix = `bce-auth-v1/${accessKey}/${xBceDate}/${BCE_EXPIRE_SECONDS}`;
-  const signingKey = createHmac("sha256", secretKey).update(authStringPrefix).digest("hex");
+  const signingKey = createHmac("sha256", secretKey).update(authStringPrefix).digest();
   const signature = createHmac("sha256", signingKey).update(canonicalRequest).digest("hex");
   return `${authStringPrefix}/${BCE_SIGNED_HEADERS}/${signature}`;
 };

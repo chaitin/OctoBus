@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
+import { readFile } from "node:fs/promises";
 
 import { GrpcError, grpcStatus } from "@chaitin-ai/octobus-sdk";
 
@@ -33,6 +35,7 @@ import { createMockServer } from "./mock_upstream.js";
 
 const originalFetch = globalThis.fetch;
 const originalConsoleLog = console.log;
+const protoPath = new URL("../proto/waf_web_template.proto", import.meta.url);
 
 const textResponse = (status, body) => ({
   status,
@@ -486,6 +489,19 @@ test("WhiteRulesdelete returns idempotent success on HTTP 404", async () => {
   assert.deepEqual(res.result, []);
 });
 
+test("WhiteRulesdelete proto declares alreadyGone field", async () => {
+  const proto = await readFile(protoPath, "utf8");
+  assert.match(proto, /message WhiteRulesdeleteResponse \{[\s\S]*bool already_gone = 3 \[json_name = "alreadyGone"\];[\s\S]*\}/);
+});
+
+test("WhiteRulesdelete returns alreadyGone false on HTTP 200", async () => {
+  setFetch(async () => jsonResponse(200, { success: true, result: [] }));
+
+  const res = await rpcdef(buildCtx({ req: { ruleKey: "rule-1" } }))[WHITERULESDELETE_PATH]();
+
+  assert.equal(res.alreadyGone, false);
+});
+
 test("WhiteRulesswitch sends JSON body and returns array", async () => {
   let capturedInit;
 
@@ -749,6 +765,32 @@ test("helper functions cover edge cases", () => {
   assert.equal(_test.toInteger(undefined, 5), 5);
   assert.equal(_test.bceEncode("/v1/waf/webTemplate/detail", "/-_.~"), "/v1/waf/webTemplate/detail");
   assert.equal(_test.buildCanonicalQueryString({ b: 2, a: 1 }), "a=1&b=2");
+  const expectedCanonicalRequest = _test.buildCanonicalRequest(
+    "GET",
+    "/v1/waf/webTemplate/detail",
+    { templateKey: "abc" },
+    {
+      Host: "api.example.com",
+      "Content-Type": _test.BCE_CONTENT_TYPE,
+      "x-bce-date": "2026-06-29T00:00:00Z",
+    },
+  );
+  const authStringPrefix = `bce-auth-v1/test-ak/2026-06-29T00:00:00Z/${_test.BCE_EXPIRE_SECONDS}`;
+  const expectedSignature = createHmac("sha256", createHmac("sha256", "test-sk").update(authStringPrefix).digest())
+    .update(expectedCanonicalRequest)
+    .digest("hex");
+  assert.equal(
+    _test.buildBceAuthorization({
+      accessKey: "test-ak",
+      secretKey: "test-sk",
+      method: "GET",
+      uri: "/v1/waf/webTemplate/detail",
+      queryParams: { templateKey: "abc" },
+      host: "api.example.com",
+      xBceDate: "2026-06-29T00:00:00Z",
+    }),
+    `bce-auth-v1/test-ak/2026-06-29T00:00:00Z/${_test.BCE_EXPIRE_SECONDS}/${_test.BCE_SIGNED_HEADERS}/${expectedSignature}`,
+  );
   assert.match(
     _test.buildBceAuthorization({
       accessKey: "test-ak",
