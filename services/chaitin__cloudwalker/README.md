@@ -48,6 +48,9 @@ Validated against `https://192.168.1.3/rpc` on 2026-06-28:
 - A request without a valid `API-Token` cookie returns `{"code":1,"message":"需要登录"}` from CloudWalker.
 - With a valid API token, `GetCurrentTime` succeeds and `ListHosts` returns one
   host: `renchenhe-virtual-machine` at `192.168.1.3`.
+- On 2026-06-29, direct upstream probes also confirmed `GetHostDetail` for host
+  `id=9` and rechecked all six event-list methods. The current test environment
+  has no event samples yet, so those methods return empty result sets.
 
 Local validation succeeds with direct access. `proxyUrl` is only needed in
 environments that must reach CloudWalker through an HTTP(S) proxy.
@@ -64,4 +67,5 @@ OctoBus live validation on 2026-06-28:
 - Access logs recorded `grpc_code=OK` for both calls.
 - Evidence:
   - `evidence/live-validation-2026-06-28.txt`
+  - `evidence/upstream-probe-2026-06-29.txt`
   - `evidence/cloudwalker-platform-overview-2026-06-28.png`

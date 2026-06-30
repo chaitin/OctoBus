@@ -128,9 +128,9 @@ function buildListParams(req = {}) {
   const count = toPositiveInteger(req.count ?? req.limit ?? req.page_size ?? req.pageSize, 'count');
   const offset = toNonNegativeInteger(req.offset, 'offset');
 
+  if (req.filters && typeof req.filters === 'object') Object.assign(params, req.filters);
   if (count !== undefined) params.count = count;
   if (offset !== undefined) params.offset = offset;
-  if (req.filters && typeof req.filters === 'object') Object.assign(params, req.filters);
   if (req.order_by && typeof req.order_by === 'object') params.order_by = req.order_by;
   if (req.orderBy && typeof req.orderBy === 'object') params.order_by = req.orderBy;
 
@@ -279,22 +279,30 @@ const resolveProxyUrl = (bindings = {}) => {
   return typeof proxyUrl === 'string' && proxyUrl.trim() ? proxyUrl.trim() : '';
 };
 
+const makeDispatcherCacheKey = (proxyUrl, skipTlsVerify) =>
+  `${proxyUrl || '-'}|${skipTlsVerify ? 'insecure' : 'secure'}`;
+
 const getDispatcher = async (proxyUrl, skipTlsVerify) => {
-  const key = `${proxyUrl || '-'}|${skipTlsVerify ? 'insecure' : 'secure'}`;
+  const key = makeDispatcherCacheKey(proxyUrl, skipTlsVerify);
   if (!dispatcherPromises.has(key)) {
     dispatcherPromises.set(key, (async () => {
-      const { Agent, ProxyAgent } = await import('undici');
-      if (proxyUrl) {
-        return new ProxyAgent({
-          uri: proxyUrl,
-          ...(skipTlsVerify ? { requestTls: { rejectUnauthorized: false } } : {}),
+      try {
+        const { Agent, ProxyAgent } = await import('undici');
+        if (proxyUrl) {
+          return new ProxyAgent({
+            uri: proxyUrl,
+            ...(skipTlsVerify ? { requestTls: { rejectUnauthorized: false } } : {}),
+          });
+        }
+        return new Agent({
+          connect: {
+            rejectUnauthorized: !skipTlsVerify,
+          },
         });
+      } catch (err) {
+        dispatcherPromises.delete(key);
+        throw err;
       }
-      return new Agent({
-        connect: {
-          rejectUnauthorized: !skipTlsVerify,
-        },
-      });
     })());
   }
   return dispatcherPromises.get(key);
@@ -328,8 +336,12 @@ export const _test = {
   buildHostDetailParams,
   buildListParams,
   buildRealTimeThreatParams,
+  clearDispatcherCache: () => dispatcherPromises.clear(),
   errorWithCode,
+  getDispatcher,
   grpcCodeFor,
+  hasDispatcherCacheKey: (key) => dispatcherPromises.has(key),
+  makeDispatcherCacheKey,
   mergedBindings,
   normalizeEndpoint,
   parseHeaders,

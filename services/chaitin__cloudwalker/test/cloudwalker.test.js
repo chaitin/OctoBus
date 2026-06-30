@@ -143,6 +143,39 @@ test('rpcdef maps list request wrappers and filters into JSON-RPC params', async
   assert.deepEqual(result.result, { data: [{ id: 1 }], total: 1 });
 });
 
+test('buildListParams keeps validated count and offset when filters contain the same keys', () => {
+  const params = _test.buildListParams({
+    count: { value: 20 },
+    offset: { value: 40 },
+    filters: {
+      count: -1,
+      offset: -2,
+      ip: '10.0.0.1',
+    },
+  });
+
+  assert.deepEqual(params, {
+    count: 20,
+    offset: 40,
+    ip: '10.0.0.1',
+  });
+});
+
+test('getDispatcher clears rejected cache entries so the next call can retry', async () => {
+  const key = _test.makeDispatcherCacheKey('://bad-proxy', false);
+  _test.clearDispatcherCache();
+
+  await assert.rejects(
+    () => _test.getDispatcher('://bad-proxy', false),
+  );
+  assert.equal(_test.hasDispatcherCacheKey(key), false);
+
+  await assert.rejects(
+    () => _test.getDispatcher('://bad-proxy', false),
+  );
+  assert.equal(_test.hasDispatcherCacheKey(key), false);
+});
+
 test('rpcdef requires host id for GetHostDetail', async () => {
   await assert.rejects(
     () => rpcdef(buildCtx({ req: {} }))[METHOD_GET_HOST_DETAIL_FULL]({}),
