@@ -252,13 +252,6 @@ async function callJsonRpc(ctx, method, params) {
     clearTimeout(timer);
   }
 
-  let payload;
-  try {
-    payload = await response.json();
-  } catch (error) {
-    throw toGrpcError(grpcStatus.UNKNOWN, `upstream returned non-JSON response: ${error.message}`);
-  }
-
   if (!response.ok) {
     if (response.status === 401) {
       throw toGrpcError(grpcStatus.UNAUTHENTICATED, "upstream rejected API token");
@@ -270,6 +263,13 @@ async function callJsonRpc(ctx, method, params) {
       throw toGrpcError(grpcStatus.UNAVAILABLE, `upstream HTTP ${response.status}`);
     }
     throw toGrpcError(grpcStatus.FAILED_PRECONDITION, `upstream HTTP ${response.status}`);
+  }
+
+  let payload;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    throw toGrpcError(grpcStatus.UNKNOWN, `upstream returned non-JSON response: ${error.message}`);
   }
 
   if (payload?.error) {

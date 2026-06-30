@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { grpcStatus } from "@chaitin-ai/octobus-sdk";
 
 import { handlers, internals } from "../src/t-answer-ndr.js";
 
@@ -110,6 +111,38 @@ test("JSON-RPC parameter error maps to INVALID_ARGUMENT", async () => {
       () => handlers["chaitin.t_answer_ndr.v1.TAnswerNdrService/ListAlerts"](ctx({ count: 10 })),
       /TimeRangeStart/,
     );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("non-JSON HTTP failures map status before response parsing", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const cases = [
+    { status: 401, code: grpcStatus.UNAUTHENTICATED, message: /rejected API token/ },
+    { status: 403, code: grpcStatus.PERMISSION_DENIED, message: /permission denied/ },
+    { status: 500, code: grpcStatus.UNAVAILABLE, message: /upstream HTTP 500/ },
+  ];
+
+  try {
+    for (const item of cases) {
+      await t.test(`HTTP ${item.status}`, async () => {
+        globalThis.fetch = async () =>
+          new Response("<html>upstream error</html>", {
+            status: item.status,
+            headers: { "content-type": "text/html" },
+          });
+
+        await assert.rejects(
+          () => handlers["chaitin.t_answer_ndr.v1.TAnswerNdrService/ListAssets"](ctx({ count: 1 })),
+          (error) => {
+            assert.equal(error.code, item.code);
+            assert.match(error.message, item.message);
+            return true;
+          },
+        );
+      });
+    }
   } finally {
     globalThis.fetch = originalFetch;
   }
