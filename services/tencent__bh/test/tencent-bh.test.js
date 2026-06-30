@@ -525,17 +525,18 @@ test('SDK handlers accept both single-arg (ctx) and two-arg (req, ctx) style', a
 
 // ── Multiple error status codes ───────────────────────────
 
-test('SearchSession InvalidParameterValue degrades gracefully to empty list (unsupported)', async () => {
-  // Simulate Tencent API returning InvalidParameterValue with an "unsupported" message
-  // (basic/free tier instances that do not support SearchSession).
-  // The handler should return an empty list instead of throwing.
+test('SearchSession InvalidParameterValue with unsupported + SearchSession degrades to empty list', async () => {
+  // Simulate Tencent API returning InvalidParameterValue with a message that mentions
+  // BOTH "SearchSession" and "unsupported" — basic/free tier instances that do not
+  // support the SearchSession action. The handler should return an empty list instead
+  // of throwing.
   setFetch(async () => ({
     ok: true,
     status: 200,
     headers: new Map([['content-type', 'application/json']]),
     text: async () => JSON.stringify({
       Response: {
-        Error: { Code: 'InvalidParameterValue', Message: 'SearchSession action is not supported on this instance' },
+        Error: { Code: 'InvalidParameterValue', Message: 'SearchSession action is unsupported on this instance' },
       },
     }),
   }));
@@ -545,10 +546,33 @@ test('SearchSession InvalidParameterValue degrades gracefully to empty list (uns
   assert.deepEqual(res, { items: [], total_count: 0 });
 });
 
-test('SearchSession InvalidParameterValue with genuine param error re-throws', async () => {
+test('SearchSession InvalidParameterValue with "unsupported" but no "SearchSession" re-throws', async () => {
+  // A message that contains "unsupported" but does NOT mention "SearchSession" is
+  // likely a genuine parameter error (e.g. "Parameter X has unsupported value format").
+  // It must NOT be treated as an unsupported-action signal.
+  setFetch(async () => ({
+    ok: true,
+    status: 200,
+    headers: new Map([['content-type', 'application/json']]),
+    text: async () => JSON.stringify({
+      Response: {
+        Error: { Code: 'InvalidParameterValue', Message: 'Parameter Status has unsupported value format' },
+      },
+    }),
+  }));
+
+  const handler = await loadHandler({}, listSessionsPath);
+  await assert.rejects(() => handler(), (err) => {
+    assert.equal(err.legacyCode, 'FAILED_PRECONDITION');
+    assert.equal(err.tencentCode, 'InvalidParameterValue');
+    return true;
+  });
+});
+
+test('SearchSession InvalidParameterValue with genuine param error re-throws (no unsupported keyword)', async () => {
   // Simulate Tencent API returning InvalidParameterValue with a message that does NOT
-  // indicate the action is unsupported. The handler should re-throw to avoid
-  // swallowing genuine parameter errors.
+  // contain both "SearchSession" AND an unsupported keyword. The handler should re-throw
+  // to avoid swallowing genuine parameter errors.
   setFetch(async () => ({
     ok: true,
     status: 200,
@@ -612,16 +636,53 @@ test('SearchSession InvalidParameterValue with "undefined" message re-throws (no
   });
 });
 
-test('SearchSession InvalidParameterValue with "no such" message re-throws (not swallowed)', async () => {
-  // "no such" can appear in genuine parameter errors and must not be treated
-  // as an "unsupported action" signal.
+test('SearchSession InvalidParameterValue with "not support" + SearchSession degrades to empty list', async () => {
+  // "not support" with SearchSession in the message indicates the action is unavailable.
   setFetch(async () => ({
     ok: true,
     status: 200,
     headers: new Map([['content-type', 'application/json']]),
     text: async () => JSON.stringify({
       Response: {
-        Error: { Code: 'InvalidParameterValue', Message: 'No such filter field' },
+        Error: { Code: 'InvalidParameterValue', Message: 'SearchSession is not supported on this instance' },
+      },
+    }),
+  }));
+
+  const handler = await loadHandler({}, listSessionsPath);
+  const res = await handler();
+  assert.deepEqual(res, { items: [], total_count: 0 });
+});
+
+test('SearchSession InvalidParameterValue with "未支持" + SearchSession degrades to empty list', async () => {
+  // "未支持" (not yet supported) with SearchSession in the message indicates the
+  // action is not available on this instance.
+  setFetch(async () => ({
+    ok: true,
+    status: 200,
+    headers: new Map([['content-type', 'application/json']]),
+    text: async () => JSON.stringify({
+      Response: {
+        Error: { Code: 'InvalidParameterValue', Message: 'SearchSession功能未支持' },
+      },
+    }),
+  }));
+
+  const handler = await loadHandler({}, listSessionsPath);
+  const res = await handler();
+  assert.deepEqual(res, { items: [], total_count: 0 });
+});
+
+test('SearchSession non-InvalidParameterValue error is not caught by degradation logic', async () => {
+  // The degradation logic only applies to InvalidParameterValue. Other Tencent API
+  // error codes (e.g. ResourceNotFound, LimitExceeded) must always propagate through.
+  setFetch(async () => ({
+    ok: true,
+    status: 200,
+    headers: new Map([['content-type', 'application/json']]),
+    text: async () => JSON.stringify({
+      Response: {
+        Error: { Code: 'ResourceNotFound', Message: 'Resource not found' },
       },
     }),
   }));
@@ -629,20 +690,21 @@ test('SearchSession InvalidParameterValue with "no such" message re-throws (not 
   const handler = await loadHandler({}, listSessionsPath);
   await assert.rejects(() => handler(), (err) => {
     assert.equal(err.legacyCode, 'FAILED_PRECONDITION');
-    assert.equal(err.tencentCode, 'InvalidParameterValue');
+    assert.equal(err.tencentCode, 'ResourceNotFound');
     return true;
   });
 });
 
-test('SearchSession InvalidParameterValue with Chinese "未支持" degrades to empty list', async () => {
-  // "未支持" (not yet supported) indicates the action itself is not available.
+test('SearchSession InvalidParameterValue with Chinese "不支持" + SearchSession degrades to empty list', async () => {
+  // "不支持" (not supported) with SearchSession in the message indicates the action
+  // itself is not available on this instance.
   setFetch(async () => ({
     ok: true,
     status: 200,
     headers: new Map([['content-type', 'application/json']]),
     text: async () => JSON.stringify({
       Response: {
-        Error: { Code: 'InvalidParameterValue', Message: '该功能未支持' },
+        Error: { Code: 'InvalidParameterValue', Message: '该实例不支持SearchSession功能' },
       },
     }),
   }));

@@ -483,27 +483,36 @@ const listSessions = async (requestOrContext = {}, maybeContext) => {
     // Some BH instances (e.g. basic/free tier) do not support SearchSession and return
     // InvalidParameterValue regardless of parameters. Return an empty list instead of
     // failing, so the method remains usable on all instance types.
-    // NOTE: InvalidParameterValue is a generic error code. To reduce the risk of
-    // swallowing genuine parameter errors, we additionally check whether the error
-    // message contains keywords suggesting the *action* is unsupported (not just a
-    // bad parameter value). If the message does NOT mention "unsupported"/"不支持",
-    // we re-throw so the caller sees the real error.
+    //
+    // Rationale for the dual-keyword check:
+    //   InvalidParameterValue is a very generic Tencent Cloud error code used for *any*
+    //   bad parameter (wrong type, out-of-range value, missing required field, etc.).
+    //   If we only checked for "unsupported"/"不支持" in the message, we could still
+    //   accidentally match genuine parameter errors that happen to contain those words
+    //   (e.g. "Parameter X is unsupported value format" or "不支持该枚举值").
+    //
+    //   To avoid swallowing genuine errors, we require the message to mention BOTH:
+    //     1. The action name ("SearchSession") — this ties the error to the specific
+    //        API operation that is unavailable on the instance, AND
+    //     2. An unsupported keyword ("unsupported"/"不支持"/"未支持"/"not support")
+    //   Only when BOTH conditions are met do we degrade to an empty list.
+    //   If either is missing, the error is treated as a genuine parameter error and
+    //   re-thrown so the caller sees the real cause.
     if (e.legacyCode === 'FAILED_PRECONDITION' && e.tencentCode === 'InvalidParameterValue') {
-      const msg = (e.message || '').toLowerCase();
-      // Only match keywords that clearly indicate the *action/API* itself is
-      // unsupported on this instance (basic/free tier). Generic terms like
-      // "not found", "undefined", "no such" are intentionally excluded because
-      // they frequently appear in genuine parameter-error messages and would
-      // cause us to swallow real errors.
-      const isUnsupported = /unsupported|不支持|未支持|not support/i.test(msg);
+      const msg = e.message || '';
+      // The message must mention both the action name AND an unsupported keyword.
+      // Order does not matter — the regex matches either direction.
+      // Examples that degrade: "SearchSession action is unsupported", "不支持SearchSession"
+      // Examples that re-throw: "Parameter Status is invalid", "Filter value unsupported format"
+      const isUnsupportedAction = /SearchSession.*(?:unsupported|不支持|未支持|not support)|(?:unsupported|不支持|未支持|not support).*SearchSession/i.test(msg);
       // Log full error info for debugging
       logFlow(context.meta || {}, 'SearchSession:degradation', {
-        note: isUnsupported
+        note: isUnsupportedAction
           ? 'instance likely does not support SearchSession, returning empty list'
-          : 'InvalidParameterValue caught but message suggests a genuine parameter error, re-throwing',
+          : 'InvalidParameterValue caught but message does not confirm unsupported action, re-throwing',
         originalError: { message: e.message, code: e.code, tencentCode: e.tencentCode },
       });
-      if (isUnsupported) {
+      if (isUnsupportedAction) {
         return { items: [], total_count: 0 };
       }
       // Genuine parameter error — do not swallow
