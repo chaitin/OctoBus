@@ -404,6 +404,10 @@ const services = {
     entryFile: "../qianxin__skyeye_v3.0.14.0/bin/qianxin-skyeye-v3-0-14-0.js",
     serviceModule: "../qianxin__skyeye_v3.0.14.0/src/service.js",
   },
+  "ctdsg-fw": {
+    entryFile: "../ctdsg__fw/bin/ctdsg-fw.js",
+    serviceModule: "../ctdsg__fw/src/service.js",
+  },
 };
 
 const serviceNames = Object.keys(services);

@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "host": {
+      "type": "string",
+      "description": "CTDSG management base URL with http(s) scheme and port, for example https://198.51.100.10:9090."
+    },
+    "restBaseUrl": {
+      "type": "string",
+      "description": "Alias for host."
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "Alias for host."
+    },
+    "rest_base_url": {
+      "type": "string",
+      "description": "Alias for host."
+    },
+    "base_url": {
+      "type": "string",
+      "description": "Alias for host."
+    },
+    "appId": {
+      "type": "string",
+      "default": "hybzapi",
+      "description": "CTDSG signature app id. Defaults to hybzapi per the device API document."
+    },
+    "app_id": {
+      "type": "string",
+      "description": "Alias for appId."
+    },
+    "apiPath": {
+      "type": "string",
+      "default": "/api.php/inter/Inter",
+      "description": "Management API path prefix."
+    },
+    "api_path": {
+      "type": "string",
+      "description": "Alias for apiPath."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "timeout_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Alias for timeoutMs."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for private deployments."
+    },
+    "tlsInsecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Legacy alias for skipTlsVerify."
+    },
+    "insecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Alias for skipTlsVerify."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional additional HTTP headers."
+    }
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "ctdsg-fw",
+  "displayName": "CTDSG FW",
+  "description": "OctoBus package for CTDSG blacklist IP and domain block or unblock APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/ctdsg_fw.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "CTDSG_FW.CTDSG_FW/BlockIP": {
+          "name": "block-ip",
+          "description": "Add one or more IPs into the CTDSG blacklist."
+        },
+        "CTDSG_FW.CTDSG_FW/UnblockIP": {
+          "name": "unblock-ip",
+          "description": "Remove one or more IPs from the CTDSG blacklist."
+        },
+        "CTDSG_FW.CTDSG_FW/BlockDomain": {
+          "name": "block-domain",
+          "description": "Add one or more domains into the CTDSG blacklist."
+        },
+        "CTDSG_FW.CTDSG_FW/UnblockDomain": {
+          "name": "unblock-domain",
+          "description": "Remove one or more domains from the CTDSG blacklist."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package CTDSG_FW;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
+
+option go_package = "miner/grpc-service/CTDSG_FW";
+
+service CTDSG_FW {
+  rpc BlockIP(BlockIPRequest) returns (DeviceHttpResponse) {}
+  rpc UnblockIP(UnblockIPRequest) returns (DeviceHttpResponse) {}
+  rpc BlockDomain(BlockDomainRequest) returns (DeviceHttpResponse) {}
+  rpc UnblockDomain(UnblockDomainRequest) returns (DeviceHttpResponse) {}
+}
+
+message BlockIPRequest {
+  repeated string ips = 1;
+  google.protobuf.BoolValue permanent = 2;
+  google.protobuf.UInt32Value punish_time = 3;
+  google.protobuf.UInt32Value time_unit = 4;
+}
+
+message UnblockIPRequest {
+  repeated string ips = 1;
+}
+
+message BlockDomainRequest {
+  repeated string domains = 1;
+  google.protobuf.BoolValue permanent = 2;
+  google.protobuf.UInt32Value punish_time = 3;
+  google.protobuf.UInt32Value time_unit = 4;
+}
+
+message UnblockDomainRequest {
+  repeated string domains = 1;
+}
+
+message DeviceHttpResponse {
+  int32 status_code = 1;
+  repeated HttpHeader headers = 2;
+  string raw_body = 3;
+  google.protobuf.Struct body_json = 4;
+  string effective_url = 5;
+}
+
+message HttpHeader {
+  string key = 1;
+  repeated string values = 2;
+}
