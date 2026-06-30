@@ -17,41 +17,8 @@ export const SERVICE_DEFINITIONS = {
 
 export const READ_ONLY_ACTIONS = [
   { methodName: 'ListDomain', action: 'ListDomain' },
-  { methodName: 'ListLoadBalancer', action: 'ListLoadBalancer' },
-  { methodName: 'QueryAttackAnalysisTermsAggLb', action: 'QueryAttackAnalysisTermsAggLb' },
-  { methodName: 'QueryAttackAnalysisWithRuleAggLb', action: 'QueryAttackAnalysisWithRuleAggLb' },
-  { methodName: 'QueryAttackSecurityEvent', action: 'QueryAttackSecurityEvent' },
-  { methodName: 'QueryFlowOverviewLb', action: 'QueryFlowOverviewLb' },
-  { methodName: 'QueryProtectionOverviewLb', action: 'QueryProtectionOverviewLb' },
-  { methodName: 'GetReqQPSAnalysis', action: 'GetReqQPSAnalysis' },
-  { methodName: 'ListAclRule', action: 'ListAclRule' },
-  { methodName: 'ListCustomPage', action: 'ListCustomPage' },
-  { methodName: 'ListAreaBlockRule', action: 'ListAreaBlockRule' },
-  { methodName: 'GetAreaBlockInfo', action: 'GetAreaBlockInfo' },
-  { methodName: 'ListCCRule', action: 'ListCCRule' },
-  { methodName: 'ListCCRulePriorityAvailable', action: 'ListCCRulePriorityAvailable' },
-  { methodName: 'GetSmartCCConfig', action: 'GetSmartCCConfig' },
-  { methodName: 'ListVulnerabilityRule', action: 'ListVulnerabilityRule' },
-  { methodName: 'GetVulnerabilityConfig', action: 'GetVulnerabilityConfig' },
-  { methodName: 'ListVulWhiteField', action: 'ListVulWhiteField' },
-  { methodName: 'ListCustomBotConfig', action: 'ListCustomBotConfig' },
-  { methodName: 'ListBotAnalyseProtectRule', action: 'ListBotAnalyseProtectRule' },
-  { methodName: 'ListBotAnalyseProtectRulePriorityAvailable', action: 'ListBotAnalyseProtectRulePriorityAvailable' },
-  { methodName: 'GetDynamicTokenConfig', action: 'GetDynamicTokenConfig' },
-  { methodName: 'ListProhibition', action: 'ListProhibition' },
-  { methodName: 'GetTLSConfig', action: 'GetTLSConfig' },
-  { methodName: 'SearchLogs', action: 'SearchLogs' },
-  { methodName: 'ListWafServiceCertificate', action: 'ListWafServiceCertificate' },
-  { methodName: 'ListAllIpGroups', action: 'ListAllIpGroups' },
-  { methodName: 'ListIpGroup', action: 'ListIpGroup' },
-  { methodName: 'ListHostGroup', action: 'ListHostGroup' },
-  { methodName: 'ListBlockRule', action: 'ListBlockRule' },
-  { methodName: 'ListAllowRule', action: 'ListAllowRule' },
-  { methodName: 'ListProjectResources', action: 'ListProjectResources' },
 ];
 
-export const METHOD_INVOKE_READ_ONLY_ACTION_FULL = `${SERVICE_PACKAGE}/InvokeReadOnlyAction`;
-export const METHOD_INVOKE_READ_ONLY_ACTION_PATH = `/${METHOD_INVOKE_READ_ONLY_ACTION_FULL}`;
 
 const ACTION_BY_METHOD = new Map(READ_ONLY_ACTIONS.map((entry) => [entry.methodName, entry]));
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj ?? {}, key);
@@ -280,8 +247,8 @@ const endpointFor = ({ serviceCode, region, endpoint }) => {
 const validateActionName = (action) => {
   const value = toTrimmedString(action);
   if (!value) throw errorWithCode('INVALID_ARGUMENT', 'action must be a non-empty string');
-  if (!/^(Get|Desc|Describe|List|Query|Search)[A-Za-z0-9]+$/.test(value)) {
-    throw errorWithCode('INVALID_ARGUMENT', 'only Volcengine WAF read-only Get*, Desc*, Describe*, List*, Query*, and Search* actions are allowed');
+  if (!READ_ONLY_ACTIONS.some((entry) => entry.action === value)) {
+    throw errorWithCode('INVALID_ARGUMENT', 'only OctoBus Connect verified Volcengine WAF read-only actions are allowed');
   }
   return value;
 };
@@ -397,21 +364,10 @@ const buildActionHandler = (spec) => async (req, ctx) => invokeVolcengine(
 
 export const handlers = Object.fromEntries([
   ...READ_ONLY_ACTIONS.map((entry) => [`${SERVICE_PACKAGE}/${entry.methodName}`, buildActionHandler(entry)]),
-  [METHOD_INVOKE_READ_ONLY_ACTION_FULL, async (req, ctx) => {
-    const request = handlerRequest(req, ctx);
-    return invokeVolcengine({
-      action: request.action,
-      serviceCode: request.service_code || request.serviceCode,
-      version: request.version,
-      method: request.method,
-      endpoint: request.endpoint,
-    }, normalizeStruct(request.payload ?? {}), handlerContext(req, ctx));
-  }],
 ]);
 
 export const rpcdef = () => Object.fromEntries([
   ...READ_ONLY_ACTIONS.map((entry) => [`/${SERVICE_PACKAGE}/${entry.methodName}`, handlers[`${SERVICE_PACKAGE}/${entry.methodName}`]]),
-  [METHOD_INVOKE_READ_ONLY_ACTION_PATH, handlers[METHOD_INVOKE_READ_ONLY_ACTION_FULL]],
 ]);
 
 export const _test = {

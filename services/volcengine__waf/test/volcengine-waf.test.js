@@ -4,8 +4,6 @@ import test from 'node:test';
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
 import {
-  METHOD_INVOKE_READ_ONLY_ACTION_FULL,
-  METHOD_INVOKE_READ_ONLY_ACTION_PATH,
   READ_ONLY_ACTIONS,
   SERVICE_PACKAGE,
   _test,
@@ -76,8 +74,6 @@ test('service exports handlers and rpcdef paths', () => {
     assert.equal(typeof handlers[`${SERVICE_PACKAGE}/${entry.methodName}`], 'function');
     assert.equal(typeof rpcdef()[`/${SERVICE_PACKAGE}/${entry.methodName}`], 'function');
   }
-  assert.equal(typeof handlers[METHOD_INVOKE_READ_ONLY_ACTION_FULL], 'function');
-  assert.equal(typeof rpcdef()[METHOD_INVOKE_READ_ONLY_ACTION_PATH], 'function');
 });
 
 test('validates required credentials and supported actions', () => {
@@ -90,9 +86,6 @@ test('validates required credentials and supported actions', () => {
   assert.throws(() => _test.validateBindings({ secretAccessKey: 'key' }), /accessKeyId/);
   assert.throws(() => _test.validateBindings({ accessKeyId: 'id' }), /secretAccessKey/);
   assert.equal(_test.validateActionName('ListDomain'), 'ListDomain');
-  assert.equal(_test.validateActionName('QueryProtectionOverviewLb'), 'QueryProtectionOverviewLb');
-  assert.equal(_test.validateActionName('SearchLogs'), 'SearchLogs');
-  assert.equal(_test.validateActionName('ListBlockRule'), 'ListBlockRule');
   assert.throws(() => _test.validateActionName('UpdateInstance'), /read-only/);
   assert.throws(() => _test.validateActionSpec({ action: 'ListDomain', serviceCode: 'ecs' }), /unsupported/);
 });
@@ -155,64 +148,6 @@ test('signs and sends POST WAF list-domain request with body payload', async () 
     /^HMAC-SHA256 Credential=AKLTEXAMPLE\/20240116\/cn-beijing\/waf\/request, SignedHeaders=content-type;host;x-content-sha256;x-date, Signature=[0-9a-f]{64}$/,
   );
   assert.equal(result.response.structValue.fields.Result.structValue.fields.Total.numberValue, 1);
-});
-
-test('supports WAF overview query action', async () => {
-  let captured;
-  setFetch(async (url, init) => {
-    captured = { url: String(url), init, body: JSON.parse(init.body) };
-    return response(200, {
-      ResponseMetadata: {
-        RequestID: 'req-2',
-        Action: 'QueryProtectionOverviewLb',
-        Version: '2023-12-25',
-        Service: 'waf',
-        Region: 'cn-beijing',
-      },
-      Result: { AttackCount: 8 },
-    });
-  });
-
-  await handlers[`${SERVICE_PACKAGE}/QueryProtectionOverviewLb`]({
-    payload: { fields: { Host: { stringValue: 'example.com' }, StartTime: { numberValue: 1712642400 }, EndTime: { numberValue: 1712646000 } } },
-  }, buildCtx());
-
-  const url = new URL(captured.url);
-  assert.equal(url.origin, 'https://waf.volcengineapi.com');
-  assert.equal(url.searchParams.get('Action'), 'QueryProtectionOverviewLb');
-  assert.equal(url.searchParams.get('Version'), '2023-12-25');
-  assert.deepEqual(captured.body, { Host: 'example.com', StartTime: 1712642400, EndTime: 1712646000 });
-  assert.equal(captured.init.method, 'POST');
-  assert.match(
-    captured.init.headers.Authorization,
-    /^HMAC-SHA256 Credential=AKLTEXAMPLE\/20240116\/cn-beijing\/waf\/request, SignedHeaders=content-type;host;x-content-sha256;x-date, Signature=[0-9a-f]{64}$/,
-  );
-});
-
-test('InvokeReadOnlyAction supports read-only custom calls and rejects mutations', async () => {
-  let captured;
-  setFetch(async (url, init) => {
-    captured = { url: String(url), init, body: JSON.parse(init.body) };
-    return response(200, { ResponseMetadata: { RequestId: 'req-3' }, Result: { ok: true } });
-  });
-
-  const result = await handlers[METHOD_INVOKE_READ_ONLY_ACTION_FULL]({
-    action: 'SearchLogs',
-    method: 'POST',
-    payload: { fields: { StartTime: { numberValue: 1712642400 }, EndTime: { numberValue: 1712646000 } } },
-  }, buildCtx());
-
-  const url = new URL(captured.url);
-  assert.equal(url.origin, 'https://waf.volcengineapi.com');
-  assert.equal(url.searchParams.get('Action'), 'SearchLogs');
-  assert.deepEqual(captured.body, { StartTime: 1712642400, EndTime: 1712646000 });
-  assert.equal(result.response.structValue.fields.Result.structValue.fields.ok.boolValue, true);
-
-  await expectGrpcError(
-    () => handlers[METHOD_INVOKE_READ_ONLY_ACTION_FULL]({ action: 'UpdateDomain' }, buildCtx()),
-    'INVALID_ARGUMENT',
-    (err) => assert.match(err.message, /read-only/),
-  );
 });
 
 test('maps Volcengine and transport errors', async () => {
@@ -295,62 +230,6 @@ test('handler accepts OctoBus SDK single-argument context', async () => {
 
   const url = new URL(captured.url);
   assert.equal(url.searchParams.get('Action'), 'ListDomain');
-  assert.match(captured.init.headers.Authorization, /^HMAC-SHA256 Credential=SDKID\//);
-  assert.match(captured.init.headers.Authorization, /\/cn-shanghai\/waf\/request,/);
-});
-
-test('InvokeReadOnlyAction accepts OctoBus SDK single-argument context', async () => {
-  let captured;
-  setFetch(async (url, init) => {
-    captured = { url: String(url), init, body: JSON.parse(init.body) };
-    return response(200, { ResponseMetadata: { RequestId: 'req-sdk-invoke' }, Result: { ok: true } });
-  });
-
-  await handlers[METHOD_INVOKE_READ_ONLY_ACTION_FULL]({
-    request: {
-      action: 'SearchLogs',
-      method: 'POST',
-      payload: { fields: { StartTime: { numberValue: 1712642400 }, EndTime: { numberValue: 1712646000 } } },
-    },
-    config: { region: 'cn-shanghai' },
-    secret: {
-      accessKeyId: 'SDKID',
-      secretAccessKey: 'SDKKEY',
-    },
-    limits: { timeoutMs: 10_000 },
-    meta: { date: new Date('2024-01-16T08:00:00Z') },
-  });
-
-  const url = new URL(captured.url);
-  assert.equal(url.searchParams.get('Action'), 'SearchLogs');
-  assert.deepEqual(captured.body, { StartTime: 1712642400, EndTime: 1712646000 });
-  assert.match(captured.init.headers.Authorization, /^HMAC-SHA256 Credential=SDKID\//);
-  assert.match(captured.init.headers.Authorization, /\/cn-shanghai\/waf\/request,/);
-});
-
-test('InvokeReadOnlyAction accepts bindings-only SDK context', async () => {
-  let captured;
-  setFetch(async (url, init) => {
-    captured = { url: String(url), init, body: JSON.parse(init.body) };
-    return response(200, { ResponseMetadata: { RequestId: 'req-sdk-bindings' }, Result: { ok: true } });
-  });
-
-  await handlers[METHOD_INVOKE_READ_ONLY_ACTION_FULL]({
-    request: {
-      action: 'ListDomain',
-      method: 'POST',
-      payload: { fields: { Page: { numberValue: 1 }, PageSize: { numberValue: 5 } } },
-    },
-    bindings: {
-      region: 'cn-shanghai',
-      accessKeyId: 'SDKID',
-      secretAccessKey: 'SDKKEY',
-    },
-  });
-
-  const url = new URL(captured.url);
-  assert.equal(url.searchParams.get('Action'), 'ListDomain');
-  assert.deepEqual(captured.body, { Page: 1, PageSize: 5 });
   assert.match(captured.init.headers.Authorization, /^HMAC-SHA256 Credential=SDKID\//);
   assert.match(captured.init.headers.Authorization, /\/cn-shanghai\/waf\/request,/);
 });
