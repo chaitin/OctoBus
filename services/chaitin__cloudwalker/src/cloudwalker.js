@@ -45,7 +45,7 @@ const normalizeCluster = (clusterData) => {
   return {
     clusterId: String(camelData.id || ''),
     clusterName: camelData.name || '',
-    status: String(camelData.status || ''),
+    status: camelData.status === undefined || camelData.status === null ? '' : String(camelData.status),
     riskLevel: '',
     createdAt: String(camelData.createdAt || ''),
     updatedAt: String(camelData.updatedAt || ''),
@@ -205,7 +205,7 @@ const collectFilteredItems = async ({
 
   return {
     items: matched.slice(0, targetCount),
-    nextPageToken: matched.length >= targetCount ? lastNextPageToken : '',
+    nextPageToken: lastNextPageToken || '',
   };
 };
 
@@ -630,4 +630,4 @@ export class CloudWalkerClient {
 }
 
 export const createClient = (options) => new CloudWalkerClient(options);
-export { CloudWalkerError, grpcStatus, toCamelCase };
+export { CloudWalkerError, grpcStatus, toCamelCase, collectFilteredItems };
