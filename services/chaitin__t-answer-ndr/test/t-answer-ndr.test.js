@@ -337,6 +337,22 @@ test("DownloadFile calls unified download API and returns base64 content", async
   }
 });
 
+test("parseFilename falls back when the UTF-8 filename is malformed", () => {
+  assert.equal(
+    internals.parseFilename("attachment; filename*=UTF-8''capture%ZZ.pcap; filename=\"fallback.pcap\""),
+    "fallback.pcap",
+  );
+  assert.equal(internals.parseFilename("attachment; filename*=UTF-8''capture%ZZ.pcap"), "");
+});
+
+test("pcap analysis polling durations are finite and bounded", () => {
+  assert.equal(internals.normalizeDurationMs(Number.MAX_SAFE_INTEGER, 60000, 1000, 600000), 600000);
+  assert.equal(internals.normalizeDurationMs(999999, 5000, 1000, 60000), 60000);
+  assert.equal(internals.normalizeDurationMs(1, 5000, 1000, 60000), 1000);
+  assert.equal(internals.normalizeDurationMs(-1, 5000, 1000, 60000), 5000);
+  assert.equal(internals.normalizeDurationMs(Number.POSITIVE_INFINITY, 5000, 1000, 60000), 5000);
+});
+
 
 test("P0 raw JSON methods route to the expected upstream services", async () => {
   const originalFetch = globalThis.fetch;

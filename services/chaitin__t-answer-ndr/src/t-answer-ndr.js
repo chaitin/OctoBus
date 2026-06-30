@@ -3,6 +3,11 @@ import { GrpcError, grpcStatus } from "@chaitin-ai/octobus-sdk";
 const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_LOOKBACK_DAYS = 30;
 const DEFAULT_PAGE_SIZE = 20;
+const DEFAULT_PCAP_ANALYSIS_TIMEOUT_MS = 60000;
+const MAX_PCAP_ANALYSIS_TIMEOUT_MS = 600000;
+const DEFAULT_PCAP_POLL_INTERVAL_MS = 5000;
+const MAX_PCAP_POLL_INTERVAL_MS = 60000;
+const MIN_PCAP_DURATION_MS = 1000;
 
 const METHOD = {
   listAlerts: "AlarmService.SearchAlarmList",
@@ -736,6 +741,12 @@ const buildDeletePcapDetectTaskParams = (req) => {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const normalizeDurationMs = (raw, fallback, minimum, maximum) => {
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value <= 0) return fallback;
+  return Math.min(Math.max(Math.trunc(value), minimum), maximum);
+};
+
 const parseResultJson = (result) => JSON.parse(result.resultJson);
 
 const safeCall = async (ctx, method, params, { web = false, sessionCookie } = {}) => {
@@ -1110,8 +1121,18 @@ async function analyzePcapFiles(ctx) {
 
   let tasks = [];
   if (firstPresent(req, "wait_for_completion", "waitForCompletion")) {
-    const timeoutMs = Number(firstPresent(req, "timeout_ms", "timeoutMs")) || 60000;
-    const pollIntervalMs = Number(firstPresent(req, "poll_interval_ms", "pollIntervalMs")) || 5000;
+    const timeoutMs = normalizeDurationMs(
+      firstPresent(req, "timeout_ms", "timeoutMs"),
+      DEFAULT_PCAP_ANALYSIS_TIMEOUT_MS,
+      MIN_PCAP_DURATION_MS,
+      MAX_PCAP_ANALYSIS_TIMEOUT_MS,
+    );
+    const pollIntervalMs = normalizeDurationMs(
+      firstPresent(req, "poll_interval_ms", "pollIntervalMs"),
+      DEFAULT_PCAP_POLL_INTERVAL_MS,
+      MIN_PCAP_DURATION_MS,
+      MAX_PCAP_POLL_INTERVAL_MS,
+    );
     const deadline = Date.now() + timeoutMs;
     while (Date.now() <= deadline) {
       const taskList = parseResultJson(
@@ -1121,7 +1142,7 @@ async function analyzePcapFiles(ctx) {
         ? taskList.pcap_detect_task_list.filter((item) => taskIds.includes(Number(item.id)))
         : [];
       if (tasks.length >= taskIds.length && tasks.every((item) => [2, 3].includes(Number(item.replay_status)))) break;
-      await sleep(Math.max(1000, pollIntervalMs));
+      await sleep(pollIntervalMs);
     }
   }
 
@@ -1145,7 +1166,13 @@ async function analyzePcapFiles(ctx) {
 const parseFilename = (contentDisposition) => {
   const value = String(contentDisposition || "");
   const utf8Match = value.match(/filename\*=UTF-8''([^;]+)/i);
-  if (utf8Match) return decodeURIComponent(utf8Match[1].trim().replace(/^"|"$/g, ""));
+  if (utf8Match) {
+    try {
+      return decodeURIComponent(utf8Match[1].trim().replace(/^"|"$/g, ""));
+    } catch {
+      // Fall back to the plain filename parameter when the upstream encoding is malformed.
+    }
+  }
   const asciiMatch = value.match(/filename="?([^";]+)"?/i);
   return asciiMatch ? asciiMatch[1].trim() : "";
 };
@@ -1376,6 +1403,7 @@ export const internals = {
   buildIdsActionParams,
   buildPcapDetectTaskParams,
   buildDeletePcapDetectTaskParams,
+  normalizeDurationMs,
   parseFilename,
   fromValue,
 };
