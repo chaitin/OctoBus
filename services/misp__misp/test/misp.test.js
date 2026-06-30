@@ -273,9 +273,29 @@ test('HTTP error codes mapped correctly', async () => {
   const h500 = await loadHandler({ event_id: '1' }, getEventPath);
   await assert.rejects(() => h500(), /UNAVAILABLE/);
 
-  setFetch(async () => { throw new Error('timeout'); });
+  // Timeout errors should map to DEADLINE_EXCEEDED, not UNAVAILABLE
+  const timeoutErr = new Error('timeout');
+  timeoutErr.name = 'TimeoutError';
+  setFetch(async () => { throw timeoutErr; });
+  const hTimeout = await loadHandler({ event_id: '1' }, getEventPath);
+  await assert.rejects(() => hTimeout(), /DEADLINE_EXCEEDED/);
+
+  // Network errors should map to UNAVAILABLE
+  setFetch(async () => { throw new Error('connection refused'); });
   const hNet = await loadHandler({ event_id: '1' }, getEventPath);
   await assert.rejects(() => hNet(), /UNAVAILABLE/);
+});
+
+test('HTTP error messages do not leak upstream body', async () => {
+  setFetch(async () => ({ ok: false, status: 401, headers: new Map(), text: async () => 'secret-token-leaked' }));
+  const h = await loadHandler({ event_id: '1' }, getEventPath);
+  try {
+    await h();
+    assert.fail('should have thrown');
+  } catch (e) {
+    assert.ok(/UNAUTHENTICATED/.test(e.message));
+    assert.ok(!e.message.includes('secret-token-leaked'), 'error message should not contain upstream body');
+  }
 });
 
 test('MISP API errors handled', async () => {

@@ -34,6 +34,7 @@ const grpcCodeFor = (code) => ({
   PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED,
   UNAUTHENTICATED: grpcStatus.UNAUTHENTICATED,
   UNAVAILABLE: grpcStatus.UNAVAILABLE,
+  DEADLINE_EXCEEDED: grpcStatus.DEADLINE_EXCEEDED,
   UNKNOWN: grpcStatus.UNKNOWN,
 })[code] ?? grpcStatus.UNKNOWN;
 
@@ -182,6 +183,23 @@ const callMisp = async (ctx, method, path, body, queryParams) => {
   const skipVerify = toBoolean(bindings.skipTlsVerify) || toBoolean(bindings.tlsInsecureSkipVerify);
   const tlsOptions = skipVerify ? { insecureSkipVerify: true, tlsInsecureSkipVerify: true } : {};
 
+  // TLS skip must be configured at the process level (e.g. OctoBus daemon sets
+  // NODE_TLS_REJECT_UNAUTHORIZED=0 before spawning the subprocess), NOT by
+  // mutating process.env inside the handler. Mutating process.env is a global,
+  // irreversible side effect that disables TLS verification for the entire
+  // Node.js process — affecting all services, handlers, and even third-party
+  // library HTTPS calls. If different instances have different skipTlsVerify
+  // configs, one instance's skip would break another's security.
+  if (skipVerify && process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0') {
+    const inst = meta.instance_id || meta.instanceId || 'unknown';
+    console.warn(
+      `[${SERVICE_NAME}][TLS] skipTlsVerify=true but NODE_TLS_REJECT_UNAUTHORIZED is not set. ` +
+      `TLS certificate verification will NOT be skipped. ` +
+      `Set NODE_TLS_REJECT_UNAUTHORIZED=0 at process startup (e.g. via OctoBus daemon config) or export it before running. ` +
+      `[inst=${inst}]`,
+    );
+  }
+
   logFlow(meta, method + ':start', { path, body: body ? '(body)' : undefined });
 
   let res;
@@ -195,31 +213,44 @@ const callMisp = async (ctx, method, path, body, queryParams) => {
     });
   } catch (err) {
     const isTimeout = err?.name === 'TimeoutError' || err?.name === 'AbortError';
-    const reason = isTimeout ? 'timeout after ' + timeoutMs + 'ms' : (err?.cause?.message || err?.message || 'fetch failed');
+    if (isTimeout) {
+      logFlow(meta, method + ':timeout', { timeoutMs });
+      throw errorWithCode('DEADLINE_EXCEEDED', 'timeout after ' + timeoutMs + 'ms');
+    }
+    const reason = err?.cause?.message || err?.message || 'fetch failed';
     logFlow(meta, method + ':error', { error: reason });
     throw errorWithCode('UNAVAILABLE', 'upstream error: ' + reason);
   }
 
   const text = await res.text();
 
+  // Log upstream response body server-side only (may contain sensitive data).
+  const logUpstreamBody = (status) => {
+    try { console.error(`[${SERVICE_NAME}] upstream http ${status}: ${String(text).slice(0, 500)}`); } catch { /* ignore */ }
+  };
+
   if (res.status === 401) {
+    logUpstreamBody(res.status);
     logFlow(meta, method + ':unauthenticated', { status: res.status });
-    throw errorWithCode('UNAUTHENTICATED', 'upstream http ' + res.status + ': ' + text);
+    throw errorWithCode('UNAUTHENTICATED', 'upstream returned ' + res.status);
   }
 
   if (res.status === 403) {
+    logUpstreamBody(res.status);
     logFlow(meta, method + ':auth-error', { status: res.status });
-    throw errorWithCode('PERMISSION_DENIED', 'upstream http ' + res.status + ': ' + text);
+    throw errorWithCode('PERMISSION_DENIED', 'upstream returned ' + res.status);
   }
 
   if (res.status >= 400 && res.status < 500) {
-    logFlow(meta, method + ':client-error', { status: res.status, response: text });
-    throw errorWithCode('FAILED_PRECONDITION', 'upstream http ' + res.status + ': ' + text);
+    logUpstreamBody(res.status);
+    logFlow(meta, method + ':client-error', { status: res.status });
+    throw errorWithCode('FAILED_PRECONDITION', 'upstream returned ' + res.status);
   }
 
   if (res.status >= 500) {
+    logUpstreamBody(res.status);
     logFlow(meta, method + ':server-error', { status: res.status });
-    throw errorWithCode('UNAVAILABLE', 'upstream http ' + res.status + ': ' + text);
+    throw errorWithCode('UNAVAILABLE', 'upstream returned ' + res.status);
   }
 
   if (!text.trim()) {
