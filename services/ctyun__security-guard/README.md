@@ -1,18 +1,22 @@
 # CTYun Server Security Guard OctoBus Service
 
-OctoBus package for CTYun Server Security Guard (native edition) and Web Tamper Protection read-only APIs.
+## Verified OctoBus Surface
+
+This service package intentionally exposes only `AssetClassify` in proto/rpcdef because this is the RPC currently covered by real OctoBus Connect evidence. Other vendor APIs are not exposed until matching OctoBus runtime evidence is added.
 
 ## Configuration
 
-- `endpoint`: defaults to `https://ctcsscn-global.ctapi.ctyun.cn`.
-- `timeoutMs`: HTTP timeout in milliseconds.
-- `headers`: optional additional HTTP headers.
+Use the service `config.schema.json` and `secret.schema.json` files for required endpoint, region, and credential fields. Secrets must be supplied at runtime and are not stored in this package.
 
-## Secrets
+## Evidence
 
-- `accessKeyId` / `ak`: CTYun AccessKey ID.
-- `secretAccessKey` / `sk`: CTYun Secret Access Key.
+- OctoBus Connect evidence: `docs/evidence/octobus-connect-evidence.md`
+- Manual terminal screenshot: `docs/evidence/manual-octobus-connect-evidence.png`
 
-`InvokeReadOnlyApi` only accepts the read-only APIs built into this package. Mutating endpoints such as add, delete, update, save, handle, open, close, scan, sync, and export are intentionally not exposed.
+## Tests
 
-For APIs whose documented path contains `*`, pass replacement values in `payload.pathParams` or `payload.path_params` as an array.
+Run the service test with Node.js from the repository or service worktree:
+
+```bash
+node --test test/*.test.js
+```

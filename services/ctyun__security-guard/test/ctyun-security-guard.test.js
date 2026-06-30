@@ -4,8 +4,6 @@ import test from 'node:test';
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
 import {
-  METHOD_INVOKE_READ_ONLY_API_FULL,
-  METHOD_INVOKE_READ_ONLY_API_PATH,
   READ_ONLY_APIS,
   SERVICE_PACKAGE,
   _test,
@@ -77,18 +75,13 @@ test('service exports handlers and rpcdef paths', () => {
     assert.equal(typeof handlers[`${SERVICE_PACKAGE}/${entry.methodName}`], 'function');
     assert.equal(typeof rpcdef()[`/${SERVICE_PACKAGE}/${entry.methodName}`], 'function');
   }
-  assert.equal(typeof handlers[METHOD_INVOKE_READ_ONLY_API_FULL], 'function');
-  assert.equal(typeof rpcdef()[METHOD_INVOKE_READ_ONLY_API_PATH], 'function');
 });
 
 test('validates credentials and read-only API names', () => {
   assert.equal(_test.validateBindings({ ak: 'id', sk: 'key' }).accessKeyId, 'id');
   assert.throws(() => _test.validateBindings({ sk: 'key' }), /accessKeyId/);
   assert.throws(() => _test.validateBindings({ ak: 'id' }), /secretAccessKey/);
-  assert.equal(_test.validateApiSpec('untreatedRisk').path, '/v1/index/untreated');
-  assert.equal(_test.validateApiSpec('hostList').httpMethod, 'POST');
-  assert.equal(_test.validateApiSpec('getAgentKey').path, '/v1/host/getAgentKey');
-  assert.equal(_test.validateApiSpec('scaCheckWhiteList').path, '/v1/sca/check/whiteList/*/*');
+  assert.equal(_test.validateApiSpec('assetClassify').path, '/v1/assert/statistics');
   assert.throws(() => _test.validateApiSpec('openStatus'), /unsupported/);
   assert.throws(() => _test.validateApiSpec('v1hostdelete'), /unsupported/);
   assert.throws(() => _test.validateApiSpec('quotaList'), /unsupported/);
@@ -135,135 +128,31 @@ test('builds CTYun EOP dates, query strings, and signatures', () => {
   assert.match(signed.canonicalRequest, /^ctyun-eop-request-id:27cfe4dc-e640-45f6-92ca-492ca73e8680\neop-date:20240116T160000Z\n\npage=1&pageSize=10\n[0-9a-f]{64}$/);
 });
 
-test('sends signed GET untreated risk request', async () => {
-  let captured;
-  setFetch(async (url, init) => {
-    captured = { url: String(url), init };
-    return response(200, {
-      error: 'CTCSSCN_000000',
-      statusCode: '200',
-      message: 'success',
-      returnObj: { vulRiskNum: 1 },
-    });
-  });
-
-  const result = await handlers[`${SERVICE_PACKAGE}/UntreatedRisk`]({}, buildCtx({ bindings: { timeoutMs: 25 } }));
-
-  const url = new URL(captured.url);
-  assert.equal(url.origin, 'https://ctcsscn-global.ctapi.ctyun.cn');
-  assert.equal(url.pathname, '/v1/index/untreated');
-  assert.equal(captured.init.method, 'GET');
-  assert.equal(captured.init.body, undefined);
-  assert.equal(Object.hasOwn(captured.init, 'timeoutMs'), false);
-  assert.equal(typeof captured.init.signal?.aborted, 'boolean');
-  assert.equal(captured.init.headers['X-Custom'], 'trace');
-  assert.equal(captured.init.headers['Content-Type'], 'application/json');
-  assert.equal(captured.init.headers['Eop-date'], '20240116T160000Z');
-  assert.match(captured.init.headers['Eop-Authorization'], /^AKEXAMPLE Headers=ctyun-eop-request-id;eop-date Signature=[A-Za-z0-9+/]+=*$/);
-  assert.equal(result.response.structValue.fields.returnObj.structValue.fields.vulRiskNum.numberValue, 1);
-});
-
-test('sends signed POST host list with JSON body', async () => {
-  let captured;
-  setFetch(async (url, init) => {
-    captured = { url: String(url), init, body: JSON.parse(init.body) };
-    return response(200, {
-      error: 'CTCSSCN_000000',
-      statusCode: '200',
-      message: 'success',
-      returnObj: { list: [{ agentGuid: 'agent-1' }] },
-    });
-  });
-
-  await handlers[`${SERVICE_PACKAGE}/HostList`]({
-    payload: {
-      fields: {
-        pageNo: { numberValue: 1 },
-        pageSize: { numberValue: 20 },
-      },
-    },
-  }, buildCtx());
-
-  const url = new URL(captured.url);
-  assert.equal(url.origin, 'https://ctcsscn-global.ctapi.ctyun.cn');
-  assert.equal(url.pathname, '/v1/host/all');
-  assert.equal(url.search, '');
-  assert.deepEqual(captured.body, { pageNo: 1, pageSize: 20 });
-  assert.equal(captured.init.method, 'POST');
-});
-
-test('fills documented star path parameters and removes them from request params', async () => {
-  let captured;
-  setFetch(async (url, init) => {
-    captured = { url: String(url), init };
-    return response(200, { error: 'CTCSSCN_000000', statusCode: '200', returnObj: { agentGuid: 'agent-1' } });
-  });
-
-  await handlers[`${SERVICE_PACKAGE}/GetHostsDetail`]({
-    payload: { fields: { pathParams: { listValue: { values: [{ stringValue: 'agent-1' }] } }, detail: { stringValue: 'basic' } } },
-  }, buildCtx());
-
-  const url = new URL(captured.url);
-  assert.equal(url.pathname, '/v1/host/detail/agent-1');
-  assert.equal(url.searchParams.get('detail'), 'basic');
-  assert.equal(url.searchParams.has('pathParams'), false);
-
-  await expectGrpcError(
-    () => handlers[`${SERVICE_PACKAGE}/GetHostsDetail`]({}, buildCtx()),
-    'INVALID_ARGUMENT',
-    (err) => assert.match(err.message, /pathParams/),
-  );
-});
-
-test('InvokeReadOnlyApi supports built-in read-only API names and rejects mutations', async () => {
-  let captured;
-  setFetch(async (url, init) => {
-    captured = { url: String(url), init };
-    return response(200, { error: 'CTCSSCN_000000', statusCode: '200', message: 'ok', returnObj: { result: [] } });
-  });
-
-  const result = await handlers[METHOD_INVOKE_READ_ONLY_API_FULL]({
-    api: 'getWeakScanConf',
-    payload: { fields: { hostId: { stringValue: 'host-1' } } },
-  }, buildCtx());
-
-  const url = new URL(captured.url);
-  assert.equal(url.pathname, '/v1/weakpw/conf');
-  assert.equal(url.searchParams.get('hostId'), 'host-1');
-  assert.equal(result.response.structValue.fields.returnObj.structValue.fields.result.listValue.values.length, 0);
-
-  await expectGrpcError(
-    () => handlers[METHOD_INVOKE_READ_ONLY_API_FULL]({ api: 'openStatus' }, buildCtx()),
-    'INVALID_ARGUMENT',
-    (err) => assert.match(err.message, /unsupported/),
-  );
-});
-
 test('maps CTYun business and transport errors', async () => {
   setFetch(async () => response(200, { error: 'CTCSSCN_000004', statusCode: '403', message: '鉴权错误' }));
   await expectGrpcError(
-    () => handlers[`${SERVICE_PACKAGE}/UntreatedRisk`]({}, buildCtx()),
+    () => handlers[`${SERVICE_PACKAGE}/AssetClassify`]({}, buildCtx()),
     'PERMISSION_DENIED',
     (err) => assert.match(err.message, /CTCSSCN_000004/),
   );
 
   setFetch(async () => response(200, { error: 'CTCSSCN_000005', statusCode: '200', message: '用户没有付费版配额' }));
   await expectGrpcError(
-    () => handlers[`${SERVICE_PACKAGE}/UntreatedRisk`]({}, buildCtx()),
+    () => handlers[`${SERVICE_PACKAGE}/AssetClassify`]({}, buildCtx()),
     'FAILED_PRECONDITION',
     (err) => assert.match(err.message, /CTCSSCN_000005/),
   );
 
   setFetch(async () => response(503, { statusCode: 500000, message: 'busy' }));
   await expectGrpcError(
-    () => handlers[`${SERVICE_PACKAGE}/UntreatedRisk`]({}, buildCtx()),
+    () => handlers[`${SERVICE_PACKAGE}/AssetClassify`]({}, buildCtx()),
     'UNAVAILABLE',
     (err) => assert.match(err.message, /HTTP 503/),
   );
 
   setFetch(async () => response(200, 'not json'));
   await expectGrpcError(
-    () => handlers[`${SERVICE_PACKAGE}/UntreatedRisk`]({}, buildCtx()),
+    () => handlers[`${SERVICE_PACKAGE}/AssetClassify`]({}, buildCtx()),
     'UNKNOWN',
     (err) => assert.match(err.message, /non-JSON/),
   );
@@ -274,7 +163,7 @@ test('maps CTYun business and transport errors', async () => {
     throw err;
   });
   await expectGrpcError(
-    () => handlers[`${SERVICE_PACKAGE}/UntreatedRisk`]({}, buildCtx({ limits: { timeoutMs: 25 } })),
+    () => handlers[`${SERVICE_PACKAGE}/AssetClassify`]({}, buildCtx({ limits: { timeoutMs: 25 } })),
     'DEADLINE_EXCEEDED',
     (err) => assert.match(err.message, /timed out after 25ms/),
   );
@@ -291,7 +180,7 @@ test('maps CTYun business and transport errors', async () => {
     }),
   }));
   await expectGrpcError(
-    () => handlers[`${SERVICE_PACKAGE}/UntreatedRisk`]({}, buildCtx({ limits: { timeoutMs: 5 } })),
+    () => handlers[`${SERVICE_PACKAGE}/AssetClassify`]({}, buildCtx({ limits: { timeoutMs: 5 } })),
     'DEADLINE_EXCEEDED',
     (err) => assert.match(err.message, /timed out after 5ms/),
   );
@@ -304,7 +193,7 @@ test('handler accepts OctoBus SDK single-argument context', async () => {
     return response(200, { statusCode: '200', returnObj: { vulRiskNum: 0 } });
   });
 
-  await handlers[`${SERVICE_PACKAGE}/UntreatedRisk`]({
+  await handlers[`${SERVICE_PACKAGE}/AssetClassify`]({
     request: {},
     config: {},
     secret: {
@@ -319,36 +208,6 @@ test('handler accepts OctoBus SDK single-argument context', async () => {
   });
 
   const url = new URL(captured.url);
-  assert.equal(url.pathname, '/v1/index/untreated');
-  assert.match(captured.init.headers['Eop-Authorization'], /^SDKAK Headers=ctyun-eop-request-id;eop-date Signature=/);
-});
-
-test('InvokeReadOnlyApi accepts OctoBus SDK single-argument context', async () => {
-  let captured;
-  setFetch(async (url, init) => {
-    captured = { url: String(url), init };
-    return response(200, { error: 'CTCSSCN_000000', statusCode: '200', returnObj: { result: [] } });
-  });
-
-  await handlers[METHOD_INVOKE_READ_ONLY_API_FULL]({
-    request: {
-      api: 'getWeakScanConf',
-      payload: { fields: { hostId: { stringValue: 'host-1' } } },
-    },
-    config: {},
-    secret: {
-      accessKeyId: 'SDKAK',
-      secretAccessKey: 'SDKSK',
-    },
-    limits: { timeoutMs: 10_000 },
-    meta: {
-      date: new Date('2024-01-16T08:00:00Z'),
-      request_id: '27cfe4dc-e640-45f6-92ca-492ca73e8680',
-    },
-  });
-
-  const url = new URL(captured.url);
-  assert.equal(url.pathname, '/v1/weakpw/conf');
-  assert.equal(url.searchParams.get('hostId'), 'host-1');
+  assert.equal(url.pathname, '/v1/assert/statistics');
   assert.match(captured.init.headers['Eop-Authorization'], /^SDKAK Headers=ctyun-eop-request-id;eop-date Signature=/);
 });
