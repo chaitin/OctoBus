@@ -149,7 +149,7 @@ test('ListAttackIPs missing apiKey', async () => {
   await assert.rejects(handler(), /INVALID_ARGUMENT/);
 });
 
-test('ListAttackIPs http error', async () => {
+test('ListAttackIPs http error 503', async () => {
   mockFetch(async () => ({
     ok: false, status: 503,
     headers: { get: () => 'text/plain' },
@@ -160,11 +160,70 @@ test('ListAttackIPs http error', async () => {
   await assert.rejects(handler(), /UNAVAILABLE/);
 });
 
+test('ListAttackIPs http error 401 returns UNAUTHENTICATED', async () => {
+  mockFetch(async () => ({
+    ok: false, status: 401,
+    headers: { get: () => 'text/plain' },
+    text: async () => 'Unauthorized',
+  }));
+
+  const handler = await loadListAttackIpsHandler({});
+  await assert.rejects(handler(), /UNAUTHENTICATED/);
+});
+
+test('ListAttackIPs http error 403 returns PERMISSION_DENIED', async () => {
+  mockFetch(async () => ({
+    ok: false, status: 403,
+    headers: { get: () => 'text/plain' },
+    text: async () => 'Forbidden',
+  }));
+
+  const handler = await loadListAttackIpsHandler({});
+  await assert.rejects(handler(), /PERMISSION_DENIED/);
+});
+
+test('throwForHttpError does not leak upstream response body', async () => {
+  const sensitiveBody = 'internal stack trace with secret=abc123';
+  const errors = [];
+  const origError = console.error;
+  console.error = (...args) => errors.push(args.join(' '));
+
+  mockFetch(async () => ({
+    ok: false, status: 500,
+    headers: { get: () => 'text/plain' },
+    text: async () => sensitiveBody,
+  }));
+
+  const handler = await loadListAttackIpsHandler({});
+  try {
+    await handler();
+    assert.fail('should have thrown');
+  } catch (e) {
+    // gRPC error message should NOT contain the sensitive body
+    assert.ok(!e.message.includes(sensitiveBody), `error message leaked upstream body: ${e.message}`);
+    // But it should have been logged server-side
+    assert.ok(errors.some(msg => msg.includes(sensitiveBody)), 'upstream body not logged server-side');
+  } finally {
+    console.error = origError;
+  }
+});
+
 test('ListAttackIPs network failure', async () => {
   mockFetch(async () => { throw new Error('connect ECONNREFUSED'); });
 
   const handler = await loadListAttackIpsHandler({});
   await assert.rejects(handler(), /UNAVAILABLE/);
+});
+
+test('timeout throws DEADLINE_EXCEEDED', async () => {
+  mockFetch(async () => {
+    const err = new Error('The operation was aborted');
+    err.name = 'TimeoutError';
+    throw err;
+  });
+
+  const handler = await loadListAttackIpsHandler({});
+  await assert.rejects(handler(), /DEADLINE_EXCEEDED/);
 });
 
 test('ListAttackDetails success', async () => {

@@ -129,13 +129,12 @@ export function rpcdef(ctx) {
   };
 
   const throwForHttpError = (status, text) => {
-    if (status === 401 || status === 403) {
-      throw errorWithCode('PERMISSION_DENIED', `upstream http ${status}: ${text}`);
-    }
-    if (status >= 400 && status < 500) {
-      throw errorWithCode('FAILED_PRECONDITION', `upstream http ${status}: ${text}`);
-    }
-    throw errorWithCode('UNAVAILABLE', `upstream http ${status}: ${text}`);
+    // Log upstream response body server-side only (may contain sensitive data).
+    try { console.error(`[ThreatBook_HFISH] upstream http ${status}: ${String(text).slice(0, 500)}`); } catch { /* ignore */ }
+    if (status === 401) throw errorWithCode('UNAUTHENTICATED', `upstream returned ${status}`);
+    if (status === 403) throw errorWithCode('PERMISSION_DENIED', `upstream returned ${status}`);
+    if (status >= 400 && status < 500) throw errorWithCode('FAILED_PRECONDITION', `upstream returned ${status}`);
+    throw errorWithCode('UNAVAILABLE', `upstream returned ${status}`);
   };
 
   const readJsonResponse = async (res, emptyValue) => {
@@ -169,7 +168,10 @@ export function rpcdef(ctx) {
       });
     } catch (e) {
       const isTimeout = e?.name === 'TimeoutError' || e?.name === 'AbortError';
-      const reason = isTimeout ? 'timeout after ' + timeoutMs + 'ms' : (e?.cause?.message || e?.message || 'fetch failed');
+      if (isTimeout) {
+        throw errorWithCode('DEADLINE_EXCEEDED', 'timeout after ' + timeoutMs + 'ms');
+      }
+      const reason = e?.cause?.message || e?.message || 'fetch failed';
       throw errorWithCode('UNAVAILABLE', reason);
     }
   };
