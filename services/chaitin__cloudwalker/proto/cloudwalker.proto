@@ -1,0 +1,133 @@
+syntax = "proto3";
+
+package CloudWalker;
+
+service CloudWalker {
+  rpc ListClusters(ListClustersRequest) returns (ListClustersResponse) {}
+  rpc GetClusterInfo(GetClusterInfoRequest) returns (Cluster) {}
+  rpc ListClusterVulnEvents(ListClusterVulnEventsRequest) returns (ListVulnEventsResponse) {}
+  rpc GetClusterVulnEvent(GetClusterVulnEventRequest) returns (VulnEvent) {}
+  rpc ListMicroserviceVulnEvents(ListMicroserviceVulnEventsRequest) returns (ListVulnEventsResponse) {}
+  rpc GetMicroserviceVulnEvent(GetMicroserviceVulnEventRequest) returns (VulnEvent) {}
+}
+
+message ListClustersRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+  string name = 3;
+  int32 status = 4;
+}
+
+message GetClusterInfoRequest {
+  string cluster_id = 1;
+}
+
+message ListClusterVulnEventsRequest {
+  string cluster_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+  string cve = 4;
+  string name = 5;
+  string cnvd = 6;
+  string cnnvd = 7;
+  string node_name = 8;
+  string cluster_name = 9;
+  string order_by = 10;
+  repeated int32 risk = 11;
+  repeated int32 state = 12;
+  repeated string characteristic = 13;
+  int32 order = 14;
+}
+
+message GetClusterVulnEventRequest {
+  string event_id = 1;
+}
+
+message ListMicroserviceVulnEventsRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+  string service_name = 3;
+  string service_type = 4;
+  string cluster_name = 5;
+  string name = 6;
+  string cve = 7;
+  string cnvd = 8;
+  string cnnvd = 9;
+  string order_by = 10;
+  repeated string characteristic = 11;
+  repeated int32 risk = 12;
+  repeated int32 state = 13;
+  int32 order = 14;
+}
+
+message GetMicroserviceVulnEventRequest {
+  string event_id = 1;
+}
+
+message ListClustersResponse {
+  repeated Cluster clusters = 1;
+  string next_page_token = 2;
+}
+
+message ListVulnEventsResponse {
+  repeated VulnEvent vuln_events = 1;
+  string next_page_token = 2;
+}
+
+message ModuleStatus {
+  string version = 1;
+  int32 module_type = 2;
+  int32 status = 3;
+}
+
+message Cluster {
+  string cluster_id = 1;
+  string cluster_name = 2;
+  string status = 3;
+  string risk_level = 4;
+  string created_at = 5;
+  string updated_at = 6;
+
+  // Extended fields from CloudWalker API
+  string api_version = 7;
+  repeated string master_ips = 8;
+  repeated ModuleStatus module_status = 9;
+  int32 cluster_type = 10;
+  int32 reachable = 11;
+  int32 integration_status = 12;
+}
+
+message VulnEvent {
+  string event_id = 1;
+  string cluster_id = 2;
+  string microservice_id = 3;
+  string microservice_name = 4;
+  string level = 5;
+  string status = 6;
+  string title = 7;
+  string cve = 8;
+  string package_name = 9;
+  string package_version = 10;
+  string fixed_version = 11;
+  string image_name = 12;
+  string discovered_at = 13;
+  string updated_at = 14;
+
+  // Extended fields for better data coverage
+  string node_name = 15;
+  string cluster_name = 16;
+  int32 risk = 17;
+  int32 original_risk = 18;
+  int32 custom_risk = 19;
+  repeated string characteristic = 20;
+  string service_uid = 21;
+  string service_type = 22;
+  string description = 23;
+  string solution = 24;
+  int32 manage_status = 25;
+  bool node_exist = 26;
+  string first_discovery_time = 27;
+  string last_discovery_time = 28;
+  string cnvd = 29;
+  string cnnvd = 30;
+}

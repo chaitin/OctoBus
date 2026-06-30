@@ -13,6 +13,10 @@ const services = {
     entryFile: "../chaitin__safeline-waf-eliminate-false-positive/bin/safeline-waf-eliminate-false-positive.js",
     serviceModule: "../chaitin__safeline-waf-eliminate-false-positive/src/service.js",
   },
+  "cloudwalker": {
+    entryFile: "../chaitin__cloudwalker/bin/cloudwalker.js",
+    serviceModule: "../chaitin__cloudwalker/src/service.js",
+  },
   "das-gateway-v3": {
     entryFile: "../das__gateway_v3/bin/das-gateway-v3.js",
     serviceModule: "../das__gateway_v3/src/service.js",
@@ -203,3 +207,4 @@ Use 'octobus-tentacles <service> --help' to print service help.`)
   });
 
 await program.parseAsync();
+
