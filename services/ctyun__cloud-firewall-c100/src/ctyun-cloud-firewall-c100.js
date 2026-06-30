@@ -8,64 +8,9 @@ export const DEFAULT_URL_TYPE = 'CTAPI';
 export const DEFAULT_TIMEOUT_MS = 5000;
 
 export const READ_ONLY_APIS = [
-  { methodName: 'QueryBlackWhitePolicyInfo', api: 'queryBlackWhitePolicyInfo', httpMethod: 'GET', path: '/vfw/v2_black_white_policy_info' },
-  { methodName: 'GetSystemVrfbindInfo', api: 'getSystemVrfbindInfo', httpMethod: 'GET', path: '/vfw/v2_system_vrf_bind_info' },
-  { methodName: 'AcPolicyOverviewC', api: 'acPolicyOverviewC', httpMethod: 'GET', path: '/vfw/v2_ac_policy_overview' },
-  { methodName: 'ProtectionStatisticsC', api: 'protectionStatisticsC', httpMethod: 'GET', path: '/vfw/v2_protection_statistics' },
-  { methodName: 'AssetProtectionOverviewC', api: 'assetProtectionOverviewC', httpMethod: 'GET', path: '/vfw/v2_asset_protection_overview' },
-  { methodName: 'FirewallOverviewC', api: 'firewallOverviewC', httpMethod: 'GET', path: '/vfw/v2_firewall_overview' },
-  { methodName: 'QueryVfwFlowLog', api: 'queryVfwFlowLog', httpMethod: 'GET', path: '/vfw/v2_flow_log_query' },
-  { methodName: 'QueryRegionMaximumsC', api: 'queryRegionMaximumsC', httpMethod: 'GET', path: '/vfw/v2_query_region_maximums' },
-  { methodName: 'GetSystemVrfbindSyncStatus', api: 'getSystemVrfbindSyncStatus', httpMethod: 'GET', path: '/vfw/v2_system_vrf_bind_sync_status' },
-  { methodName: 'GetSystemVrfbindSynctime', api: 'getSystemVrfbindSynctime', httpMethod: 'GET', path: '/vfw/v2_system_vrf_bind_sync_time' },
-  { methodName: 'RandomFirewallName', api: 'randomFirewallName', httpMethod: 'GET', path: '/vfw/v2_firewall_random_firewall_name' },
   { methodName: 'QueryFirewallSimpleInfo', api: 'queryFirewallSimpleInfo', httpMethod: 'GET', path: '/vfw/v2_firewall_simple_query' },
-  { methodName: 'GetVpcSubnetList', api: 'getVpcSubnetList', httpMethod: 'GET', path: '/vfw/v2_firewall_subnet_list' },
-  { methodName: 'GetUserVpcList', api: 'getUserVpcList', httpMethod: 'GET', path: '/vfw/v2_firewall_vpc_list' },
-  { methodName: 'QueryFirewallInfo', api: 'queryFirewallInfo', httpMethod: 'GET', path: '/vfw/v2_firewall_query' },
-  { methodName: 'CheckCidrC', api: 'checkCidrC', httpMethod: 'GET', path: '/vfw/v2_check_cidr' },
-  { methodName: 'AssertExpressConnectQueryC', api: 'assertExpressConnectQueryC', httpMethod: 'GET', path: '/vfw/v2_assert_expressConnect_query' },
-  { methodName: 'AssertCdaQueryC', api: 'assertCdaQueryC', httpMethod: 'GET', path: '/vfw/v2_assert_cda_query' },
-  { methodName: 'AssertVpcPeerQueryC', api: 'assertVpcPeerQueryC', httpMethod: 'GET', path: '/vfw/v2_assert_vpcPeer_query' },
-  { methodName: 'AssertStatisticsCC', api: 'assertStatisticsCC', httpMethod: 'GET', path: '/vfw/v2_assert_statistics' },
-  { methodName: 'AssetAllC', api: 'assetAllC', httpMethod: 'GET', path: '/vfw/v2_asset_all' },
-  { methodName: 'AssertNatQueryC', api: 'assertNatQueryC', httpMethod: 'GET', path: '/vfw/v2_assert_nat_query' },
-  { methodName: 'QuerySystemVrfbindStatistics', api: 'querySystemVrfbindStatistics', httpMethod: 'GET', path: '/vfw/v2_system_vrf_bind_statistics' },
-  { methodName: 'QuerySystemVrfbind', api: 'querySystemVrfbind', httpMethod: 'GET', path: '/vfw/v2_system_vrf_bind_query' },
-  { methodName: 'QueryBlackWhitePolicy', api: 'queryBlackWhitePolicy', httpMethod: 'GET', path: '/vfw/v2_black_white_policy_query' },
-  { methodName: 'QuerySecPolicyRules', api: 'QuerySecPolicyRules', httpMethod: 'GET', path: '/vfw/v2_system_sec_policy_query' },
-  { methodName: 'QuerySecPolicyRuleInfo', api: 'QuerySecPolicyRuleInfo', httpMethod: 'GET', path: '/vfw/v2_system_sec_policy_info' },
-  { methodName: 'QuerySecpolicyStatistics', api: 'querySecpolicyStatistics', httpMethod: 'GET', path: '/vfw/v2_system_sec_policy_statistics' },
-  { methodName: 'QueryAppWithParent', api: 'queryAppWithParent', httpMethod: 'GET', path: '/vfw/v2_app_queryAppWithParent' },
-  { methodName: 'IpsRuleQueryAll', api: 'ipsRuleQueryAll', httpMethod: 'GET', path: '/vfw/v2_ips_rule_queryAll' },
-  { methodName: 'QueryIpsRule', api: 'queryIpsRule', httpMethod: 'GET', path: '/vfw/v2_ips_rule_query' },
-  { methodName: 'QueryIpsRuleTypeList', api: 'queryIpsRuleTypeList', httpMethod: 'GET', path: '/vfw/v2_ips_rule_type' },
-  { methodName: 'QueryDpiInfo', api: 'queryDpiInfo', httpMethod: 'GET', path: '/vfw/v2_dpi_info' },
-  { methodName: 'QueryAllApp', api: 'queryAllApp', httpMethod: 'GET', path: '/vfw/v2_app_queryAll' },
-  { methodName: 'LogQueryDeliverInfoC', api: 'logQueryDeliverInfoC', httpMethod: 'GET', path: '/vfw/v2_log_query_deliver_info' },
-  { methodName: 'LogQueryDeliverTimeC', api: 'logQueryDeliverTimeC', httpMethod: 'POST', path: '/vfw/v2_log_query_deliver_time' },
-  { methodName: 'LogQueryDeliverListC', api: 'logQueryDeliverListC', httpMethod: 'GET', path: '/vfw/v2_log_query_deliver_list' },
-  { methodName: 'GetRawLogAh', api: 'getRawLogAh', httpMethod: 'POST', path: '/vfw/200000004263/v2_get_raw_log' },
-  { methodName: 'GetRawLogC', api: 'getRawLogC', httpMethod: 'POST', path: '/vfw/bb9fdb42056f11eda1610242ac110002/v2_get_raw_log' },
-  { methodName: 'GetLogCountC', api: 'getLogCountC', httpMethod: 'POST', path: '/vfw/bb9fdb42056f11eda1610242ac110002/v2_get_log_count' },
-  { methodName: 'LogSaveStatisticsLogC', api: 'logSaveStatisticsLogC', httpMethod: 'GET', path: '/vfw/v2_log_save_statistics' },
-  { methodName: 'QueryOperationLog', api: 'queryOperationLog', httpMethod: 'GET', path: '/vfw/v2_operation_log_query' },
-  { methodName: 'GetLogSettingInfo', api: 'getLogSettingInfo', httpMethod: 'GET', path: '/vfw/v2_log_setting_info' },
-  { methodName: 'AlarmStatics', api: 'alarmStatics', httpMethod: 'GET', path: '/vfw/v2_alarm_statics' },
-  { methodName: 'AlarmQuery', api: 'alarmQuery', httpMethod: 'GET', path: '/vfw/v2_alarm_query' },
-  { methodName: 'AlarmLogList', api: 'alarmLogList', httpMethod: 'GET', path: '/vfw/v2_alarm_logList' },
-  { methodName: 'AlarmDetail', api: 'alarmDetail', httpMethod: 'GET', path: '/vfw/v2_alarm_detail' },
-  { methodName: 'ReportSubscribe', api: 'reportSubscribe', httpMethod: 'GET', path: '/vfw/v2_report_subscribe' },
-  { methodName: 'ReportStatistics', api: 'reportStatistics', httpMethod: 'GET', path: '/vfw/v2_report_statistics' },
-  { methodName: 'ReportList', api: 'reportList', httpMethod: 'GET', path: '/vfw/v2_report_list' },
-  { methodName: 'StatisticAddressGroup', api: 'statisticAddressGroup', httpMethod: 'GET', path: '/vfw/v2_address_group_statistic' },
-  { methodName: 'QueryAddressGroup', api: 'queryAddressGroup', httpMethod: 'GET', path: '/vfw/v2_address_group_query' },
-  { methodName: 'ItemsAddressGroup', api: 'itemsAddressGroup', httpMethod: 'GET', path: '/vfw/v2_address_group_items' },
-  { methodName: 'Notification', api: 'notification', httpMethod: 'GET', path: '/vfw/v2_notification' },
 ];
 
-export const METHOD_INVOKE_READ_ONLY_API_FULL = `${SERVICE_PACKAGE}/InvokeReadOnlyApi`;
-export const METHOD_INVOKE_READ_ONLY_API_PATH = `/${METHOD_INVOKE_READ_ONLY_API_FULL}`;
 
 const API_BY_NAME = new Map(READ_ONLY_APIS.map((entry) => [entry.api, entry]));
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj ?? {}, key);
@@ -394,19 +339,10 @@ const buildApiHandler = (spec) => async (req, ctx) => invokeCtyun(
 
 export const handlers = Object.fromEntries([
   ...READ_ONLY_APIS.map((entry) => [`${SERVICE_PACKAGE}/${entry.methodName}`, buildApiHandler(entry)]),
-  [METHOD_INVOKE_READ_ONLY_API_FULL, async (req, ctx) => {
-    const request = handlerRequest(req, ctx);
-    return invokeCtyun(
-      validateApiSpec(request.api),
-      normalizeStruct(request.payload ?? {}),
-      handlerContext(req, ctx),
-    );
-  }],
 ]);
 
 export const rpcdef = () => Object.fromEntries([
   ...READ_ONLY_APIS.map((entry) => [`/${SERVICE_PACKAGE}/${entry.methodName}`, handlers[`${SERVICE_PACKAGE}/${entry.methodName}`]]),
-  [METHOD_INVOKE_READ_ONLY_API_PATH, handlers[METHOD_INVOKE_READ_ONLY_API_FULL]],
 ]);
 
 export const _test = {

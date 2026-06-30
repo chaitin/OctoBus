@@ -1,18 +1,22 @@
 # CTYun Cloud Firewall C100 OctoBus Service
 
-OctoBus package for CTYun Cloud Firewall native edition C100 read-only query APIs.
+## Verified OctoBus Surface
+
+This service package intentionally exposes only `QueryFirewallSimpleInfo` in proto/rpcdef because this is the RPC currently covered by real OctoBus Connect evidence. Other vendor APIs are not exposed until matching OctoBus runtime evidence is added.
 
 ## Configuration
 
-- `endpoint`: defaults to `https://ctcfw-east-a.ctapi.ctyun.cn`; the documented global endpoint `https://ctcfw-global.ctapi.ctyun.cn` can be used as an override.
-- `regionId`: CTYun resource pool ID sent as the `regionid` request header.
-- `urlType`: defaults to `CTAPI`.
-- `timeoutMs`: HTTP timeout in milliseconds.
-- `headers`: optional additional HTTP headers.
+Use the service `config.schema.json` and `secret.schema.json` files for required endpoint, region, and credential fields. Secrets must be supplied at runtime and are not stored in this package.
 
-## Secrets
+## Evidence
 
-- `accessKeyId` / `ak`: CTYun AccessKey ID.
-- `secretAccessKey` / `sk`: CTYun Secret Access Key.
+- OctoBus Connect evidence: `docs/evidence/octobus-connect-evidence.md`
+- Manual terminal screenshot: `docs/evidence/manual-octobus-connect-evidence.png`
 
-`InvokeReadOnlyApi` only accepts the read-only APIs built into this package. Mutating endpoints such as add, delete, update, save, switch, open, close, sync, export, and order placement are intentionally not exposed.
+## Tests
+
+Run the service test with Node.js from the repository or service worktree:
+
+```bash
+node --test test/*.test.js
+```
