@@ -14,7 +14,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -1664,29 +1663,12 @@ func secretReadFile(secret []byte) (*os.File, func(), error) {
 	return reader, closeFn, nil
 }
 
-func usesSecretFD() bool {
-	return runtime.GOOS != "windows" || runtime.GOARCH != "arm64"
-}
-
 func runtimeSecretArg(workdir string, secret []byte) ([]string, *os.File, func(), error) {
-	if usesSecretFD() {
-		secretFile, closeFn, err := secretReadFile(secret)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		return []string{"--secret-fd", "3"}, secretFile, closeFn, nil
-	}
-	if len(secret) == 0 {
-		secret = []byte(`{}`)
-	}
-	secretPath := filepath.Join(workdir, "secret.runtime.json")
-	if err := os.WriteFile(secretPath, secret, 0o600); err != nil {
+	secretFile, closeFn, err := secretReadFile(secret)
+	if err != nil {
 		return nil, nil, nil, err
 	}
-	cleanup := func() {
-		_ = os.Remove(secretPath)
-	}
-	return []string{"--secret", secretPath}, nil, cleanup, nil
+	return []string{"--secret-fd", "3"}, secretFile, closeFn, nil
 }
 
 func (g *Gateway) validateOnDemandResponse(item store.ExposedMethod, raw []byte) error {

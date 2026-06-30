@@ -114,10 +114,10 @@ export function rpcdef(ctx) {
   // 6.2.5 DelUsers
   const goDelUsers = async (req) => {
     const oc = first(req?.org_code, req?.orgCode) || ocDef; const apk = first(req?.appkey) || ak;
-    const tp = first(req?.type) ?? 0; const uids = arr(first(req?.user_ids, req?.userIds));
+    const tp = Number(first(req?.type) ?? 0); const uids = arr(first(req?.user_ids, req?.userIds));
     const did = first(req?.condition?.dept_id, req?.condition?.deptId) || '';
     const sg = first(req?.sign) || signCalc(sk, apk, oc, uids.join(','), tp, did);
-    const body = { type: Number(tp), orgCode: oc, appkey: apk, sign: sg };
+    const body = { type: tp, orgCode: oc, appkey: apk, sign: sg };
     if (tp === 0) { body.userIds = uids; } else { const c = buildCond(req?.condition); if (Object.keys(c).length > 0) body.condition = c; }
     const j = await post(BASE + '/v1/delUsers', body);
     return { code: j?.code ?? 0, msg: j?.msg ?? '', data: j?.data ?? null };
@@ -126,12 +126,12 @@ export function rpcdef(ctx) {
   // 6.2.6 StateUsers
   const goStateUsers = async (req) => {
     const oc = first(req?.org_code, req?.orgCode) || ocDef; const apk = first(req?.appkey) || ak;
-    const tp = first(req?.type) ?? 0; const st = first(req?.state);
+    const tp = Number(first(req?.type) ?? 0); const st = first(req?.state);
     if (st === undefined || st === null) throw er('INVALID_ARGUMENT', 'state required');
     const uids = arr(first(req?.user_ids, req?.userIds));
     const did = first(req?.condition?.dept_id, req?.condition?.deptId) || '';
     const sg = first(req?.sign) || signCalc(sk, apk, oc, uids.join(','), tp, st, did);
-    const body = { type: Number(tp), state: st, orgCode: oc, appkey: apk, sign: sg };
+    const body = { type: tp, state: st, orgCode: oc, appkey: apk, sign: sg };
     if (tp === 0) { body.userIds = uids; } else { const c = buildCond(req?.condition); if (Object.keys(c).length > 0) body.condition = c; }
     const j = await post(BASE + '/v1/stateUsers', body);
     return { code: j?.code ?? 0, msg: j?.msg ?? '', data: j?.data ?? null };
