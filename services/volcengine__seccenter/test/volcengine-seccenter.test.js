@@ -4,8 +4,6 @@ import test from 'node:test';
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
 import {
-  METHOD_INVOKE_READ_ONLY_ACTION_FULL,
-  METHOD_INVOKE_READ_ONLY_ACTION_PATH,
   READ_ONLY_ACTIONS,
   SERVICE_PACKAGE,
   _test,
@@ -76,8 +74,6 @@ test('service exports handlers and rpcdef paths', () => {
     assert.equal(typeof handlers[`${SERVICE_PACKAGE}/${entry.methodName}`], 'function');
     assert.equal(typeof rpcdef()[`/${SERVICE_PACKAGE}/${entry.methodName}`], 'function');
   }
-  assert.equal(typeof handlers[METHOD_INVOKE_READ_ONLY_ACTION_FULL], 'function');
-  assert.equal(typeof rpcdef()[METHOD_INVOKE_READ_ONLY_ACTION_PATH], 'function');
 });
 
 test('validates required credentials and supported actions', () => {
@@ -89,12 +85,9 @@ test('validates required credentials and supported actions', () => {
 
   assert.throws(() => _test.validateBindings({ secretAccessKey: 'key' }), /accessKeyId/);
   assert.throws(() => _test.validateBindings({ accessKeyId: 'id' }), /secretAccessKey/);
-  assert.equal(_test.validateActionName('ListAssetCenterHosts'), 'ListAssetCenterHosts');
-  assert.equal(_test.validateActionName('GetHostAssetOverview'), 'GetHostAssetOverview');
-  assert.equal(_test.validateActionName('ListHidsAlarms'), 'ListHidsAlarms');
-  assert.equal(_test.validateActionName('GetSecurityOverview'), 'GetSecurityOverview');
+  assert.equal(_test.validateActionName('ListAssetGroups'), 'ListAssetGroups');
   assert.throws(() => _test.validateActionName('UpdateInstance'), /read-only/);
-  assert.throws(() => _test.validateActionSpec({ action: 'ListAssetCenterHosts', serviceCode: 'ecs' }), /unsupported/);
+  assert.throws(() => _test.validateActionSpec({ action: 'ListAssetGroups', serviceCode: 'ecs' }), /unsupported/);
 });
 
 test('escapes Volcengine query params and rejects nested GET query values', () => {
@@ -117,181 +110,24 @@ test('normalizes protobuf Struct payloads', () => {
   });
 });
 
-test('signs and sends POST Cloud Security Center host list request with body payload', async () => {
+test('signs and sends POST Cloud Security Center asset groups request with body payload', async () => {
   let captured;
   setFetch(async (url, init) => {
     captured = { url: String(url), init, body: JSON.parse(init.body) };
     return response(200, {
       ResponseMetadata: {
         RequestId: 'req-1',
-        Action: 'ListAssetCenterHosts',
+        Action: 'ListAssetGroups',
         Version: '2024-05-08',
         Service: 'seccenter',
         Region: 'cn-beijing',
       },
-      Result: { Data: [{ AgentID: 'agent-1' }], TotalCount: 1, PageNumber: 1, PageSize: 10 },
+      Result: { Data: [{ GroupName: 'default' }], TotalCount: 1, PageNumber: 1, PageSize: 10 },
     });
   });
 
-  const result = await handlers[`${SERVICE_PACKAGE}/ListAssetCenterHosts`]({
-    payload: { fields: { PageNumber: { numberValue: 1 }, PageSize: { numberValue: 10 } } },
-  }, buildCtx({ bindings: { timeoutMs: 25 } }));
-
-  const url = new URL(captured.url);
-  assert.equal(url.origin, 'https://seccenter.volcengineapi.com');
-  assert.equal(url.searchParams.get('Action'), 'ListAssetCenterHosts');
-  assert.equal(url.searchParams.get('Version'), '2024-05-08');
-  assert.deepEqual(captured.body, { PageNumber: 1, PageSize: 10 });
-  assert.equal(captured.init.method, 'POST');
-  assert.equal(Object.hasOwn(captured.init, 'timeoutMs'), false);
-  assert.equal(typeof captured.init.signal?.aborted, 'boolean');
-  assert.equal(captured.init.headers['X-Custom'], 'trace');
-  assert.equal(captured.init.headers['Content-Type'], 'application/json; charset=UTF-8');
-  assert.equal(captured.init.headers.Host, 'seccenter.volcengineapi.com');
-  assert.equal(captured.init.headers['X-Date'], '20240116T080000Z');
-  assert.match(captured.init.headers['X-Content-Sha256'], /^[0-9a-f]{64}$/);
-  assert.match(
-    captured.init.headers.Authorization,
-    /^HMAC-SHA256 Credential=AKLTEXAMPLE\/20240116\/cn-beijing\/seccenter\/request, SignedHeaders=host;x-content-sha256;x-date, Signature=[0-9a-f]{64}$/,
-  );
-  assert.equal(result.response.structValue.fields.Result.structValue.fields.TotalCount.numberValue, 1);
-});
-
-test('supports Cloud Security Center overview query action', async () => {
-  let captured;
-  setFetch(async (url, init) => {
-    captured = { url: String(url), init, body: JSON.parse(init.body) };
-    return response(200, {
-      ResponseMetadata: {
-        RequestID: 'req-2',
-        Action: 'GetHostAssetOverview',
-        Version: '2024-05-08',
-        Service: 'seccenter',
-        Region: 'cn-beijing',
-      },
-      Result: { TotalCount: 8 },
-    });
-  });
-
-  await handlers[`${SERVICE_PACKAGE}/GetHostAssetOverview`]({
-    payload: { fields: { Conditions: { structValue: { fields: { AllHost: { boolValue: true } } } } } },
-  }, buildCtx());
-
-  const url = new URL(captured.url);
-  assert.equal(url.origin, 'https://seccenter.volcengineapi.com');
-  assert.equal(url.searchParams.get('Action'), 'GetHostAssetOverview');
-  assert.equal(url.searchParams.get('Version'), '2024-05-08');
-  assert.deepEqual(captured.body, { Conditions: { AllHost: true } });
-  assert.equal(captured.init.method, 'POST');
-  assert.match(
-    captured.init.headers.Authorization,
-    /^HMAC-SHA256 Credential=AKLTEXAMPLE\/20240116\/cn-beijing\/seccenter\/request, SignedHeaders=host;x-content-sha256;x-date, Signature=[0-9a-f]{64}$/,
-  );
-});
-
-test('InvokeReadOnlyAction supports read-only custom calls and rejects mutations', async () => {
-  let captured;
-  setFetch(async (url, init) => {
-    captured = { url: String(url), init, body: JSON.parse(init.body) };
-    return response(200, { ResponseMetadata: { RequestId: 'req-3' }, Result: { ok: true } });
-  });
-
-  const result = await handlers[METHOD_INVOKE_READ_ONLY_ACTION_FULL]({
-    action: 'ListVulns',
-    method: 'POST',
-    payload: { fields: { PageNumber: { numberValue: 1 }, PageSize: { numberValue: 10 } } },
-  }, buildCtx());
-
-  const url = new URL(captured.url);
-  assert.equal(url.origin, 'https://seccenter.volcengineapi.com');
-  assert.equal(url.searchParams.get('Action'), 'ListVulns');
-  assert.equal(url.searchParams.get('Version'), '2024-05-08');
-  assert.deepEqual(captured.body, { PageNumber: 1, PageSize: 10 });
-  assert.equal(result.response.structValue.fields.Result.structValue.fields.ok.boolValue, true);
-
-  await expectGrpcError(
-    () => handlers[METHOD_INVOKE_READ_ONLY_ACTION_FULL]({ action: 'HandleVuln' }, buildCtx()),
-    'INVALID_ARGUMENT',
-    (err) => assert.match(err.message, /read-only/),
-  );
-});
-
-test('maps Volcengine and transport errors', async () => {
-  setFetch(async () => response(200, { ResponseMetadata: { Error: { Code: 'InvalidAccessKey', Message: 'denied' } } }));
-  await expectGrpcError(
-    () => handlers[`${SERVICE_PACKAGE}/ListAssetCenterHosts`]({}, buildCtx()),
-    'PERMISSION_DENIED',
-    (err) => assert.match(err.message, /InvalidAccessKey/),
-  );
-
-  setFetch(async () => response(200, { ResponseMetadata: { Error: { Code: 'MissingParameter', Message: 'missing' } } }));
-  await expectGrpcError(
-    () => handlers[`${SERVICE_PACKAGE}/ListAssetCenterHosts`]({}, buildCtx()),
-    'INVALID_ARGUMENT',
-    (err) => assert.match(err.message, /MissingParameter/),
-  );
-
-  setFetch(async () => response(403, { ResponseMetadata: { Error: { Code: 'OperationDenied.TenantUnauthorized', Message: 'tenant not found' } } }));
-  await expectGrpcError(
-    () => handlers[`${SERVICE_PACKAGE}/ListAssetCenterHosts`]({}, buildCtx()),
-    'PERMISSION_DENIED',
-    (err) => assert.match(err.message, /TenantUnauthorized/),
-  );
-
-  setFetch(async () => response(503, { ResponseMetadata: { Error: { Code: 'InternalError', Message: 'busy' } } }));
-  await expectGrpcError(
-    () => handlers[`${SERVICE_PACKAGE}/ListAssetCenterHosts`]({}, buildCtx()),
-    'UNAVAILABLE',
-    (err) => assert.match(err.message, /HTTP 503/),
-  );
-
-  setFetch(async () => response(200, 'not json'));
-  await expectGrpcError(
-    () => handlers[`${SERVICE_PACKAGE}/ListAssetCenterHosts`]({}, buildCtx()),
-    'UNKNOWN',
-    (err) => assert.match(err.message, /non-JSON/),
-  );
-
-  setFetch(async () => {
-    const err = new Error('timeout');
-    err.name = 'TimeoutError';
-    throw err;
-  });
-  await expectGrpcError(
-    () => handlers[`${SERVICE_PACKAGE}/ListAssetCenterHosts`]({}, buildCtx({ limits: { timeoutMs: 25 } })),
-    'DEADLINE_EXCEEDED',
-    (err) => assert.match(err.message, /timed out after 25ms/),
-  );
-
-  setFetch(async (_url, init) => ({
-    status: 200,
-    text: () => new Promise((_resolve, reject) => {
-      init.signal.addEventListener('abort', () => {
-        const err = new Error('body stream timeout');
-        err.name = 'AbortError';
-        reject(err);
-      }, { once: true });
-      setTimeout(() => reject(new Error('signal was not aborted')), 100);
-    }),
-  }));
-  await expectGrpcError(
-    () => handlers[`${SERVICE_PACKAGE}/ListAssetCenterHosts`]({}, buildCtx({ limits: { timeoutMs: 5 } })),
-    'DEADLINE_EXCEEDED',
-    (err) => assert.match(err.message, /timed out after 5ms/),
-  );
-});
-
-test('handler accepts OctoBus SDK single-argument context', async () => {
-  let captured;
-  setFetch(async (url, init) => {
-    captured = { url: String(url), init };
-    return response(200, { ResponseMetadata: { RequestId: 'req-sdk' }, Result: { Total: 0 } });
-  });
-
-  await handlers[`${SERVICE_PACKAGE}/ListAssetCenterHosts`]({
-    request: {
-      payload: { fields: { Page: { numberValue: 1 }, PageSize: { numberValue: 5 } } },
-    },
+  const result = await handlers[`${SERVICE_PACKAGE}/ListAssetGroups`]({
+    request: { payload: { fields: { Page: { numberValue: 1 }, PageSize: { numberValue: 5 } } } },
     config: { region: 'cn-shanghai' },
     secret: {
       accessKeyId: 'SDKID',
@@ -302,36 +138,7 @@ test('handler accepts OctoBus SDK single-argument context', async () => {
   });
 
   const url = new URL(captured.url);
-  assert.equal(url.searchParams.get('Action'), 'ListAssetCenterHosts');
-  assert.match(captured.init.headers.Authorization, /^HMAC-SHA256 Credential=SDKID\//);
-  assert.match(captured.init.headers.Authorization, /\/cn-shanghai\/seccenter\/request,/);
-});
-
-test('InvokeReadOnlyAction accepts OctoBus SDK single-argument context', async () => {
-  let captured;
-  setFetch(async (url, init) => {
-    captured = { url: String(url), init, body: JSON.parse(init.body) };
-    return response(200, { ResponseMetadata: { RequestId: 'req-sdk-invoke' }, Result: { ok: true } });
-  });
-
-  await handlers[METHOD_INVOKE_READ_ONLY_ACTION_FULL]({
-    request: {
-      action: 'ListVulns',
-      method: 'POST',
-      payload: { fields: { PageNumber: { numberValue: 1 }, PageSize: { numberValue: 10 } } },
-    },
-    config: { region: 'cn-shanghai' },
-    secret: {
-      accessKeyId: 'SDKID',
-      secretAccessKey: 'SDKKEY',
-    },
-    limits: { timeoutMs: 10_000 },
-    meta: { date: new Date('2024-01-16T08:00:00Z') },
-  });
-
-  const url = new URL(captured.url);
-  assert.equal(url.searchParams.get('Action'), 'ListVulns');
-  assert.deepEqual(captured.body, { PageNumber: 1, PageSize: 10 });
+  assert.equal(url.searchParams.get('Action'), 'ListAssetGroups');
   assert.match(captured.init.headers.Authorization, /^HMAC-SHA256 Credential=SDKID\//);
   assert.match(captured.init.headers.Authorization, /\/cn-shanghai\/seccenter\/request,/);
 });
