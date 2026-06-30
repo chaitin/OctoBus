@@ -13,44 +13,12 @@ export const SERVICE_DEFINITIONS = {
     defaultVersion: '2020-12-08',
     endpoint: (region) => `https://ddos.${region}.volcengineapi.com`,
   },
-  AdvDefence: {
-    defaultVersion: '2021-06-15',
-    endpoint: () => 'https://advdefence.volcengineapi.com',
-  },
-  'origin-defence': {
-    defaultVersion: '2022-01-01',
-    endpoint: (region) => `https://origin-defence.${region}.volcengineapi.com`,
-  },
 };
 
 export const READ_ONLY_ACTIONS = [
   { methodName: 'GetBasicAlarm', action: 'GetAlarm', serviceCode: 'ddos', version: '2020-12-08', httpMethod: 'POST' },
-  { methodName: 'AdvDefenceDescInstanceList', action: 'DescInstanceList', serviceCode: 'AdvDefence', version: '2021-06-15', httpMethod: 'GET' },
-  { methodName: 'AdvDefenceDescInstance', action: 'DescInstance', serviceCode: 'AdvDefence', version: '2021-06-15', httpMethod: 'GET' },
-  { methodName: 'AdvDefenceDescFwdRule', action: 'DescFwdRule', serviceCode: 'AdvDefence', version: '2021-06-15', httpMethod: 'GET' },
-  { methodName: 'AdvDefenceGetFwdRuleLipList', action: 'GetFwdRuleLipList', serviceCode: 'AdvDefence', version: '2021-06-15', httpMethod: 'GET' },
-  { methodName: 'AdvDefenceDescHostRules', action: 'DescHostRules', serviceCode: 'AdvDefence', version: '2021-06-15', httpMethod: 'GET' },
-  { methodName: 'AdvDefenceDescCertificate', action: 'DescCertificate', serviceCode: 'AdvDefence', version: '2021-06-15', httpMethod: 'GET' },
-  { methodName: 'AdvDefenceDescAttackEvent', action: 'DescAttackEvent', serviceCode: 'AdvDefence', version: '2021-06-15', httpMethod: 'POST' },
-  { methodName: 'AdvDefenceDescAttackFlow', action: 'DescAttackFlow', serviceCode: 'AdvDefence', version: '2021-06-15', httpMethod: 'POST' },
-  { methodName: 'AdvDefenceDescAttackSrcIpTop100', action: 'DescAttackSrcIpTop100', serviceCode: 'AdvDefence', version: '2021-06-15', httpMethod: 'POST' },
-  { methodName: 'AdvDefenceDescAttackSrcRegionTop100', action: 'DescAttackSrcRegionTop100', serviceCode: 'AdvDefence', version: '2021-06-15', httpMethod: 'POST' },
-  { methodName: 'AdvDefenceDescAttackTypeTop100', action: 'DescAttackTypeTop100', serviceCode: 'AdvDefence', version: '2021-06-15', httpMethod: 'POST' },
-  { methodName: 'AdvDefenceDescAttackDstPortTop100', action: 'DescAttackDstPortTop100', serviceCode: 'AdvDefence', version: '2021-06-15', httpMethod: 'POST' },
-  { methodName: 'AdvDefenceDescAtkAlarmThreshold', action: 'DescAtkAlarmThreshold', serviceCode: 'AdvDefence', version: '2021-06-15', httpMethod: 'POST' },
-  { methodName: 'AdvDefenceDescWebDefCcRule', action: 'DescWebDefCcRule', serviceCode: 'AdvDefence', version: '2021-06-15', httpMethod: 'POST' },
-  { methodName: 'AdvDefenceGetHostDefStatus', action: 'GetHostDefStatus', serviceCode: 'AdvDefence', version: '2021-06-15', httpMethod: 'POST' },
-  { methodName: 'AdvDefenceGetWebDefAttackLog', action: 'GetWebDefAttackLog', serviceCode: 'AdvDefence', version: '2021-06-15', httpMethod: 'POST' },
-  { methodName: 'OriginDefenceDescInstanceList', action: 'DescInstanceList', serviceCode: 'origin-defence', version: '2022-01-01', httpMethod: 'GET' },
-  { methodName: 'OriginDefenceDescInstance', action: 'DescInstance', serviceCode: 'origin-defence', version: '2022-01-01', httpMethod: 'GET' },
-  { methodName: 'OriginDefenceDescFreeEipList', action: 'DescFreeEipList', serviceCode: 'origin-defence', version: '2022-01-01', httpMethod: 'GET' },
-  { methodName: 'OriginDefenceDescResourceList', action: 'DescResourceList', serviceCode: 'origin-defence', version: '2022-01-01', httpMethod: 'GET' },
-  { methodName: 'OriginDefenceDescAttackEvent', action: 'DescAttackEvent', serviceCode: 'origin-defence', version: '2022-01-01', httpMethod: 'POST' },
-  { methodName: 'OriginDefenceDescAttackFlow', action: 'DescAttackFlow', serviceCode: 'origin-defence', version: '2022-01-01', httpMethod: 'GET' },
 ];
 
-export const METHOD_INVOKE_READ_ONLY_ACTION_FULL = `${SERVICE_PACKAGE}/InvokeReadOnlyAction`;
-export const METHOD_INVOKE_READ_ONLY_ACTION_PATH = `/${METHOD_INVOKE_READ_ONLY_ACTION_FULL}`;
 
 const ACTION_BY_METHOD = new Map(READ_ONLY_ACTIONS.map((entry) => [entry.methodName, entry]));
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj ?? {}, key);
@@ -278,8 +246,8 @@ const endpointFor = ({ serviceCode, region, endpoint }) => {
 const validateActionName = (action) => {
   const value = toTrimmedString(action);
   if (!value) throw errorWithCode('INVALID_ARGUMENT', 'action must be a non-empty string');
-  if (!/^(Get|Desc|Describe|List|Query)[A-Za-z0-9]+$/.test(value)) {
-    throw errorWithCode('INVALID_ARGUMENT', 'only Volcengine DDoS read-only Get*, Desc*, Describe*, List*, and Query* actions are allowed');
+  if (!READ_ONLY_ACTIONS.some((entry) => entry.action === value)) {
+    throw errorWithCode('INVALID_ARGUMENT', 'only OctoBus Connect verified Volcengine DDoS read-only actions are allowed');
   }
   return value;
 };
@@ -396,21 +364,10 @@ const buildActionHandler = (spec) => async (req, ctx) => invokeVolcengine(
 
 export const handlers = Object.fromEntries([
   ...READ_ONLY_ACTIONS.map((entry) => [`${SERVICE_PACKAGE}/${entry.methodName}`, buildActionHandler(entry)]),
-  [METHOD_INVOKE_READ_ONLY_ACTION_FULL, async (req, ctx) => {
-    const request = handlerRequest(req, ctx);
-    return invokeVolcengine({
-      action: request.action,
-      serviceCode: request.service_code || request.serviceCode,
-      version: request.version,
-      method: request.method,
-      endpoint: request.endpoint,
-    }, normalizeStruct(request.payload ?? {}), handlerContext(req, ctx));
-  }],
 ]);
 
 export const rpcdef = () => Object.fromEntries([
   ...READ_ONLY_ACTIONS.map((entry) => [`/${SERVICE_PACKAGE}/${entry.methodName}`, handlers[`${SERVICE_PACKAGE}/${entry.methodName}`]]),
-  [METHOD_INVOKE_READ_ONLY_ACTION_PATH, handlers[METHOD_INVOKE_READ_ONLY_ACTION_FULL]],
 ]);
 
 export const _test = {

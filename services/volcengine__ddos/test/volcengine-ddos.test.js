@@ -4,8 +4,6 @@ import test from 'node:test';
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
 import {
-  METHOD_INVOKE_READ_ONLY_ACTION_FULL,
-  METHOD_INVOKE_READ_ONLY_ACTION_PATH,
   READ_ONLY_ACTIONS,
   SERVICE_PACKAGE,
   _test,
@@ -76,8 +74,6 @@ test('service exports handlers and rpcdef paths', () => {
     assert.equal(typeof handlers[`${SERVICE_PACKAGE}/${entry.methodName}`], 'function');
     assert.equal(typeof rpcdef()[`/${SERVICE_PACKAGE}/${entry.methodName}`], 'function');
   }
-  assert.equal(typeof handlers[METHOD_INVOKE_READ_ONLY_ACTION_FULL], 'function');
-  assert.equal(typeof rpcdef()[METHOD_INVOKE_READ_ONLY_ACTION_PATH], 'function');
 });
 
 test('validates required credentials and supported actions', () => {
@@ -89,10 +85,9 @@ test('validates required credentials and supported actions', () => {
 
   assert.throws(() => _test.validateBindings({ secretAccessKey: 'key' }), /accessKeyId/);
   assert.throws(() => _test.validateBindings({ accessKeyId: 'id' }), /secretAccessKey/);
-  assert.equal(_test.validateActionName('DescInstanceList'), 'DescInstanceList');
   assert.equal(_test.validateActionName('GetAlarm'), 'GetAlarm');
   assert.throws(() => _test.validateActionName('UpdateInstance'), /read-only/);
-  assert.throws(() => _test.validateActionSpec({ action: 'DescInstanceList', serviceCode: 'ecs' }), /unsupported/);
+  assert.throws(() => _test.validateActionSpec({ action: 'GetAlarm', serviceCode: 'ecs' }), /unsupported/);
 });
 
 test('escapes Volcengine query params and rejects nested GET query values', () => {
@@ -113,48 +108,6 @@ test('normalizes protobuf Struct payloads', () => {
     IpList: ['192.0.2.1', null],
     Exact: true,
   });
-});
-
-test('signs and sends GET AdvDefence request with query payload', async () => {
-  let captured;
-  setFetch(async (url, init) => {
-    captured = { url: String(url), init };
-    return response(200, {
-      ResponseMetadata: {
-        RequestId: 'req-1',
-        Action: 'DescInstanceList',
-        Version: '2021-06-15',
-        Service: 'AdvDefence',
-        Region: 'cn-beijing',
-      },
-      Result: { InsList: [{ Id: 1 }], Total: 1 },
-    });
-  });
-
-  const result = await handlers[`${SERVICE_PACKAGE}/AdvDefenceDescInstanceList`]({
-    payload: { fields: { Page: { numberValue: 1 }, PageSize: { numberValue: 10 } } },
-  }, buildCtx({ bindings: { timeoutMs: 25 } }));
-
-  const url = new URL(captured.url);
-  assert.equal(url.origin, 'https://advdefence.volcengineapi.com');
-  assert.equal(url.searchParams.get('Action'), 'DescInstanceList');
-  assert.equal(url.searchParams.get('Version'), '2021-06-15');
-  assert.equal(url.searchParams.get('Page'), '1');
-  assert.equal(url.searchParams.get('PageSize'), '10');
-  assert.equal(captured.init.method, 'GET');
-  assert.equal(Object.hasOwn(captured.init, 'timeoutMs'), false);
-  assert.equal(typeof captured.init.signal?.aborted, 'boolean');
-  assert.equal(captured.init.body, undefined);
-  assert.equal(captured.init.headers['X-Custom'], 'trace');
-  assert.equal(captured.init.headers['Content-Type'], 'application/json');
-  assert.equal(captured.init.headers.Host, 'advdefence.volcengineapi.com');
-  assert.equal(captured.init.headers['X-Date'], '20240116T080000Z');
-  assert.match(captured.init.headers['X-Content-Sha256'], /^[0-9a-f]{64}$/);
-  assert.match(
-    captured.init.headers.Authorization,
-    /^HMAC-SHA256 Credential=AKLTEXAMPLE\/20240116\/cn-beijing\/AdvDefence\/request, SignedHeaders=host;x-content-sha256;x-date, Signature=[0-9a-f]{64}$/,
-  );
-  assert.equal(result.response.structValue.fields.Result.structValue.fields.Total.numberValue, 1);
 });
 
 test('signs and sends POST ddos request with body payload', async () => {
@@ -186,34 +139,6 @@ test('signs and sends POST ddos request with body payload', async () => {
   assert.match(
     captured.init.headers.Authorization,
     /^HMAC-SHA256 Credential=AKLTEXAMPLE\/20240116\/cn-beijing\/ddos\/request, SignedHeaders=host;x-content-sha256;x-date, Signature=[0-9a-f]{64}$/,
-  );
-});
-
-test('InvokeReadOnlyAction supports read-only custom calls and rejects mutations', async () => {
-  let captured;
-  setFetch(async (url, init) => {
-    captured = { url: String(url), init, body: JSON.parse(init.body) };
-    return response(200, { ResponseMetadata: { RequestId: 'req-3' }, Result: { ok: true } });
-  });
-
-  const result = await handlers[METHOD_INVOKE_READ_ONLY_ACTION_FULL]({
-    action: 'DescAttackEvent',
-    service_code: 'origin-defence',
-    version: '2022-01-01',
-    method: 'POST',
-    payload: { fields: { BeginTime: { numberValue: 1712642400 } } },
-  }, buildCtx());
-
-  const url = new URL(captured.url);
-  assert.equal(url.origin, 'https://origin-defence.cn-beijing.volcengineapi.com');
-  assert.equal(url.searchParams.get('Action'), 'DescAttackEvent');
-  assert.deepEqual(captured.body, { BeginTime: 1712642400 });
-  assert.equal(result.response.structValue.fields.Result.structValue.fields.ok.boolValue, true);
-
-  await expectGrpcError(
-    () => handlers[METHOD_INVOKE_READ_ONLY_ACTION_FULL]({ action: 'UpdateInstance', service_code: 'AdvDefence' }, buildCtx()),
-    'INVALID_ARGUMENT',
-    (err) => assert.match(err.message, /read-only/),
   );
 });
 
@@ -282,10 +207,8 @@ test('handler accepts OctoBus SDK single-argument context', async () => {
     return response(200, { ResponseMetadata: { RequestId: 'req-sdk' }, Result: { Total: 0 } });
   });
 
-  await handlers[`${SERVICE_PACKAGE}/AdvDefenceDescInstanceList`]({
-    request: {
-      payload: { fields: { Page: { numberValue: 1 }, PageSize: { numberValue: 5 } } },
-    },
+  await handlers[`${SERVICE_PACKAGE}/GetBasicAlarm`]({
+    request: { payload: { fields: { Limit: { numberValue: 5 } } } },
     config: { region: 'cn-shanghai' },
     secret: {
       accessKeyId: 'SDKID',
@@ -296,39 +219,7 @@ test('handler accepts OctoBus SDK single-argument context', async () => {
   });
 
   const url = new URL(captured.url);
-  assert.equal(url.searchParams.get('Action'), 'DescInstanceList');
-  assert.equal(url.searchParams.get('PageSize'), '5');
+  assert.equal(url.searchParams.get('Action'), 'GetAlarm');
   assert.match(captured.init.headers.Authorization, /^HMAC-SHA256 Credential=SDKID\//);
-  assert.match(captured.init.headers.Authorization, /\/cn-shanghai\/AdvDefence\/request,/);
-});
-
-test('InvokeReadOnlyAction accepts OctoBus SDK single-argument context', async () => {
-  let captured;
-  setFetch(async (url, init) => {
-    captured = { url: String(url), init, body: JSON.parse(init.body) };
-    return response(200, { ResponseMetadata: { RequestId: 'req-sdk-invoke' }, Result: { ok: true } });
-  });
-
-  await handlers[METHOD_INVOKE_READ_ONLY_ACTION_FULL]({
-    request: {
-      action: 'DescAttackEvent',
-      service_code: 'origin-defence',
-      version: '2022-01-01',
-      method: 'POST',
-      payload: { fields: { BeginTime: { numberValue: 1712642400 } } },
-    },
-    config: { region: 'cn-shanghai' },
-    secret: {
-      accessKeyId: 'SDKID',
-      secretAccessKey: 'SDKKEY',
-    },
-    limits: { timeoutMs: 10_000 },
-    meta: { date: new Date('2024-01-16T08:00:00Z') },
-  });
-
-  const url = new URL(captured.url);
-  assert.equal(url.searchParams.get('Action'), 'DescAttackEvent');
-  assert.deepEqual(captured.body, { BeginTime: 1712642400 });
-  assert.match(captured.init.headers.Authorization, /^HMAC-SHA256 Credential=SDKID\//);
-  assert.match(captured.init.headers.Authorization, /\/cn-shanghai\/origin-defence\/request,/);
+  assert.match(captured.init.headers.Authorization, /\/cn-shanghai\/ddos\/request,/);
 });
