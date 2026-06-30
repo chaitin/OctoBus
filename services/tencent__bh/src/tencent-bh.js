@@ -490,7 +490,12 @@ const listSessions = async (requestOrContext = {}, maybeContext) => {
     // we re-throw so the caller sees the real error.
     if (e.legacyCode === 'FAILED_PRECONDITION' && e.tencentCode === 'InvalidParameterValue') {
       const msg = (e.message || '').toLowerCase();
-      const isUnsupported = /unsupported|不支持|not support|not found|undefined|no such/i.test(msg);
+      // Only match keywords that clearly indicate the *action/API* itself is
+      // unsupported on this instance (basic/free tier). Generic terms like
+      // "not found", "undefined", "no such" are intentionally excluded because
+      // they frequently appear in genuine parameter-error messages and would
+      // cause us to swallow real errors.
+      const isUnsupported = /unsupported|不支持|未支持|not support/i.test(msg);
       // Log full error info for debugging
       logFlow(context.meta || {}, 'SearchSession:degradation', {
         note: isUnsupported

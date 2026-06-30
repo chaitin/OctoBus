@@ -568,6 +568,90 @@ test('SearchSession InvalidParameterValue with genuine param error re-throws', a
   });
 });
 
+test('SearchSession InvalidParameterValue with "not found" message re-throws (not swallowed)', async () => {
+  // "not found" is a generic message that can appear in genuine parameter errors.
+  // It must NOT be treated as an "unsupported action" signal.
+  setFetch(async () => ({
+    ok: true,
+    status: 200,
+    headers: new Map([['content-type', 'application/json']]),
+    text: async () => JSON.stringify({
+      Response: {
+        Error: { Code: 'InvalidParameterValue', Message: 'Filter value not found' },
+      },
+    }),
+  }));
+
+  const handler = await loadHandler({}, listSessionsPath);
+  await assert.rejects(() => handler(), (err) => {
+    assert.equal(err.legacyCode, 'FAILED_PRECONDITION');
+    assert.equal(err.tencentCode, 'InvalidParameterValue');
+    return true;
+  });
+});
+
+test('SearchSession InvalidParameterValue with "undefined" message re-throws (not swallowed)', async () => {
+  // "undefined" can appear in genuine parameter errors and must not be treated
+  // as an "unsupported action" signal.
+  setFetch(async () => ({
+    ok: true,
+    status: 200,
+    headers: new Map([['content-type', 'application/json']]),
+    text: async () => JSON.stringify({
+      Response: {
+        Error: { Code: 'InvalidParameterValue', Message: 'Parameter undefined is not valid' },
+      },
+    }),
+  }));
+
+  const handler = await loadHandler({}, listSessionsPath);
+  await assert.rejects(() => handler(), (err) => {
+    assert.equal(err.legacyCode, 'FAILED_PRECONDITION');
+    assert.equal(err.tencentCode, 'InvalidParameterValue');
+    return true;
+  });
+});
+
+test('SearchSession InvalidParameterValue with "no such" message re-throws (not swallowed)', async () => {
+  // "no such" can appear in genuine parameter errors and must not be treated
+  // as an "unsupported action" signal.
+  setFetch(async () => ({
+    ok: true,
+    status: 200,
+    headers: new Map([['content-type', 'application/json']]),
+    text: async () => JSON.stringify({
+      Response: {
+        Error: { Code: 'InvalidParameterValue', Message: 'No such filter field' },
+      },
+    }),
+  }));
+
+  const handler = await loadHandler({}, listSessionsPath);
+  await assert.rejects(() => handler(), (err) => {
+    assert.equal(err.legacyCode, 'FAILED_PRECONDITION');
+    assert.equal(err.tencentCode, 'InvalidParameterValue');
+    return true;
+  });
+});
+
+test('SearchSession InvalidParameterValue with Chinese "未支持" degrades to empty list', async () => {
+  // "未支持" (not yet supported) indicates the action itself is not available.
+  setFetch(async () => ({
+    ok: true,
+    status: 200,
+    headers: new Map([['content-type', 'application/json']]),
+    text: async () => JSON.stringify({
+      Response: {
+        Error: { Code: 'InvalidParameterValue', Message: '该功能未支持' },
+      },
+    }),
+  }));
+
+  const handler = await loadHandler({}, listSessionsPath);
+  const res = await handler();
+  assert.deepEqual(res, { items: [], total_count: 0 });
+});
+
 test('HTTP error codes are mapped correctly', async () => {
   setFetch(async () => ({
     ok: false,
