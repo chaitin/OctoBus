@@ -330,10 +330,10 @@ async function webLogin(ctx) {
     clearTimeout(timer);
   }
 
-  const payload = await parseJsonResponse(response, "web login");
   if (!response.ok) {
     throw toGrpcError(grpcStatus.UNAVAILABLE, `web login HTTP ${response.status}`);
   }
+  const payload = await parseJsonResponse(response, "web login");
   if (payload?.error) {
     throw toGrpcError(statusForJsonRpcError(payload.error), payload.error.message || JSON.stringify(payload.error));
   }
@@ -372,10 +372,10 @@ async function callWebJsonRpc(ctx, method, params, sessionCookie) {
     clearTimeout(timer);
   }
 
-  const payload = await parseJsonResponse(response, "upstream web JSON-RPC");
   if (!response.ok) {
     throw toGrpcError(grpcStatus.UNAVAILABLE, `upstream web JSON-RPC HTTP ${response.status}`);
   }
+  const payload = await parseJsonResponse(response, "upstream web JSON-RPC");
   if (payload?.error) {
     throw toGrpcError(statusForJsonRpcError(payload.error), payload.error.message || JSON.stringify(payload.error));
   }
@@ -701,10 +701,10 @@ async function uploadPcapDetectFilesInternal(ctx, pcapFiles, sessionCookie) {
     clearTimeout(timer);
   }
 
-  const payload = await parseJsonResponse(response, "pcap upload");
   if (!response.ok) {
     throw toGrpcError(grpcStatus.UNAVAILABLE, `pcap upload HTTP ${response.status}`);
   }
+  const payload = await parseJsonResponse(response, "pcap upload");
   if (payload?.error) {
     throw toGrpcError(statusForJsonRpcError(payload.error), payload.error.message || JSON.stringify(payload.error));
   }

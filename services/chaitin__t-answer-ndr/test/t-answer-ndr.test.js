@@ -308,6 +308,88 @@ test("CreatePcapDetectTask uses web session JSON-RPC", async () => {
   }
 });
 
+test("web-session HTTP failures map status before response parsing", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const taskRequest = {
+    files: [{ id: "file-1", fileName: "sample.pcap" }],
+    detectPattern: 2,
+  };
+
+  const assertUnavailable = async (operation, message) => {
+    await assert.rejects(operation, (error) => {
+      assert.equal(error.code, grpcStatus.UNAVAILABLE);
+      assert.match(error.message, message);
+      return true;
+    });
+  };
+
+  try {
+    await t.test("web login", async () => {
+      globalThis.fetch = async () =>
+        new Response("<html>login unavailable</html>", {
+          status: 502,
+          headers: { "content-type": "text/html" },
+        });
+
+      await assertUnavailable(
+        () => handlers["chaitin.t_answer_ndr.v1.TAnswerNdrService/CreatePcapDetectTask"](ctx(taskRequest)),
+        /web login HTTP 502/,
+      );
+    });
+
+    await t.test("web JSON-RPC", async () => {
+      let calls = 0;
+      globalThis.fetch = async () => {
+        calls += 1;
+        if (calls === 1) {
+          return new Response(JSON.stringify({ jsonrpc: "2.0", id: "login", result: { id: 1 } }), {
+            status: 200,
+            headers: { "set-cookie": "sessionid=session-error; Path=/; HttpOnly" },
+          });
+        }
+        return new Response("<html>RPC unavailable</html>", {
+          status: 503,
+          headers: { "content-type": "text/html" },
+        });
+      };
+
+      await assertUnavailable(
+        () => handlers["chaitin.t_answer_ndr.v1.TAnswerNdrService/CreatePcapDetectTask"](ctx(taskRequest)),
+        /upstream web JSON-RPC HTTP 503/,
+      );
+    });
+
+    await t.test("pcap upload", async () => {
+      let calls = 0;
+      globalThis.fetch = async () => {
+        calls += 1;
+        if (calls === 1) {
+          return new Response(JSON.stringify({ jsonrpc: "2.0", id: "login", result: { id: 1 } }), {
+            status: 200,
+            headers: { "set-cookie": "sessionid=session-upload-error; Path=/; HttpOnly" },
+          });
+        }
+        return new Response("<html>upload unavailable</html>", {
+          status: 500,
+          headers: { "content-type": "text/html" },
+        });
+      };
+
+      await assertUnavailable(
+        () =>
+          handlers["chaitin.t_answer_ndr.v1.TAnswerNdrService/UploadPcapDetectFiles"](
+            ctx({
+              pcapFiles: [{ fileName: "sample.pcap", contentBase64: Buffer.from("pcap").toString("base64") }],
+            }),
+          ),
+        /pcap upload HTTP 500/,
+      );
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("GetPcapDetectAlertRawDocument uses web session JSON-RPC", async () => {
   const originalFetch = globalThis.fetch;
   try {
