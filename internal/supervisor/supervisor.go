@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 
@@ -230,15 +231,20 @@ func (s *Supervisor) startWithAttempt(ctx context.Context, instanceID string, re
 		startErr = fmt.Errorf("runtime entry %q is not a regular file", svc.NodeEntry)
 		return startErr
 	}
-	secretFile, closeSecret, err := secretReadFile(inst.SecretJSON)
+	secretArg, secretFile, closeSecret, err := runtimeSecretArg(workdir, inst.SecretJSON)
 	if err != nil {
 		startErr = err
 		return err
 	}
 	defer closeSecret()
-	cmd := exec.Command(entry, "--runtime", "serve", "--host", "127.0.0.1", "--port", fmt.Sprintf("%d", port), "--config", filepath.Join(workdir, "config.json"), "--secret-fd", "3", "--workdir", workdir, "--service", svc.ID, "--instance", instanceID)
+	args := []string{"--runtime", "serve", "--host", "127.0.0.1", "--port", fmt.Sprintf("%d", port), "--config", filepath.Join(workdir, "config.json")}
+	args = append(args, secretArg...)
+	args = append(args, "--workdir", workdir, "--service", svc.ID, "--instance", instanceID)
+	cmd := exec.Command(entry, args...)
 	cmd.Dir = workdir
-	cmd.ExtraFiles = []*os.File{secretFile}
+	if secretFile != nil {
+		cmd.ExtraFiles = []*os.File{secretFile}
+	}
 	cmd.Env = append(os.Environ(),
 		"OCTOBUS_SERVICE_ID="+svc.ID,
 		"OCTOBUS_INSTANCE_ID="+instanceID,
@@ -521,6 +527,31 @@ func secretReadFile(secret []byte) (*os.File, func(), error) {
 		<-done
 	}
 	return reader, closeFn, nil
+}
+
+func usesSecretFD() bool {
+	return runtime.GOOS != "windows" || runtime.GOARCH != "arm64"
+}
+
+func runtimeSecretArg(workdir string, secret []byte) ([]string, *os.File, func(), error) {
+	if usesSecretFD() {
+		secretFile, closeFn, err := secretReadFile(secret)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		return []string{"--secret-fd", "3"}, secretFile, closeFn, nil
+	}
+	if len(secret) == 0 {
+		secret = []byte(`{}`)
+	}
+	secretPath := filepath.Join(workdir, "secret.runtime.json")
+	if err := os.WriteFile(secretPath, secret, 0o600); err != nil {
+		return nil, nil, nil, err
+	}
+	cleanup := func() {
+		_ = os.Remove(secretPath)
+	}
+	return []string{"--secret", secretPath}, nil, cleanup, nil
 }
 
 func (s *Supervisor) wait(instanceID string, state *processState, stdout, stderr *os.File) {

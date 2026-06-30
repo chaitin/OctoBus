@@ -59,7 +59,8 @@
     "tencent-bh": "bin/tencent-bh.js",
     "alibaba-sas": "bin/alibaba-sas.js",
     "misp": "bin/misp.js",
-    "opencti": "bin/opencti.js"
+    "opencti": "bin/opencti.js",
+    "zhizhangyi-mbs": "zhizhangyi__mbs/bin/zhizhangyi-mbs.js"
   },
   "files": [
     "bin/alibaba-cloud-simple-application-server-firewall.js",
@@ -173,7 +174,14 @@
     "filigran__opencti",
     "wangsu__label-ip",
     "scripts",
-    "bin/octobus-tentacles.js"
+    "bin/octobus-tentacles.js",
+    "zhizhangyi__mbs/bin/zhizhangyi-mbs.js",
+    "zhizhangyi__mbs/config.schema.json",
+    "zhizhangyi__mbs/package.json",
+    "zhizhangyi__mbs/proto",
+    "zhizhangyi__mbs/secret.schema.json",
+    "zhizhangyi__mbs/service.json",
+    "zhizhangyi__mbs/src"
   ],
   "scripts": {
     "validate": "node scripts/validate-service-package.mjs",
