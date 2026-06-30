@@ -67,13 +67,15 @@ const expectGrpcError = async (fn, legacyCode, checker = () => {}) => {
   checker(caught);
 };
 
-const expectRejectPayload = async (fn, code, httpStatus, reasonPattern) => {
+const expectRejectPayload = async (fn, code, httpStatus, reasonPattern, options = {}) => {
   await expectGrpcError(fn, code, (err) => {
     const payload = JSON.parse(err.message);
     assert.equal(payload.code, code);
     assert.equal(payload.http_status, httpStatus);
     assert.equal(typeof payload.http_body, "string");
     if (reasonPattern) assert.match(payload.reason, reasonPattern);
+    if (options.httpBodyLength !== undefined) assert.equal(payload.http_body.length, options.httpBodyLength);
+    if (options.httpBody !== undefined) assert.equal(payload.http_body, options.httpBody);
   });
 };
 
@@ -470,6 +472,17 @@ test("WhiteRulesdelete uses DELETE query and returns result array", async () => 
   assert.match(capturedUrl, /\/v1\/waf\/whiteRules\/delete\?ruleKey=rule-1/);
   assert.equal(capturedInit.method, "DELETE");
   assert.equal(res.success, true);
+  assert.equal(res.alreadyGone, false);
+  assert.deepEqual(res.result, []);
+});
+
+test("WhiteRulesdelete returns idempotent success on HTTP 404", async () => {
+  setFetch(async () => jsonResponse(404, { success: false, message: "resource not found" }));
+
+  const res = await rpcdef(buildCtx({ req: { ruleKey: "gone-rule" } }))[WHITERULESDELETE_PATH]();
+
+  assert.equal(res.success, true);
+  assert.equal(res.alreadyGone, true);
   assert.deepEqual(res.result, []);
 });
 
@@ -668,6 +681,31 @@ test("WhiteRules invalid JSON response maps to UNKNOWN", async () => {
   );
 });
 
+test("HTTP error body is truncated", async () => {
+  const longBody = "x".repeat(_test.MAX_HTTP_BODY_CHARS + 50);
+  setFetch(async () => textResponse(500, longBody));
+  await expectRejectPayload(
+    () => rpcdef(buildCtx({ req: { templateKey: "tpl-1" } }))[WEBTEMPLATEDETAIL_PATH](),
+    "UNAVAILABLE",
+    500,
+    /upstream http 500/,
+    { httpBody: "x".repeat(_test.MAX_HTTP_BODY_CHARS) },
+  );
+});
+
+test("native fetch timeout maps to UNAVAILABLE", async () => {
+  setFetch((_url, init) => new Promise((resolve, reject) => {
+    init.signal.addEventListener("abort", () => reject(Object.assign(new Error("The operation was aborted"), { name: "AbortError" })));
+    void resolve;
+  }));
+  await expectRejectPayload(
+    () => rpcdef(buildCtx({ req: { templateKey: "tpl-1" }, limits: { timeoutMs: 10 } }))[WEBTEMPLATEDETAIL_PATH](),
+    "UNAVAILABLE",
+    0,
+    /request timed out/,
+  );
+});
+
 test("network error maps to UNAVAILABLE", async () => {
   setFetch(async () => {
     throw Object.assign(new Error("fetch failed"), { cause: new Error("connection refused") });
@@ -698,6 +736,8 @@ test("helper functions cover edge cases", () => {
   assert.equal(_test.mapHttpStatusToCode(401), "PERMISSION_DENIED");
   assert.equal(_test.mapHttpStatusToCode(404), "FAILED_PRECONDITION");
   assert.equal(_test.mapHttpStatusToCode(500), "UNAVAILABLE");
+  assert.equal(_test.MAX_HTTP_BODY_CHARS, 200);
+  assert.equal(_test.truncateHttpBody("abcdef", 3), "abc");
 
   assert.equal(
     _test.buildUrl("https://api.example.com", "/v1/waf/webTemplate/detail", { templateKey: "abc" }),
@@ -884,8 +924,25 @@ test("mock upstream whiteRulesdelete end-to-end", async () => {
     });
     const res = await rpcdef(ctx)[WHITERULESDELETE_PATH]();
     assert.equal(res.success, true);
+    assert.equal(res.alreadyGone, false);
     assert.deepEqual(res.result, []);
     assert.ok(mockServer.requests.some((req) => req.method === "DELETE" && req.url.startsWith("/v1/waf/whiteRules/delete?ruleKey=rule-key-123")));
+  } finally {
+    await mockServer.close();
+  }
+});
+
+test("mock upstream whiteRulesdelete returns idempotent success on 404", async () => {
+  const mockServer = await createMockServer();
+  try {
+    const ctx = buildCtx({
+      config: { api_base: mockServer.url },
+      req: { ruleKey: "gone-rule" },
+    });
+    const res = await rpcdef(ctx)[WHITERULESDELETE_PATH]();
+    assert.equal(res.success, true);
+    assert.equal(res.alreadyGone, true);
+    assert.deepEqual(res.result, []);
   } finally {
     await mockServer.close();
   }

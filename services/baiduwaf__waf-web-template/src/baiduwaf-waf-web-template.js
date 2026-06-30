@@ -165,6 +165,9 @@ const mapHttpStatusToCode = (status) => {
   return "UNAVAILABLE";
 };
 
+const MAX_HTTP_BODY_CHARS = 200;
+const truncateHttpBody = (value, limit = MAX_HTTP_BODY_CHARS) => String(value || "").slice(0, limit);
+
 // ---- Structured error helper ----
 
 const throwStructuredError = (code, message, options = {}) => {
@@ -172,7 +175,7 @@ const throwStructuredError = (code, message, options = {}) => {
     code,
     message,
     http_status: Number(options.httpStatus ?? 0),
-    http_body: String(options.httpBody ?? ""),
+    http_body: truncateHttpBody(options.httpBody),
   };
   if (options.reason) payload.reason = String(options.reason);
   throw errorWithCode(code, JSON.stringify(payload));
@@ -201,9 +204,27 @@ const parseJsonBody = (text, action = "parse") => {
   } catch {
     throwStructuredError("UNKNOWN", `BaiduWAF_WAFWebTemplate ${action} response is not valid JSON`, {
       httpStatus: 0,
-      httpBody: String(text || "").slice(0, 200),
+      httpBody: text,
       reason: "response is not valid JSON",
     });
+  }
+};
+
+const fetchWithTimeout = async (url, init = {}, timeoutMs = DEFAULT_TIMEOUT_MS) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(new Error("request timed out")), timeoutMs);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      throw new Error("request timed out");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
   }
 };
 
@@ -260,11 +281,9 @@ const fetchText = async (ctx, url, init = {}) => {
       headers = response.headers;
       text = response.text;
     } else {
-      const res = await fetch(url, {
-        timeoutMs: resolveTimeoutMs(callCtx),
-        ...tlsOptions,
+      const res = await fetchWithTimeout(url, {
         ...init,
-      });
+      }, resolveTimeoutMs(callCtx));
       status = res.status;
       headers = res.headers;
       try {
@@ -734,17 +753,15 @@ const runWebTemplateDelete = async (req, ctx) => {
       httpStatus = response.status;
       text = response.text;
     } else {
-      const res = await fetch(url, {
+      const res = await fetchWithTimeout(url, {
         method: "DELETE",
-        timeoutMs: resolveTimeoutMs(callCtx),
-        ...tlsOptions,
         headers: buildHeaders(callCtx, buildBceSignedHeaders(callCtx, {
           method: "DELETE",
           apiBase,
           path: "/v1/waf/webTemplate/delete",
           queryParams,
         })),
-      });
+      }, resolveTimeoutMs(callCtx));
       httpStatus = res.status;
       text = await res.text();
     }
@@ -799,18 +816,62 @@ const runWhiteRulesdelete = async (req, ctx) => {
   const ruleKey = requireString(firstDefined(req?.ruleKey, req?.rule_key), "ruleKey");
   const queryParams = { ruleKey };
   const url = buildUrl(apiBase, "/v1/waf/whiteRules/delete", queryParams);
+  const tlsOptions = buildTlsOptions(callCtx.bindings || {});
 
-  const response = await fetchText(callCtx, url, {
-    method: "DELETE",
-    headers: buildHeaders(callCtx, buildBceSignedHeaders(callCtx, {
-      method: "DELETE",
-      apiBase,
-      path: "/v1/waf/whiteRules/delete",
-      queryParams,
-    })),
-  });
-  const json = parseJsonBody(response.http_body, "WhiteRulesdelete");
-  return { json, httpStatus: response.http_status };
+  let httpStatus;
+  let text;
+  try {
+    if (tlsOptions.skipTlsVerify) {
+      const response = await requestTextWithNodeTransport(url, {
+        method: "DELETE",
+        headers: buildHeaders(callCtx, buildBceSignedHeaders(callCtx, {
+          method: "DELETE",
+          apiBase,
+          path: "/v1/waf/whiteRules/delete",
+          queryParams,
+        })),
+      }, {
+        timeoutMs: resolveTimeoutMs(callCtx),
+        rejectUnauthorized: false,
+      });
+      httpStatus = response.status;
+      text = response.text;
+    } else {
+      const res = await fetchWithTimeout(url, {
+        method: "DELETE",
+        headers: buildHeaders(callCtx, buildBceSignedHeaders(callCtx, {
+          method: "DELETE",
+          apiBase,
+          path: "/v1/waf/whiteRules/delete",
+          queryParams,
+        })),
+      }, resolveTimeoutMs(callCtx));
+      httpStatus = res.status;
+      text = await res.text();
+    }
+  } catch (err) {
+    throwStructuredError("UNAVAILABLE", "BaiduWAF_WAFWebTemplate upstream request failed", {
+      httpStatus: 0,
+      httpBody: "",
+      reason: err?.cause?.message || err?.message || "fetch failed",
+    });
+  }
+
+  if (httpStatus === 404) {
+    logFlow(callCtx, "WhiteRulesdelete:already-gone", { ruleKey });
+    return { alreadyGone: true, json: { success: true, result: [] }, httpStatus };
+  }
+
+  if (httpStatus < 200 || httpStatus >= 300) {
+    throwStructuredError(mapHttpStatusToCode(httpStatus), `upstream HTTP ${httpStatus}`, {
+      httpStatus,
+      httpBody: text,
+      reason: `upstream http ${httpStatus}`,
+    });
+  }
+
+  const json = parseJsonBody(text, "WhiteRulesdelete");
+  return { alreadyGone: false, json, httpStatus };
 };
 
 const runWhiteRulesswitch = async (req, ctx) => {
@@ -966,12 +1027,17 @@ const handleWhiteRulesdelete = async (req, ctx) => {
   const callCtx = resolveCallContext(ctx);
   const ruleKey = firstDefined(req?.ruleKey, req?.rule_key);
   logFlow(callCtx, "WhiteRulesdelete:start", { ruleKey });
-  const { json } = await runWhiteRulesdelete(req, callCtx);
-  logFlow(callCtx, "WhiteRulesdelete:success", {});
+  const { alreadyGone, json } = await runWhiteRulesdelete(req, callCtx);
 
+  if (alreadyGone) {
+    return { success: true, result: [], alreadyGone: true };
+  }
+
+  logFlow(callCtx, "WhiteRulesdelete:success", {});
   return {
     success: Boolean(json.success),
     result: Array.isArray(json.result) ? json.result.map(unwrapString) : [],
+    alreadyGone: false,
   };
 };
 
@@ -1070,6 +1136,7 @@ rpcdef.__test__ = {
   buildUrl,
   errorWithCode,
   fetchText,
+  fetchWithTimeout,
   firstDefined,
   formatBceDate,
   grpcCodeFor,
@@ -1086,6 +1153,7 @@ rpcdef.__test__ = {
   hasOwn,
   logFlow,
   mapHttpStatusToCode,
+  MAX_HTTP_BODY_CHARS,
   mapWebTemplateDetailResult,
   mapWebTemplateListItem,
   mapWebTemplateListResult,
@@ -1124,6 +1192,7 @@ rpcdef.__test__ = {
   runRegionRuleslist,
   throwStructuredError,
   toInteger,
+  truncateHttpBody,
   unwrapString,
 };
 

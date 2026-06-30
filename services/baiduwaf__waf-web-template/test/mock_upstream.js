@@ -241,6 +241,10 @@ export const createMockServer = async (options = {}) => {
           sendJson(res, 400, { success: false, message: "ruleKey is required" });
           return;
         }
+        if (ruleKey === "gone-rule") {
+          sendJson(res, 404, { success: false, message: "resource not found" });
+          return;
+        }
         if (ruleKey === "server-error-key") {
           sendJson(res, 500, { success: false, message: "internal server error" });
           return;
