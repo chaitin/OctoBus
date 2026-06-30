@@ -1035,6 +1035,45 @@ func TestWaitMarksEnabledInstanceDegradedAfterProcessError(t *testing.T) {
 	}
 }
 
+func TestStopProcessCleansRuntimeSecretAfterWaitTimeout(t *testing.T) {
+	ctx := context.Background()
+	dataDir := filepath.Join(t.TempDir(), "data")
+	st, err := store.Open(filepath.Join(dataDir, "octobus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if err := st.UpsertService(ctx, domain.Service{ID: "echo", Name: "Echo", PackageSource: "fixture", PackageArtifactPath: "pkg", PackageSHA256: "pkgsha", DescriptorPath: "desc", DescriptorSHA256: "descsha", DescriptorVersion: "descsha", NodeEntry: "entry"}); err != nil {
+		t.Fatal(err)
+	}
+	inst := domain.Instance{ID: "echo-test", ServiceID: "echo", Name: "Echo Test", Enabled: true, Status: domain.StatusRunning, NodeEntry: "entry", ConfigJSON: []byte(`{}`), SecretJSON: []byte(`{}`)}
+	if err := st.UpsertInstance(ctx, inst); err != nil {
+		t.Fatal(err)
+	}
+	sup := New(dataDir, st)
+	cmd := exec.Command("sh", "-c", "exit 0")
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	cleanupCalls := 0
+	state := &processState{cmd: cmd, done: make(chan struct{}), cleanup: func() { cleanupCalls++ }}
+	sup.mu.Lock()
+	sup.procs["echo-test"] = state
+	sup.mu.Unlock()
+
+	if err := sup.stopProcess(ctx, inst, false); err != nil {
+		t.Fatal(err)
+	}
+	if cleanupCalls != 1 {
+		t.Fatalf("cleanup calls after stop timeout=%d want 1", cleanupCalls)
+	}
+	state.cleanupRuntimeSecret()
+	if cleanupCalls != 1 {
+		t.Fatalf("cleanup should be idempotent, calls=%d", cleanupCalls)
+	}
+	_ = cmd.Wait()
+}
+
 func TestWaitReturnsWhenInstanceDisabledOrStateReplaced(t *testing.T) {
 	ctx := context.Background()
 	dataDir := filepath.Join(t.TempDir(), "data")

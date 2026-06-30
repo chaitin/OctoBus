@@ -37,11 +37,19 @@ type Supervisor struct {
 }
 
 type processState struct {
-	cmd        *exec.Cmd
-	done       chan struct{}
-	attempt    int
-	generation int64
-	cleanup    func()
+	cmd         *exec.Cmd
+	done        chan struct{}
+	attempt     int
+	generation  int64
+	cleanup     func()
+	cleanupOnce sync.Once
+}
+
+func (p *processState) cleanupRuntimeSecret() {
+	if p == nil || p.cleanup == nil {
+		return
+	}
+	p.cleanupOnce.Do(p.cleanup)
 }
 
 type CreateInstanceRequest struct {
@@ -325,9 +333,7 @@ func (s *Supervisor) cleanupFailedStart(instanceID string, state *processState, 
 		_ = state.cmd.Process.Kill()
 		_ = state.cmd.Wait()
 	}
-	if state.cleanup != nil {
-		state.cleanup()
-	}
+	state.cleanupRuntimeSecret()
 	close(state.done)
 	_ = stdout.Close()
 	_ = stderr.Close()
@@ -429,6 +435,7 @@ func (s *Supervisor) stopProcess(ctx context.Context, inst domain.Instance, enab
 			case <-time.After(2 * time.Second):
 			}
 		}
+		state.cleanupRuntimeSecret()
 	}
 	if err := s.Store.UpsertInstance(ctx, inst); err != nil {
 		logger.Error("instance_stop_failed", "instance_id", inst.ID, "error", err)
@@ -567,9 +574,7 @@ func (s *Supervisor) wait(instanceID string, state *processState, stdout, stderr
 	err := state.cmd.Wait()
 	_ = stdout.Close()
 	_ = stderr.Close()
-	if state.cleanup != nil {
-		state.cleanup()
-	}
+	state.cleanupRuntimeSecret()
 	close(state.done)
 	s.mu.Lock()
 	current := s.procs[instanceID]
