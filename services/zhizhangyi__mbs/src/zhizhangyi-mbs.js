@@ -75,7 +75,7 @@ export function rpcdef(ctx) {
     const oc = first(req?.org_code, req?.orgCode) || ocDef; const apk = first(req?.appkey) || ak;
     const un = first(req?.user_name, req?.userName) || ''; const ln = first(req?.login_name, req?.loginName) || '';
     const did = first(req?.dept_id, req?.deptId) || ''; const pw = first(req?.password) || '';
-    if (!un) throw er('INVALID_ARGUMENT', 'user_name required'); if (!ln) throw er('INVALID_ARGUMENT', 'login_name required'); if (!did) throw er('INVALID_ARGUMENT', 'dept_id required');
+    if (!un) throw er('INVALID_ARGUMENT', 'user_name required'); if (!ln) throw er('INVALID_ARGUMENT', 'login_name required'); if (!did) throw er('INVALID_ARGUMENT', 'dept_id required'); if (!pw) throw er('INVALID_ARGUMENT', 'password required');
     const sg = first(req?.sign) || signCalc(sk, apk, oc, un, ln, did, pw);
     const body = { userName: un, loginName: ln, deptId: did, password: pw, userSource: Number(first(req?.user_source, req?.userSource) ?? 0), orgCode: oc, appkey: apk, sign: sg };
     const sm = { phone_number: 'phoneNumber', job: 'job', employee_number: 'employeeNumber', address: 'address', mobile: 'mobile', email: 'email', organization: 'organization' };
@@ -126,7 +126,8 @@ export function rpcdef(ctx) {
   // 6.2.6 StateUsers
   const goStateUsers = async (req) => {
     const oc = first(req?.org_code, req?.orgCode) || ocDef; const apk = first(req?.appkey) || ak;
-    const tp = first(req?.type) ?? 0; const st = first(req?.state) || '0';
+    const tp = first(req?.type) ?? 0; const st = first(req?.state);
+    if (st === undefined || st === null) throw er('INVALID_ARGUMENT', 'state required');
     const uids = arr(first(req?.user_ids, req?.userIds));
     const did = first(req?.condition?.dept_id, req?.condition?.deptId) || '';
     const sg = first(req?.sign) || signCalc(sk, apk, oc, uids.join(','), tp, st, did);
