@@ -25,8 +25,7 @@
     },
     "appId": {
       "type": "string",
-      "default": "hybzapi",
-      "description": "CTDSG signature app id. Defaults to hybzapi per the device API document."
+      "description": "CTDSG signature app id. Must match the device configuration."
     },
     "app_id": {
       "type": "string",

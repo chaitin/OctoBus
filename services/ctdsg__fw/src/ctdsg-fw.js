@@ -13,7 +13,6 @@ export const METHOD_BLOCK_DOMAIN_FULL = 'CTDSG_FW.CTDSG_FW/BlockDomain';
 export const METHOD_UNBLOCK_DOMAIN_FULL = 'CTDSG_FW.CTDSG_FW/UnblockDomain';
 
 export const DEFAULT_TIMEOUT_MS = 5000;
-export const DEFAULT_APP_ID = 'hybzapi';
 export const DEFAULT_API_PATH = '/api.php/inter/Inter';
 export const TIME_PERMANENT = 1;
 export const TIME_TEMPORARY = 0;
@@ -124,7 +123,7 @@ const resolveHost = (ctx = {}) => {
 const resolveAppId = (ctx = {}) => {
   const req = ctx.req || {};
   const bindings = ctx.bindings || {};
-  return optionalString(firstDefined(req.appId, req.app_id, bindings.appId, bindings.app_id)) || DEFAULT_APP_ID;
+  return requireString(firstDefined(req.appId, req.app_id, bindings.appId, bindings.app_id), 'appId');
 };
 
 const resolveApiPath = (ctx = {}) => {

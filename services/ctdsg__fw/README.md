@@ -37,7 +37,7 @@ Create and start a test instance:
 ```bash
 ./bin/octobus instance create ctdsg-fw-test \
   --service ctdsg-fw \
-  --config-json '{"host":"https://10.211.194.22:9090","appId":"hybzapi","skipTlsVerify":true}' \
+  --config-json '{"host":"https://10.211.194.22:9090","appId":"h*****","skipTlsVerify":true}' \
   --secret-json '{"secretKey":"REDACTED"}'
 ```
 

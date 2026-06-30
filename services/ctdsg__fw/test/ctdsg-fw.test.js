@@ -24,7 +24,7 @@ const originalFetch = globalThis.fetch;
 const buildCtx = (overrides = {}) => ({
   bindings: {
     host: 'http://127.0.0.1:19090',
-    appId: 'hybzapi',
+    appId: 'mock-app-id',
     secretKey: 'demo-secret',
     headers: { 'X-Extra': 'demo' },
     ...(overrides.bindings || {}),
@@ -115,7 +115,7 @@ test('BlockIP sends signed addblack2 request with newline-separated IPs', async 
   assert.equal(captured.init.timeoutMs, 10_000);
   assert.equal(captured.init.headers['x-engine-instance'], 'inst-1');
   assert.equal(captured.init.headers['x-request-id'], 'req-1');
-  assert.equal(captured.init.headers['hy-bz-api-app-id'], 'hybzapi');
+  assert.equal(captured.init.headers['hy-bz-api-app-id'], 'mock-app-id');
   assert.ok(captured.init.headers['hy-bz-api-timestamp']);
   assert.ok(captured.init.headers['hy-bz-api-signature']);
   assert.equal(captured.init.headers['content-type'], 'application/json');
@@ -278,7 +278,7 @@ test('helpers cover parsing, aliases, signatures, timing, and normalization bran
   assert.equal(_test.optionalBoolean('maybe'), undefined);
   assert.equal(_test.normalizeBaseUrl('https://example.test///'), 'https://example.test');
   assert.equal(_test.normalizeBaseUrl('example.test'), '');
-  assert.equal(_test.resolveAppId({ req: {}, bindings: {} }), 'hybzapi');
+  assert.throws(() => _test.resolveAppId({ req: {}, bindings: {} }), /INVALID_ARGUMENT: appId is required/);
   assert.equal(_test.resolveAppId({ req: { app_id: 'req-app' }, bindings: {} }), 'req-app');
   assert.equal(_test.resolveAppId({ req: {}, bindings: { app_id: 'binding-app' } }), 'binding-app');
   assert.equal(_test.resolveApiPath({ req: {}, bindings: {} }), '/api.php/inter/Inter');
@@ -334,7 +334,7 @@ test('helpers cover parsing, aliases, signatures, timing, and normalization bran
   });
   assert.deepEqual(_test.buildUnblockBody(['a.example.com', 'b.example.com'], 1), { name: 'a.example.com\nb.example.com', addr_type: '1' });
   const headers = _test.buildSignedHeaders(buildCtx(), '{"a":1}');
-  assert.equal(headers['hy-bz-api-app-id'], 'hybzapi');
+  assert.equal(headers['hy-bz-api-app-id'], 'mock-app-id');
   assert.ok(headers['hy-bz-api-timestamp']);
   assert.ok(headers['hy-bz-api-signature']);
   const originalTlsEnv = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
