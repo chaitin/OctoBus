@@ -2,311 +2,14 @@ import crypto from 'node:crypto';
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
-export const METHOD_DESCRIBE_MACHINES = 'Tencent_CWP.TencentCwpService/DescribeMachines';
-export const METHOD_DESCRIBE_MACHINE_GENERAL = 'Tencent_CWP.TencentCwpService/DescribeMachineGeneral';
-export const METHOD_DESCRIBE_MALWARE_LIST = 'Tencent_CWP.TencentCwpService/DescribeMalWareList';
-export const METHOD_DESCRIBE_VUL_LIST = 'Tencent_CWP.TencentCwpService/DescribeVulList';
-export const METHOD_DESCRIBE_BASELINE_DETECT_OVERVIEW = 'Tencent_CWP.TencentCwpService/DescribeBaselineDetectOverview';
-export const METHOD_DESCRIBE_MACHINE_RISK_CNT = 'Tencent_CWP.TencentCwpService/DescribeMachineRiskCnt';
-export const METHOD_INVOKE_READ_ONLY_ACTION = 'Tencent_CWP.TencentCwpService/InvokeReadOnlyAction';
 
+export const METHOD_DESCRIBE_MACHINE_GENERAL = 'Tencent_CWP.TencentCwpService/DescribeMachineGeneral';
 export const DEFAULT_ENDPOINT = 'https://cwp.tencentcloudapi.com';
 export const DEFAULT_REGION = 'ap-guangzhou';
 export const DEFAULT_VERSION = '2018-02-28';
 export const DEFAULT_TIMEOUT_MS = 5000;
 export const SERVICE = 'cwp';
 export const ALGORITHM = 'TC3-HMAC-SHA256';
-
-const FIXED_ACTIONS = new Set([
-  'DescribeABTestConfig',
-  'DescribeAccountStatistics',
-  'DescribeAlarmIncidentNodes',
-  'DescribeAlarmVertexId',
-  'DescribeAssetAppCount',
-  'DescribeAssetAppList',
-  'DescribeAssetAppProcessList',
-  'DescribeAssetCoreModuleInfo',
-  'DescribeAssetCoreModuleList',
-  'DescribeAssetDatabaseCount',
-  'DescribeAssetDatabaseInfo',
-  'DescribeAssetDatabaseList',
-  'DescribeAssetDiskList',
-  'DescribeAssetEnvList',
-  'DescribeAssetHostTotalCount',
-  'DescribeAssetInfo',
-  'DescribeAssetInitServiceList',
-  'DescribeAssetJarInfo',
-  'DescribeAssetJarList',
-  'DescribeAssetLoadInfo',
-  'DescribeAssetMachineDetail',
-  'DescribeAssetMachineList',
-  'DescribeAssetMachineTagTop',
-  'DescribeAssetPlanTaskList',
-  'DescribeAssetPortCount',
-  'DescribeAssetPortInfoList',
-  'DescribeAssetProcessCount',
-  'DescribeAssetProcessInfoList',
-  'DescribeAssetRecentMachineInfo',
-  'DescribeAssetSystemPackageList',
-  'DescribeAssetTotalCount',
-  'DescribeAssetTypes',
-  'DescribeAssetTypeTop',
-  'DescribeAssetUserCount',
-  'DescribeAssetUserInfo',
-  'DescribeAssetUserKeyList',
-  'DescribeAssetUserList',
-  'DescribeAssetWebAppCount',
-  'DescribeAssetWebAppList',
-  'DescribeAssetWebAppPluginList',
-  'DescribeAssetWebFrameCount',
-  'DescribeAssetWebFrameList',
-  'DescribeAssetWebLocationCount',
-  'DescribeAssetWebLocationInfo',
-  'DescribeAssetWebLocationList',
-  'DescribeAssetWebLocationPathList',
-  'DescribeAssetWebServiceCount',
-  'DescribeAssetWebServiceInfoList',
-  'DescribeAssetWebServiceProcessList',
-  'DescribeAttackEventInfo',
-  'DescribeAttackEvents',
-  'DescribeAttackStatistics',
-  'DescribeAttackTop',
-  'DescribeAttackTrends',
-  'DescribeAttackType',
-  'DescribeAttackVulTypeList',
-  'DescribeBanMode',
-  'DescribeBanRegions',
-  'DescribeBanStatus',
-  'DescribeBanWhiteList',
-  'DescribeBaselineAnalysisData',
-  'DescribeBaselineBasicInfo',
-  'DescribeBaselineDefaultStrategyList',
-  'DescribeBaselineDetail',
-  'DescribeBaselineDetectList',
-  'DescribeBaselineDetectOverview',
-  'DescribeBaselineEffectHostList',
-  'DescribeBaselineFixList',
-  'DescribeBaselineHostDetectList',
-  'DescribeBaselineHostIgnoreList',
-  'DescribeBaselineHostRiskTop',
-  'DescribeBaselineHostTop',
-  'DescribeBaselineItemDetectList',
-  'DescribeBaselineItemIgnoreList',
-  'DescribeBaselineItemInfo',
-  'DescribeBaselineItemList',
-  'DescribeBaselineItemRiskTop',
-  'DescribeBaselineList',
-  'DescribeBaselinePolicyList',
-  'DescribeBaselineRule',
-  'DescribeBaselineRuleCategoryList',
-  'DescribeBaselineRuleDetectList',
-  'DescribeBaselineRuleIgnoreList',
-  'DescribeBaselineRuleList',
-  'DescribeBaselineScanSchedule',
-  'DescribeBaselineStrategyDetail',
-  'DescribeBaselineStrategyList',
-  'DescribeBaselineTop',
-  'DescribeBaselineWeakPasswordList',
-  'DescribeBashEvents',
-  'DescribeBashEventsInfo',
-  'DescribeBashEventsInfoNew',
-  'DescribeBashEventsNew',
-  'DescribeBashPolicies',
-  'DescribeBashRules',
-  'DescribeBruteAttackList',
-  'DescribeBruteAttackRules',
-  'DescribeCanFixVulMachine',
-  'DescribeCanNotSeparateMachine',
-  'DescribeClientException',
-  'DescribeDefenceEventDetail',
-  'DescribeEmergencyVulList',
-  'DescribeESAggregations',
-  'DescribeEventByTable',
-  'DescribeFastAnalysis',
-  'DescribeFileTamperEventRuleInfo',
-  'DescribeFileTamperEvents',
-  'DescribeFileTamperRuleCount',
-  'DescribeFileTamperRuleInfo',
-  'DescribeFileTamperRules',
-  'DescribeGeneralStat',
-  'DescribeHistoryAccounts',
-  'DescribeHistoryService',
-  'DescribeHostInfo',
-  'DescribeHostLoginList',
-  'DescribeHotVulTop',
-  'DescribeIgnoreBaselineRule',
-  'DescribeIgnoreHostAndItemConfig',
-  'DescribeIgnoreRuleEffectHostList',
-  'DescribeImportMachineInfo',
-  'DescribeInjectRiskyServiceSwitch',
-  'DescribeJavaMemShellInfo',
-  'DescribeJavaMemShellList',
-  'DescribeJavaMemShellPluginInfo',
-  'DescribeJavaMemShellPluginList',
-  'DescribeLogDeliveryKafkaOptions',
-  'DescribeLogHistogram',
-  'DescribeLogIndex',
-  'DescribeLoginTypeGlobalConf',
-  'DescribeLoginTypeHost',
-  'DescribeLoginWhiteCombinedList',
-  'DescribeLoginWhiteHostList',
-  'DescribeLoginWhiteList',
-  'DescribeLogKafkaDeliverInfo',
-  'DescribeLogStorageConfig',
-  'DescribeLogStorageRecord',
-  'DescribeLogStorageStatistic',
-  'DescribeLogType',
-  'DescribeMachineClearHistory',
-  'DescribeMachineDefenseCnt',
-  'DescribeMachineFileTamperRules',
-  'DescribeMachineGeneral',
-  'DescribeMachineInfo',
-  'DescribeMachineList',
-  'DescribeMachineOsList',
-  'DescribeMachineRegionList',
-  'DescribeMachineRegions',
-  'DescribeMachineRiskCnt',
-  'DescribeMachines',
-  'DescribeMachineSnapshot',
-  'DescribeMachinesSimple',
-  'DescribeMaliciousRequestWhiteList',
-  'DescribeMalwareFile',
-  'DescribeMalwareInfo',
-  'DescribeMalWareList',
-  'DescribeMalwareRiskOverview',
-  'DescribeMalwareRiskWarning',
-  'DescribeMalwareTimingScanSetting',
-  'DescribeMalwareWhiteList',
-  'DescribeMalwareWhiteListAffectList',
-  'DescribeMemShellRules',
-  'DescribeNetAttackSetting',
-  'DescribeNetAttackWhiteList',
-  'DescribeOpenPortStatistics',
-  'DescribeOverviewStatistics',
-  'DescribePatchEffectHostList',
-  'DescribePatchInfo',
-  'DescribePrivilegeEventInfo',
-  'DescribePrivilegeEvents',
-  'DescribePrivilegeRules',
-  'DescribeProcessStatistics',
-  'DescribeProtectDirList',
-  'DescribeProtectDirRelatedServer',
-  'DescribeRansomDefenseBackupList',
-  'DescribeRansomDefenseEventsList',
-  'DescribeRansomDefenseMachineList',
-  'DescribeRansomDefenseMachineStrategyInfo',
-  'DescribeRansomDefenseRollBackTaskList',
-  'DescribeRansomDefenseState',
-  'DescribeRansomDefenseStrategyDetail',
-  'DescribeRansomDefenseStrategyList',
-  'DescribeRansomDefenseStrategyMachines',
-  'DescribeRansomDefenseTrend',
-  'DescribeRaspEventCWP',
-  'DescribeRaspEventDetailCWP',
-  'DescribeRaspEventDetailTCSS',
-  'DescribeRaspEventTCSS',
-  'DescribeRaspMaxCpu',
-  'DescribeRaspMemShellDetailTCSS',
-  'DescribeRaspMemShellListTCSS',
-  'DescribeRaspPluginList',
-  'DescribeRaspRules',
-  'DescribeRaspRuleVuls',
-  'DescribeReverseShellEventInfo',
-  'DescribeReverseShellEvents',
-  'DescribeReverseShellRules',
-  'DescribeReverseShellRulesAggregation',
-  'DescribeReverseShellSystemPolicyConfig',
-  'DescribeRiskBatchStatus',
-  'DescribeRiskDnsEventInfo',
-  'DescribeRiskDnsEventList',
-  'DescribeRiskDnsInfo',
-  'DescribeRiskDnsList',
-  'DescribeRiskDnsPolicyList',
-  'DescribeRiskProcessEvents',
-  'DescribeSafeInfo',
-  'DescribeScanMalwareSchedule',
-  'DescribeScanSchedule',
-  'DescribeScanState',
-  'DescribeScanTaskDetails',
-  'DescribeScanTaskStatus',
-  'DescribeScanVulSetting',
-  'DescribeScreenAttackHotspot',
-  'DescribeScreenBroadcasts',
-  'DescribeScreenDefenseTrends',
-  'DescribeScreenEmergentMsg',
-  'DescribeScreenEventsCnt',
-  'DescribeScreenGeneralStat',
-  'DescribeScreenHostInvasion',
-  'DescribeScreenMachineRegions',
-  'DescribeScreenMachines',
-  'DescribeScreenProtectionCnt',
-  'DescribeScreenProtectionStat',
-  'DescribeScreenRiskAssetsTop',
-  'DescribeSearchLogs',
-  'DescribeSearchTemplates',
-  'DescribeSecurityBroadcastInfo',
-  'DescribeSecurityBroadcasts',
-  'DescribeSecurityDynamics',
-  'DescribeSecurityEventsCnt',
-  'DescribeSecurityEventStat',
-  'DescribeSecurityTrends',
-  'DescribeServerRelatedDirInfo',
-  'DescribeServersAndRiskAndFirstInfo',
-  'DescribeShellPolicyList',
-  'DescribeSkillInfo',
-  'DescribeStrategyExist',
-  'DescribeTagMachines',
-  'DescribeTags',
-  'DescribeUndoVulCounts',
-  'DescribeUsersConfig',
-  'DescribeUsualLoginPlaces',
-  'DescribeVdbAndPocInfo',
-  'DescribeVertexDetail',
-  'DescribeVulCountByDates',
-  'DescribeVulCveIdInfo',
-  'DescribeVulDefenceEvent',
-  'DescribeVulDefenceList',
-  'DescribeVulDefenceOverview',
-  'DescribeVulDefenceOverviewCount',
-  'DescribeVulDefencePluginDetail',
-  'DescribeVulDefencePluginExceptionCount',
-  'DescribeVulDefencePluginStatus',
-  'DescribeVulDefenceSetting',
-  'DescribeVulDefenceSettingList',
-  'DescribeVulEffectHostList',
-  'DescribeVulEffectModules',
-  'DescribeVulEmergentMsg',
-  'DescribeVulFixStatus',
-  'DescribeVulHostCountScanTime',
-  'DescribeVulHostTop',
-  'DescribeVulInfoCvss',
-  'DescribeVulLabels',
-  'DescribeVulLevelCount',
-  'DescribeVulList',
-  'DescribeVulOverview',
-  'DescribeVulStoreList',
-  'DescribeVulTop',
-  'DescribeVulTrend',
-  'DescribeWarningHostConfig',
-  'DescribeWarningList',
-  'DescribeWebHookPolicy',
-  'DescribeWebHookReceiver',
-  'DescribeWebHookReceiverUsage',
-  'DescribeWebHookRule',
-  'DescribeWebHookRules',
-  'DescribeWebPageEventList',
-  'DescribeWebPageGeneralize',
-  'DescribeWebPageProtectStat',
-  'DescribeWebPageServiceInfo',
-  'DescribeWindowsPatchList',
-  'DescribeYDRaspBlackWhite',
-  'SearchLog',
-]);
-const LIST_KEYS_BY_ACTION = {
-  DescribeMachines: ['Machines'],
-  DescribeMalWareList: ['MalWareList', 'MalwareList', 'List'],
-  DescribeVulList: ['VulList', 'VulInfoList', 'List'],
-};
 
 const grpcCodeFor = (code) => ({
   FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
@@ -424,12 +127,6 @@ const parseHeaders = (value) => {
   return {};
 };
 
-const parseStringList = (value) => {
-  const raw = unwrapScalar(value);
-  if (Array.isArray(raw)) return raw.map(asString).filter(Boolean);
-  if (typeof raw === 'string') return raw.split(',').map((item) => item.trim()).filter(Boolean);
-  return [];
-};
 
 const assertSupportedTlsConfig = (bindings = {}) => {
   if (asBool(bindings.skipTlsVerify) || asBool(bindings.tlsInsecureSkipVerify) || asBool(bindings.insecureSkipVerify)) {
@@ -474,8 +171,6 @@ const resolveRuntime = (ctx = {}) => {
     version: asOptionalString(bindings.version) ?? DEFAULT_VERSION,
     timeoutMs: asPositiveInt(firstDefined(bindings.timeoutMs, ctx.limits?.timeoutMs, DEFAULT_TIMEOUT_MS), 'timeoutMs', false),
     headers: parseHeaders(bindings.headers),
-    allowActions: parseStringList(bindings.allowActions),
-    allowAllDescribeActions: asBool(bindings.allowAllDescribeActions),
   };
 };
 
@@ -602,38 +297,7 @@ const requestTencentCloud = async (runtime, action, params, { timestamp = Math.f
   }
 };
 
-const normalizeAction = (value) => {
-  const action = asString(value);
-  if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(action)) {
-    throw errorWithCode('INVALID_ARGUMENT', 'action must be an API action name');
-  }
-  return action;
-};
 
-const ensureReadOnlyActionAllowed = (runtime, action) => {
-  if (!action.startsWith('Describe') && !FIXED_ACTIONS.has(action)) {
-    throw errorWithCode('INVALID_ARGUMENT', 'InvokeReadOnlyAction only allows read-only actions');
-  }
-  if (FIXED_ACTIONS.has(action) || runtime.allowActions.includes(action) || runtime.allowAllDescribeActions) return;
-  throw errorWithCode('PERMISSION_DENIED', `${action} is not allowed; add it to allowActions or use a dedicated method`);
-};
-
-const extractItems = (action, response = {}) => {
-  const keys = LIST_KEYS_BY_ACTION[action] ?? [];
-  for (const key of keys) {
-    if (Array.isArray(response[key])) return response[key];
-  }
-  for (const [key, value] of Object.entries(response)) {
-    if (key !== 'RequestId' && key !== 'Error' && Array.isArray(value)) return value;
-  }
-  return [];
-};
-
-const extractTotalCount = (response = {}, items = []) => {
-  const raw = firstDefined(response.TotalCount, response.Total, response.Count, response.TotalNum);
-  const num = Number(raw);
-  return Number.isFinite(num) ? Math.trunc(num) : items.length;
-};
 
 const actionResponse = (action, json) => {
   const response = json.Response ?? {};
@@ -645,53 +309,27 @@ const actionResponse = (action, json) => {
   };
 };
 
-const listResponse = (action, json) => {
-  const response = json.Response ?? {};
-  const items = extractItems(action, response);
-  return {
-    action,
-    request_id: asString(response.RequestId),
-    total_count: extractTotalCount(response, items),
-    items: items.map(jsonStruct),
-    response: jsonStruct(response),
-    raw: jsonStruct(json),
-  };
-};
-
-const callAction = (action, { list = false } = {}) => async (req, ctx) => {
+const callAction = (action) => async (req, ctx) => {
   const request = handlerRequest(req, ctx);
   const runtime = resolveRuntime(handlerContext(req, ctx));
   const params = mergeRequestParams(request);
   const json = await requestTencentCloud(runtime, action, params);
-  return list ? listResponse(action, json) : actionResponse(action, json);
-};
-
-const invokeReadOnlyAction = async (req, ctx) => {
-  const request = handlerRequest(req, ctx);
-  const runtime = resolveRuntime(handlerContext(req, ctx));
-  const action = normalizeAction(request.action);
-  ensureReadOnlyActionAllowed(runtime, action);
-  const params = fromProtoStruct(request.params ?? {});
-  const json = await requestTencentCloud(runtime, action, params);
   return actionResponse(action, json);
 };
 
+
 export const handlers = {
-  [METHOD_DESCRIBE_MACHINES]: callAction('DescribeMachines', { list: true }),
   [METHOD_DESCRIBE_MACHINE_GENERAL]: callAction('DescribeMachineGeneral'),
-  [METHOD_DESCRIBE_MALWARE_LIST]: callAction('DescribeMalWareList', { list: true }),
-  [METHOD_DESCRIBE_VUL_LIST]: callAction('DescribeVulList', { list: true }),
-  [METHOD_DESCRIBE_BASELINE_DETECT_OVERVIEW]: callAction('DescribeBaselineDetectOverview'),
-  [METHOD_DESCRIBE_MACHINE_RISK_CNT]: callAction('DescribeMachineRiskCnt'),
-  [METHOD_INVOKE_READ_ONLY_ACTION]: invokeReadOnlyAction,
 };
+
+export const rpcdef = () => ({
+  [`/${METHOD_DESCRIBE_MACHINE_GENERAL}`]: handlers[METHOD_DESCRIBE_MACHINE_GENERAL],
+});
 
 export const _test = {
   buildAuthorization,
   buildCanonicalRequest,
   assertSupportedTlsConfig,
-  ensureReadOnlyActionAllowed,
-  extractItems,
   fromProtoStruct,
   handlers,
   jsonStruct,

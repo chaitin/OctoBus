@@ -34,18 +34,6 @@
         "type": "string"
       },
       "description": "Optional extra HTTP headers."
-    },
-    "allowActions": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "description": "Additional CWP Describe* actions allowed by InvokeReadOnlyAction."
-    },
-    "allowAllDescribeActions": {
-      "type": "boolean",
-      "default": false,
-      "description": "Allow InvokeReadOnlyAction to call any CWP action whose name starts with Describe."
     }
   }
 }
