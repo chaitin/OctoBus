@@ -8,35 +8,8 @@ export const DEFAULT_TIMEOUT_MS = 5000;
 
 export const READ_ONLY_APIS = [
   { methodName: 'DomainQuery', api: 'domainQuery', httpMethod: 'GET', path: '/ctapi/v2/domain/query' },
-  { methodName: 'DomainConfig', api: 'domainConfig', httpMethod: 'POST', path: '/ctapi/v1/domain/config' },
-  { methodName: 'DomainStatusQuery', api: 'domainStatusQuery', httpMethod: 'POST', path: '/ctapi/v1/domain/status/query' },
-  { methodName: 'GetCcAttackAddr', api: 'getCcAttackAddr', httpMethod: 'POST', path: '/ctapi/v1/ccAttack/getCcAttackAddr' },
-  { methodName: 'GetCcAttackEvent', api: 'getCcAttackEvent', httpMethod: 'POST', path: '/ctapi/v1/ccAttack/getEvent' },
-  { methodName: 'GetCcAttackInfo', api: 'getCcAttackInfo', httpMethod: 'POST', path: '/ctapi/v1/ccAttack/getInfo' },
-  { methodName: 'GetCcConfInfo', api: 'getCcConfInfo', httpMethod: 'POST', path: '/ctapi/v1/ccConf/getCcConfInfo' },
-  { methodName: 'GetAccessControlInfo', api: 'getAccessControlInfo', httpMethod: 'POST', path: '/ctapi/v1/accessControlConf/getAccessControlInfo' },
-  { methodName: 'GetFrequencyControlnfo', api: 'getFrequencyControlnfo', httpMethod: 'POST', path: '/ctapi/v1/frequencyControlConf/getFrequencyControlnfo' },
-  { methodName: 'GetDdosAttackTrend', api: 'getDdosAttackTrend', httpMethod: 'POST', path: '/ctapi/v1/ddosAttack/getAttackTrend' },
-  { methodName: 'GetDdosAttackEvent', api: 'getDdosAttackEvent', httpMethod: 'POST', path: '/ctapi/v1/ddosAttack/getEvent' },
-  { methodName: 'GetDdosAttackInfo', api: 'getDdosAttackInfo', httpMethod: 'POST', path: '/ctapi/v1/ddosAttack/getInfo' },
-  { methodName: 'GetPortCnameList', api: 'getPortCnameList', httpMethod: 'POST', path: '/ctapi/v1/portManage/getCnameList' },
-  { methodName: 'GetPortList', api: 'getPortList', httpMethod: 'POST', path: '/ctapi/v1/portManage/getPortList' },
-  { methodName: 'CertExpireCount', api: 'certExpireCount', httpMethod: 'GET', path: '/ctapi/v1/cert/expire_count' },
-  { methodName: 'CertList', api: 'certList', httpMethod: 'GET', path: '/ctapi/v1/cert/list' },
-  { methodName: 'CertQuery', api: 'certQuery', httpMethod: 'GET', path: '/ctapi/v1/cert/query' },
-  { methodName: 'QueryOperationalLog', api: 'queryOperationalLog', httpMethod: 'POST', path: '/ctapi/v1/operationalLog/queryLog' },
-  { methodName: 'LogBsstimeFiles', api: 'logBsstimeFiles', httpMethod: 'GET', path: '/ctapi/v1/log_bsstime_files' },
-  { methodName: 'StatisticsanalysisQueryBandwidth', api: 'statisticsanalysisQueryBandwidth', httpMethod: 'POST', path: '/ctapi/v2/statisticsanalysis/query_bandwidth_data' },
-  { methodName: 'StatisticsanalysisQueryHitFlowRateDataByDomain', api: 'statisticsanalysisQueryHitFlowRateDataByDomain', httpMethod: 'POST', path: '/ctapi/v2/statisticsanalysis/query_hit_flow_rate_data_by_domain' },
-  { methodName: 'StatisticsanalysisQueryHttpStatusCodeData', api: 'statisticsanalysisQueryHttpStatusCodeData', httpMethod: 'POST', path: '/ctapi/v2/statisticsanalysis/query_http_status_code_data' },
-  { methodName: 'StatisticsanalysisQueryPeakBandwidthData', api: 'statisticsanalysisQueryPeakBandwidthData', httpMethod: 'POST', path: '/ctapi/v2/statisticsanalysis/query_peak_bandwidth_data' },
-  { methodName: 'StatisticsanalysisQueryQpsData', api: 'statisticsanalysisQueryQpsData', httpMethod: 'POST', path: '/ctapi/v2/statisticsanalysis/query_qps_data' },
-  { methodName: 'StatisticsanalysisQueryRequestNumData', api: 'statisticsanalysisQueryRequestNumData', httpMethod: 'POST', path: '/ctapi/v2/statisticsanalysis/query_request_num_data' },
-  { methodName: 'VerifyDomainOwnershipContent', api: 'verifyDomainOwnershipContent', httpMethod: 'GET', path: '/ctapi/v1/verify_domain_ownership/verify_content' },
 ];
 
-export const METHOD_INVOKE_READ_ONLY_API_FULL = `${SERVICE_PACKAGE}/InvokeReadOnlyApi`;
-export const METHOD_INVOKE_READ_ONLY_API_PATH = `/${METHOD_INVOKE_READ_ONLY_API_FULL}`;
 
 const API_BY_NAME = new Map(READ_ONLY_APIS.map((entry) => [entry.api, entry]));
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj ?? {}, key);
@@ -357,19 +330,10 @@ const buildApiHandler = (spec) => async (req, ctx) => invokeCtyun(
 
 export const handlers = Object.fromEntries([
   ...READ_ONLY_APIS.map((entry) => [`${SERVICE_PACKAGE}/${entry.methodName}`, buildApiHandler(entry)]),
-  [METHOD_INVOKE_READ_ONLY_API_FULL, async (req, ctx) => {
-    const request = handlerRequest(req, ctx);
-    return invokeCtyun(
-      validateApiSpec(request.api),
-      normalizeStruct(request.payload ?? {}),
-      handlerContext(req, ctx),
-    );
-  }],
 ]);
 
 export const rpcdef = () => Object.fromEntries([
   ...READ_ONLY_APIS.map((entry) => [`/${SERVICE_PACKAGE}/${entry.methodName}`, handlers[`${SERVICE_PACKAGE}/${entry.methodName}`]]),
-  [METHOD_INVOKE_READ_ONLY_API_PATH, handlers[METHOD_INVOKE_READ_ONLY_API_FULL]],
 ]);
 
 export const _test = {

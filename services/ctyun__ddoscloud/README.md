@@ -1,18 +1,22 @@
 # CTYun DDoS Cloud OctoBus Service
 
-OctoBus package for CTYun DDoS High Protection (Edge Cloud) read-only APIs.
+## Verified OctoBus Surface
+
+This service package intentionally exposes only `DomainQuery` in proto/rpcdef because this is the RPC currently covered by real OctoBus Connect evidence. Other vendor APIs are not exposed until matching OctoBus runtime evidence is added.
 
 ## Configuration
 
-- `endpoint`: defaults to `https://ddoscloud-global.ctapi.ctyun.cn`.
-- `timeoutMs`: HTTP timeout in milliseconds.
-- `headers`: optional additional HTTP headers.
+Use the service `config.schema.json` and `secret.schema.json` files for required endpoint, region, and credential fields. Secrets must be supplied at runtime and are not stored in this package.
 
-## Secrets
+## Evidence
 
-- `accessKeyId` / `ak`: CTYun CDN+ IAM AccessKey ID.
-- `secretAccessKey` / `sk`: CTYun CDN+ IAM Secret Access Key.
+- OctoBus Connect evidence: `docs/evidence/octobus-connect-evidence.md`
+- Manual terminal screenshot: `docs/evidence/manual-octobus-connect-evidence.png`
 
-The product document states that this edge-cloud DDoS API uses AccessKey values created in CDN+ IAM (`vip.ctcdn.cn`), not the AccessKey values from the CTYun public console.
+## Tests
 
-`InvokeReadOnlyApi` only accepts the read-only APIs built into this package. Mutating endpoints such as add, delete, update, create, manage, and ownership verification are intentionally not exposed.
+Run the service test with Node.js from the repository or service worktree:
+
+```bash
+node --test test/*.test.js
+```

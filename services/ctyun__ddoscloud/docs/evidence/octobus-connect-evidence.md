@@ -2,6 +2,11 @@
 
 Recorded from an actual local OctoBus connect run on 2026-06-27. Secrets and signatures are redacted.
 
+## Exposed Interface Scope
+
+This service package now exposes only the OctoBus Connect verified RPC `DomainQuery` in proto/rpcdef. Other vendor APIs are intentionally left out of proto/rpcdef until corresponding OctoBus runtime evidence is added.
+
+
 ## Setup
 
 ```text

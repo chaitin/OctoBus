@@ -4,8 +4,6 @@ import test from 'node:test';
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
 import {
-  METHOD_INVOKE_READ_ONLY_API_FULL,
-  METHOD_INVOKE_READ_ONLY_API_PATH,
   READ_ONLY_APIS,
   SERVICE_PACKAGE,
   _test,
@@ -77,8 +75,6 @@ test('service exports handlers and rpcdef paths', () => {
     assert.equal(typeof handlers[`${SERVICE_PACKAGE}/${entry.methodName}`], 'function');
     assert.equal(typeof rpcdef()[`/${SERVICE_PACKAGE}/${entry.methodName}`], 'function');
   }
-  assert.equal(typeof handlers[METHOD_INVOKE_READ_ONLY_API_FULL], 'function');
-  assert.equal(typeof rpcdef()[METHOD_INVOKE_READ_ONLY_API_PATH], 'function');
 });
 
 test('validates required credentials and supported read-only APIs', () => {
@@ -86,8 +82,6 @@ test('validates required credentials and supported read-only APIs', () => {
   assert.throws(() => _test.validateBindings({ sk: 'key' }), /accessKeyId/);
   assert.throws(() => _test.validateBindings({ ak: 'id' }), /secretAccessKey/);
   assert.equal(_test.validateApiSpec('domainQuery').path, '/ctapi/v2/domain/query');
-  assert.equal(_test.validateApiSpec('getDdosAttackTrend').httpMethod, 'POST');
-  assert.equal(_test.validateApiSpec('verifyDomainOwnershipContent').path, '/ctapi/v1/verify_domain_ownership/verify_content');
   assert.throws(() => _test.validateApiSpec('domainAdd'), /unsupported/);
   assert.throws(() => _test.validateApiSpec('deletePort'), /unsupported/);
   assert.throws(() => _test.validateApiSpec('topDomain'), /unsupported/);
@@ -169,63 +163,6 @@ test('sends signed GET domain query with query payload', async () => {
   assert.equal(captured.init.headers['Eop-date'], '20240116T160000Z');
   assert.match(captured.init.headers['Eop-Authorization'], /^AKEXAMPLE Headers=ctyun-eop-request-id;eop-date Signature=[A-Za-z0-9+/]+=*$/);
   assert.equal(result.response.structValue.fields.returnObj.structValue.fields.total.numberValue, 1);
-});
-
-test('sends signed POST DDoS attack trend with JSON body', async () => {
-  let captured;
-  setFetch(async (url, init) => {
-    captured = { url: String(url), init, body: JSON.parse(init.body) };
-    return response(200, {
-      statusCode: '100000',
-      message: 'success',
-      returnObj: [{ time: '2024-01-16 16:00:00', attackCount: 2 }],
-    });
-  });
-
-  await handlers[`${SERVICE_PACKAGE}/GetDdosAttackTrend`]({
-    payload: {
-      fields: {
-        productCode: { stringValue: '011' },
-        startTime: { stringValue: '2024-01-01 00:00:00' },
-        endTime: { stringValue: '2024-01-02 00:00:00' },
-      },
-    },
-  }, buildCtx());
-
-  const url = new URL(captured.url);
-  assert.equal(url.origin, 'https://ddoscloud-global.ctapi.ctyun.cn');
-  assert.equal(url.pathname, '/ctapi/v1/ddosAttack/getAttackTrend');
-  assert.equal(url.search, '');
-  assert.deepEqual(captured.body, {
-    productCode: '011',
-    startTime: '2024-01-01 00:00:00',
-    endTime: '2024-01-02 00:00:00',
-  });
-  assert.equal(captured.init.method, 'POST');
-});
-
-test('InvokeReadOnlyApi supports built-in read-only API names and rejects mutations', async () => {
-  let captured;
-  setFetch(async (url, init) => {
-    captured = { url: String(url), init };
-    return response(200, { statusCode: 100000, message: 'ok', returnObj: { result: [] } });
-  });
-
-  const result = await handlers[METHOD_INVOKE_READ_ONLY_API_FULL]({
-    api: 'certList',
-    payload: { fields: { page: { numberValue: 1 }, per_page: { numberValue: 20 } } },
-  }, buildCtx());
-
-  const url = new URL(captured.url);
-  assert.equal(url.pathname, '/ctapi/v1/cert/list');
-  assert.equal(url.searchParams.get('per_page'), '20');
-  assert.equal(result.response.structValue.fields.returnObj.structValue.fields.result.listValue.values.length, 0);
-
-  await expectGrpcError(
-    () => handlers[METHOD_INVOKE_READ_ONLY_API_FULL]({ api: 'domainAdd' }, buildCtx()),
-    'INVALID_ARGUMENT',
-    (err) => assert.match(err.message, /unsupported/),
-  );
 });
 
 test('maps CTYun business and transport errors', async () => {
@@ -312,35 +249,5 @@ test('handler accepts OctoBus SDK single-argument context', async () => {
   const url = new URL(captured.url);
   assert.equal(url.pathname, '/ctapi/v2/domain/query');
   assert.equal(url.searchParams.get('page_size'), '5');
-  assert.match(captured.init.headers['Eop-Authorization'], /^SDKAK Headers=ctyun-eop-request-id;eop-date Signature=/);
-});
-
-test('InvokeReadOnlyApi accepts OctoBus SDK single-argument context', async () => {
-  let captured;
-  setFetch(async (url, init) => {
-    captured = { url: String(url), init };
-    return response(200, { statusCode: 100000, returnObj: { result: [] } });
-  });
-
-  await handlers[METHOD_INVOKE_READ_ONLY_API_FULL]({
-    request: {
-      api: 'certList',
-      payload: { fields: { page: { numberValue: 1 }, per_page: { numberValue: 20 } } },
-    },
-    config: {},
-    secret: {
-      accessKeyId: 'SDKAK',
-      secretAccessKey: 'SDKSK',
-    },
-    limits: { timeoutMs: 10_000 },
-    meta: {
-      date: new Date('2024-01-16T08:00:00Z'),
-      request_id: '27cfe4dc-e640-45f6-92ca-492ca73e8680',
-    },
-  });
-
-  const url = new URL(captured.url);
-  assert.equal(url.pathname, '/ctapi/v1/cert/list');
-  assert.equal(url.searchParams.get('per_page'), '20');
   assert.match(captured.init.headers['Eop-Authorization'], /^SDKAK Headers=ctyun-eop-request-id;eop-date Signature=/);
 });
