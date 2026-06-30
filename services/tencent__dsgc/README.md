@@ -1,38 +1,22 @@
 # Tencent Cloud DSGC OctoBus Service
 
-This package adapts Tencent Cloud Data Security Governance Center (DSGC) API 3.0 read-only operations for OctoBus.
+## Verified OctoBus Surface
+
+This service package intentionally exposes only `ListDSPAClusters` in proto/rpcdef because this is the RPC currently covered by real OctoBus Connect evidence. Other vendor APIs are not exposed until matching OctoBus runtime evidence is added.
 
 ## Configuration
 
-`config.schema.json` accepts:
+Use the service `config.schema.json` and `secret.schema.json` files for required endpoint, region, and credential fields. Secrets must be supplied at runtime and are not stored in this package.
 
-- `endpoint`: defaults to `https://dsgc.tencentcloudapi.com`.
-- `region`: defaults to `ap-guangzhou`.
-- `version`: defaults to `2019-07-23`.
-- `language`: optional `X-TC-Language`.
-- `timeoutMs`: request timeout in milliseconds.
-- `headers`: optional extra HTTP headers.
-- `allowActions`: extra read-only `Describe*`, `List*`, or `Get*` actions allowed by `InvokeReadOnlyAction`.
-- `allowAllReadOnlyActions`: allow every `Describe*`, `List*`, or `Get*` action.
+## Evidence
 
-TLS certificate verification bypass is not supported by this Node.js fetch adapter.
+- OctoBus Connect evidence: `docs/evidence/octobus-connect-evidence.md`
+- Manual terminal screenshot: `docs/evidence/manual-octobus-connect-evidence.png`
 
-`secret.schema.json` accepts:
+## Tests
 
-- `secretId` or `secret_id`: Tencent Cloud SecretId.
-- `secretKey` or `secret_key`: Tencent Cloud SecretKey.
-- `token`: optional temporary security token.
+Run the service test with Node.js from the repository or service worktree:
 
-## Methods
-
-- `DescribeAssetOverview`
-- `ListDSPAClusters`
-- `DescribeDSPACOSDataAssetBuckets`
-- `DescribeDSPARDBDataAssetByComplianceId`
-- `DescribeDSPAESDataAssetByComplianceId`
-- `DescribeDSPAAssessmentLatestRiskList`
-- `DescribeDSPAAssessmentTasks`
-- `DescribeReportTasks`
-- `InvokeReadOnlyAction`
-
-The adapter uses Tencent Cloud API 3.0 `TC3-HMAC-SHA256` signing. Dedicated methods and `InvokeReadOnlyAction` preserve the Tencent Cloud `Response` object and raw response envelope for troubleshooting.
+```bash
+node --test test/*.test.js
+```

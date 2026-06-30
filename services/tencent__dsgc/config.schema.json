@@ -38,23 +38,6 @@
         "type": "string"
       },
       "description": "Optional extra HTTP headers."
-    },
-    "allowActions": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "description": "Additional DSGC Describe*, List*, or Get* actions allowed by InvokeReadOnlyAction."
-    },
-    "allowAllReadOnlyActions": {
-      "type": "boolean",
-      "default": false,
-      "description": "Allow InvokeReadOnlyAction to call any action whose name starts with Describe, List, or Get."
-    },
-    "allowAllDescribeActions": {
-      "type": "boolean",
-      "default": false,
-      "description": "Alias for allowAllReadOnlyActions."
     }
   }
 }

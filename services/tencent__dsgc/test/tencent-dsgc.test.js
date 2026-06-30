@@ -2,11 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  METHOD_DESCRIBE_ASSET_OVERVIEW,
-  METHOD_DESCRIBE_DSPA_ASSESSMENT_LATEST_RISK_LIST,
-  METHOD_DESCRIBE_DSPA_COS_DATA_ASSET_BUCKETS,
-  METHOD_DESCRIBE_DSPA_RDB_DATA_ASSET_BY_COMPLIANCE_ID,
-  METHOD_INVOKE_READ_ONLY_ACTION,
   METHOD_LIST_DSPA_CLUSTERS,
   _test,
   handlers,
@@ -56,150 +51,32 @@ test('buildAuthorization creates deterministic TC3 signature for DSGC', () => {
   );
 });
 
-test('DescribeAssetOverview posts signed JSON and returns raw response', async () => {
+test('ListDSPAClusters posts signed JSON, merges pagination, and extracts clusters', async () => {
   let captured;
   mockJSON((url, init) => {
     captured = { url, init, body: JSON.parse(init.body) };
     return {
       Response: {
-        RequestId: 'req-dsgc-1',
-        DBCount: 3,
-        COSCount: 2,
+        RequestId: 'cluster-1',
+        TotalCount: 1,
+        InstanceList: [{ DspaId: 'dspa-1', Name: 'cluster-a' }],
       },
     };
   });
 
-  const res = await handlers[METHOD_DESCRIBE_ASSET_OVERVIEW]({
-    params: {
-      DspaId: 'dspa-abcd',
-    },
-  }, buildCtx());
+  const res = await handlers[METHOD_LIST_DSPA_CLUSTERS]({ offset: 0, limit: 10 }, buildCtx());
 
   assert.equal(captured.url, 'https://dsgc.tencentcloudapi.com');
   assert.equal(captured.init.method, 'POST');
-  assert.equal(captured.init.headers['X-TC-Action'], 'DescribeAssetOverview');
+  assert.equal(captured.init.headers['X-TC-Action'], 'ListDSPAClusters');
   assert.equal(captured.init.headers['X-TC-Version'], '2019-07-23');
   assert.equal(captured.init.headers['X-TC-Region'], 'ap-guangzhou');
   assert.match(captured.init.headers.Authorization, /^TC3-HMAC-SHA256 Credential=AKIDEXAMPLE\//);
-  assert.deepEqual(captured.body, { DspaId: 'dspa-abcd' });
-  assert.equal(res.action, 'DescribeAssetOverview');
-  assert.equal(res.request_id, 'req-dsgc-1');
-  assert.equal(res.response.DBCount, 3);
-  assert.equal(res.response.COSCount, 2);
-});
-
-test('pagination defaults do not leak into non-paginated DSGC actions', async () => {
-  let captured;
-  mockJSON((url, init) => {
-    captured = { url, init, body: JSON.parse(init.body) };
-    return { Response: { RequestId: 'asset-defaults' } };
-  });
-
-  await handlers[METHOD_DESCRIBE_ASSET_OVERVIEW]({ offset: 0, limit: 0 }, buildCtx());
-
-  assert.deepEqual(captured.body, {});
-});
-
-test('list methods merge pagination and extract action-specific arrays', async () => {
-  mockJSON((url, init) => {
-    assert.equal(init.headers['X-TC-Action'], 'ListDSPAClusters');
-    assert.deepEqual(JSON.parse(init.body), { Offset: 0, Limit: 10 });
-    return {
-      Response: {
-        RequestId: 'clusters-1',
-        TotalCount: 1,
-        InstanceList: [{ DspaId: 'dspa-abcd', Name: 'demo' }],
-      },
-    };
-  });
-  const clusters = await handlers[METHOD_LIST_DSPA_CLUSTERS]({ offset: 0, limit: 10 }, buildCtx());
-  assert.equal(clusters.total_count, 1);
-  assert.equal(clusters.items[0].DspaId, 'dspa-abcd');
-
-  mockJSON((url, init) => {
-    assert.equal(init.headers['X-TC-Action'], 'DescribeDSPACOSDataAssetBuckets');
-    return {
-      Response: {
-        RequestId: 'cos-1',
-        TotalCount: 1,
-        BucketList: [{ BucketName: 'bucket-a' }],
-      },
-    };
-  });
-  const cos = await handlers[METHOD_DESCRIBE_DSPA_COS_DATA_ASSET_BUCKETS]({}, buildCtx());
-  assert.equal(cos.items[0].BucketName, 'bucket-a');
-});
-
-test('risk and asset list methods preserve fallback list arrays', async () => {
-  mockJSON((url, init) => {
-    assert.equal(init.headers['X-TC-Action'], 'DescribeDSPARDBDataAssetByComplianceId');
-    return {
-      Response: {
-        RequestId: 'rdb-1',
-        TotalCount: 1,
-        AssetList: [{ DbName: 'mysql-demo' }],
-      },
-    };
-  });
-  const rdb = await handlers[METHOD_DESCRIBE_DSPA_RDB_DATA_ASSET_BY_COMPLIANCE_ID]({}, buildCtx());
-  assert.equal(rdb.items[0].DbName, 'mysql-demo');
-
-  mockJSON((url, init) => {
-    assert.equal(init.headers['X-TC-Action'], 'DescribeDSPAAssessmentLatestRiskList');
-    return {
-      Response: {
-        RequestId: 'risk-1',
-        Total: 1,
-        RiskList: [{ RiskName: 'public bucket' }],
-      },
-    };
-  });
-  const risk = await handlers[METHOD_DESCRIBE_DSPA_ASSESSMENT_LATEST_RISK_LIST]({}, buildCtx());
-  assert.equal(risk.total_count, 1);
-  assert.equal(risk.items[0].RiskName, 'public bucket');
-});
-
-test('InvokeReadOnlyAction enforces read-only action allow list', async () => {
-  mockJSON((url, init) => {
-    assert.equal(init.headers['X-TC-Action'], 'DescribeDSPAComplianceGroups');
-    assert.deepEqual(JSON.parse(init.body), { DspaId: 'dspa-abcd' });
-    return { Response: { RequestId: 'compliance-groups-1', Items: [] } };
-  });
-
-  const res = await handlers[METHOD_INVOKE_READ_ONLY_ACTION]({
-    action: 'DescribeDSPAComplianceGroups',
-    params: { DspaId: 'dspa-abcd' },
-  }, buildCtx());
-  assert.equal(res.action, 'DescribeDSPAComplianceGroups');
-
-  await assert.rejects(
-    () => handlers[METHOD_INVOKE_READ_ONLY_ACTION]({
-      action: 'GetDSPACustomAllowedAction',
-      params: { DspaId: 'dspa-abcd' },
-    }, buildCtx()),
-    /GetDSPACustomAllowedAction is not allowed/,
-  );
-
-  mockJSON((url, init) => {
-    assert.equal(init.headers['X-TC-Action'], 'GetDSPACustomAllowedAction');
-    assert.deepEqual(JSON.parse(init.body), { DspaId: 'dspa-abcd' });
-    return { Response: { RequestId: 'custom-allow-1', Items: [] } };
-  });
-
-  const customAllowed = await handlers[METHOD_INVOKE_READ_ONLY_ACTION]({
-    action: 'GetDSPACustomAllowedAction',
-    params: { DspaId: 'dspa-abcd' },
-  }, buildCtx({ config: { allowActions: ['GetDSPACustomAllowedAction'] } }));
-  assert.equal(customAllowed.action, 'GetDSPACustomAllowedAction');
-
-  await assert.rejects(
-    () => handlers[METHOD_INVOKE_READ_ONLY_ACTION]({ action: 'CreateDSPADiscoveryTask', params: {} }, buildCtx()),
-    /InvokeReadOnlyAction only allows Describe\*, List\*, or Get\* actions/,
-  );
-  await assert.rejects(
-    () => handlers[METHOD_INVOKE_READ_ONLY_ACTION]({ action: 'DescribeReportTaskDownloadUrl', params: {} }, buildCtx()),
-    /DescribeReportTaskDownloadUrl is not allowed/,
-  );
+  assert.deepEqual(captured.body, { Offset: 0, Limit: 10 });
+  assert.equal(res.action, 'ListDSPAClusters');
+  assert.equal(res.request_id, 'cluster-1');
+  assert.equal(res.total_count, 1);
+  assert.equal(res.items[0].DspaId, 'dspa-1');
 });
 
 test('Tencent Cloud API errors and HTTP failures map to gRPC-style errors', async () => {
@@ -214,7 +91,7 @@ test('Tencent Cloud API errors and HTTP failures map to gRPC-style errors', asyn
   }));
 
   await assert.rejects(
-    () => handlers[METHOD_DESCRIBE_ASSET_OVERVIEW]({}, buildCtx()),
+    () => handlers[METHOD_LIST_DSPA_CLUSTERS]({}, buildCtx()),
     /INVALID_ARGUMENT: InvalidParameter.MissingParameter: missing DspaId/,
   );
 
@@ -224,7 +101,7 @@ test('Tencent Cloud API errors and HTTP failures map to gRPC-style errors', asyn
     text: async () => 'forbidden',
   });
   await assert.rejects(
-    () => handlers[METHOD_DESCRIBE_ASSET_OVERVIEW]({}, buildCtx()),
+    () => handlers[METHOD_LIST_DSPA_CLUSTERS]({}, buildCtx()),
     /UNAUTHENTICATED: upstream http 403: forbidden/,
   );
 });
@@ -233,19 +110,20 @@ test('config aliases, language, temporary token, and Struct inputs are supported
   let captured;
   mockJSON((url, init) => {
     captured = { url, init, body: JSON.parse(init.body) };
-    return { Response: { RequestId: 'req-token', TotalCount: 0, Items: [] } };
+    return { Response: { RequestId: 'req-token', InstanceList: [] } };
   });
 
   await handlers[METHOD_LIST_DSPA_CLUSTERS]({
     params: {
       fields: {
+        DspaId: { stringValue: 'dspa-1' },
         Filters: {
           listValue: {
             values: [{
               structValue: {
                 fields: {
-                  Name: { stringValue: 'DspaId' },
-                  Values: { listValue: { values: [{ stringValue: 'dspa-abcd' }] } },
+                  Name: { stringValue: 'Status' },
+                  Values: { listValue: { values: [{ stringValue: 'running' }] } },
                 },
               },
             }],
@@ -270,21 +148,19 @@ test('config aliases, language, temporary token, and Struct inputs are supported
   assert.equal(captured.init.headers['X-TC-Token'], 'SESSION');
   assert.equal(captured.init.headers['X-TC-Language'], 'zh-CN');
   assert.equal(captured.init.headers['X-Extra'], 'demo');
-  assert.equal(Object.hasOwn(captured.init, 'skipTlsVerify'), false);
-  assert.equal(Object.hasOwn(captured.init, 'tlsInsecureSkipVerify'), false);
-  assert.equal(Object.hasOwn(captured.init, 'insecureSkipVerify'), false);
   assert.deepEqual(captured.body, {
-    Filters: [{ Name: 'DspaId', Values: ['dspa-abcd'] }],
+    DspaId: 'dspa-1',
+    Filters: [{ Name: 'Status', Values: ['running'] }],
   });
 });
 
 test('configuration validation rejects unsupported TLS bypass flags', async () => {
   await assert.rejects(
-    () => handlers[METHOD_DESCRIBE_ASSET_OVERVIEW]({}, buildCtx({ config: { skipTlsVerify: true } })),
+    () => handlers[METHOD_LIST_DSPA_CLUSTERS]({}, buildCtx({ config: { skipTlsVerify: true } })),
     /TLS certificate verification bypass is not supported/,
   );
   await assert.rejects(
-    () => handlers[METHOD_DESCRIBE_ASSET_OVERVIEW]({}, buildCtx({ bindings: { tlsInsecureSkipVerify: true } })),
+    () => handlers[METHOD_LIST_DSPA_CLUSTERS]({}, buildCtx({ bindings: { tlsInsecureSkipVerify: true } })),
     /TLS certificate verification bypass is not supported/,
   );
   assert.throws(
@@ -299,11 +175,11 @@ test('configuration validation rejects unsupported TLS bypass flags', async () =
 
 test('configuration validation rejects missing endpoint and credentials', async () => {
   await assert.rejects(
-    () => handlers[METHOD_DESCRIBE_ASSET_OVERVIEW]({}, buildCtx({ config: { endpoint: 'ftp://bad' } })),
+    () => handlers[METHOD_LIST_DSPA_CLUSTERS]({}, buildCtx({ config: { endpoint: 'ftp://bad' } })),
     /endpoint\/host must include http or https/,
   );
   await assert.rejects(
-    () => handlers[METHOD_DESCRIBE_ASSET_OVERVIEW]({}, buildCtx({ secret: { secretId: '' } })),
+    () => handlers[METHOD_LIST_DSPA_CLUSTERS]({}, buildCtx({ secret: { secretId: '' } })),
     /secretId is required/,
   );
 });
@@ -312,12 +188,13 @@ test('handler accepts OctoBus SDK single-argument context', async () => {
   let captured;
   mockJSON((url, init) => {
     captured = { url, init, body: JSON.parse(init.body) };
-    return { Response: { RequestId: 'req-sdk', TotalCount: 0, Items: [] } };
+    return { Response: { RequestId: 'req-sdk', InstanceList: [] } };
   });
 
   await handlers[METHOD_LIST_DSPA_CLUSTERS]({
     request: {
-      params: { Limit: 5 },
+      params: { DspaId: 'dspa-1' },
+      limit: 5,
     },
     config: {
       endpoint: 'https://dsgc.tencentcloudapi.com',
@@ -333,35 +210,5 @@ test('handler accepts OctoBus SDK single-argument context', async () => {
   assert.equal(captured.url, 'https://dsgc.tencentcloudapi.com');
   assert.equal(captured.init.headers['X-TC-Region'], 'ap-shanghai');
   assert.match(captured.init.headers.Authorization, /^TC3-HMAC-SHA256 Credential=SDKID\//);
-  assert.deepEqual(captured.body, { Limit: 5 });
-});
-
-test('InvokeReadOnlyAction accepts OctoBus SDK single-argument context', async () => {
-  let captured;
-  mockJSON((url, init) => {
-    captured = { url, init, body: JSON.parse(init.body) };
-    return { Response: { RequestId: 'req-sdk-invoke', Items: [] } };
-  });
-
-  await handlers[METHOD_INVOKE_READ_ONLY_ACTION]({
-    request: {
-      action: 'DescribeDSPAComplianceGroups',
-      params: { DspaId: 'dspa-abcd' },
-    },
-    config: {
-      endpoint: 'https://dsgc.tencentcloudapi.com',
-      region: 'ap-shanghai',
-    },
-    secret: {
-      secretId: 'SDKID',
-      secretKey: 'SDKKEY',
-    },
-    limits: { timeoutMs: 10_000 },
-  });
-
-  assert.equal(captured.url, 'https://dsgc.tencentcloudapi.com');
-  assert.equal(captured.init.headers['X-TC-Action'], 'DescribeDSPAComplianceGroups');
-  assert.equal(captured.init.headers['X-TC-Region'], 'ap-shanghai');
-  assert.match(captured.init.headers.Authorization, /^TC3-HMAC-SHA256 Credential=SDKID\//);
-  assert.deepEqual(captured.body, { DspaId: 'dspa-abcd' });
+  assert.deepEqual(captured.body, { DspaId: 'dspa-1', Limit: 5 });
 });

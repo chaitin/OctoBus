@@ -2,16 +2,8 @@ import crypto from 'node:crypto';
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
-export const METHOD_DESCRIBE_ASSET_OVERVIEW = 'Tencent_DSGC.TencentDsgcService/DescribeAssetOverview';
-export const METHOD_LIST_DSPA_CLUSTERS = 'Tencent_DSGC.TencentDsgcService/ListDSPAClusters';
-export const METHOD_DESCRIBE_DSPA_COS_DATA_ASSET_BUCKETS = 'Tencent_DSGC.TencentDsgcService/DescribeDSPACOSDataAssetBuckets';
-export const METHOD_DESCRIBE_DSPA_RDB_DATA_ASSET_BY_COMPLIANCE_ID = 'Tencent_DSGC.TencentDsgcService/DescribeDSPARDBDataAssetByComplianceId';
-export const METHOD_DESCRIBE_DSPA_ES_DATA_ASSET_BY_COMPLIANCE_ID = 'Tencent_DSGC.TencentDsgcService/DescribeDSPAESDataAssetByComplianceId';
-export const METHOD_DESCRIBE_DSPA_ASSESSMENT_LATEST_RISK_LIST = 'Tencent_DSGC.TencentDsgcService/DescribeDSPAAssessmentLatestRiskList';
-export const METHOD_DESCRIBE_DSPA_ASSESSMENT_TASKS = 'Tencent_DSGC.TencentDsgcService/DescribeDSPAAssessmentTasks';
-export const METHOD_DESCRIBE_REPORT_TASKS = 'Tencent_DSGC.TencentDsgcService/DescribeReportTasks';
-export const METHOD_INVOKE_READ_ONLY_ACTION = 'Tencent_DSGC.TencentDsgcService/InvokeReadOnlyAction';
 
+export const METHOD_LIST_DSPA_CLUSTERS = 'Tencent_DSGC.TencentDsgcService/ListDSPAClusters';
 export const DEFAULT_ENDPOINT = 'https://dsgc.tencentcloudapi.com';
 export const DEFAULT_REGION = 'ap-guangzhou';
 export const DEFAULT_VERSION = '2019-07-23';
@@ -19,90 +11,8 @@ export const DEFAULT_TIMEOUT_MS = 5000;
 export const SERVICE = 'dsgc';
 export const ALGORITHM = 'TC3-HMAC-SHA256';
 
-const FIXED_ACTIONS = new Set([
-  'DescribeAssetOverview',
-  'DescribeBindDBList',
-  'DescribeCOSAssetSensitiveDistribution',
-  'DescribeDSPAAssessmentHighRiskTop10Overview',
-  'DescribeDSPAAssessmentLatestRiskDetailInfo',
-  'DescribeDSPAAssessmentLatestRiskList',
-  'DescribeDSPAAssessmentNewDiscoveredRiskOverview',
-  'DescribeDSPAAssessmentPendingRiskOverview',
-  'DescribeDSPAAssessmentProcessingRiskOverview',
-  'DescribeDSPAAssessmentRiskAmountOverview',
-  'DescribeDSPAAssessmentRiskDatasourceTop5',
-  'DescribeDSPAAssessmentRiskDealedOverview',
-  'DescribeDSPAAssessmentRiskDealedTrend',
-  'DescribeDSPAAssessmentRiskDistributionOverview',
-  'DescribeDSPAAssessmentRiskItemTop5',
-  'DescribeDSPAAssessmentRiskLevelDetail',
-  'DescribeDSPAAssessmentRiskLevelList',
-  'DescribeDSPAAssessmentRiskLevelTrend',
-  'DescribeDSPAAssessmentRiskOverview',
-  'DescribeDSPAAssessmentRiskProcessHistory',
-  'DescribeDSPAAssessmentRisks',
-  'DescribeDSPAAssessmentRiskSideDistributed',
-  'DescribeDSPAAssessmentRiskSideList',
-  'DescribeDSPAAssessmentRiskTemplateDetail',
-  'DescribeDSPAAssessmentRiskTemplateVulnerableList',
-  'DescribeDSPAAssessmentTasks',
-  'DescribeDSPAAssessmentTemplateControlItems',
-  'DescribeDSPAAssessmentTemplates',
-  'DescribeDSPACategories',
-  'DescribeDSPACategoryRules',
-  'DescribeDSPACategoryRuleStatistic',
-  'DescribeDSPACategoryTree',
-  'DescribeDSPACategoryTreeWithRules',
-  'DescribeDSPAComplianceGroupDetail',
-  'DescribeDSPAComplianceGroups',
-  'DescribeDSPAComplianceUpdateNotification',
-  'DescribeDSPACOSDataAssetBuckets',
-  'DescribeDSPACOSDataAssetByComplianceId',
-  'DescribeDSPACOSDataAssetDetail',
-  'DescribeDSPACOSDiscoveryTaskDetail',
-  'DescribeDSPACOSDiscoveryTaskFiles',
-  'DescribeDSPACOSDiscoveryTaskResult',
-  'DescribeDSPACOSDiscoveryTasks',
-  'DescribeDSPACOSTaskResultDetail',
-  'DescribeDSPADataSourceDbInfo',
-  'DescribeDSPADiscoveryRules',
-  'DescribeDSPADiscoveryServiceStatus',
-  'DescribeDSPADiscoveryTaskDetail',
-  'DescribeDSPADiscoveryTaskResult',
-  'DescribeDSPADiscoveryTaskResultDetail',
-  'DescribeDSPADiscoveryTasks',
-  'DescribeDSPADiscoveryTaskTables',
-  'DescribeDSPAESDataAssetByComplianceId',
-  'DescribeDSPAESDataAssetDetail',
-  'DescribeDSPAESDataSample',
-  'DescribeDSPAESDiscoveryTaskResultDetail',
-  'DescribeDSPALevelDetail',
-  'DescribeDSPALevelGroups',
-  'DescribeDSPARDBDataAssetByComplianceId',
-  'DescribeDSPARDBDataAssetDetail',
-  'DescribeDSPASupportedMetas',
-  'DescribeDSPATaskResultDataSample',
-  'DescribeESAssetSensitiveDistribution',
-  'DescribeMongoAssetSensitiveDistribution',
-  'DescribeRDBAssetSensitiveDistribution',
-  'DescribeReportTasks',
-  'DescribeSensitiveCOSDataDistribution',
-  'DescribeSensitiveRDBDataDistribution',
-  'GetResourceConnectionStatus',
-  'ListDSPAClusters',
-  'ListDSPACosMetaResources',
-  'ListDSPAMetaResources',
-]);
-const READ_ONLY_PREFIXES = ['Describe', 'List', 'Get'];
-
 const LIST_KEYS_BY_ACTION = {
   ListDSPAClusters: ['Items', 'InstanceList', 'List', 'Clusters', 'DSPAClusters'],
-  DescribeDSPACOSDataAssetBuckets: ['Items', 'AssetList', 'BucketList', 'Buckets', 'List'],
-  DescribeDSPARDBDataAssetByComplianceId: ['Items', 'AssetList', 'RDBList', 'DBList', 'List'],
-  DescribeDSPAESDataAssetByComplianceId: ['Items', 'AssetList', 'ESList', 'List'],
-  DescribeDSPAAssessmentLatestRiskList: ['Items', 'RiskList', 'LatestRiskList', 'List'],
-  DescribeDSPAAssessmentTasks: ['Items', 'TaskList', 'Tasks', 'List'],
-  DescribeReportTasks: ['Items', 'TaskList', 'Tasks', 'List'],
 };
 
 const grpcCodeFor = (code) => ({
@@ -221,12 +131,6 @@ const parseHeaders = (value) => {
   return {};
 };
 
-const parseStringList = (value) => {
-  const raw = unwrapScalar(value);
-  if (Array.isArray(raw)) return raw.map(asString).filter(Boolean);
-  if (typeof raw === 'string') return raw.split(',').map((item) => item.trim()).filter(Boolean);
-  return [];
-};
 
 const assertSupportedTlsConfig = (bindings = {}) => {
   if (asBool(bindings.skipTlsVerify) || asBool(bindings.tlsInsecureSkipVerify) || asBool(bindings.insecureSkipVerify)) {
@@ -272,8 +176,6 @@ const resolveRuntime = (ctx = {}) => {
     language: asOptionalString(bindings.language),
     timeoutMs: asPositiveInt(firstDefined(bindings.timeoutMs, ctx.limits?.timeoutMs, DEFAULT_TIMEOUT_MS), 'timeoutMs', false),
     headers: parseHeaders(bindings.headers),
-    allowActions: parseStringList(bindings.allowActions),
-    allowAllReadOnlyActions: asBool(firstDefined(bindings.allowAllReadOnlyActions, bindings.allowAllDescribeActions)),
   };
 };
 
@@ -401,21 +303,7 @@ const requestTencentCloud = async (runtime, action, params, { timestamp = Math.f
   }
 };
 
-const normalizeAction = (value) => {
-  const action = asString(value);
-  if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(action)) {
-    throw errorWithCode('INVALID_ARGUMENT', 'action must be an API action name');
-  }
-  return action;
-};
 
-const ensureReadOnlyActionAllowed = (runtime, action) => {
-  if (!READ_ONLY_PREFIXES.some((prefix) => action.startsWith(prefix))) {
-    throw errorWithCode('INVALID_ARGUMENT', 'InvokeReadOnlyAction only allows Describe*, List*, or Get* actions');
-  }
-  if (FIXED_ACTIONS.has(action) || runtime.allowActions.includes(action) || runtime.allowAllReadOnlyActions) return;
-  throw errorWithCode('PERMISSION_DENIED', `${action} is not allowed; add it to allowActions or use a dedicated method`);
-};
 
 const extractItems = (action, response = {}) => {
   const keys = LIST_KEYS_BY_ACTION[action] ?? [];
@@ -465,33 +353,19 @@ const callAction = (action, { list = false } = {}) => async (req, ctx) => {
   return list ? listResponse(action, json) : actionResponse(action, json);
 };
 
-const invokeReadOnlyAction = async (req, ctx) => {
-  const request = handlerRequest(req, ctx);
-  const runtime = resolveRuntime(handlerContext(req, ctx));
-  const action = normalizeAction(request.action);
-  ensureReadOnlyActionAllowed(runtime, action);
-  const params = fromProtoStruct(request.params ?? {});
-  const json = await requestTencentCloud(runtime, action, params);
-  return actionResponse(action, json);
-};
 
 export const handlers = {
-  [METHOD_DESCRIBE_ASSET_OVERVIEW]: callAction('DescribeAssetOverview'),
   [METHOD_LIST_DSPA_CLUSTERS]: callAction('ListDSPAClusters', { list: true }),
-  [METHOD_DESCRIBE_DSPA_COS_DATA_ASSET_BUCKETS]: callAction('DescribeDSPACOSDataAssetBuckets', { list: true }),
-  [METHOD_DESCRIBE_DSPA_RDB_DATA_ASSET_BY_COMPLIANCE_ID]: callAction('DescribeDSPARDBDataAssetByComplianceId', { list: true }),
-  [METHOD_DESCRIBE_DSPA_ES_DATA_ASSET_BY_COMPLIANCE_ID]: callAction('DescribeDSPAESDataAssetByComplianceId', { list: true }),
-  [METHOD_DESCRIBE_DSPA_ASSESSMENT_LATEST_RISK_LIST]: callAction('DescribeDSPAAssessmentLatestRiskList', { list: true }),
-  [METHOD_DESCRIBE_DSPA_ASSESSMENT_TASKS]: callAction('DescribeDSPAAssessmentTasks', { list: true }),
-  [METHOD_DESCRIBE_REPORT_TASKS]: callAction('DescribeReportTasks', { list: true }),
-  [METHOD_INVOKE_READ_ONLY_ACTION]: invokeReadOnlyAction,
 };
+
+export const rpcdef = () => ({
+  [`/${METHOD_LIST_DSPA_CLUSTERS}`]: handlers[METHOD_LIST_DSPA_CLUSTERS],
+});
 
 export const _test = {
   buildAuthorization,
   buildCanonicalRequest,
   assertSupportedTlsConfig,
-  ensureReadOnlyActionAllowed,
   extractItems,
   fromProtoStruct,
   handlers,
