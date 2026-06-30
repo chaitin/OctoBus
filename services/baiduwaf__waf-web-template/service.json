@@ -1,0 +1,59 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "baiduwaf-waf-web-template",
+  "displayName": "百度云 WAF Web Template",
+  "description": "封装百度云 WAF 基础防护模板、白名单规则与区域封禁规则的详情、保存、开关切换、列表与删除接口。⚠️ 高风险操作：所有非查询类接口都会直接修改线上配置或数据。",
+  "runtime": { "mode": "long-running" },
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/waf_web_template.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "BaiduWAF_WAFWebTemplate.BaiduWAF_WAFWebTemplate/WebTemplateDetail": {
+          "name": "web-template-detail",
+          "description": "查询百度云 WAF 基础防护模板详情"
+        },
+        "BaiduWAF_WAFWebTemplate.BaiduWAF_WAFWebTemplate/WebTemplateSave": {
+          "name": "web-template-save",
+          "description": "保存百度云 WAF 基础防护模板。⚠️ 高风险操作：会直接修改模板配置"
+        },
+        "BaiduWAF_WAFWebTemplate.BaiduWAF_WAFWebTemplate/WebTemplateSwitch": {
+          "name": "web-template-switch",
+          "description": "切换百度云 WAF 基础防护模板开关。⚠️ 高风险操作：会直接修改模板状态"
+        },
+        "BaiduWAF_WAFWebTemplate.BaiduWAF_WAFWebTemplate/WebTemplateList": {
+          "name": "web-template-list",
+          "description": "分页查询百度云 WAF 基础防护模板列表"
+        },
+        "BaiduWAF_WAFWebTemplate.BaiduWAF_WAFWebTemplate/WebTemplateDelete": {
+          "name": "web-template-delete",
+          "description": "删除百度云 WAF 基础防护模板。⚠️ 高风险操作：会永久删除模板"
+        },
+        "BaiduWAF_WAFWebTemplate.BaiduWAF_WAFWebTemplate/WhiteRulesdetail": {
+          "name": "white-rulesdetail",
+          "description": "查询百度云 WAF 白名单规则详情"
+        },
+        "BaiduWAF_WAFWebTemplate.BaiduWAF_WAFWebTemplate/WhiteRulesdelete": {
+          "name": "white-rulesdelete",
+          "description": "删除百度云 WAF 白名单规则。⚠️ 高风险操作：会直接删除白名单规则"
+        },
+        "BaiduWAF_WAFWebTemplate.BaiduWAF_WAFWebTemplate/WhiteRulesswitch": {
+          "name": "white-rulesswitch",
+          "description": "切换百度云 WAF 白名单规则开关。⚠️ 高风险操作：会直接修改规则状态"
+        },
+        "BaiduWAF_WAFWebTemplate.BaiduWAF_WAFWebTemplate/WhiteRuleslist": {
+          "name": "white-ruleslist",
+          "description": "分页查询百度云 WAF 白名单规则列表"
+        },
+        "BaiduWAF_WAFWebTemplate.BaiduWAF_WAFWebTemplate/RegionRuleslist": {
+          "name": "region-ruleslist",
+          "description": "分页查询百度云 WAF 区域封禁规则列表"
+        }
+      }
+    }
+  }
+}

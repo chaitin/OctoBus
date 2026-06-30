@@ -1,0 +1,235 @@
+syntax = "proto3";
+
+package BaiduWAF_WAFWebTemplate;
+
+option go_package = "miner/grpc-service/BaiduWAF_WAFWebTemplate";
+
+// BaiduWAF_WAFWebTemplate - 百度云 WAF 基础防护模板、白名单规则与区域封禁规则操作
+service BaiduWAF_WAFWebTemplate {
+  rpc WebTemplateDetail(WebTemplateDetailRequest) returns (WebTemplateDetailResponse);
+  rpc WebTemplateSave(WebTemplateSaveRequest) returns (WebTemplateSaveResponse);
+  rpc WebTemplateSwitch(WebTemplateSwitchRequest) returns (WebTemplateSwitchResponse);
+  rpc WebTemplateList(WebTemplateListRequest) returns (WebTemplateListResponse);
+  rpc WebTemplateDelete(WebTemplateDeleteRequest) returns (WebTemplateDeleteResponse);
+  rpc WhiteRulesdetail(WhiteRulesdetailRequest) returns (WhiteRulesdetailResponse);
+  rpc WhiteRulesdelete(WhiteRulesdeleteRequest) returns (WhiteRulesdeleteResponse);
+  rpc WhiteRulesswitch(WhiteRulesswitchRequest) returns (WhiteRulesswitchResponse);
+  rpc WhiteRuleslist(WhiteRuleslistRequest) returns (WhiteRuleslistResponse);
+  rpc RegionRuleslist(RegionRuleslistRequest) returns (RegionRuleslistResponse);
+}
+
+message WebTemplateDetailRequest {
+  string template_key = 1 [json_name = "templateKey"];
+}
+
+message WebTemplateDetailResponse {
+  int32 status = 1 [json_name = "status"];
+  WebTemplateDetailResult result = 2 [json_name = "result"];
+  bool success = 3 [json_name = "success"];
+}
+
+message WebTemplateDetailResult {
+  int32 switch = 1 [json_name = "switch"];
+  repeated string protection_domains = 2 [json_name = "protectionDomains"];
+  string template_type = 3 [json_name = "templateType"];
+  string template_key = 4 [json_name = "templateKey"];
+  string action = 5 [json_name = "action"];
+  string group_key = 6 [json_name = "groupKey"];
+  string rule_name = 7 [json_name = "ruleName"];
+  int32 rule_id = 8 [json_name = "ruleID"];
+  string group_name = 9 [json_name = "groupName"];
+}
+
+message WebTemplateBindInfoItem {
+  string instance_id = 1 [json_name = "instanceID"];
+  repeated string subdomains = 2 [json_name = "subdomains"];
+}
+
+message WebTemplateSaveRequest {
+  string name = 1 [json_name = "name"];
+  repeated WebTemplateBindInfoItem bind_info = 2 [json_name = "bindInfo"];
+  int32 switch = 3 [json_name = "switch"];
+  string template_type = 4 [json_name = "templateType"];
+  string action = 5 [json_name = "action"];
+  string template_key = 6 [json_name = "templateKey"];
+  string rules_group_id = 7 [json_name = "rulesGroupID"];
+}
+
+message WebTemplateSaveResponse {
+  int32 status = 1 [json_name = "status"];
+  WebTemplateSaveResult result = 2 [json_name = "result"];
+}
+
+message WebTemplateSaveResult {
+  string template_key = 1 [json_name = "templateKey"];
+}
+
+message WebTemplateSwitchRequest {
+  string template_key = 1 [json_name = "templateKey"];
+  int32 switch = 2 [json_name = "switch"];
+}
+
+message WebTemplateSwitchResponse {
+  bool success = 1 [json_name = "success"];
+  int32 status = 2 [json_name = "status"];
+}
+
+message WebTemplateListRequest {
+  repeated string subdomains = 1 [json_name = "subdomains"];
+  int32 page_no = 2 [json_name = "pageNo"];
+  int32 page_size = 3 [json_name = "pageSize"];
+  int32 rule_id = 4 [json_name = "ruleID"];
+  int32 switch = 5 [json_name = "switch"];
+  string action = 6 [json_name = "action"];
+  string template_name = 7 [json_name = "templateName"];
+}
+
+message WebTemplateListResponse {
+  int32 status = 1 [json_name = "status"];
+  bool success = 2 [json_name = "success"];
+  WebTemplateListResult result = 3 [json_name = "result"];
+}
+
+message WebTemplateListResult {
+  repeated WebTemplateListItem result = 1 [json_name = "result"];
+  int32 total_count = 2 [json_name = "totalCount"];
+}
+
+message WebTemplateListItem {
+  string rule_name = 1 [json_name = "ruleName"];
+  string template_key = 2 [json_name = "templateKey"];
+  string template_type = 3 [json_name = "templateType"];
+  repeated string protection_domains = 4 [json_name = "protectionDomains"];
+  string action = 5 [json_name = "action"];
+  int32 switch = 6 [json_name = "switch"];
+  string update_time = 7 [json_name = "updateTime"];
+  int32 rule_id = 8 [json_name = "ruleID"];
+}
+
+message WebTemplateDeleteRequest {
+  string template_key = 1 [json_name = "templateKey"];
+}
+
+message WebTemplateDeleteResponse {
+  bool success = 1 [json_name = "success"];
+  WebTemplateDeleteResult result = 2 [json_name = "result"];
+  bool already_gone = 3 [json_name = "alreadyGone"];
+}
+
+message WebTemplateDeleteResult {}
+
+message WhiteRulesdetailRequest {
+  optional string rule_key = 1 [json_name = "ruleKey"];
+}
+
+message WhiteRulesdetailResponse {
+  bool success = 1 [json_name = "success"];
+  int32 status = 2 [json_name = "status"];
+  WhiteRulesdetailResult result = 3 [json_name = "result"];
+}
+
+message WhiteRulesdetailResult {
+  string rule_name = 1 [json_name = "ruleName"];
+  int32 rule_id = 2 [json_name = "ruleID"];
+  string rule_type = 3 [json_name = "ruleType"];
+  repeated string protection_domains = 4 [json_name = "protectionDomains"];
+  int32 switch = 5 [json_name = "switch"];
+  string update_time = 6 [json_name = "updateTime"];
+  repeated WhiteRulesdetailTarget targets = 7 [json_name = "targets"];
+}
+
+message WhiteRulesdetailTarget {
+  string field = 1 [json_name = "field"];
+  string key = 2 [json_name = "key"];
+  string match = 3 [json_name = "match"];
+  repeated string value = 4 [json_name = "value"];
+}
+
+message WhiteRulesdeleteRequest {
+  optional string rule_key = 1 [json_name = "ruleKey"];
+}
+
+message WhiteRulesdeleteResponse {
+  bool success = 1 [json_name = "success"];
+  repeated string result = 2 [json_name = "result"];
+}
+
+message WhiteRulesswitchRequest {
+  optional string rule_key = 1 [json_name = "ruleKey"];
+  optional int32 switch = 2 [json_name = "switch"];
+}
+
+message WhiteRulesswitchResponse {
+  bool success = 1 [json_name = "success"];
+  repeated string result = 2 [json_name = "result"];
+}
+
+message WhiteRuleslistRequest {
+  optional int32 page_no = 1 [json_name = "pageNo"];
+  optional int32 page_size = 2 [json_name = "pageSize"];
+  optional int32 switch = 3 [json_name = "switch"];
+  repeated string subdomain = 4 [json_name = "subdomain"];
+  optional string rule_id = 5 [json_name = "ruleID"];
+  optional string rule_name = 6 [json_name = "ruleName"];
+}
+
+message WhiteRuleslistResponse {
+  bool success = 1 [json_name = "success"];
+  int32 status = 2 [json_name = "status"];
+  WhiteRuleslistResult result = 3 [json_name = "result"];
+}
+
+message WhiteRuleslistResult {
+  repeated WhiteRuleslistItem result = 1 [json_name = "result"];
+  int32 total_count = 2 [json_name = "totalCount"];
+}
+
+message WhiteRuleslistItem {
+  string rule_name = 1 [json_name = "ruleName"];
+  string rule_type = 2 [json_name = "ruleType"];
+  repeated string protection_domains = 3 [json_name = "protectionDomains"];
+  int32 switch = 4 [json_name = "switch"];
+  string update_time = 5 [json_name = "updateTime"];
+  string rule_key = 6 [json_name = "ruleKey"];
+  int32 rule_id = 7 [json_name = "ruleID"];
+  repeated string ignore_modules = 8 [json_name = "ignoreModules"];
+  repeated string ignore_ids = 9 [json_name = "ignoreIds"];
+}
+
+message RegionRuleslistRequest {
+  optional int32 page_no = 1 [json_name = "pageNo"];
+  optional int32 page_size = 2 [json_name = "pageSize"];
+  optional int32 switch = 3 [json_name = "switch"];
+  repeated string subdomain = 4 [json_name = "subdomain"];
+  optional string rule_id = 5 [json_name = "ruleID"];
+  optional string rule_name = 6 [json_name = "ruleName"];
+  optional string action = 7 [json_name = "action"];
+}
+
+message RegionRuleslistResponse {
+  bool success = 1 [json_name = "success"];
+  int32 status = 2 [json_name = "status"];
+  RegionRuleslistResult result = 3 [json_name = "result"];
+}
+
+message RegionRuleslistResult {
+  repeated RegionRuleslistItem result = 1 [json_name = "result"];
+  optional int32 total_count = 2 [json_name = "totalCount"];
+}
+
+message RegionRuleslistItem {
+  string rule_name = 1 [json_name = "ruleName"];
+  repeated string protection_domains = 2 [json_name = "protectionDomains"];
+  optional int32 switch = 3 [json_name = "switch"];
+  string update_time = 4 [json_name = "updateTime"];
+  string rule_key = 5 [json_name = "ruleKey"];
+  int32 rule_id = 6 [json_name = "ruleID"];
+  string rule_type = 7 [json_name = "ruleType"];
+  string action = 8 [json_name = "action"];
+  RegionRuleslistValue value = 9 [json_name = "value"];
+}
+
+message RegionRuleslistValue {
+  repeated string domestic = 1 [json_name = "domestic"];
+  repeated string overseas = 2 [json_name = "overseas"];
+}

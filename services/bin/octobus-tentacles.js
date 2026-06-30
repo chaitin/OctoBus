@@ -80,6 +80,10 @@ const services = {
     entryFile: "../chaitin__t-answer-ndr/bin/t-answer-ndr.js",
     serviceModule: "../chaitin__t-answer-ndr/src/service.js",
   },
+  "baiduwaf-waf-web-template": {
+    entryFile: "../baiduwaf__waf-web-template/bin/baiduwaf-waf-web-template.js",
+    serviceModule: "../baiduwaf__waf-web-template/src/service.js",
+  },
   "das-gateway-v3": {
     entryFile: "../das__gateway_v3/bin/das-gateway-v3.js",
     serviceModule: "../das__gateway_v3/src/service.js",

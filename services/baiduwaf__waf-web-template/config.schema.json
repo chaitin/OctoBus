@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "api_base": {
+      "type": "string",
+      "description": "API 基础地址，默认值为 http://bss.wf.bj.baidubce.com"
+    },
+    "apiBase": {
+      "type": "string",
+      "description": "api_base 的别名（camelCase）"
+    },
+    "base_url": {
+      "type": "string",
+      "description": "api_base 的别名（snake_case）"
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 10000,
+      "description": "HTTP 请求超时时间（毫秒），默认 10000"
+    },
+    "timeout_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "timeoutMs 的别名（snake_case）"
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "仅在你手动改用 HTTPS 且需要忽略证书校验时启用；默认 HTTP 场景不需要"
+    },
+    "tlsInsecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "skipTlsVerify 的别名"
+    },
+    "insecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "skipTlsVerify 的别名"
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "可选的额外 HTTP headers，会与内置 headers 合并"
+    }
+  }
+}
