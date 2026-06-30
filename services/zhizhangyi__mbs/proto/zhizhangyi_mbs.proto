@@ -150,7 +150,7 @@ message AddUserRequest {
   string user_name = 1;             // 用户姓名（必填）
   string login_name = 2;            // 登录名（必填）
   string dept_id = 3;               // 部门ID（必填）
-  string password = 4;              // 密码 3DES加密（必填）
+  string password = 4;              // MBS要求的3DES加密后密码串（必填，由调用方提供）
   string phone_number = 5;
   string job = 6;
   string employee_number = 7;
@@ -301,9 +301,9 @@ message PhoneUserInfo {
 // =============================================================================
 message UpdUserPwdRequest {
   string user_id = 1;               // v1版本必填
-  string password = 2;              // 新密码 3DES加密（v1）
-  string old_pwd = 3;               // 原密码 3DES加密（v2）
-  string new_pwd = 4;               // 新密码 3DES加密（v2）
+  string password = 2;              // MBS要求的3DES加密后新密码串（v1，由调用方提供）
+  string old_pwd = 3;               // MBS要求的3DES加密后原密码串（v2，由调用方提供）
+  string new_pwd = 4;               // MBS要求的3DES加密后新密码串（v2，由调用方提供）
   string login_name = 5;            // v2版本必填
   string version = 6;               // "v1" 管理员修改 / "v2" 用户自服务
   string org_code = 7;

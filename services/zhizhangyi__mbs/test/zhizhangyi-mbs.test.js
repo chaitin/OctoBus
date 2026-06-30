@@ -7,6 +7,7 @@ import { rpcdef } from '../src/zhizhangyi-mbs.js';
 
 const ADD_USER = 'zhizhangyi.mbs.UserManagement/AddUser';
 const DEL_USERS = 'zhizhangyi.mbs.UserManagement/DelUsers';
+const GET_USERS = 'zhizhangyi.mbs.UserManagement/GetUsers';
 const STATE_USERS = 'zhizhangyi.mbs.UserManagement/StateUsers';
 
 const originalFetch = globalThis.fetch;
@@ -40,6 +41,37 @@ test('AddUser requires password before calling upstream', async () => {
   );
 
   assert.equal(called, false);
+});
+
+test('GetUsers preserves falsy state and is_mdm filters', async () => {
+  let captured;
+  globalThis.fetch = async (url, init) => {
+    captured = { url, init };
+    return { ok: true, status: 200, text: async () => '{"code":0,"data":{"total":0,"userInfos":[]}}' };
+  };
+
+  await rpcdef(buildCtx({ condition: { state: 0, is_mdm: 0 } }))[GET_USERS]();
+
+  assert.equal(captured.url, 'https://mbs.example/uusafe/mos/thirdaccess/rest/opt/v1/getUsers');
+  assert.deepEqual(JSON.parse(captured.init.body).condition, {
+    deptId: '1',
+    keyWord: '',
+    state: 0,
+    isMdm: 0,
+  });
+});
+
+test('AddUser forwards caller-provided 3DES-encrypted password value', async () => {
+  let captured;
+  globalThis.fetch = async (url, init) => {
+    captured = { url, init };
+    return { ok: true, status: 200, text: async () => '{"code":0}' };
+  };
+
+  await rpcdef(buildCtx({ user_name: 'User', login_name: 'user', dept_id: 'dept', password: '3des-ciphertext' }))[ADD_USER]();
+
+  assert.equal(captured.url, 'https://mbs.example/uusafe/mos/thirdaccess/rest/opt/v1/addUser');
+  assert.equal(JSON.parse(captured.init.body).password, '3des-ciphertext');
 });
 
 test('StateUsers requires explicit state before calling upstream', async () => {

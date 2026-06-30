@@ -62,9 +62,9 @@ export function rpcdef(ctx) {
     const odc = first(req?.order_code, req?.orderCode) ?? 0; const odt = first(req?.order_type, req?.orderType) ?? 1;
     const did = first(req?.condition?.dept_id, req?.condition?.deptId) || '1';
     const kw = first(req?.condition?.key_word, req?.condition?.keyWord) || '';
-    const st = first(req?.condition?.state) || ''; const md = first(req?.condition?.is_mdm, req?.condition?.isMdm) || '';
+    const st = first(req?.condition?.state) ?? ''; const md = first(req?.condition?.is_mdm, req?.condition?.isMdm) ?? '';
     const sg = first(req?.sign) || signCalc(sk, apk, oc, idx, sz, odc, odt, kw, st, md, did);
-    const cond = { deptId: did, keyWord: kw }; if (st) cond.state = st; if (md) cond.isMdm = md;
+    const cond = { deptId: did, keyWord: kw }; if (st !== '') cond.state = st; if (md !== '') cond.isMdm = md;
     const j = await post(BASE + '/v1/getUsers', { index: Number(idx), size: Number(sz), orderCode: Number(odc), orderType: Number(odt), condition: cond, orgCode: oc, appkey: apk, sign: sg });
     const d = j?.data || {};
     return { code: j?.code ?? 0, msg: j?.msg ?? '', data: { total: d.total ?? 0, user_infos: arr(d.userInfos).map(mapUser) }, time_stamp: j?.timeStamp ?? '' };
@@ -74,10 +74,10 @@ export function rpcdef(ctx) {
   const goAddUser = async (req) => {
     const oc = first(req?.org_code, req?.orgCode) || ocDef; const apk = first(req?.appkey) || ak;
     const un = first(req?.user_name, req?.userName) || ''; const ln = first(req?.login_name, req?.loginName) || '';
-    const did = first(req?.dept_id, req?.deptId) || ''; const pw = first(req?.password) || '';
-    if (!un) throw er('INVALID_ARGUMENT', 'user_name required'); if (!ln) throw er('INVALID_ARGUMENT', 'login_name required'); if (!did) throw er('INVALID_ARGUMENT', 'dept_id required'); if (!pw) throw er('INVALID_ARGUMENT', 'password required');
-    const sg = first(req?.sign) || signCalc(sk, apk, oc, un, ln, did, pw);
-    const body = { userName: un, loginName: ln, deptId: did, password: pw, userSource: Number(first(req?.user_source, req?.userSource) ?? 0), orgCode: oc, appkey: apk, sign: sg };
+    const did = first(req?.dept_id, req?.deptId) || ''; const encryptedPw = first(req?.password) || '';
+    if (!un) throw er('INVALID_ARGUMENT', 'user_name required'); if (!ln) throw er('INVALID_ARGUMENT', 'login_name required'); if (!did) throw er('INVALID_ARGUMENT', 'dept_id required'); if (!encryptedPw) throw er('INVALID_ARGUMENT', 'password required as 3DES-encrypted value');
+    const sg = first(req?.sign) || signCalc(sk, apk, oc, un, ln, did, encryptedPw);
+    const body = { userName: un, loginName: ln, deptId: did, password: encryptedPw, userSource: Number(first(req?.user_source, req?.userSource) ?? 0), orgCode: oc, appkey: apk, sign: sg };
     const sm = { phone_number: 'phoneNumber', job: 'job', employee_number: 'employeeNumber', address: 'address', mobile: 'mobile', email: 'email', organization: 'organization' };
     for (const [k, jk] of Object.entries(sm)) { const v = str(first(req?.[k])); if (v !== undefined) body[jk] = v; }
     for (const k of ['is_mdm', 'state', 'weight']) { const v = num(first(req?.[k])); if (v !== undefined) body[k === 'is_mdm' ? 'isMdm' : k] = v; }
@@ -161,16 +161,16 @@ export function rpcdef(ctx) {
     const ver = first(req?.version) || 'v1';
     let body;
     if (ver === 'v2') {
-      const ln = first(req?.login_name, req?.loginName) || ''; const np = first(req?.new_pwd, req?.newPwd) || '';
-      if (!ln) throw er('INVALID_ARGUMENT', 'login_name required for v2'); if (!np) throw er('INVALID_ARGUMENT', 'new_pwd required for v2');
-      const sg = first(req?.sign) || signCalc(sk, apk, oc, ln, np);
-      body = { loginName: ln, newPwd: np, orgCode: oc, appkey: apk, sign: sg };
-      const op = first(req?.old_pwd, req?.oldPwd); if (op) body.oldPwd = op;
+      const ln = first(req?.login_name, req?.loginName) || ''; const encryptedNewPwd = first(req?.new_pwd, req?.newPwd) || '';
+      if (!ln) throw er('INVALID_ARGUMENT', 'login_name required for v2'); if (!encryptedNewPwd) throw er('INVALID_ARGUMENT', 'new_pwd required as 3DES-encrypted value for v2');
+      const sg = first(req?.sign) || signCalc(sk, apk, oc, ln, encryptedNewPwd);
+      body = { loginName: ln, newPwd: encryptedNewPwd, orgCode: oc, appkey: apk, sign: sg };
+      const encryptedOldPwd = first(req?.old_pwd, req?.oldPwd); if (encryptedOldPwd) body.oldPwd = encryptedOldPwd;
     } else {
-      const uid = first(req?.user_id, req?.userId) || ''; const pw = first(req?.password) || '';
-      if (!uid) throw er('INVALID_ARGUMENT', 'user_id required for v1'); if (!pw) throw er('INVALID_ARGUMENT', 'password required for v1');
-      const sg = first(req?.sign) || signCalc(sk, apk, oc, uid, pw);
-      body = { userId: uid, password: pw, orgCode: oc, appkey: apk, sign: sg };
+      const uid = first(req?.user_id, req?.userId) || ''; const encryptedPw = first(req?.password) || '';
+      if (!uid) throw er('INVALID_ARGUMENT', 'user_id required for v1'); if (!encryptedPw) throw er('INVALID_ARGUMENT', 'password required as 3DES-encrypted value for v1');
+      const sg = first(req?.sign) || signCalc(sk, apk, oc, uid, encryptedPw);
+      body = { userId: uid, password: encryptedPw, orgCode: oc, appkey: apk, sign: sg };
     }
     const j = await post(BASE + `/${ver}/updUserPwd`, body);
     return { code: j?.code ?? 0, msg: j?.msg ?? '', data: j?.data ?? null };
