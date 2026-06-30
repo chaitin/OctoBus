@@ -8,18 +8,17 @@ function httpCall(method, url, reqBody, headers, timeoutMs, insecure) {
     const parsed = new URL(url);
     const isHttps = parsed.protocol === "https:";
     const reqModule = isHttps ? httpsRequest : httpRequest;
-    const bodyStr = reqBody ? JSON.stringify(reqBody) : null;
+    const bodyStr = reqBody ? JSON.stringify(reqBody, (k, v) => typeof v === "bigint" ? Number(v) : v) : null;
 
     const opts = {
       hostname: parsed.hostname,
       port: parsed.port || (isHttps ? 443 : 80),
       path: parsed.pathname + parsed.search,
       method: method.toUpperCase(),
-      headers: {
-        "Content-Type": bodyStr ? "application/json" : undefined,
-        "Content-Length": bodyStr ? Buffer.byteLength(bodyStr) : undefined,
-        "Accept": "application/json",
-      },
+      headers: Object.assign(
+        { "Accept": "application/json" },
+        bodyStr ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(bodyStr) } : {},
+      ),
       timeout: timeoutMs || 30000,
       rejectUnauthorized: insecure ? false : true,
     };
@@ -121,24 +120,9 @@ export async function queryAlerts(config, secret, req) {
   if (req.ruleTag) body.ruleTag = req.ruleTag;
   if (req.srcAddr) body.srcAddr = req.srcAddr;
   if (req.dstAddr) body.dstAddr = req.dstAddr;
-  if (req.filterDsl) body.filterDsl = req.filterDsl;
+    if (req.filterDsl) body.filterDsl = req.filterDsl;
   const data = await httpCall("POST", `${apiBase(config)}/alert/query`, body, hdrs, config.timeoutMs, config.insecure);
   return { data: (data.data || data || []) };
-}
-
-export async function getAlertDetail(config, secret, req) {
-  if (!req.id) throw new GrpcError(grpcStatus.INVALID_ARGUMENT, "id is required");
-  const hdrs = await authHeaders(config, secret);
-  const data = await httpCall("GET", `${apiBase(config)}/alarm/${encodeURIComponent(req.id)}`, null, hdrs, config.timeoutMs, config.insecure);
-  const d = data.data || data;
-  return {
-    id: d.id || "", alarmName: d.alarmName || "", severity: d.severity || "", status: d.status || "",
-    srcAddr: d.srcAddr || "", dstAddr: d.dstAddr || "", srcPort: d.srcPort || "", dstPort: d.dstPort || "",
-    devRecTime: d.devRecTime || "", logTime: d.logTime || "", ruleName: d.ruleName || "",
-    ruleId: d.ruleId || "", alarmTypeName: d.alarmTypeName || [], attackPhase: d.attackPhase || [],
-    ruleTag: d.ruleTag || [], evtID: d.evtID || "", evtBeginT: d.evtBeginT || "",
-    evtEndT: d.evtEndT || "", triggerStatus: d.triggerStatus || "", rawLog: d.rawLog || "",
-  };
 }
 
 export async function alertAggCount(config, secret, req) {
@@ -153,7 +137,7 @@ export async function alertAggCount(config, secret, req) {
   if (req.ruleTag) body.ruleTag = req.ruleTag;
   if (req.srcAddr) body.srcAddr = req.srcAddr;
   if (req.dstAddr) body.dstAddr = req.dstAddr;
-  if (req.filterDsl) body.filterDsl = req.filterDsl;
+    if (req.filterDsl) body.filterDsl = req.filterDsl;
   const data = await httpCall("POST", `${apiBase(config)}/alert/aggCount`, body, hdrs, config.timeoutMs, config.insecure);
   return { count: (data.data || data).count || 0 };
 }
@@ -212,7 +196,6 @@ export async function queryCollectors(config, secret, req) {
 
 export const handlers = {
   "tophant.xsiem.XsiemService/QueryAlerts": (ctx) => queryAlerts(ctx.config, ctx.secret, ctx.request),
-  "tophant.xsiem.XsiemService/GetAlertDetail": (ctx) => getAlertDetail(ctx.config, ctx.secret, ctx.request),
   "tophant.xsiem.XsiemService/AlertAggCount": (ctx) => alertAggCount(ctx.config, ctx.secret, ctx.request),
   "tophant.xsiem.XsiemService/AlertAggDetail": (ctx) => alertAggDetail(ctx.config, ctx.secret, ctx.request),
   "tophant.xsiem.XsiemService/BatchUpdateAlertStatus": (ctx) => batchUpdateAlertStatus(ctx.config, ctx.secret, ctx.request),

@@ -2,26 +2,13 @@
 
 斗象科技 XSIEM 元数据融合安全管理平台 REST API v1.28 wrapper — 告警查询/详情/聚合统计/状态更新、设备与采集器管理。
 
-## 变更记录
-
-### v0.1.1
-
-- 不再依赖系统 curl，改用 Node.js 原生 `http`/`https` 模块发起请求
-- config 新增 `insecure` 字段（boolean），控制是否跳过 TLS 证书验证
-- 自动跟随 HTTP 3xx 重定向
-- 所有 HTTP 调用改为异步，利用 Node 事件循环实现可靠超时
-
-### v0.1.0
-
-- 初始版本，通过 curl 子进程调用 XSIEM API
-
 ## 支持版本
 
 | 组件 | 版本 | 说明 |
 |---|---|---|
 | XSIEM REST API | v1.28 | `/api/xsiem` |
 | SDK | `@chaitin-ai/octobus-sdk` ^0.5.0 | 运行时框架 |
-| Node.js | ≥ 16 | 运行环境（v0.1.1 起降低至 16；若使用原生 fetch 推荐 ≥ 18） |
+| Node.js | ≥ 20 | 运行环境 |
 
 ## 配置示例
 
@@ -29,17 +16,9 @@
 
 ```json
 {
-  "xsiemHost": "https://10.192.128.117",
-  "timeoutMs": 30000,
-  "insecure": true
+  "xsiemHost": "192.168.1.100:443",
+  "timeoutMs": 30000
 }
-```
-
-| 字段 | 类型 | 默认值 | 说明 |
-|---|---|---|---|
-| `xsiemHost` | string | (必填) | XSIEM 服务地址，支持 `http://` / `https://` 前缀 |
-| `timeoutMs` | integer | 30000 | HTTP 请求超时毫秒数 |
-| `insecure` | boolean | false | 是否跳过 TLS 证书验证（自签证书环境设为 true） |
 ```
 
 ### secret（敏感 — 免密 token）
@@ -115,76 +94,6 @@ Content-Type: application/json
     }
   ]
 }
-```
-
-### GetAlertDetail
-
-根据告警 ID 查询详细告警信息。
-
-| 字段 | 类型 | 说明 |
-|---|---|---|
-| **请求** `id` | string | 告警 ID（必填） |
-| **响应** `id` | string | 告警 ID |
-| `alarmName` | string | 告警名称 |
-| `severity` | string | 严重程度 |
-| `status` | string | 处理状态 |
-| `srcAddr` | string | 源地址 |
-| `dstAddr` | string | 目标地址 |
-| `srcPort` | string | 源端口 |
-| `dstPort` | string | 目标端口 |
-| `devRecTime` | string | 设备接收时间 |
-| `logTime` | string | 日志时间 |
-| `ruleName` | string | 规则名称 |
-| `ruleId` | string | 规则 ID |
-| `alarmTypeName` | []string | 告警类型名称 |
-| `attackPhase` | []string | 攻击阶段 |
-| `ruleTag` | []string | 规则标签 |
-| `evtID` | string | 事件 ID |
-| `evtBeginT` | string | 事件开始时间 |
-| `evtEndT` | string | 事件结束时间 |
-| `triggerStatus` | string | 触发状态 |
-| `rawLog` | string | 原始日志 |
-
-**请求示例**：
-
-```http
-POST /capsets/dev/connect/tophant-xsiem-test/tophant.xsiem.XsiemService/GetAlertDetail
-Content-Type: application/json
-
-{"id": "249863197234700288"}
-```
-
-**响应示例**：
-
-```json
-{
-  "id": "249863197234700288",
-  "alarmName": "Apache Tomcat httpoxy 安全漏洞",
-  "severity": "highRisk",
-  "status": "unprocessed",
-  "srcAddr": "111.197.156.184",
-  "dstAddr": "99.237.1.28",
-  "srcPort": "58702",
-  "dstPort": "443",
-  "devRecTime": "2024-11-20 11:47:08",
-  "logTime": "2024-11-20 11:45:09",
-  "ruleName": "基础-test-01",
-  "ruleId": "249589578520731648",
-  "alarmTypeName": ["信息内网安全事件", "Dynamic Resolution"],
-  "attackPhase": ["横向移动,远程服务的利用", "防御绕过,颠覆信任控制,绕过 Web 标记"],
-  "ruleTag": ["sysmon", "security"],
-  "evtID": "1859080516012085249",
-  "evtBeginT": "2024-11-20 11:45:09",
-  "evtEndT": "2024-11-20 11:45:09",
-  "triggerStatus": "basic",
-  "rawLog": "{\"devRecTime\":\"2024-11-20 03:45:09\",\"dstAddr\":\"99.237.1.28\",\"dstPort\":443,\"srcAddr\":\"111.197.156.184\",\"srcPort\":58702}"
-}
-```
-
-**告警不存在时的响应**：
-
-```json
-{"code": "invalid_argument", "message": "XSIEM client parameter error"}
 ```
 
 ### AlertAggCount
@@ -374,14 +283,14 @@ Content-Type: application/json
 
 ```bash
 # 1. 解压并安装
-tar -xzf tophant-xsiem-0.1.1.tgz && cd package && npm install
+tar -xzf tophant-xsiem-0.1.0.tgz && cd package && npm install
 
 # 2. 导入服务
 octobus service import tophant-xsiem .
 
 # 3. 创建实例
 octobus instance create tophant-xsiem-test --service tophant-xsiem \
-  --config-json '{"xsiemHost":"https://192.168.1.100:443","timeoutMs":30000,"insecure":true}' \
+  --config-json '{"xsiemHost":"192.168.1.100:443","timeoutMs":30000}' \
   --secret-json '{"mmToken":"your-mm-token-uuid"}'
 
 # 4. 创建 capset 并关联实例
@@ -399,7 +308,7 @@ octobus capset add-instance xsiem-ops tophant-xsiem-test
 
 ### 幂等语义
 
-- `QueryAlerts` / `GetAlertDetail` / `AlertAggCount` / `AlertAggDetail` / `QueryDevices` / `QueryCollectors` 为**只读查询**，天然幂等
+- `QueryAlerts` / `AlertAggCount` / `AlertAggDetail` / `QueryDevices` / `QueryCollectors` 为**只读查询**，天然幂等
 - `BatchUpdateAlertStatus` 为**置值操作**，多次相同调用结果一致（告警状态不变），属于幂等写入
 
 ### 回滚方式

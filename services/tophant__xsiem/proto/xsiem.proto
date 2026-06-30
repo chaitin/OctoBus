@@ -4,7 +4,6 @@ package tophant.xsiem;
 
 service XsiemService {
   rpc QueryAlerts(QueryAlertsRequest) returns (QueryAlertsResponse);
-  rpc GetAlertDetail(GetAlertDetailRequest) returns (AlertDetail);
   rpc AlertAggCount(AlertAggCountRequest) returns (AlertAggCountResponse);
   rpc AlertAggDetail(AlertAggDetailRequest) returns (AlertAggDetailResponse);
   rpc BatchUpdateAlertStatus(BatchUpdateAlertStatusRequest) returns (BatchUpdateAlertStatusResponse);
@@ -50,33 +49,6 @@ message AlertItem {
 
 message QueryAlertsResponse {
   repeated AlertItem data = 1;
-}
-
-message GetAlertDetailRequest {
-  string id = 1;
-}
-
-message AlertDetail {
-  string id = 1;
-  string alarm_name = 2 [json_name = "alarmName"];
-  string severity = 3;
-  string status = 4;
-  string src_addr = 5 [json_name = "srcAddr"];
-  string dst_addr = 6 [json_name = "dstAddr"];
-  string src_port = 7 [json_name = "srcPort"];
-  string dst_port = 8 [json_name = "dstPort"];
-  string dev_rec_time = 9 [json_name = "devRecTime"];
-  string log_time = 10 [json_name = "logTime"];
-  string rule_name = 11 [json_name = "ruleName"];
-  string rule_id = 12 [json_name = "ruleId"];
-  repeated string alarm_type_name = 13 [json_name = "alarmTypeName"];
-  repeated string attack_phase = 14 [json_name = "attackPhase"];
-  repeated string rule_tag = 15 [json_name = "ruleTag"];
-  string evt_id = 16 [json_name = "evtID"];
-  string evt_begin_t = 17 [json_name = "evtBeginT"];
-  string evt_end_t = 18 [json_name = "evtEndT"];
-  string trigger_status = 19 [json_name = "triggerStatus"];
-  string raw_log = 20 [json_name = "rawLog"];
 }
 
 message AlertAggCountRequest {
