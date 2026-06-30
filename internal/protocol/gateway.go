@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -1594,24 +1595,29 @@ func (g *Gateway) invokeOnDemand(ctx context.Context, item store.ExposedMethod, 
 	if !info.Mode().IsRegular() {
 		return nil, status.Errorf(codes.Internal, "runtime entry %q is not a regular file", item.Service.NodeEntry)
 	}
-	secretFile, closeSecret, err := secretReadFile(inst.SecretJSON)
+	secretArg, secretFile, closeSecret, err := runtimeSecretArg(workdir, inst.SecretJSON)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "prepare secret fd: %v", err)
+		return nil, status.Errorf(codes.Internal, "prepare runtime secret: %v", err)
 	}
 	defer closeSecret()
-	cmd := exec.CommandContext(ctx, entry,
+	args := []string{
 		"--runtime",
 		"invoke",
 		"--method", item.Method.FullName,
 		"--config", filepath.Join(workdir, "config.json"),
-		"--secret-fd", "3",
+	}
+	args = append(args, secretArg...)
+	args = append(args,
 		"--metadata", metadataPath,
 		"--workdir", workdir,
 		"--service", item.Service.ID,
 		"--instance", item.Instance.ID,
 	)
+	cmd := exec.CommandContext(ctx, entry, args...)
 	cmd.Dir = workdir
-	cmd.ExtraFiles = []*os.File{secretFile}
+	if secretFile != nil {
+		cmd.ExtraFiles = []*os.File{secretFile}
+	}
 	cmd.Env = append(os.Environ(),
 		"OCTOBUS_SERVICE_ID="+item.Service.ID,
 		"OCTOBUS_INSTANCE_ID="+item.Instance.ID,
@@ -1656,6 +1662,31 @@ func secretReadFile(secret []byte) (*os.File, func(), error) {
 		<-done
 	}
 	return reader, closeFn, nil
+}
+
+func usesSecretFD() bool {
+	return runtime.GOOS != "windows" || runtime.GOARCH != "arm64"
+}
+
+func runtimeSecretArg(workdir string, secret []byte) ([]string, *os.File, func(), error) {
+	if usesSecretFD() {
+		secretFile, closeFn, err := secretReadFile(secret)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		return []string{"--secret-fd", "3"}, secretFile, closeFn, nil
+	}
+	if len(secret) == 0 {
+		secret = []byte(`{}`)
+	}
+	secretPath := filepath.Join(workdir, "secret.runtime.json")
+	if err := os.WriteFile(secretPath, secret, 0o600); err != nil {
+		return nil, nil, nil, err
+	}
+	cleanup := func() {
+		_ = os.Remove(secretPath)
+	}
+	return []string{"--secret", secretPath}, nil, cleanup, nil
 }
 
 func (g *Gateway) validateOnDemandResponse(item store.ExposedMethod, raw []byte) error {

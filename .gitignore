@@ -188,6 +188,7 @@ crash.*.log
 
 # Containers and local runtime data
 /data/
+/.octobus-mbs-mac/
 /playground/
 /qemu-compose.yml
 docker-compose.override.yml

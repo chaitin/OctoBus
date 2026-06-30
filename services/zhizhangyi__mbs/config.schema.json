@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "endpoint": {
+      "type": "string",
+      "default": "https://101.37.25.245:9074",
+      "description": "MBS REST API base URL. Default: https://101.37.25.245:9074"
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "Legacy alias for endpoint."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": true,
+      "description": "Skip TLS certificate verification (MBS uses self-signed certs)."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 30000,
+      "description": "HTTP timeout in milliseconds."
+    }
+  }
+}
