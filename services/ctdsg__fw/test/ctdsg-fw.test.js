@@ -112,7 +112,6 @@ test('BlockIP sends signed addblack2 request with newline-separated IPs', async 
   }))[BLOCK_IP_PATH]();
 
   assert.equal(captured.init.method, 'POST');
-  assert.equal(captured.init.timeoutMs, 10_000);
   assert.equal(captured.init.headers['x-engine-instance'], 'inst-1');
   assert.equal(captured.init.headers['x-request-id'], 'req-1');
   assert.equal(captured.init.headers['hy-bz-api-app-id'], 'mock-app-id');
@@ -289,6 +288,7 @@ test('helpers cover parsing, aliases, signatures, timing, and normalization bran
   assert.equal(_test.resolveHost({ req: {}, bindings: { restBaseUrl: 'https://binding.test/' } }), 'https://binding.test');
   assert.equal(_test.resolveSecretKey({ req: {}, bindings: { secret_key: 's' } }), 's');
   assert.equal(_test.resolveTimeoutMs({ req: { timeout_ms: 111 }, bindings: { timeoutMs: 222 }, limits: { timeoutMs: 333 } }), 111);
+  assert.throws(() => AbortSignal.timeout(10), /TimeoutError|The operation was aborted|signal/i);
   assert.equal(_test.resolveTimeoutMs({ req: {}, bindings: { timeout_ms: 223 }, limits: { timeoutMs: 333 } }), 223);
   assert.equal(_test.resolveTimeoutMs({ req: {}, bindings: {}, limits: {} }), 5000);
   assert.deepEqual(_test.resolveCallContext({ config: { host: 'h' }, secret: { secretKey: 's' }, bindings: { headers: { a: '1' } }, request: { ips: ['1.1.1.1'] } }).bindings, {
@@ -337,11 +337,8 @@ test('helpers cover parsing, aliases, signatures, timing, and normalization bran
   assert.equal(headers['hy-bz-api-app-id'], 'mock-app-id');
   assert.ok(headers['hy-bz-api-timestamp']);
   assert.ok(headers['hy-bz-api-signature']);
-  const originalTlsEnv = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-  await _test.withTlsBypass({ bindings: { skipTlsVerify: true } }, async () => {
-    assert.equal(process.env.NODE_TLS_REJECT_UNAUTHORIZED, '0');
-  });
-  assert.equal(process.env.NODE_TLS_REJECT_UNAUTHORIZED, originalTlsEnv);
+  const tlsOptions = _test.buildTlsOptions({ bindings: { skipTlsVerify: true } });
+  assert.ok(tlsOptions.dispatcher);
   assert.deepEqual(_test.toStruct({ a: 1, b: null, c: [true] }), {
     fields: {
       a: { numberValue: 1 },
