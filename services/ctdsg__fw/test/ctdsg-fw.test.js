@@ -288,7 +288,6 @@ test('helpers cover parsing, aliases, signatures, timing, and normalization bran
   assert.equal(_test.resolveHost({ req: {}, bindings: { restBaseUrl: 'https://binding.test/' } }), 'https://binding.test');
   assert.equal(_test.resolveSecretKey({ req: {}, bindings: { secret_key: 's' } }), 's');
   assert.equal(_test.resolveTimeoutMs({ req: { timeout_ms: 111 }, bindings: { timeoutMs: 222 }, limits: { timeoutMs: 333 } }), 111);
-  assert.throws(() => AbortSignal.timeout(10), /TimeoutError|The operation was aborted|signal/i);
   assert.equal(_test.resolveTimeoutMs({ req: {}, bindings: { timeout_ms: 223 }, limits: { timeoutMs: 333 } }), 223);
   assert.equal(_test.resolveTimeoutMs({ req: {}, bindings: {}, limits: {} }), 5000);
   assert.deepEqual(_test.resolveCallContext({ config: { host: 'h' }, secret: { secretKey: 's' }, bindings: { headers: { a: '1' } }, request: { ips: ['1.1.1.1'] } }).bindings, {
