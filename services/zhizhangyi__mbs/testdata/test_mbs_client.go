@@ -16,13 +16,38 @@ import (
 	"time"
 )
 
-var cfg = struct{ B, O, A, S string }{"https://101.37.25.245:9074", "test", "jiekoudiaoyongappkey", "jiekoudiaoyongsecretkey"}
+var cfg = struct{ B, O, A, S string }{
+	B: envOr("MBS_BASE_URL", "https://127.0.0.1:9074"),
+	O: os.Getenv("MBS_ORG_CODE"),
+	A: os.Getenv("MBS_APPKEY"),
+	S: os.Getenv("MBS_SECRETKEY"),
+}
 
 const apiBase = "/uusafe/mos/thirdaccess/rest/opt"
 const uid1 = "1691979294102310912" // test1
 const uid2 = "1691979421122613248" // test2
 
 var pass, failn, skipn int
+
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+func requireConfig() {
+	var missing []string
+	for key, value := range map[string]string{"MBS_ORG_CODE": cfg.O, "MBS_APPKEY": cfg.A, "MBS_SECRETKEY": cfg.S} {
+		if value == "" {
+			missing = append(missing, key)
+		}
+	}
+	if len(missing) > 0 {
+		fmt.Fprintf(os.Stderr, "missing MBS test config: %s; set MBS_BASE_URL, MBS_ORG_CODE, MBS_APPKEY and MBS_SECRETKEY\n", strings.Join(missing, ", "))
+		os.Exit(2)
+	}
+}
 
 func md5s(s string) string                          { h := md5.Sum([]byte(s)); return fmt.Sprintf("%x", h) }
 func sign(p ...string) string                       { return md5s(strings.Join(p, "") + cfg.S) }
@@ -231,6 +256,7 @@ func tForceOffline() { hdr("6.2.11 ForceOffline"); sk("test1无在线会话") }
 func tImportUser()   { hdr("6.2.12 ImportUser"); sk("需上传文件") }
 
 func main() {
+	requireConfig()
 	tn := flag.String("test", "all", "test name: all|scenarios|apis|scenario1|getUsers|...")
 	flag.Parse()
 	all := map[string]func(){

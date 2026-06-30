@@ -5,10 +5,10 @@ import crypto from 'node:crypto';
 import https from 'node:https';
 
 const CONFIG = {
-  baseUrl: 'https://101.37.25.245:9074',
-  orgCode: 'test',
-  appkey: 'jiekoudiaoyongappkey',
-  secretkey: 'jiekoudiaoyongsecretkey',
+  baseUrl: process.env.MBS_BASE_URL || 'https://127.0.0.1:9074',
+  orgCode: process.env.MBS_ORG_CODE || '',
+  appkey: process.env.MBS_APPKEY || '',
+  secretkey: process.env.MBS_SECRETKEY || '',
 };
 
 const md5 = (s) => crypto.createHash('md5').update(s, 'utf8').digest('hex');
@@ -20,7 +20,15 @@ const computeSign = (params) => {
   return md5(joined + CONFIG.secretkey);
 };
 
+const requireConfig = () => {
+  const missing = Object.entries(CONFIG).filter(([, value]) => !value).map(([key]) => key);
+  if (missing.length > 0) {
+    throw new Error(`Missing MBS test config: ${missing.join(', ')}. Set MBS_BASE_URL, MBS_ORG_CODE, MBS_APPKEY and MBS_SECRETKEY.`);
+  }
+};
+
 const testGetUsers = async () => {
+  requireConfig();
   const { baseUrl, orgCode, appkey } = CONFIG;
 
   const index = 0;

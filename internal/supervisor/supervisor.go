@@ -41,6 +41,7 @@ type processState struct {
 	done       chan struct{}
 	attempt    int
 	generation int64
+	cleanup    func()
 }
 
 type CreateInstanceRequest struct {
@@ -236,7 +237,7 @@ func (s *Supervisor) startWithAttempt(ctx context.Context, instanceID string, re
 		startErr = err
 		return err
 	}
-	defer closeSecret()
+	cleanupSecret := closeSecret
 	args := []string{"--runtime", "serve", "--host", "127.0.0.1", "--port", fmt.Sprintf("%d", port), "--config", filepath.Join(workdir, "config.json")}
 	args = append(args, secretArg...)
 	args = append(args, "--workdir", workdir, "--service", svc.ID, "--instance", instanceID)
@@ -254,12 +255,14 @@ func (s *Supervisor) startWithAttempt(ctx context.Context, instanceID string, re
 	)
 	stdout, err := os.OpenFile(filepath.Join(workdir, "stdout.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
+		cleanupSecret()
 		startErr = err
 		return err
 	}
 	stderr, err := os.OpenFile(filepath.Join(workdir, "stderr.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		_ = stdout.Close()
+		cleanupSecret()
 		startErr = err
 		return err
 	}
@@ -271,12 +274,14 @@ func (s *Supervisor) startWithAttempt(ctx context.Context, instanceID string, re
 	if err := s.Store.UpsertInstance(ctx, inst); err != nil {
 		_ = stdout.Close()
 		_ = stderr.Close()
+		cleanupSecret()
 		startErr = err
 		return err
 	}
 	if err := cmd.Start(); err != nil {
 		_ = stdout.Close()
 		_ = stderr.Close()
+		cleanupSecret()
 		inst.Status = domain.StatusFailed
 		_ = s.Store.UpsertInstance(ctx, inst)
 		startErr = err
@@ -287,12 +292,13 @@ func (s *Supervisor) startWithAttempt(ctx context.Context, instanceID string, re
 	inst.Status = domain.StatusRunning
 	if err := s.Store.UpsertInstance(ctx, inst); err != nil {
 		_ = cmd.Process.Kill()
+		cleanupSecret()
 		startErr = err
 		return err
 	}
 	logger.Info("instance_started", "instance_id", instanceID, "pid", pid, "listen_addr", addr)
 	s.mu.Lock()
-	state := &processState{cmd: cmd, done: make(chan struct{}), attempt: restartAttempt, generation: generation}
+	state := &processState{cmd: cmd, done: make(chan struct{}), attempt: restartAttempt, generation: generation, cleanup: cleanupSecret}
 	s.procs[instanceID] = state
 	s.mu.Unlock()
 	if err := waitHealth(ctx, addr, 5*time.Second); err != nil {
@@ -318,6 +324,9 @@ func (s *Supervisor) cleanupFailedStart(instanceID string, state *processState, 
 	if state.cmd.Process != nil {
 		_ = state.cmd.Process.Kill()
 		_ = state.cmd.Wait()
+	}
+	if state.cleanup != nil {
+		state.cleanup()
 	}
 	close(state.done)
 	_ = stdout.Close()
@@ -558,6 +567,9 @@ func (s *Supervisor) wait(instanceID string, state *processState, stdout, stderr
 	err := state.cmd.Wait()
 	_ = stdout.Close()
 	_ = stderr.Close()
+	if state.cleanup != nil {
+		state.cleanup()
+	}
 	close(state.done)
 	s.mu.Lock()
 	current := s.procs[instanceID]
