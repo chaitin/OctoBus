@@ -27,17 +27,22 @@ function fetchCatalog(config) {
   if (_cache && ttl > 0 && (now - _cacheTime) < ttl) return _cache;
   const primary = config?.kevPrimaryUrl || DEFAULT_PRIMARY;
   const fallback = config?.kevFallbackUrl || DEFAULT_FALLBACK;
+  let lastError = null;
   for (const url of [primary, fallback]) {
     try {
       const data = httpGetJson(url, config?.timeoutMs);
       _cache = data.vulnerabilities || [];
       _cacheTime = now;
       return _cache;
-    } catch (e) { continue; }
+    } catch (e) {
+      lastError = e;
+      continue;
+    }
   }
-  _cache = [];
-  _cacheTime = now;
-  return _cache;
+  throw new GrpcError(
+    grpcStatus.UNAVAILABLE,
+    lastError?.message || "KEV catalog unavailable from both primary and fallback sources",
+  );
 }
 
 export function checkCve(config, cveId) {
