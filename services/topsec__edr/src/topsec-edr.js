@@ -792,12 +792,12 @@ export function rpcdef(ctx = {}) {
 }
 
 export const handlers = {
-  [METHOD_LOGIN_FULL]: (req, ctx = {}) => callLogin(req, ctx),
-  [METHOD_LIST_CLIENTS_FULL]: (req, ctx = {}) => callListClients(req, ctx),
-  [METHOD_GET_CLIENT_FULL]: (req, ctx = {}) => callGetClient(req, ctx),
-  [METHOD_GET_ALERT_STATS_FULL]: (req, ctx = {}) => callGetAlertStats(req, ctx),
-  [METHOD_GET_SYSTEM_VIEW_FULL]: (req, ctx = {}) => callGetSystemView(req, ctx),
-  [METHOD_GET_SYSTEM_INFO_FULL]: (req, ctx = {}) => callGetSystemInfo(req, ctx),
+  [METHOD_LOGIN_FULL]: (ctx = {}) => callLogin(ctx.request ?? ctx.req ?? {}, ctx),
+  [METHOD_LIST_CLIENTS_FULL]: (ctx = {}) => callListClients(ctx.request ?? ctx.req ?? {}, ctx),
+  [METHOD_GET_CLIENT_FULL]: (ctx = {}) => callGetClient(ctx.request ?? ctx.req ?? {}, ctx),
+  [METHOD_GET_ALERT_STATS_FULL]: (ctx = {}) => callGetAlertStats(ctx.request ?? ctx.req ?? {}, ctx),
+  [METHOD_GET_SYSTEM_VIEW_FULL]: (ctx = {}) => callGetSystemView(ctx.request ?? ctx.req ?? {}, ctx),
+  [METHOD_GET_SYSTEM_INFO_FULL]: (ctx = {}) => callGetSystemInfo(ctx.request ?? ctx.req ?? {}, ctx),
 };
 
 // --- Test exports ---

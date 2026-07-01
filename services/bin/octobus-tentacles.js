@@ -336,6 +336,10 @@ const services = {
     entryFile: "../topsec__fw_v3-7-6/bin/topsec-fw-v3-7-6.js",
     serviceModule: "../topsec__fw_v3-7-6/src/service.js",
   },
+  "topsec-edr": {
+    entryFile: "../topsec__edr/bin/topsec-edr.js",
+    serviceModule: "../topsec__edr/src/service.js",
+  },
   "venus-ads-v3-6": {
     entryFile: "../venus__ads_v3-6/bin/venus-ads-v3-6.js",
     serviceModule: "../venus__ads_v3-6/src/service.js",

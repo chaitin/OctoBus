@@ -8,6 +8,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import {
   mockLoginResponse,
@@ -210,5 +213,42 @@ describe('mock system info response', () => {
     assert.equal(parsed.data.disk_usage, 65);
     assert.equal(parsed.data.cpu_usage, 35);
     assert.equal(parsed.data.memory_usage, 72);
+  });
+});
+
+// --- SDK Handler Contract Tests ---
+// Verify that handlers accept single-arg ctx (OctoBus SDK calling convention)
+// where request, config, and secret are accessed via ctx.request, ctx.config, ctx.secret
+// These tests verify the handler signature WITHOUT importing the service module
+// (which requires @chaitin-ai/octobus-sdk). Full SDK integration tests run in the
+// OctoBus build environment.
+
+describe('SDK handler contract (single-arg ctx)', () => {
+  it('handler functions should have length 1 (single ctx parameter)', () => {
+    const sourceDir = path.dirname(fileURLToPath(import.meta.url));
+    const source = fs.readFileSync(path.join(sourceDir, '../src/topsec-edr.js'), 'utf8');
+    // Find all handler definitions in the handlers export
+    const handlerPattern = /\[METHOD_\w+_FULL\]:\s*\(([^)]*)\)\s*=>/g;
+    let match;
+    let count = 0;
+    while ((match = handlerPattern.exec(source)) !== null) {
+      count++;
+      const params = match[1].trim();
+      // Should be "ctx = {}" (single param), NOT "req, ctx = {}" (two params)
+      assert.ok(
+        params.startsWith('ctx') && !params.includes(','),
+        `Handler should accept single ctx param, got: (${params})`
+      );
+    }
+    assert.equal(count, 6, `Expected 6 handler definitions, found ${count}`);
+  });
+
+  it('handlers should extract request from ctx.request or ctx.req', () => {
+    const sourceDir = path.dirname(fileURLToPath(import.meta.url));
+    const source = fs.readFileSync(path.join(sourceDir, '../src/topsec-edr.js'), 'utf8');
+    // Each handler should call callX(ctx.request ?? ctx.req ?? {}, ctx)
+    const callPattern = /call\w+\(ctx\.request\s*\?\?\s*ctx\.req\s*\?\?\s*\{\},\s*ctx\)/g;
+    const matches = source.match(callPattern);
+    assert.ok(matches && matches.length >= 6, 'All handlers should use ctx.request ?? ctx.req ?? {} pattern');
   });
 });
