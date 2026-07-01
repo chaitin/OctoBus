@@ -10,6 +10,7 @@ const DEL_USERS = 'zhizhangyi.mbs.UserManagement/DelUsers';
 const GET_USERS = 'zhizhangyi.mbs.UserManagement/GetUsers';
 const STATE_USERS = 'zhizhangyi.mbs.UserManagement/StateUsers';
 const UPD_USER = 'zhizhangyi.mbs.UserManagement/UpdUser';
+const UPD_USER_PWD = 'zhizhangyi.mbs.UserManagement/UpdUserPwd';
 
 const originalFetch = globalThis.fetch;
 
@@ -168,6 +169,116 @@ test('StateUsers condition mode preserves falsy condition filters', async () => 
     isMdm: 0,
   });
   assert.equal(result.data.structValue.fields.updated.numberValue, 2);
+});
+
+test('UpdUserPwd rejects invalid version before calling upstream', async () => {
+  let called = false;
+  globalThis.fetch = async () => {
+    called = true;
+    return { ok: true, status: 200, text: async () => '{"code":0}' };
+  };
+
+  await assert.rejects(
+    () => rpcdef(buildCtx({ version: '../v1', user_id: 'user-1', password: '3des-ciphertext' }))[UPD_USER_PWD](),
+    (err) => {
+      assert.ok(err instanceof GrpcError);
+      assert.equal(err.code, grpcStatus.INVALID_ARGUMENT);
+      assert.equal(err.legacyCode, 'INVALID_ARGUMENT');
+      assert.match(err.message, /version must be v1 or v2/);
+      return true;
+    },
+  );
+
+  assert.equal(called, false);
+});
+
+test('UpdUserPwd v1 requires user_id and password before calling upstream', async () => {
+  let called = false;
+  globalThis.fetch = async () => {
+    called = true;
+    return { ok: true, status: 200, text: async () => '{"code":0}' };
+  };
+
+  await assert.rejects(
+    () => rpcdef(buildCtx({ version: 'v1', password: '3des-ciphertext' }))[UPD_USER_PWD](),
+    (err) => {
+      assert.ok(err instanceof GrpcError);
+      assert.equal(err.code, grpcStatus.INVALID_ARGUMENT);
+      assert.match(err.message, /user_id required for v1/);
+      return true;
+    },
+  );
+  await assert.rejects(
+    () => rpcdef(buildCtx({ version: 'v1', user_id: 'user-1' }))[UPD_USER_PWD](),
+    (err) => {
+      assert.ok(err instanceof GrpcError);
+      assert.equal(err.code, grpcStatus.INVALID_ARGUMENT);
+      assert.match(err.message, /password required as 3DES-encrypted value for v1/);
+      return true;
+    },
+  );
+
+  assert.equal(called, false);
+});
+
+test('UpdUserPwd v1 posts to v1 path with encrypted password', async () => {
+  let captured;
+  globalThis.fetch = async (url, init) => {
+    captured = { url, init };
+    return { ok: true, status: 200, text: async () => '{"code":0,"data":{}}' };
+  };
+
+  const result = await rpcdef(buildCtx({ version: 'v1', user_id: 'user-1', password: '3des-ciphertext' }))[UPD_USER_PWD]();
+
+  assert.equal(captured.url, 'https://mbs.example/uusafe/mos/thirdaccess/rest/opt/v1/updUserPwd');
+  assert.equal(JSON.parse(captured.init.body).userId, 'user-1');
+  assert.equal(JSON.parse(captured.init.body).password, '3des-ciphertext');
+  assert.deepEqual(result.data, { structValue: { fields: {} } });
+});
+
+test('UpdUserPwd v2 requires login_name and new_pwd before calling upstream', async () => {
+  let called = false;
+  globalThis.fetch = async () => {
+    called = true;
+    return { ok: true, status: 200, text: async () => '{"code":0}' };
+  };
+
+  await assert.rejects(
+    () => rpcdef(buildCtx({ version: 'v2', new_pwd: 'new-ciphertext' }))[UPD_USER_PWD](),
+    (err) => {
+      assert.ok(err instanceof GrpcError);
+      assert.equal(err.code, grpcStatus.INVALID_ARGUMENT);
+      assert.match(err.message, /login_name required for v2/);
+      return true;
+    },
+  );
+  await assert.rejects(
+    () => rpcdef(buildCtx({ version: 'v2', login_name: 'user' }))[UPD_USER_PWD](),
+    (err) => {
+      assert.ok(err instanceof GrpcError);
+      assert.equal(err.code, grpcStatus.INVALID_ARGUMENT);
+      assert.match(err.message, /new_pwd required as 3DES-encrypted value for v2/);
+      return true;
+    },
+  );
+
+  assert.equal(called, false);
+});
+
+test('UpdUserPwd v2 posts to v2 path and forwards oldPwd', async () => {
+  let captured;
+  globalThis.fetch = async (url, init) => {
+    captured = { url, init };
+    return { ok: true, status: 200, text: async () => '{"code":0,"data":{"changed":true}}' };
+  };
+
+  const result = await rpcdef(buildCtx({ version: 'v2', login_name: 'user', old_pwd: 'old-ciphertext', new_pwd: 'new-ciphertext' }))[UPD_USER_PWD]();
+
+  assert.equal(captured.url, 'https://mbs.example/uusafe/mos/thirdaccess/rest/opt/v2/updUserPwd');
+  assert.equal(JSON.parse(captured.init.body).loginName, 'user');
+  assert.equal(JSON.parse(captured.init.body).oldPwd, 'old-ciphertext');
+  assert.equal(JSON.parse(captured.init.body).newPwd, 'new-ciphertext');
+  assert.equal(result.data.structValue.fields.changed.boolValue, true);
 });
 
 test('StateUsers treats string type zero as userIds mode', async () => {

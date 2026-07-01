@@ -173,6 +173,7 @@ export function rpcdef(ctx) {
   const goUpdUserPwd = async (req) => {
     const oc = first(req?.org_code, req?.orgCode) || ocDef; const apk = first(req?.appkey) || ak;
     const ver = first(req?.version) || 'v1';
+    if (ver !== 'v1' && ver !== 'v2') throw er('INVALID_ARGUMENT', 'version must be v1 or v2');
     let body;
     if (ver === 'v2') {
       const ln = first(req?.login_name, req?.loginName) || ''; const encryptedNewPwd = first(req?.new_pwd, req?.newPwd) || '';
