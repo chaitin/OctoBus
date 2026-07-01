@@ -431,4 +431,55 @@ describe('cloudwalker client', () => {
     assert.equal(response.clusters.length, 0);
     assert.equal(response.nextPageToken, 'cursor-2');
   });
+
+  it('preserves zero status values during cluster normalization', async () => {
+    const client = createClient({
+      baseUrl,
+      token: 'test-token',
+      fetchImpl: async () => new Response(JSON.stringify({
+        data: {
+          data: [
+            { id: 'cluster-zero', name: 'zero-cluster', status: 0 }
+          ]
+        },
+        next_page_token: ''
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    });
+
+    const response = await client.listClusters({ pageSize: 1 });
+    assert.equal(response.clusters[0].status, '0');
+  });
+
+  it('preserves zero risk and manageStatus values during vuln event normalization', async () => {
+    const client = createClient({
+      baseUrl,
+      token: 'test-token',
+      fetchImpl: async (url) => {
+        const path = typeof url === 'string' ? url : url.toString();
+        if (path.includes('/cluster_vuln/vuln_event_list')) {
+          return new Response(JSON.stringify({
+            data: {
+              data: [
+                { id: 'vuln-zero', cluster_id: 'c1', risk: 0, manage_status: 0 }
+              ]
+            },
+            next_page_token: ''
+          }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        }
+        throw new Error(`unexpected path: ${path}`);
+      },
+    });
+
+    const response = await client.listClusterVulnEvents({ pageSize: 1 });
+    assert.equal(response.vulnEvents[0].level, '0');
+    assert.equal(response.vulnEvents[0].status, '0');
+    assert.equal(response.vulnEvents[0].risk, 0);
+    assert.equal(response.vulnEvents[0].manageStatus, 0);
+  });
 });

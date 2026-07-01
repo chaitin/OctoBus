@@ -84,12 +84,12 @@ node test/real-api-test.js
 
 ```bash
 # 方式一：使用环境变量
-CLOUDWALKER_TOKEN="TMCpan#2VB44wwFG2bii*WLZ^xUldjBe237d8081bdbb88f542b9f96e3cf698a1" \
+CLOUDWALKER_TOKEN="<TOKEN>" \
 CLOUDWALKER_COOKIE="你的cookie值" \
 node test/real-api-test.js
 
 # 方式二：先设置环境变量再运行
-export CLOUDWALKER_TOKEN="TMCpan#2VB44wwFG2bii*WLZ^xUldjBe237d8081bdbb88f542b9f96e3cf698a1"
+export CLOUDWALKER_TOKEN="<TOKEN>"
 export CLOUDWALKER_COOKIE="你的cookie值"
 node test/real-api-test.js
 ```

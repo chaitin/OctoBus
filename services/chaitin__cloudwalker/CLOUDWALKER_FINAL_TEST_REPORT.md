@@ -45,8 +45,8 @@
 
 - **测试地址**: https://cnapp.demo.chaitin.cn
 - **认证方式**: Token + Browser Session Cookie
-- **Token**: TMCpan#2VB44wwFG2bii*WLZ^xUldjBe237d8081bdbb88f542b9f96e3cf698a1
-- **Cookie**: 已提供完整 browser session cookie
+- **Token**: <TOKEN>
+- **Cookie**: <COOKIE>
 
 ---
 
@@ -129,9 +129,9 @@ GET https://cnapp.demo.chaitin.cn/cluster/cluster_list?page_size=10
 
 Headers:
   accept: application/json, text/plain, */*
-  authorization: Bearer TMCpan#2VB44wwFG2bii*WLZ^xUldjBe237d8081bdbb88f542b9f96e3cf698a1
-  token: TMCpan#2VB44wwFG2bii*WLZ^xUldjBe237d8081bdbb88f542b9f96e3cf698a1
-  x-auth-token: TMCpan#2VB44wwFG2bii*WLZ^xUldjBe237d8081bdbb88f542b9f96e3cf698a1
+  authorization: Bearer <TOKEN>
+  token: <TOKEN>
+  x-auth-token: <TOKEN>
   x-requested-with: XMLHttpRequest
   cookie: [完整 browser session cookie]
   referer: https://cnapp.demo.chaitin.cn/profile/apitoken

@@ -1,7 +1,13 @@
 const grpcStatus = Object.freeze({
+  INVALID_ARGUMENT: 3,
   NOT_FOUND: 5,
-  UNAUTHENTICATED: 16,
+  ALREADY_EXISTS: 6,
+  RESOURCE_EXHAUSTED: 8,
+  FAILED_PRECONDITION: 9,
+  DEADLINE_EXCEEDED: 4,
   UNAVAILABLE: 14,
+  PERMISSION_DENIED: 7,
+  UNAUTHENTICATED: 16,
 });
 
 const endpoints = Object.freeze({
@@ -67,8 +73,8 @@ const normalizeVulnEvent = (vulnData) => {
     clusterId: String(camelData.clusterId || ''),
     microserviceId: camelData.serviceUid || '',
     microserviceName: camelData.serviceName || '',
-    level: String(camelData.risk || ''),
-    status: String(camelData.manageStatus || ''),
+    level: camelData.risk === undefined || camelData.risk === null ? '' : String(camelData.risk),
+    status: camelData.manageStatus === undefined || camelData.manageStatus === null ? '' : String(camelData.manageStatus),
     title: camelData.name || '',
     cve: camelData.cve || '',
     cnvd: camelData.cnvd || '',
@@ -117,6 +123,10 @@ const appendScalarQuery = (query, entries) => {
       continue;
     }
     if (typeof value === 'string' && value.trim() === '') {
+      continue;
+    }
+    // Skip numeric zero values — they are proto3 defaults and not meaningful filter parameters
+    if (typeof value === 'number' && value === 0) {
       continue;
     }
     query.set(key, String(value));
@@ -323,10 +333,22 @@ const buildHttpError = (status, payload) => {
   const message = payload?.message || payload?.error || `CloudWalker upstream returned HTTP ${status}`;
   let code = grpcStatus.UNAVAILABLE;
 
-  if (status === 401) {
+  if (status === 400) {
+    code = grpcStatus.INVALID_ARGUMENT;
+  } else if (status === 401) {
     code = grpcStatus.UNAUTHENTICATED;
+  } else if (status === 403) {
+    code = grpcStatus.PERMISSION_DENIED;
   } else if (status === 404) {
     code = grpcStatus.NOT_FOUND;
+  } else if (status === 409) {
+    code = grpcStatus.ALREADY_EXISTS;
+  } else if (status === 429) {
+    code = grpcStatus.RESOURCE_EXHAUSTED;
+  } else if (status === 412) {
+    code = grpcStatus.FAILED_PRECONDITION;
+  } else if (status === 504) {
+    code = grpcStatus.DEADLINE_EXCEEDED;
   }
 
   return new CloudWalkerError(message, {

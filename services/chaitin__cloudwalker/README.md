@@ -40,6 +40,26 @@
 
 **CloudWalker OctoBus Service** 是一个专门为长亭科技 CloudWalker 平台设计的 OctoBus 服务包，提供集群管理和漏洞查询的只读 API 接口。通过该服务，用户可以方便地查询 CloudWalker 平台中的集群信息、漏洞事件等安全数据。
 
+### 支持版本
+
+- **目标产品**: 长亭科技 CloudWalker
+- **支持版本**: VM-S10-26.06.002
+
+### 认证方式
+
+- **Token + Browser Session Cookie 组合认证**
+- Token 为必需项，Cookie 在 demo 环境中为必需，在支持 token-only 认证的环境中可省略
+
+### 风险边界
+
+- **read-only**: 本服务所有 6 个 RPC 方法均为只读操作，不会对 CloudWalker 平台产生任何修改
+
+### 推荐 Capset
+
+- **推荐名称**: `chaitin-cloudwalker-readonly`
+- **分组理由**: 当前所有方法均为只读查询，属于同一运维场景（集群与漏洞状态巡检），适合归入单一 readonly capset
+- **包含方法**: ListClusters, GetClusterInfo, ListClusterVulnEvents, GetClusterVulnEvent, ListMicroserviceVulnEvents, GetMicroserviceVulnEvent
+
 ### 核心价值
 
 - 🔍 **集群资产查询**: 实时获取 CloudWalker 管理的所有 Kubernetes 集群信息
@@ -168,7 +188,7 @@ octobus instance start cloudwalker-demo
 
 **示例 Cookie 格式**:
 ```javascript
-_c_WBKFRo=XqZ9Kzk8IS3PpTuHtiPuWB1B7Iy0XAF2y9KmLGdS; veinmind=1238n3t4lumw00djkqp5bu6hev500s7c; _ga=GA1.1.1297162178.1779286613
+<COOKIE>
 ```
 
 ---
@@ -837,6 +857,18 @@ CLOUDWALKER_TOKEN="xxx" CLOUDWALKER_COOKIE="xxx" node test/real-api-test.js
 Apache License 2.0
 
 详见 [LICENSE](../../LICENSE) 文件。
+
+---
+
+## 已知限制 (Known Limitations)
+
+1. **Demo 环境 Cookie 依赖**: CloudWalker demo 环境需要 Token + Cookie 组合认证，仅有 Token 会返回 HTML 登录页面；非 demo 环境可能仅需要 Token
+2. **Fallback 行为**: `clusterName / cnvd / cnnvd` 参数在 demo 上游直筛不稳定，service 已实现自动降级（列表拉取 + 本地过滤 + 详情补全），但 fallback 模式下存在额外 API 调用开销
+3. **ListClusters.status 筛选**: 上游 demo 环境中 `status` 参数偶发异常，不建议在生产环境中依赖此筛选
+4. **cnvd 筛选**: 代码已兼容 cnvd fallback，但当前 cluster 样本未拿到稳定的非空命中值
+5. **分页模式**: CloudWalker 上游使用 offset 分页而非 page 编号，大量数据翻页时 offset 值可能不稳定
+6. **无写入能力**: 当前版本为纯只读，不支持漏洞状态变更、集群操作等写操作
+7. **Cookie 有效期**: Browser Session Cookie 有时效性，长期运行需要定期刷新
 
 ---
 

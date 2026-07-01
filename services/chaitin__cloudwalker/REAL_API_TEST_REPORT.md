@@ -26,11 +26,11 @@
 GET https://cnapp.demo.chaitin.cn/cluster/cluster_list&page_size=10
 
 accept: application/json, text/plain, */*
-authorization: Bearer TMCpan#2VB44wwFG2bii*WLZ^xUldjBe237d8081bdbb88f542b9f96e3cf698a1
-token: TMCpan#2VB44wwFG2bii*WLZ^xUldjBe237d8081bdbb88f542b9f96e3cf698a1
-x-auth-token: TMCpan#2VB44wwFG2bii*WLZ^xUldjBe237d8081bdbb88f542b9f96e3cf698a1
+authorization: Bearer <TOKEN>
+token: <TOKEN>
+x-auth-token: <TOKEN>
 x-requested-with: XMLHttpRequest
-cookie: _c_WBKFRo=XqZ9Kzk8IS3PpTuHtiPuWB1B7Iy0XAF2y9KmLGdS; _ga=GA1.1.1297162178.1779286613; _ga_9GZCPX5F2S=GS2.1.s1781158734; Hm_lvt_bdc8a6ca6357aeb139a069c8b93cc42e=1782638516; Hm_lpvt_bdc8a6ca6357aeb139a069c8b93cc42e=1782638516; HMACCOUNT=234FBC9F3102653B; veinmind=1238n3t4lumw00djkqp5bu6hev500s7c
+cookie: <COOKIE>
 referer: https://cnapp.demo.chaitin.cn/profile/apitoken
 
 Query Parameters:
@@ -185,11 +185,11 @@ Query Parameters:
 GET https://cnapp.demo.chaitin.cn/cluster/cluster_info?cluster_id=3
 
 accept: application/json, text/plain, */*
-authorization: Bearer TMCpan#2VB44wwFG2bii*WLZ^xUldjBe237d8081bdbb88f542b9f96e3cf698a1
-token: TMCpan#2VB44wwFG2bii*WLZ^xUldjBe237d8081bdbb88f542b9f96e3cf698a1
-x-auth-token: TMCpan#2VB44wwFG2bii*WLZ^xUldjBe237d8081bdbb88f542b9f96e3cf698a1
+authorization: Bearer <TOKEN>
+token: <TOKEN>
+x-auth-token: <TOKEN>
 x-requested-with: XMLHttpRequest
-cookie: _c_WBKFRo=XqZ9Kzk8IS3PpTuHtiPuWB1B7Iy0XAF2y9KmLGdS; _ga=GA1.1.1297162178.1779286613; _ga_9GZCPX5F2S=GS2.1.s1781158734; Hm_lvt_bdc8a6ca6357aeb139a069c8b93cc42e=1782638516; Hm_lpvt_bdc8a6ca6357aeb139a069c8b93cc42e=1782638516; HMACCOUNT=234FBC9F3102653B; veinmind=1238n3t4lumw00djkqp5bu6hev500s7c
+cookie: <COOKIE>
 referer: https://cnapp.demo.chaitin.cn/profile/apitoken
 
 Query Parameters:
@@ -254,11 +254,11 @@ Query Parameters:
 GET https://cnapp.demo.chaitin.cn/cluster_vuln/vuln_event_list?cluster_id=3&page_size=5
 
 accept: application/json, text/plain, */*
-authorization: Bearer TMCpan#2VB44wwFG2bii*WLZ^xUldjBe237d8081bdbb88f542b9f96e3cf698a1
-token: TMCpan#2VB44wwFG2bii*WLZ^xUldjBe237d8081bdbb88f542b9f96e3cf698a1
-x-auth-token: TMCpan#2VB44wwFG2bii*WLZ^xUldjBe237d8081bdbb88f542b9f96e3cf698a1
+authorization: Bearer <TOKEN>
+token: <TOKEN>
+x-auth-token: <TOKEN>
 x-requested-with: XMLHttpRequest
-cookie: _c_WBKFRo=XqZ9Kzk8IS3PpTuHtiPuWB1B7Iy0XAF2y9KmLGdS; _ga=GA1.1.1297162178.1779286613; _ga_9GZCPX5F2S=GS2.1.s1781158734; Hm_lvt_bdc8a6ca6357aeb139a069c8b93cc42e=1782638516; Hm_lpvt_bdc8a6ca6357aeb139a069c8b93cc42e=1782638516; HMACCOUNT=234FBC9F3102653B; veinmind=1238n3t4lumw00djkqp5bu6hev500s7c
+cookie: <COOKIE>
 referer: https://cnapp.demo.chaitin.cn/profile/apitoken
 
 Query Parameters:
@@ -460,11 +460,11 @@ Query Parameters:
 GET https://cnapp.demo.chaitin.cn/cluster_vuln/vuln_event_info?id=30
 
 accept: application/json, text/plain, */*
-authorization: Bearer TMCpan#2VB44wwFG2bii*WLZ^xUldjBe237d8081bdbb88f542b9f96e3cf698a1
-token: TMCpan#2VB44wwFG2bii*WLZ^xUldjBe237d8081bdbb88f542b9f96e3cf698a1
-x-auth-token: TMCpan#2VB44wwFG2bii*WLZ^xUldjBe237d8081bdbb88f542b9f96e3cf698a1
+authorization: Bearer <TOKEN>
+token: <TOKEN>
+x-auth-token: <TOKEN>
 x-requested-with: XMLHttpRequest
-cookie: _c_WBKFRo=XqZ9Kzk8IS3PpTuHtiPuWB1B7Iy0XAF2y9KmLGdS; _ga=GA1.1.1297162178.1779286613; _ga_9GZCPX5F2S=GS2.1.s1781158734; Hm_lvt_bdc8a6ca6357aeb139a069c8b93cc42e=1782638516; Hm_lpvt_bdc8a6ca6357aeb139a069c8b93cc42e=1782638516; HMACCOUNT=234FBC9F3102653B; veinmind=1238n3t4lumw00djkqp5bu6hev500s7c
+cookie: <COOKIE>
 referer: https://cnapp.demo.chaitin.cn/profile/apitoken
 
 Query Parameters:
@@ -532,11 +532,11 @@ Query Parameters:
 GET https://cnapp.demo.chaitin.cn/cluster_microservice/vuln_event_list&page_size=5
 
 accept: application/json, text/plain, */*
-authorization: Bearer TMCpan#2VB44wwFG2bii*WLZ^xUldjBe237d8081bdbb88f542b9f96e3cf698a1
-token: TMCpan#2VB44wwFG2bii*WLZ^xUldjBe237d8081bdbb88f542b9f96e3cf698a1
-x-auth-token: TMCpan#2VB44wwFG2bii*WLZ^xUldjBe237d8081bdbb88f542b9f96e3cf698a1
+authorization: Bearer <TOKEN>
+token: <TOKEN>
+x-auth-token: <TOKEN>
 x-requested-with: XMLHttpRequest
-cookie: _c_WBKFRo=XqZ9Kzk8IS3PpTuHtiPuWB1B7Iy0XAF2y9KmLGdS; _ga=GA1.1.1297162178.1779286613; _ga_9GZCPX5F2S=GS2.1.s1781158734; Hm_lvt_bdc8a6ca6357aeb139a069c8b93cc42e=1782638516; Hm_lpvt_bdc8a6ca6357aeb139a069c8b93cc42e=1782638516; HMACCOUNT=234FBC9F3102653B; veinmind=1238n3t4lumw00djkqp5bu6hev500s7c
+cookie: <COOKIE>
 referer: https://cnapp.demo.chaitin.cn/profile/apitoken
 
 Query Parameters:
@@ -677,11 +677,11 @@ Query Parameters:
 GET https://cnapp.demo.chaitin.cn/cluster_microservice/vuln_event_info?id=3
 
 accept: application/json, text/plain, */*
-authorization: Bearer TMCpan#2VB44wwFG2bii*WLZ^xUldjBe237d8081bdbb88f542b9f96e3cf698a1
-token: TMCpan#2VB44wwFG2bii*WLZ^xUldjBe237d8081bdbb88f542b9f96e3cf698a1
-x-auth-token: TMCpan#2VB44wwFG2bii*WLZ^xUldjBe237d8081bdbb88f542b9f96e3cf698a1
+authorization: Bearer <TOKEN>
+token: <TOKEN>
+x-auth-token: <TOKEN>
 x-requested-with: XMLHttpRequest
-cookie: _c_WBKFRo=XqZ9Kzk8IS3PpTuHtiPuWB1B7Iy0XAF2y9KmLGdS; _ga=GA1.1.1297162178.1779286613; _ga_9GZCPX5F2S=GS2.1.s1781158734; Hm_lvt_bdc8a6ca6357aeb139a069c8b93cc42e=1782638516; Hm_lpvt_bdc8a6ca6357aeb139a069c8b93cc42e=1782638516; HMACCOUNT=234FBC9F3102653B; veinmind=1238n3t4lumw00djkqp5bu6hev500s7c
+cookie: <COOKIE>
 referer: https://cnapp.demo.chaitin.cn/profile/apitoken
 
 Query Parameters:

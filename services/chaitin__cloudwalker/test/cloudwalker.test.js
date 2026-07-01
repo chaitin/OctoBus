@@ -111,9 +111,39 @@ function createMockServer() {
       return;
     }
 
+    if (req.url === '/bad-request') {
+      res.writeHead(400, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ message: 'invalid parameter' }));
+      return;
+    }
+
+    if (req.url === '/forbidden') {
+      res.writeHead(403, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ message: 'access denied' }));
+      return;
+    }
+
     if (req.url === '/unauthorized') {
       res.writeHead(401, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ message: 'invalid token' }));
+      return;
+    }
+
+    if (req.url === '/conflict') {
+      res.writeHead(409, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ message: 'already exists' }));
+      return;
+    }
+
+    if (req.url === '/rate-limited') {
+      res.writeHead(429, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ message: 'too many requests' }));
+      return;
+    }
+
+    if (req.url === '/precondition') {
+      res.writeHead(412, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ message: 'precondition failed' }));
       return;
     }
 
@@ -126,6 +156,12 @@ function createMockServer() {
     if (req.url === '/broken') {
       res.writeHead(500, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ message: 'upstream exploded' }));
+      return;
+    }
+
+    if (req.url === '/gateway-timeout') {
+      res.writeHead(504, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ message: 'gateway timeout' }));
       return;
     }
 
@@ -206,12 +242,27 @@ describe('cloudwalker client', () => {
     assert.equal(microserviceEvents.nextPageToken, 'cursor-n');
   });
 
-  it('wraps 401, 404 and 500 upstream errors', async () => {
+  it('wraps upstream HTTP errors to gRPC status codes', async () => {
     const client = createClient({ baseUrl, token: 'test-token' });
 
+    // 400 -> INVALID_ARGUMENT (3)
+    await assert.rejects(() => client.get('/bad-request'), { code: 3, details: 'invalid parameter' });
+    // 401 -> UNAUTHENTICATED (16)
     await assert.rejects(() => client.get('/unauthorized'), { code: 16, details: 'invalid token' });
+    // 403 -> PERMISSION_DENIED (7)
+    await assert.rejects(() => client.get('/forbidden'), { code: 7, details: 'access denied' });
+    // 404 -> NOT_FOUND (5)
     await assert.rejects(() => client.get('/missing'), { code: 5, details: 'not found' });
+    // 409 -> ALREADY_EXISTS (6)
+    await assert.rejects(() => client.get('/conflict'), { code: 6, details: 'already exists' });
+    // 412 -> FAILED_PRECONDITION (9)
+    await assert.rejects(() => client.get('/precondition'), { code: 9, details: 'precondition failed' });
+    // 429 -> RESOURCE_EXHAUSTED (8)
+    await assert.rejects(() => client.get('/rate-limited'), { code: 8, details: 'too many requests' });
+    // 500 -> UNAVAILABLE (14)
     await assert.rejects(() => client.get('/broken'), { code: 14, details: 'upstream exploded' });
+    // 504 -> DEADLINE_EXCEEDED (4)
+    await assert.rejects(() => client.get('/gateway-timeout'), { code: 4, details: 'gateway timeout' });
   });
 });
 
