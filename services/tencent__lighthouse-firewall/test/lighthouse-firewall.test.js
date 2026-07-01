@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { handlers } from "../src/lighthouse-firewall.js";
+import { GrpcError } from "@chaitin-ai/octobus-sdk";
 
 const ctx = {
   config: { endpoint: "https://lighthouse.tencentcloudapi.com", region: "ap-guangzhou", timeoutMs: 1000 },
@@ -114,7 +115,8 @@ test("validates arguments and maps cloud errors", async () => {
     text: async () => JSON.stringify({ Response: { Error: { Code: "UnauthorizedOperation.NoPermission", Message: "denied" }, RequestId: "req" } }),
   }));
   await assert.rejects(() => handlers.ListFirewallRules({ instance_id: "lhins-test" }, ctx), (err) => {
-    assert.equal(err.code, "PERMISSION_DENIED");
+    assert.ok(err instanceof GrpcError);
+    assert.equal(err.legacyCode, "PERMISSION_DENIED");
     assert.match(err.message, /denied/);
     return true;
   });

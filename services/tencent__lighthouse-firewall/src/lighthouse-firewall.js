@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import https from "node:https";
+import { GrpcError, grpcStatus } from "@chaitin-ai/octobus-sdk";
 
 const SERVICE_NAME = "tencent__lighthouse-firewall";
 const API_SERVICE = "lighthouse";
@@ -22,15 +23,23 @@ const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key
 const firstDefined = (...values) => values.find((value) => value !== undefined && value !== null);
 const toTrimmedString = (value) => (value === undefined || value === null ? "" : String(value).trim());
 
+const grpcCodeFor = (code) => ({
+  FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
+  INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT,
+  PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED,
+  UNAVAILABLE: grpcStatus.UNAVAILABLE,
+  UNKNOWN: grpcStatus.UNKNOWN,
+})[code] ?? grpcStatus.UNKNOWN;
+
 const errorWithCode = (code, message, details) => {
-  const err = new Error(message);
-  err.code = code;
+  const err = new GrpcError(grpcCodeFor(code), `${code}: ${message}`);
+  err.legacyCode = code;
   if (details !== undefined) err.details = details;
   return err;
 };
 
 const parseOptionalNumber = (value) => {
-  if (value === undefined || value === null || value === 0) return undefined;
+  if (value === undefined || value === null) return undefined;
   const num = Number(value);
   if (!Number.isInteger(num) || num < 0) return undefined;
   return num;
@@ -237,6 +246,11 @@ const callTencent = async (ctx, req, action, body) => {
     try {
       parsed = text ? JSON.parse(text) : {};
     } catch {
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) throw errorWithCode("PERMISSION_DENIED", `Tencent Cloud HTTP ${response.status}`);
+        if (response.status >= 500) throw errorWithCode("UNAVAILABLE", `Tencent Cloud HTTP ${response.status}`);
+        throw errorWithCode("FAILED_PRECONDITION", `Tencent Cloud HTTP ${response.status}`);
+      }
       throw errorWithCode("UNKNOWN", "Tencent Cloud returned non-JSON response");
     }
     if (!response.ok) {
