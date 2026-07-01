@@ -81,6 +81,7 @@
     "bin/dptech-fw-v4-6-10.js",
     "bin/dptech-umc-ads-v5-3-29.js",
     "bin/elastic-kibana-7-17-26.js",
+    "bin/f5-awaf.js",
     "bin/feishu-group-robot.js",
     "bin/first-epss-v1.js",
     "bin/fortinet-fw.js",
