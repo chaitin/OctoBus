@@ -179,6 +179,11 @@ const isHtmlResponseError = (error) => (
   && error.details.toLowerCase().includes('<!doctype html>')
 );
 
+const isNetworkError = (error) => (
+  error instanceof CloudWalkerError
+  && error.httpStatus === undefined
+);
+
 const normalizeComparableString = (value) => String(value || '').trim();
 
 const collectFilteredItems = async ({
@@ -433,7 +438,7 @@ export class CloudWalkerClient {
     try {
       return normalizeListPayload(await this.get(endpoints.listClusters, buildListClustersQuery(request)), 'clusters');
     } catch (error) {
-      if (!isHtmlResponseError(error) || (!hasMeaningfulValue(request?.name) && !hasMeaningfulValue(request?.status))) {
+      if (isNetworkError(error) || !isHtmlResponseError(error) || (!hasMeaningfulValue(request?.name) && !hasMeaningfulValue(request?.status))) {
         throw error;
       }
 
@@ -511,7 +516,7 @@ export class CloudWalkerClient {
       }
     } catch (error) {
       directError = error;
-      if (!(isHtmlResponseError(error) || error instanceof CloudWalkerError)) {
+      if (isNetworkError(error) || !(isHtmlResponseError(error) || error instanceof CloudWalkerError)) {
         throw error;
       }
     }
@@ -606,7 +611,7 @@ export class CloudWalkerClient {
       }
     } catch (error) {
       directError = error;
-      if (!(isHtmlResponseError(error) || error instanceof CloudWalkerError)) {
+      if (isNetworkError(error) || !(isHtmlResponseError(error) || error instanceof CloudWalkerError)) {
         throw error;
       }
     }
