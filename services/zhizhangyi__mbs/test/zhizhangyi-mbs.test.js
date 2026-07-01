@@ -66,13 +66,14 @@ test('AddUser forwards caller-provided 3DES-encrypted password value', async () 
   let captured;
   globalThis.fetch = async (url, init) => {
     captured = { url, init };
-    return { ok: true, status: 200, text: async () => '{"code":0}' };
+    return { ok: true, status: 200, text: async () => '{"code":0,"data":{"created":true}}' };
   };
 
-  await rpcdef(buildCtx({ user_name: 'User', login_name: 'user', dept_id: 'dept', password: '3des-ciphertext' }))[ADD_USER]();
+  const result = await rpcdef(buildCtx({ user_name: 'User', login_name: 'user', dept_id: 'dept', password: '3des-ciphertext' }))[ADD_USER]();
 
   assert.equal(captured.url, 'https://mbs.example/uusafe/mos/thirdaccess/rest/opt/v1/addUser');
   assert.equal(JSON.parse(captured.init.body).password, '3des-ciphertext');
+  assert.equal(result.data.structValue.fields.created.boolValue, true);
 });
 
 test('UpdUser requires dept_id before calling upstream', async () => {
@@ -130,6 +131,43 @@ test('DelUsers treats string type zero as userIds mode', async () => {
   assert.deepEqual(JSON.parse(captured.init.body).userIds, ['user-1']);
   assert.equal(JSON.parse(captured.init.body).type, 0);
   assert.equal(Object.hasOwn(JSON.parse(captured.init.body), 'condition'), false);
+});
+
+test('DelUsers condition mode preserves falsy condition filters', async () => {
+  let captured;
+  globalThis.fetch = async (url, init) => {
+    captured = { url, init };
+    return { ok: true, status: 200, text: async () => '{"code":0,"data":null}' };
+  };
+
+  const result = await rpcdef(buildCtx({ type: 1, condition: { key_word: '', status: 0, is_mdm: 0, dept_id: 'dept' } }))[DEL_USERS]();
+
+  assert.equal(captured.url, 'https://mbs.example/uusafe/mos/thirdaccess/rest/opt/v1/delUsers');
+  assert.deepEqual(JSON.parse(captured.init.body).condition, {
+    keyWord: '',
+    status: 0,
+    isMdm: 0,
+    deptId: 'dept',
+  });
+  assert.deepEqual(result.data, { nullValue: 'NULL_VALUE' });
+});
+
+test('StateUsers condition mode preserves falsy condition filters', async () => {
+  let captured;
+  globalThis.fetch = async (url, init) => {
+    captured = { url, init };
+    return { ok: true, status: 200, text: async () => '{"code":0,"data":{"updated":2}}' };
+  };
+
+  const result = await rpcdef(buildCtx({ type: 1, state: '0', condition: { status: 0, is_mdm: 0 } }))[STATE_USERS]();
+
+  assert.equal(captured.url, 'https://mbs.example/uusafe/mos/thirdaccess/rest/opt/v1/stateUsers');
+  assert.equal(JSON.parse(captured.init.body).state, '0');
+  assert.deepEqual(JSON.parse(captured.init.body).condition, {
+    status: 0,
+    isMdm: 0,
+  });
+  assert.equal(result.data.structValue.fields.updated.numberValue, 2);
 });
 
 test('StateUsers treats string type zero as userIds mode', async () => {

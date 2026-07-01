@@ -19,7 +19,20 @@ const er = (c, m) => { const e = new GrpcError(gc(c), c + ': ' + m); e.legacyCod
 const doFetch = async (url, init, to, st) => { const tls = st ? { insecureSkipVerify: true, tlsInsecureSkipVerify: true } : {}; try { return await fetch(url, { ...init, timeoutMs: to, ...tls }); } catch (e) { throw er('UNAVAILABLE', e?.cause?.message || e?.message || 'fetch failed'); } };
 const rdJson = async (res) => { const t = await res.text(); if (!res.ok) throw er(res.status === 401 || res.status === 403 ? 'PERMISSION_DENIED' : res.status >= 400 && res.status < 500 ? 'FAILED_PRECONDITION' : 'UNAVAILABLE', 'http ' + res.status + ': ' + t); if (!t.trim()) return {}; try { return JSON.parse(t); } catch { throw er('UNKNOWN', 'not JSON'); } };
 const check = (j) => { if (j.code !== undefined && j.code !== 0) throw er('FAILED_PRECONDITION', 'MBS code=' + j.code + ': ' + (j.msg || '')); };
-const buildCond = (cond) => { const c = {}; if (cond?.key_word || cond?.keyWord) c.keyWord = cond?.key_word || cond?.keyWord; if (cond?.status) c.status = cond.status; if (cond?.is_mdm || cond?.isMdm) c.isMdm = cond?.is_mdm || cond?.isMdm; if (cond?.dept_id || cond?.deptId) c.deptId = cond?.dept_id || cond?.deptId; return c; };
+const buildCond = (cond) => { const c = {}; const kw = first(cond?.key_word, cond?.keyWord); if (kw !== undefined) c.keyWord = kw; if (cond?.status !== undefined && cond?.status !== null) c.status = cond.status; const im = first(cond?.is_mdm, cond?.isMdm); if (im !== undefined) c.isMdm = im; const did = first(cond?.dept_id, cond?.deptId); if (did !== undefined) c.deptId = did; return c; };
+const toValue = (value) => {
+  if (value === undefined || value === null) return { nullValue: 'NULL_VALUE' };
+  if (typeof value === 'string') return { stringValue: value };
+  if (typeof value === 'number') return Number.isFinite(value) ? { numberValue: value } : { stringValue: String(value) };
+  if (typeof value === 'boolean') return { boolValue: value };
+  if (Array.isArray(value)) return { listValue: { values: value.map((item) => toValue(item)) } };
+  if (typeof value === 'object') {
+    const fields = {};
+    for (const [k, v] of Object.entries(value)) fields[k] = toValue(v);
+    return { structValue: { fields } };
+  }
+  return { stringValue: String(value) };
+};
 
 const mapUser = (it) => ({ user_id: it?.userId ?? '', user_name: it?.userName ?? '', login_name: it?.loginName ?? '', phone_number: it?.phoneNumber ?? '', email: it?.email ?? '', employee_number: it?.employeeNumber ?? '', dept_id: it?.deptId ?? '', dept_name: it?.deptName ?? '', device_count: it?.deviceCount ?? 0, is_mdm: it?.isMdm ?? 0, state: it?.state ?? 0, is_admin: it?.isAdmin ?? 0, user_source: it?.userSource ?? 0, status: it?.status ?? 1, weight: it?.weight ?? 0, attrs: arr(it?.attrs).map((a) => ({ attr_key: a?.attrKey ?? '', attr_value: a?.attrValue ?? '' })), dept_full_id: it?.deptFullId ?? '', dept_full_path: it?.deptFullPath ?? '', job: it?.job ?? '', mobile: it?.mobile ?? '', address: it?.address ?? '', organization: it?.organization ?? '' });
 const mapDetail = (it) => ({ user_id: it?.userId ?? '', user_name: it?.userName ?? '', login_name: it?.loginName ?? '', dept_id: it?.deptId ?? '', dept_name: it?.deptName ?? '', phone_number: it?.phoneNumber ?? '', job: it?.job ?? '', employee_number: it?.employeeNumber ?? '', address: it?.address ?? '', mobile: it?.mobile ?? '', email: it?.email ?? '', organization: it?.organization ?? '', is_mdm: it?.isMdm ?? 0, state: it?.state ?? 0, weight: it?.weight ?? 0, icon_file_id: it?.iconFileId ?? '', attrs: arr(it?.attrs).map((a) => ({ attr_key: a?.attrKey ?? '', attr_value: a?.attrValue ?? '' })) });
@@ -83,7 +96,7 @@ export function rpcdef(ctx) {
     for (const k of ['is_mdm', 'state', 'weight']) { const v = num(first(req?.[k])); if (v !== undefined) body[k === 'is_mdm' ? 'isMdm' : k] = v; }
     if (arr(req?.attrs).length > 0) body.attrs = req.attrs.map((a) => ({ attrKey: a?.attr_key ?? '', attrValue: a?.attr_value ?? '' }));
     const j = await post(BASE + '/v1/addUser', body);
-    return { code: j?.code ?? 0, msg: j?.msg ?? '', data: j?.data ?? null };
+    return { code: j?.code ?? 0, msg: j?.msg ?? '', data: toValue(j?.data ?? null) };
   };
 
   // 6.2.3 UpdUser
@@ -100,7 +113,7 @@ export function rpcdef(ctx) {
     for (const k of ['is_mdm', 'weight']) { const v = num(first(req?.[k])); if (v !== undefined) body[k === 'is_mdm' ? 'isMdm' : k] = v; }
     if (arr(req?.attrs).length > 0) body.attrs = req.attrs.map((a) => ({ attrKey: a?.attr_key ?? '', attrValue: a?.attr_value ?? '' }));
     const j = await post(BASE + '/v1/updUser', body);
-    return { code: j?.code ?? 0, msg: j?.msg ?? '', data: j?.data ?? null };
+    return { code: j?.code ?? 0, msg: j?.msg ?? '', data: toValue(j?.data ?? null) };
   };
 
   // 6.2.4 DetailUser
@@ -121,7 +134,7 @@ export function rpcdef(ctx) {
     const body = { type: tp, orgCode: oc, appkey: apk, sign: sg };
     if (tp === 0) { body.userIds = uids; } else { const c = buildCond(req?.condition); if (Object.keys(c).length > 0) body.condition = c; }
     const j = await post(BASE + '/v1/delUsers', body);
-    return { code: j?.code ?? 0, msg: j?.msg ?? '', data: j?.data ?? null };
+    return { code: j?.code ?? 0, msg: j?.msg ?? '', data: toValue(j?.data ?? null) };
   };
 
   // 6.2.6 StateUsers
@@ -135,7 +148,7 @@ export function rpcdef(ctx) {
     const body = { type: tp, state: st, orgCode: oc, appkey: apk, sign: sg };
     if (tp === 0) { body.userIds = uids; } else { const c = buildCond(req?.condition); if (Object.keys(c).length > 0) body.condition = c; }
     const j = await post(BASE + '/v1/stateUsers', body);
-    return { code: j?.code ?? 0, msg: j?.msg ?? '', data: j?.data ?? null };
+    return { code: j?.code ?? 0, msg: j?.msg ?? '', data: toValue(j?.data ?? null) };
   };
 
   // 6.2.7 CheckLoginName
@@ -144,7 +157,7 @@ export function rpcdef(ctx) {
     const ln = first(req?.login_name, req?.loginName) || ''; if (!ln) throw er('INVALID_ARGUMENT', 'login_name required');
     const sg = first(req?.sign) || signCalc(sk, apk, oc, ln);
     const j = await post(BASE + '/v1/checkLoginName', { loginName: ln, orgCode: oc, appkey: apk, sign: sg });
-    return { code: j?.code ?? 0, msg: j?.msg ?? '', data: j?.data ?? null };
+    return { code: j?.code ?? 0, msg: j?.msg ?? '', data: toValue(j?.data ?? null) };
   };
 
   // 6.2.8 GetUserByPhone
@@ -174,7 +187,7 @@ export function rpcdef(ctx) {
       body = { userId: uid, password: encryptedPw, orgCode: oc, appkey: apk, sign: sg };
     }
     const j = await post(BASE + `/${ver}/updUserPwd`, body);
-    return { code: j?.code ?? 0, msg: j?.msg ?? '', data: j?.data ?? null };
+    return { code: j?.code ?? 0, msg: j?.msg ?? '', data: toValue(j?.data ?? null) };
   };
 
   // 6.2.11 ForceOffline
@@ -183,7 +196,7 @@ export function rpcdef(ctx) {
     const uid = first(req?.user_id, req?.userId) || ''; if (!uid) throw er('INVALID_ARGUMENT', 'user_id required');
     const sg = first(req?.sign) || signCalc(sk, apk, oc, uid);
     const j = await post(BASE + '/v1/forceOffline', { userId: uid, orgCode: oc, appkey: apk, sign: sg });
-    return { code: j?.code ?? 0, msg: j?.msg ?? '', data: j?.data ?? null };
+    return { code: j?.code ?? 0, msg: j?.msg ?? '', data: toValue(j?.data ?? null) };
   };
 
   // 6.2.12 ImportUser
@@ -193,7 +206,7 @@ export function rpcdef(ctx) {
     if (!fid) throw er('INVALID_ARGUMENT', 'file_id required');
     const sg = first(req?.sign) || signCalc(sk, apk, oc, lang, fid);
     const j = await post(BASE + '/v1/importUser', { lang: Number(lang), fileId: fid, orgCode: oc, appkey: apk, sign: sg });
-    return { code: j?.code ?? 0, msg: j?.msg ?? '', data: j?.data ?? null };
+    return { code: j?.code ?? 0, msg: j?.msg ?? '', data: toValue(j?.data ?? null) };
   };
 
   return {

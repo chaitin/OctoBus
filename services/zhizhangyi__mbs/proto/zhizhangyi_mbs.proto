@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package zhizhangyi.mbs;
 
+import "google/protobuf/struct.proto";
+
 // =============================================================================
 // MBS (Mobile Security Management Platform) User Management API
 // Vendor: 北京指掌易科技有限公司
@@ -171,7 +173,7 @@ message AddUserRequest {
 message AddUserResponse {
   int32 code = 1;
   string msg = 2;
-  string data = 3;                  // 通常为空对象
+  google.protobuf.Value data = 3;   // 通常为空对象
 }
 
 // =============================================================================
@@ -200,7 +202,7 @@ message UpdUserRequest {
 message UpdUserResponse {
   int32 code = 1;
   string msg = 2;
-  string data = 3;
+  google.protobuf.Value data = 3;
 }
 
 // =============================================================================
@@ -234,7 +236,7 @@ message DelUsersRequest {
 message DelUsersResponse {
   int32 code = 1;
   string msg = 2;
-  string data = 3;
+  google.protobuf.Value data = 3;
 }
 
 // =============================================================================
@@ -253,7 +255,7 @@ message StateUsersRequest {
 message StateUsersResponse {
   int32 code = 1;
   string msg = 2;
-  string data = 3;
+  google.protobuf.Value data = 3;
 }
 
 // =============================================================================
@@ -269,7 +271,7 @@ message CheckLoginNameRequest {
 message CheckLoginNameResponse {
   int32 code = 1;
   string msg = 2;
-  string data = 3;
+  google.protobuf.Value data = 3;
 }
 
 // =============================================================================
@@ -314,7 +316,7 @@ message UpdUserPwdRequest {
 message UpdUserPwdResponse {
   int32 code = 1;
   string msg = 2;
-  string data = 3;
+  google.protobuf.Value data = 3;
 }
 
 // =============================================================================
@@ -330,7 +332,7 @@ message ForceOfflineRequest {
 message ForceOfflineResponse {
   int32 code = 1;
   string msg = 2;
-  string data = 3;
+  google.protobuf.Value data = 3;
 }
 
 // =============================================================================
@@ -347,5 +349,5 @@ message ImportUserRequest {
 message ImportUserResponse {
   int32 code = 1;
   string msg = 2;
-  string data = 3;
+  google.protobuf.Value data = 3;
 }

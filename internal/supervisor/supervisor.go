@@ -239,7 +239,7 @@ func (s *Supervisor) startWithAttempt(ctx context.Context, instanceID string, re
 		startErr = fmt.Errorf("runtime entry %q is not a regular file", svc.NodeEntry)
 		return startErr
 	}
-	secretArg, secretFile, closeSecret, err := runtimeSecretArg(workdir, inst.SecretJSON)
+	secretArg, secretFile, closeSecret, err := runtimeSecretArg(inst.SecretJSON)
 	if err != nil {
 		startErr = err
 		return err
@@ -544,7 +544,7 @@ func secretReadFile(secret []byte) (*os.File, func(), error) {
 	return reader, closeFn, nil
 }
 
-func runtimeSecretArg(workdir string, secret []byte) ([]string, *os.File, func(), error) {
+func runtimeSecretArg(secret []byte) ([]string, *os.File, func(), error) {
 	secretFile, closeFn, err := secretReadFile(secret)
 	if err != nil {
 		return nil, nil, nil, err

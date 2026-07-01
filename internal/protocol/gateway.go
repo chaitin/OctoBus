@@ -1594,7 +1594,7 @@ func (g *Gateway) invokeOnDemand(ctx context.Context, item store.ExposedMethod, 
 	if !info.Mode().IsRegular() {
 		return nil, status.Errorf(codes.Internal, "runtime entry %q is not a regular file", item.Service.NodeEntry)
 	}
-	secretArg, secretFile, closeSecret, err := runtimeSecretArg(workdir, inst.SecretJSON)
+	secretArg, secretFile, closeSecret, err := runtimeSecretArg(inst.SecretJSON)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "prepare runtime secret: %v", err)
 	}
@@ -1663,7 +1663,7 @@ func secretReadFile(secret []byte) (*os.File, func(), error) {
 	return reader, closeFn, nil
 }
 
-func runtimeSecretArg(workdir string, secret []byte) ([]string, *os.File, func(), error) {
+func runtimeSecretArg(secret []byte) ([]string, *os.File, func(), error) {
 	secretFile, closeFn, err := secretReadFile(secret)
 	if err != nil {
 		return nil, nil, nil, err
