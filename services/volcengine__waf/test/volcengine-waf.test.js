@@ -90,8 +90,16 @@ test('validates required credentials and supported actions', () => {
 
 test('escapes Volcengine query params and rejects nested GET query values', () => {
   assert.equal(_test.queryParamsToString({ Special: "!'()*", Text: 'hello world', CN: '中文' }), 'CN=%E4%B8%AD%E6%96%87&Special=%21%27%28%29%2A&Text=hello%20world');
+  assert.equal(_test.queryParamsToString({ Filter: ['enabled', null, undefined, 'blocked'] }), 'Filter=blocked&Filter=enabled');
   assert.throws(() => _test.queryParamsToString({ Filter: { Name: 'status' } }), /nested object/);
   assert.throws(() => _test.queryParamsToString({ Filter: ['ok', { Name: 'status' }] }), /nested object/);
+});
+
+test('validates signing date metadata', () => {
+  assert.equal(_test.resolveSigningDate({ date: new Date('2024-01-16T08:00:00Z') }).toISOString(), '2024-01-16T08:00:00.000Z');
+  assert.equal(_test.resolveSigningDate({ date: '2024-01-16T08:00:00Z' }).toISOString(), '2024-01-16T08:00:00.000Z');
+  assert.throws(() => _test.resolveSigningDate({ date: new Date('invalid') }), /meta.date/);
+  assert.throws(() => _test.resolveSigningDate({ date: 'invalid-date' }), /meta.date/);
 });
 
 test('normalizes protobuf Struct payloads', () => {

@@ -13,7 +13,7 @@ This service package exposes read-only Volcengine WAF query APIs through OctoBus
 | `QueryAttackAnalysisWithRuleAggLb` | `QueryAttackAnalysisWithRuleAggLb` | Query attack analysis grouped by protection rule. |
 | `QueryFlowOverviewLb` | `QueryFlowOverviewLb` | Query traffic overview metrics. |
 | `ListCustomPage` | `ListCustomPage` | Query custom response pages. |
-| `GetTLSConfig` | `GetTLSConfig` | Query log configuration. |
+| `GetTLSConfig` | `GetTLSConfig` | Query TLS configuration. |
 | `GetVulnerabilityConfig` | `GetVulnerabilityConfig` | Query vulnerability protection configuration. |
 | `ListVulnerabilityRule` | `ListVulnerabilityRule` | Query vulnerability protection rules. |
 | `ListCustomBotConfig` | `ListCustomBotConfig` | Query custom bot protection configuration. |

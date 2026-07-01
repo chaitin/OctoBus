@@ -171,10 +171,15 @@ const queryParamsToString = (params = {}) => Object.keys(params)
   .flatMap((key) => {
     const escapedKey = uriEscape(key);
     const value = params[key];
-    if (Array.isArray(value)) return value.map((item) => {
-      assertQueryParamValue(key, item);
-      return `${escapedKey}=${uriEscape(item)}`;
-    }).sort();
+    if (Array.isArray(value)) {
+      return value
+        .filter((item) => item !== undefined && item !== null)
+        .map((item) => {
+          assertQueryParamValue(key, item);
+          return `${escapedKey}=${uriEscape(item)}`;
+        })
+        .sort();
+    }
     assertQueryParamValue(key, value);
     return [`${escapedKey}=${uriEscape(value)}`];
   })
@@ -307,6 +312,17 @@ const parseVolcengineResponse = async (res) => {
 
 const payloadFromRequest = (req = {}) => normalizeStruct(req.payload ?? {});
 
+const resolveSigningDate = (meta = {}) => {
+  const raw = meta.date;
+  const date = raw instanceof Date
+    ? raw
+    : (toTrimmedString(raw) ? new Date(toTrimmedString(raw)) : new Date());
+  if (Number.isNaN(date.getTime())) {
+    throw errorWithCode('INVALID_ARGUMENT', 'meta.date must be a valid date');
+  }
+  return date;
+};
+
 const invokeVolcengine = async (spec, payload, ctx = {}) => {
   const actionSpec = validateActionSpec(spec);
   const callCtx = resolveCallContext(ctx);
@@ -321,9 +337,7 @@ const invokeVolcengine = async (spec, payload, ctx = {}) => {
   }
   endpoint.search = queryParamsToString(query);
 
-  const date = callCtx.meta?.date instanceof Date
-    ? callCtx.meta.date
-    : (toTrimmedString(callCtx.meta?.date) ? new Date(toTrimmedString(callCtx.meta.date)) : new Date());
+  const date = resolveSigningDate(callCtx.meta);
   const signed = signRequest({
     method: actionSpec.httpMethod,
     url: endpoint,
@@ -388,6 +402,7 @@ export const _test = {
   validateBindings,
   validateActionName,
   validateActionSpec,
+  resolveSigningDate,
   queryParamsToString,
   signRequest,
   invokeVolcengine,

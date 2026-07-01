@@ -49,7 +49,7 @@
         },
         "Volcengine_WAF.Volcengine_WAF/GetTLSConfig": {
           "name": "get-tls-config",
-          "description": "Query Volcengine WAF log configuration."
+          "description": "Query Volcengine WAF TLS configuration."
         },
         "Volcengine_WAF.Volcengine_WAF/GetVulnerabilityConfig": {
           "name": "get-vulnerability-config",
