@@ -46,6 +46,9 @@ const toCamelCase = (value) => {
 };
 
 const normalizeCluster = (clusterData) => {
+  if (!clusterData) {
+    return {};
+  }
   const camelData = toCamelCase(clusterData);
 
   return {
@@ -66,6 +69,9 @@ const normalizeCluster = (clusterData) => {
 };
 
 const normalizeVulnEvent = (vulnData) => {
+  if (!vulnData) {
+    return {};
+  }
   const camelData = toCamelCase(vulnData);
 
   return {
@@ -289,7 +295,8 @@ const normalizeListPayload = (payload, collectionKey) => {
   const camelPayload = toCamelCase(payload);
 
   // CloudWalker API returns {data: {data: [...]}} format
-  const rawItems = camelPayload?.data?.data || camelPayload.items || camelPayload[collectionKey] || [];
+  const candidate = camelPayload?.data?.data || camelPayload.items || camelPayload[collectionKey];
+  const rawItems = Array.isArray(candidate) ? candidate : [];
 
   // Normalize each item based on collection type
   let items;
@@ -391,10 +398,19 @@ export class CloudWalkerClient {
       headers.referer = this.referer;
     }
 
-    const response = await this.fetchImpl(url, {
-      method: 'GET',
-      headers,
-    });
+    let response;
+    try {
+      response = await this.fetchImpl(url, {
+        method: 'GET',
+        headers,
+      });
+    } catch (networkError) {
+      throw new CloudWalkerError(networkError.message || 'CloudWalker upstream unreachable', {
+        code: grpcStatus.UNAVAILABLE,
+        details: networkError.message || 'Network error',
+        httpStatus: undefined,
+      });
+    }
 
     const payload = await readPayload(response);
     if (!response.ok) {
