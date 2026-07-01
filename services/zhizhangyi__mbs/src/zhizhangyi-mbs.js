@@ -92,6 +92,7 @@ export function rpcdef(ctx) {
     const uid = first(req?.user_id, req?.userId) || ''; const un = first(req?.user_name, req?.userName) || '';
     if (!uid) throw er('INVALID_ARGUMENT', 'user_id required'); if (!un) throw er('INVALID_ARGUMENT', 'user_name required');
     const ln = first(req?.login_name, req?.loginName) || ''; const did = first(req?.dept_id, req?.deptId) || '';
+    if (!did) throw er('INVALID_ARGUMENT', 'dept_id required');
     const sg = first(req?.sign) || signCalc(sk, apk, oc, uid, un, ln, did);
     const body = { userId: uid, userName: un, loginName: ln, deptId: did, orgCode: oc, appkey: apk, sign: sg };
     const sm = { phone_number: 'phoneNumber', job: 'job', employee_number: 'employeeNumber', address: 'address', mobile: 'mobile', email: 'email', organization: 'organization' };

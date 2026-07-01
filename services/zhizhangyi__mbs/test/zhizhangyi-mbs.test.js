@@ -9,6 +9,7 @@ const ADD_USER = 'zhizhangyi.mbs.UserManagement/AddUser';
 const DEL_USERS = 'zhizhangyi.mbs.UserManagement/DelUsers';
 const GET_USERS = 'zhizhangyi.mbs.UserManagement/GetUsers';
 const STATE_USERS = 'zhizhangyi.mbs.UserManagement/StateUsers';
+const UPD_USER = 'zhizhangyi.mbs.UserManagement/UpdUser';
 
 const originalFetch = globalThis.fetch;
 
@@ -72,6 +73,27 @@ test('AddUser forwards caller-provided 3DES-encrypted password value', async () 
 
   assert.equal(captured.url, 'https://mbs.example/uusafe/mos/thirdaccess/rest/opt/v1/addUser');
   assert.equal(JSON.parse(captured.init.body).password, '3des-ciphertext');
+});
+
+test('UpdUser requires dept_id before calling upstream', async () => {
+  let called = false;
+  globalThis.fetch = async () => {
+    called = true;
+    return { ok: true, status: 200, text: async () => '{"code":0}' };
+  };
+
+  await assert.rejects(
+    () => rpcdef(buildCtx({ user_id: 'user-1', user_name: 'User' }))[UPD_USER](),
+    (err) => {
+      assert.ok(err instanceof GrpcError);
+      assert.equal(err.code, grpcStatus.INVALID_ARGUMENT);
+      assert.equal(err.legacyCode, 'INVALID_ARGUMENT');
+      assert.match(err.message, /dept_id required/);
+      return true;
+    },
+  );
+
+  assert.equal(called, false);
 });
 
 test('StateUsers requires explicit state before calling upstream', async () => {
