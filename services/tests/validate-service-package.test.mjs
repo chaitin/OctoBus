@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { discoverServices, main as importCheckMain } from "../scripts/import-check-all.mjs";
+import { checkRegistry, main as registryMain } from "../scripts/generate-service-registry.mjs";
 import { main as runCoverageAllMain } from "../scripts/run-coverage-all.mjs";
 import { main as runTestsMain, buildNodeTestArgs } from "../scripts/run-tests.mjs";
 import { main as validateMain, validateRepository } from "../scripts/validate-service-package.mjs";
@@ -110,6 +111,19 @@ test("validates a migrated external service package root", () => {
   const root = fixture();
   const result = validateRepository(root, { serviceDir: "chaitin__safeline-waf" });
   assert.deepEqual(result.errors, []);
+});
+
+test("generates and checks the aggregate service registry", () => {
+  const root = fixture();
+  assert.equal(registryMain(["--root", root]), 0);
+  assert.equal(registryMain(["--root", root, "--check"]), 0);
+  assert.deepEqual(validateRepository(root, { serviceDir: "chaitin__safeline-waf" }).errors, []);
+
+  fs.chmodSync(path.join(root, "bin", "safeline-waf.js"), 0o644);
+  assert.match(
+    checkRegistry(root).errors.join("\n"),
+    /bin\/safeline-waf\.js must be executable/,
+  );
 });
 
 test("requires executable root wrappers and service entries", () => {

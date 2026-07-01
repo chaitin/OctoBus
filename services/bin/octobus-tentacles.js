@@ -9,14 +9,6 @@ const services = {
     entryFile: "../alibaba-cloud__simple-application-server-firewall/bin/alibaba-cloud-simple-application-server-firewall.js",
     serviceModule: "../alibaba-cloud__simple-application-server-firewall/src/service.js",
   },
-  "safeline-waf": {
-    entryFile: "../chaitin__safeline-waf/bin/safeline-waf.js",
-    serviceModule: "../chaitin__safeline-waf/src/service.js",
-  },
-  "safeline-waf-eliminate-false-positive": {
-    entryFile: "../chaitin__safeline-waf-eliminate-false-positive/bin/safeline-waf-eliminate-false-positive.js",
-    serviceModule: "../chaitin__safeline-waf-eliminate-false-positive/src/service.js",
-  },
   "cloudatlas": {
     entryFile: "../chaitin__cloudatlas/bin/cloudatlas.js",
     serviceModule: "../chaitin__cloudatlas/src/service.js",
@@ -53,6 +45,10 @@ const services = {
     entryFile: "../dptech__umc-ads_v5-3-29/bin/dptech-umc-ads-v5-3-29.js",
     serviceModule: "../dptech__umc-ads_v5-3-29/src/service.js",
   },
+  "dsensor": {
+    entryFile: "../chaitin__dsensor_ds-s_h_40-25.07.001/bin/dsensor.js",
+    serviceModule: "../chaitin__dsensor_ds-s_h_40-25.07.001/src/service.js",
+  },
   "elastic-kibana-7-17-26": {
     entryFile: "../elastic__kibana_7-17-26/bin/elastic-kibana-7-17-26.js",
     serviceModule: "../elastic__kibana_7-17-26/src/service.js",
@@ -64,6 +60,10 @@ const services = {
   "first-epss-v1": {
     entryFile: "../first__epss-v1/bin/first-epss-v1.js",
     serviceModule: "../first__epss-v1/src/service.js",
+  },
+  "fofa-network-space-mapper": {
+    entryFile: "../fofa__network-space-mapper/bin/fofa-network-space-mapper.js",
+    serviceModule: "../fofa__network-space-mapper/src/service.js",
   },
   "fortinet-fw": {
     entryFile: "../fortinet__fw/bin/fortinet-fw.js",
@@ -89,13 +89,13 @@ const services = {
     entryFile: "../hillstone__fw_v5-5-r6/bin/hillstone-fw-v5-5-r6.js",
     serviceModule: "../hillstone__fw_v5-5-r6/src/service.js",
   },
-  "huorong-endpoint-security-management-system-v2-0-19-3": {
-    entryFile: "../huorong__endpoint-security-management-system_v2-0-19-3/bin/huorong-endpoint-security-management-system-v2-0-19-3.js",
-    serviceModule: "../huorong__endpoint-security-management-system_v2-0-19-3/src/service.js",
-  },
   "huawei-fw-usg6000e": {
     entryFile: "../huawei__fw-usg6000e/bin/huawei-fw-usg6000e.js",
     serviceModule: "../huawei__fw-usg6000e/src/service.js",
+  },
+  "huorong-endpoint-security-management-system-v2-0-19-3": {
+    entryFile: "../huorong__endpoint-security-management-system_v2-0-19-3/bin/huorong-endpoint-security-management-system-v2-0-19-3.js",
+    serviceModule: "../huorong__endpoint-security-management-system_v2-0-19-3/src/service.js",
   },
   "imperva-waf-gateway-v13-6-90": {
     entryFile: "../imperva__waf-gateway_v13-6-90/bin/imperva-waf-gateway-v13-6-90.js",
@@ -105,9 +105,17 @@ const services = {
     entryFile: "../nsfocus__ads_v4-5-r90-f06/bin/nsfocus-ads-v4-5-r90-f06.js",
     serviceModule: "../nsfocus__ads_v4-5-r90-f06/src/service.js",
   },
+  "nsfocus-ngfw-v60-9900": {
+    entryFile: "../nsfocus__ngfw_v60-9900/bin/nsfocus-ngfw-v60-9900.js",
+    serviceModule: "../nsfocus__ngfw_v60-9900/src/service.js",
+  },
   "nsfocus-nips-v5-6-r11": {
     entryFile: "../nsfocus__nips_v5-6-r11/bin/nsfocus-nips-v5-6-r11.js",
     serviceModule: "../nsfocus__nips_v5-6-r11/src/service.js",
+  },
+  "opencti": {
+    entryFile: "../filigran__opencti/bin/opencti.js",
+    serviceModule: "../filigran__opencti/src/service.js",
   },
   "owasp-dependency-track-sca-v5-0": {
     entryFile: "../owasp__dependency-track-sca_v5-0/bin/owasp-dependency-track-sca-v5-0.js",
@@ -149,6 +157,18 @@ const services = {
     entryFile: "../riversafe__waf/bin/riversafe-waf.js",
     serviceModule: "../riversafe__waf/src/service.js",
   },
+  "ruijie-behavior-firewall-r2-3-2-t0": {
+    entryFile: "../ruijie__behavior_firewall_r2-3-2-t0/bin/ruijie-behavior-firewall-r2-3-2-t0.js",
+    serviceModule: "../ruijie__behavior_firewall_r2-3-2-t0/src/service.js",
+  },
+  "safeline-waf": {
+    entryFile: "../chaitin__safeline-waf/bin/safeline-waf.js",
+    serviceModule: "../chaitin__safeline-waf/src/service.js",
+  },
+  "safeline-waf-eliminate-false-positive": {
+    entryFile: "../chaitin__safeline-waf-eliminate-false-positive/bin/safeline-waf-eliminate-false-positive.js",
+    serviceModule: "../chaitin__safeline-waf-eliminate-false-positive/src/service.js",
+  },
   "sangfor-fw-v8-0-45": {
     entryFile: "../sangfor__fw_v8-0-45/bin/sangfor-fw-v8-0-45.js",
     serviceModule: "../sangfor__fw_v8-0-45/src/service.js",
@@ -157,13 +177,21 @@ const services = {
     entryFile: "../sangfor__xdr_v2-0-45/bin/sangfor-xdr-v2-0-45.js",
     serviceModule: "../sangfor__xdr_v2-0-45/src/service.js",
   },
+  "skycloud-inet": {
+    entryFile: "../skycloud__inet/bin/skycloud-inet.js",
+    serviceModule: "../skycloud__inet/src/service.js",
+  },
   "slack-group-robot": {
     entryFile: "../slack__group-robot/bin/slack-group-robot.js",
     serviceModule: "../slack__group-robot/src/service.js",
   },
-  "skycloud-inet": {
-    entryFile: "../skycloud__inet/bin/skycloud-inet.js",
-    serviceModule: "../skycloud__inet/src/service.js",
+  "telegram-bot-api": {
+    entryFile: "../telegram__bot-api/bin/telegram-bot-api.js",
+    serviceModule: "../telegram__bot-api/src/service.js",
+  },
+  "tencent-qq-chat": {
+    entryFile: "../tencent__qq-chat/bin/tencent-qq-chat.js",
+    serviceModule: "../tencent__qq-chat/src/service.js",
   },
   "tencent-qyweixin-group-robot": {
     entryFile: "../tencent__qyweixin-group-robot/bin/tencent-qyweixin-group-robot.js",
@@ -177,17 +205,13 @@ const services = {
     entryFile: "../tencent__tsec_v2-5-1/bin/tencent-tsec-v2-5-1.js",
     serviceModule: "../tencent__tsec_v2-5-1/src/service.js",
   },
-  "telegram-bot-api": {
-    entryFile: "../telegram__bot-api/bin/telegram-bot-api.js",
-    serviceModule: "../telegram__bot-api/src/service.js",
+  "threatbook-claudsandbox-v3": {
+    entryFile: "../threatbook__claudsandbox_v3/bin/threatbook-claudsandbox-v3.js",
+    serviceModule: "../threatbook__claudsandbox_v3/src/service.js",
   },
   "threatbook-cloudapi-v3": {
     entryFile: "../threatbook__cloudapi_v3/bin/threatbook-cloudapi-v3.js",
     serviceModule: "../threatbook__cloudapi_v3/src/service.js",
-  },
-  "threatbook-claudsandbox-v3": {
-    entryFile: "../threatbook__claudsandbox_v3/bin/threatbook-claudsandbox-v3.js",
-    serviceModule: "../threatbook__claudsandbox_v3/src/service.js",
   },
   "threatbook-ngtip-v5": {
     entryFile: "../threatbook__ngtip_v5/bin/threatbook-ngtip-v5.js",
@@ -205,10 +229,6 @@ const services = {
     entryFile: "../threatbook__tip_v4/bin/threatbook-tip-v4.js",
     serviceModule: "../threatbook__tip_v4/src/service.js",
   },
-  "topsec-waf-v3-2294-20238": {
-    entryFile: "../topsec__waf_v3-2294-20238/bin/topsec-waf-v3-2294-20238.js",
-    serviceModule: "../topsec__waf_v3-2294-20238/src/service.js",
-  },
   "topsec-fw-2u": {
     entryFile: "../topsec__fw-2u/bin/topsec-fw-2u.js",
     serviceModule: "../topsec__fw-2u/src/service.js",
@@ -220,6 +240,10 @@ const services = {
   "topsec-fw-v3-7-6": {
     entryFile: "../topsec__fw_v3-7-6/bin/topsec-fw-v3-7-6.js",
     serviceModule: "../topsec__fw_v3-7-6/src/service.js",
+  },
+  "topsec-waf-v3-2294-20238": {
+    entryFile: "../topsec__waf_v3-2294-20238/bin/topsec-waf-v3-2294-20238.js",
+    serviceModule: "../topsec__waf_v3-2294-20238/src/service.js",
   },
   "venus-ads-v3-6": {
     entryFile: "../venus__ads_v3-6/bin/venus-ads-v3-6.js",
@@ -236,22 +260,6 @@ const services = {
   "wd-k01": {
     entryFile: "../wd__k01/bin/wd-k01.js",
     serviceModule: "../wd__k01/src/service.js",
-  },
-  "tencent-bh": {
-    entryFile: "../tencent__bh/bin/tencent-bh.js",
-    serviceModule: "../tencent__bh/src/service.js",
-  },
-  "alibaba-sas": {
-    entryFile: "../alibaba__sas/bin/alibaba-sas.js",
-    serviceModule: "../alibaba__sas/src/service.js",
-  },
-  "misp": {
-    entryFile: "../misp__misp/bin/misp.js",
-    serviceModule: "../misp__misp/src/service.js",
-  },
-  "opencti": {
-    entryFile: "../filigran__opencti/bin/opencti.js",
-    serviceModule: "../filigran__opencti/src/service.js",
   },
 };
 
