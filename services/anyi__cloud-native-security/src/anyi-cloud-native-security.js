@@ -145,6 +145,8 @@ const resolveCallContext = (baseCtx, reqOrCtx, maybeInnerCtx) => {
 
 // --- DISS HTTP Client ---
 
+// DISS API uses apiKey auth: Authorization header with raw token value (no "Bearer " prefix).
+// Verified against real DISS platform — "Bearer " prefix causes TokenInvalided.
 const buildHeaders = (token, extraHeaders = {}) => ({
   ...extraHeaders,
   'Content-Type': 'application/json',

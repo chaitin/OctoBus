@@ -10,14 +10,14 @@ octobus service import --id anyi-cloud-native-security ./services//anyi__cloud-n
 
 ## Supported Version
 
-Tested against DISS API v1.0.0. The API uses JWT Bearer token authentication.
+Tested against DISS API v1.0.0. The API uses apiKey authentication: the JWT token is sent directly in the `Authorization` header without a `Bearer` prefix (i.e., `Authorization: <token>`).
 
 ## Package Files
 
 - `service.json`: OctoBus service manifest.
 - `proto/anyi_cloud_native_security.proto`: gRPC API definition.
 - `config.schema.json`: non-secret endpoint, timeout, TLS, and user settings.
-- `secret.schema.json`: DISS API JWT token.
+- `secret.schema.json`: DISS API token (sent as `Authorization: <token>`, no Bearer prefix).
 - `src/anyi-cloud-native-security.js`: DISS API implementation.
 - `src/service.js`: OctoBus SDK `defineService` wrapper.
 - `bin/anyi-cloud-native-security.js`: service-local executable entrypoint.
@@ -37,7 +37,7 @@ Use `endpoint` for the DISS REST API base URL. `baseUrl` is accepted as a legacy
 }
 ```
 
-Use `secret.token` for the DISS JWT token:
+Use `secret.token` for the DISS API token (placed directly in the `Authorization` header, no `Bearer` prefix):
 
 ```json
 {

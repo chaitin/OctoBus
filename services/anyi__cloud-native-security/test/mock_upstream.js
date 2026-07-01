@@ -77,12 +77,12 @@ const server = http.createServer(async (req, res) => {
   let body;
   try { body = await readBody(req); } catch { sendJson(res, 400, { code: 400, message: 'invalid json', data: null }); return; }
 
-  const authHeader = req.headers['authorization'] || '';
-  if (!authHeader.startsWith('Bearer ')) {
+  const authHeader = (req.headers['authorization'] || '').trim();
+  if (!authHeader) {
     sendJson(res, 401, { code: 401, message: 'unauthorized', data: null });
     return;
   }
-  const token = authHeader.slice(7);
+  const token = authHeader;
   if (token === 'invalid-token') {
     sendJson(res, 403, { code: 403, message: 'forbidden', data: null });
     return;
