@@ -13,7 +13,7 @@ const md5 = (s) => crypto.createHash('md5').update(s, 'utf8').digest('hex');
 const signCalc = (sk, ...ps) => md5(ps.map((p) => (p === undefined || p === null ? '' : String(p))).join('') + String(sk || ''));
 const arr = (v) => Array.isArray(v) ? v : [];
 const str = (v) => (v === undefined || v === null || v === '') ? undefined : String(v);
-const num = (v) => (v === undefined || v === null) ? undefined : Number(v);
+const num = (v) => (v === undefined || v === null || v === '') ? undefined : Number(v);
 const gc = (c) => ({ INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT, FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION, PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED, UNAVAILABLE: grpcStatus.UNAVAILABLE, DEADLINE_EXCEEDED: grpcStatus.DEADLINE_EXCEEDED })[c] ?? grpcStatus.UNKNOWN;
 const er = (c, m) => { const e = new GrpcError(gc(c), c + ': ' + m); e.legacyCode = c; return e; };
 const doFetch = async (url, init, to, st) => { const tls = st ? { insecureSkipVerify: true, tlsInsecureSkipVerify: true } : {}; try { return await fetch(url, { ...init, timeoutMs: to, ...tls }); } catch (e) { throw er('UNAVAILABLE', e?.cause?.message || e?.message || 'fetch failed'); } };

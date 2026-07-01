@@ -77,6 +77,21 @@ test('AddUser forwards caller-provided 3DES-encrypted password value', async () 
   assert.equal(result.data.structValue.fields.created.boolValue, true);
 });
 
+test('AddUser omits empty numeric fields instead of sending zero values', async () => {
+  let captured;
+  globalThis.fetch = async (url, init) => {
+    captured = { url, init };
+    return { ok: true, status: 200, text: async () => '{"code":0,"data":{}}' };
+  };
+
+  await rpcdef(buildCtx({ user_name: 'User', login_name: 'user', dept_id: 'dept', password: '3des-ciphertext', is_mdm: '', state: '', weight: '' }))[ADD_USER]();
+
+  const body = JSON.parse(captured.init.body);
+  assert.equal(Object.hasOwn(body, 'isMdm'), false);
+  assert.equal(Object.hasOwn(body, 'state'), false);
+  assert.equal(Object.hasOwn(body, 'weight'), false);
+});
+
 test('UpdUser requires dept_id before calling upstream', async () => {
   let called = false;
   globalThis.fetch = async () => {
@@ -96,6 +111,20 @@ test('UpdUser requires dept_id before calling upstream', async () => {
   );
 
   assert.equal(called, false);
+});
+
+test('UpdUser omits empty numeric fields instead of sending zero values', async () => {
+  let captured;
+  globalThis.fetch = async (url, init) => {
+    captured = { url, init };
+    return { ok: true, status: 200, text: async () => '{"code":0,"data":{}}' };
+  };
+
+  await rpcdef(buildCtx({ user_id: 'user-1', user_name: 'User', dept_id: 'dept', is_mdm: '', weight: '' }))[UPD_USER]();
+
+  const body = JSON.parse(captured.init.body);
+  assert.equal(Object.hasOwn(body, 'isMdm'), false);
+  assert.equal(Object.hasOwn(body, 'weight'), false);
 });
 
 test('StateUsers requires explicit state before calling upstream', async () => {
