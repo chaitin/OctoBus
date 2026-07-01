@@ -1,29 +1,70 @@
 # WD K01
 
-This package preserves legacy gRPC package and method names where applicable.
+WD K01 package for Web API login, IP block, IP unblock, and logout workflows.
 
-The legacy service and repository search only identify the product as `WD_K01`; public search did not find a more authoritative full vendor name. This package keeps the planned `wd__k01` root and `wd-k01` command while preserving the legacy proto package and RPC names.
+The legacy source only identifies the product as `WD_K01`; this package keeps the `wd__k01` service dir and legacy proto package.
 
-## Import
+## Package
 
-```bash
-octobus service import --id wd-k01 ./services//wd__k01
-```
+- Service name: `wd-k01`
+- Service dir: `services/wd__k01`
+- Runtime mode: `long-running`
+- Command: `wd-k01`
+- Proto service: `WD_K01.WD_K01`
 
-## Behavior
+## Config And Secret
 
-- `BlockIP` logs in with `POST /api/cms/user/login`, calls `POST /api/v1/security/iplist/save` with `method: "add"`, then logs out with `POST /api/cms/user/logout`.
-- `UnblockIP` logs in, calls the same save endpoint with `method: "delete"`, then logs out.
-- Block messages containing `已存在` or `多播地址` are treated as idempotent success.
-- Unblock messages containing `对象不存在` or `多播地址` are treated as idempotent success.
-- `UnblockIP` accepts `1.1.1.1` or `1.1.1.1/32`; when the mask is omitted, `/32` is used.
-- HTTP 401/403 maps to `PERMISSION_DENIED`, other 4xx maps to `FAILED_PRECONDITION`, and network failures map to `UNAVAILABLE`.
+Config fields:
 
-## Local Checks
+- `host` required by runtime, with `restBaseUrl` and `baseUrl` aliases. Web API base URL.
+- `user` or `username` required by runtime.
+- `timeoutMs` optional, upstream HTTP timeout in milliseconds.
+- `skipTlsVerify`, `tlsInsecureSkipVerify`, `insecureSkipVerify` optional. TLS verification aliases for private deployments.
+- `headers` optional, extra upstream headers.
+
+Secret fields:
+
+- `password` required by runtime.
+
+The login token is used only internally for the action and logout calls. `login_raw_json` is returned as an empty string, and logout raw text is redacted.
+
+## RPCs
+
+| RPC | Access | Upstream behavior |
+| --- | --- | --- |
+| `BlockIP` | Write | Logs in, posts `method: "add"` to `/api/v1/security/iplist/save`, then logs out. |
+| `UnblockIP` | Write | Logs in, posts `method: "delete"` to `/api/v1/security/iplist/save`, then logs out. |
+
+Block messages containing `already exists` equivalents or multicast hints are idempotent success. Unblock messages containing object-not-found equivalents or multicast hints are idempotent success.
+
+## Local Validation
 
 ```bash
 cd services
 npm run validate -- --service-dir wd__k01
-npm test -- --service-dir wd__k01 --coverage
-npm run pack:check
+npm test -- --service-dir wd__k01
+npm test -- --coverage --service-dir wd__k01
 ```
+
+## OctoBus Example
+
+```bash
+octobus service import --id wd-k01 ./services/wd__k01
+octobus instance create wd-k01 \
+  --service wd-k01 \
+  --config-json '{"host":"https://wd.example.com","user":"api-user","timeoutMs":1500,"skipTlsVerify":false}' \
+  --secret-json '{"password":"REDACTED"}'
+octobus capset create security-ops --name security-ops
+octobus capset add-instance security-ops wd-k01
+
+curl -s -X POST \
+  http://127.0.0.1:9000/capsets/security-ops/connect/wd-k01/WD_K01.WD_K01/BlockIP \
+  -H 'Content-Type: application/json' \
+  -d '{"ip":"198.51.100.10","type":1,"timeout":60,"time_type":60,"comment":"incident test"}'
+```
+
+## Known Limits
+
+- The product identity is preserved from the legacy `WD_K01` naming.
+- The service logs in and logs out for each operation.
+- Response fields kept for legacy compatibility do not contain raw login body or raw logout text.

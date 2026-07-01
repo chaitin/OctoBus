@@ -29,9 +29,6 @@ message SendTextMessageResponse {
   // 其他状态码表示失败
   int32 http_status = 1;
 
-  // 下游飞书 HTTP 响应体的原始内容
-  // 以 JSON 字符串形式保存飞书返回的完整响应
-  // 典型响应示例: {"StatusCode": 0, "StatusMessage": "success"}
-  // 调用方可从此字段解析飞书返回的业务状态码和消息
+  // 兼容旧响应字段。当前实现为避免泄露上游内容固定返回空字符串。
   string http_body = 2;
 }

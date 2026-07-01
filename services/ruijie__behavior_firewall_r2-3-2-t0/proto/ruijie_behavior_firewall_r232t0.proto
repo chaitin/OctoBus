@@ -1,0 +1,157 @@
+syntax = "proto3";
+
+package Ruijie_Behavior_Firewall_R232T0;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Ruijie_Behavior_Firewall_R232T0";
+
+service RuijieBehaviorFirewallR232T0 {
+  rpc ListSafePolicies(ListRequest) returns (RuijieResponse) {}
+  rpc AddSafePolicy(PayloadRequest) returns (RuijieResponse) {}
+  rpc GetSafePolicy(SafePolicyKeyRequest) returns (RuijieResponse) {}
+  rpc EditSafePolicy(PayloadRequest) returns (RuijieResponse) {}
+  rpc InsertSafePolicy(PayloadRequest) returns (RuijieResponse) {}
+  rpc MoveSafePolicy(MoveSafePolicyRequest) returns (RuijieResponse) {}
+  rpc SetSafePolicyStatus(StatusBatchRequest) returns (RuijieResponse) {}
+  rpc DeleteSafePolicy(SafePolicyKeyRequest) returns (RuijieResponse) {}
+  rpc DeleteAllSafePolicies(EmptyRequest) returns (RuijieResponse) {}
+  rpc ClearSafePolicyCounters(EmptyRequest) returns (RuijieResponse) {}
+
+  rpc ListSecurityProtectPolicies(PageRequest) returns (RuijieResponse) {}
+  rpc UpsertSecurityProtectPolicy(SecurityProtectPolicyRequest) returns (RuijieResponse) {}
+  rpc GetSecurityProtectPolicy(NameRequest) returns (RuijieResponse) {}
+  rpc MoveSecurityProtectPolicy(MoveSecurityProtectPolicyRequest) returns (RuijieResponse) {}
+  rpc SetSecurityProtectPolicyStatus(StatusBatchRequest) returns (RuijieResponse) {}
+  rpc DeleteSecurityProtectPolicy(NameRequest) returns (RuijieResponse) {}
+  rpc DeleteAllSecurityProtectPolicies(EmptyRequest) returns (RuijieResponse) {}
+  rpc ClearSecurityProtectPolicyCounters(EmptyRequest) returns (RuijieResponse) {}
+
+  rpc ListIPWhitePolicies(ListRequest) returns (RuijieResponse) {}
+  rpc AddIPWhitePolicy(PayloadRequest) returns (RuijieResponse) {}
+  rpc GetIPWhitePolicy(NameRequest) returns (RuijieResponse) {}
+  rpc EditIPWhitePolicy(PayloadRequest) returns (RuijieResponse) {}
+  rpc DeleteIPWhitePolicy(NameRequest) returns (RuijieResponse) {}
+  rpc DeleteAllIPWhitePolicies(EmptyRequest) returns (RuijieResponse) {}
+
+  rpc ListURLWhitePolicies(ListRequest) returns (RuijieResponse) {}
+  rpc AddURLWhitePolicy(PayloadRequest) returns (RuijieResponse) {}
+  rpc GetURLWhitePolicy(NameRequest) returns (RuijieResponse) {}
+  rpc EditURLWhitePolicy(PayloadRequest) returns (RuijieResponse) {}
+  rpc SetURLWhitePolicyStatus(StatusBatchRequest) returns (RuijieResponse) {}
+  rpc DeleteURLWhitePolicy(NameRequest) returns (RuijieResponse) {}
+  rpc DeleteAllURLWhitePolicies(EmptyRequest) returns (RuijieResponse) {}
+
+  rpc GetDdosLogs(SecurityLogQueryRequest) returns (RuijieResponse) {}
+  rpc GetVirusLogs(SecurityLogQueryRequest) returns (RuijieResponse) {}
+  rpc GetIpsLogs(SecurityLogQueryRequest) returns (RuijieResponse) {}
+  rpc GetWafLogs(SecurityLogQueryRequest) returns (RuijieResponse) {}
+  rpc GetLockedIpLogs(LockedIpLogQueryRequest) returns (RuijieResponse) {}
+
+  rpc RawManage(RawOptRequest) returns (RuijieResponse) {}
+  rpc RawReport(RawOptRequest) returns (RuijieResponse) {}
+}
+
+message EmptyRequest {
+  google.protobuf.Struct payload = 1;
+}
+
+message ListRequest {
+  google.protobuf.Struct filter = 1;
+}
+
+message PageRequest {
+  int32 page = 1;
+  int32 pagesize = 2;
+  google.protobuf.Struct filter = 3;
+}
+
+message NameRequest {
+  string name = 1;
+  google.protobuf.Struct payload = 2;
+}
+
+message SafePolicyKeyRequest {
+  string rule_name = 1;
+  string policy_from = 2;
+  string policy_to = 3;
+  google.protobuf.Struct payload = 4;
+}
+
+message MoveSafePolicyRequest {
+  string name = 1;
+  string position = 2;
+  int32 target = 3;
+  string policy_from = 4;
+  string policy_to = 5;
+  google.protobuf.Struct payload = 6;
+}
+
+message MoveSecurityProtectPolicyRequest {
+  string name = 1;
+  string position = 2;
+  int32 target = 3;
+  google.protobuf.Struct payload = 4;
+}
+
+message PayloadRequest {
+  google.protobuf.Struct payload = 1;
+}
+
+message SecurityProtectPolicyRequest {
+  string action = 1;
+  string name = 2;
+  string insert_name = 3;
+  google.protobuf.Struct payload = 4;
+}
+
+message StatusBatchRequest {
+  string names = 1;
+  google.protobuf.Struct payload = 2;
+}
+
+message SecurityLogQueryRequest {
+  string useobj = 1;
+  string group_name = 2;
+  string chlgroup = 3;
+  string user_name = 4;
+  string ip_from = 5;
+  string ip_to = 6;
+  string from_date = 7;
+  string to_date = 8;
+  string object_date = 9;
+  string from_time = 10;
+  string to_time = 11;
+  int32 type = 12;
+  int32 app = 13;
+  int32 hole_id = 14;
+  string rule_id = 15;
+  int32 status_code = 16;
+  string url = 17;
+  int32 pagesize = 18;
+  int32 pagenum = 19;
+  google.protobuf.Struct filter = 20;
+}
+
+message LockedIpLogQueryRequest {
+  string ip = 1;
+  string from = 2;
+  string to = 3;
+  string order = 4;
+  int32 pagesize = 5;
+  int32 pagenum = 6;
+  google.protobuf.Struct filter = 7;
+}
+
+message RawOptRequest {
+  string opt = 1;
+  google.protobuf.Struct payload = 2;
+}
+
+message RuijieResponse {
+  int32 http_status = 1;
+  string raw_body = 2;
+  google.protobuf.Value raw_json = 3;
+  int32 code = 4;
+  string message = 5;
+}

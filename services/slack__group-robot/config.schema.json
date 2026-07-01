@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "webhook": {
+      "type": "string",
+      "deprecated": true,
+      "description": "Deprecated fallback for the Slack Incoming Webhook URL. Prefer secret.webhook."
+    },
+    "webhook_url": {
+      "type": "string",
+      "deprecated": true,
+      "description": "Deprecated fallback alias for webhook. Prefer secret.webhook."
+    },
+    "webhookUrl": {
+      "type": "string",
+      "deprecated": true,
+      "description": "Deprecated fallback alias for webhook. Prefer secret.webhook."
+    },
+    "url": {
+      "type": "string",
+      "deprecated": true,
+      "description": "Deprecated fallback alias for webhook. Prefer secret.webhook."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "timeout_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Legacy alias for timeoutMs."
+    }
+  }
+}

@@ -14,22 +14,34 @@ import { service } from '../src/service.js';
 
 const originalFetch = globalThis.fetch;
 
+const defaultConfig = {
+  host: 'https://device.example:8447',
+  user: 'sys_user',
+  timeoutMs: 4000,
+};
+
+const defaultSecret = {
+  password: 'Passw0rd!',
+};
+
 const buildCtx = (overrides = {}) => ({
   req: overrides.req || {},
   bindings: { timeoutMs: 4000, ...(overrides.bindings || {}) },
-  config: overrides.config || {},
-  secret: overrides.secret || {},
+  config: overrides.config === undefined ? defaultConfig : overrides.config,
+  secret: overrides.secret === undefined ? defaultSecret : overrides.secret,
   limits: { timeoutMs: 4000, ...(overrides.limits || {}) },
   meta: { instance_id: 'inst-1', request_id: 'req-1', ...(overrides.meta || {}) },
   metadata: { ...(overrides.metadata || {}) },
 });
 
+const callHandler = (method, request = {}, ctx = {}) => {
+  const handler = handlers[method];
+  return handler({ ...ctx, request });
+};
+
 const validRequest = () => ({
-  host: 'https://device.example:8447',
   device_name: 'public',
   book_name: 'Block_Group_1',
-  user: 'sys_user',
-  password: 'Passw0rd!',
   ipv4_list: ['203.0.113.20', '203.0.113.21'],
   ipv6_list: ['2001:db8::1'],
 });
@@ -80,7 +92,8 @@ test('UpdateAddressGroup succeeds and sends a single PUT XML request', async () 
 
   assert.equal(captured.url, 'https://device.example:8447/restconf/data/huawei-address-set:address-set/addr-group=public,Block_Group_1');
   assert.equal(captured.init.method, 'PUT');
-  assert.equal(captured.init.timeoutMs, 4000);
+  assert.equal(Object.hasOwn(captured.init, 'timeoutMs'), false);
+  assert.ok(captured.init.signal instanceof AbortSignal);
   assert.equal(captured.init.headers['Content-Type'], 'application/yang-data+xml');
   assert.equal(captured.init.headers.Accept, 'application/yang-data+xml');
   assert.match(captured.init.headers.Authorization, /^Basic\s+/);
@@ -89,11 +102,12 @@ test('UpdateAddressGroup succeeds and sends a single PUT XML request', async () 
   assert.match(captured.init.body, /<address-ipv6>2001:db8::1\/64<\/address-ipv6>/);
   assert.equal(result.success, true);
   assert.equal(result.http_status, 200);
-  assert.equal(result.raw_body, '<ok>true</ok>');
+  assert.equal(result.raw_body, '');
   assert.equal(result.preview_only, false);
   assert.equal(result.request_method, 'PUT');
   assert.equal(result.request_url, captured.url);
-  assert.equal(result.request_headers.Authorization, 'Basic ***');
+  assert.deepEqual(result.request_headers, {});
+  assert.equal(result.request_body, '');
   assert.equal(result.message, 'address group updated');
 });
 
@@ -137,8 +151,8 @@ test('UpdateAddressGroup supports preview mode through metadata and does not cal
   assert.equal(result.http_status, 0);
   assert.equal(result.raw_body, '');
   assert.equal(result.message, 'preview only');
-  assert.equal(result.request_headers.Authorization, 'Basic ***');
-  assert.match(result.request_body, /<addr-group>/);
+  assert.deepEqual(result.request_headers, {});
+  assert.equal(result.request_body, '');
 });
 
 test('UpdateAddressGroup rejects invalid host, key parts, and missing credentials before sending request', async () => {
@@ -149,7 +163,7 @@ test('UpdateAddressGroup rejects invalid host, key parts, and missing credential
   };
 
   await expectGrpcError(
-    () => rpcdef(buildCtx({ req: { ...validRequest(), host: 'http://device.example:8447' } }))[UPDATE_ADDRESS_GROUP_PATH](),
+    () => rpcdef(buildCtx({ req: validRequest(), config: { ...defaultConfig, host: 'http://device.example:8447' } }))[UPDATE_ADDRESS_GROUP_PATH](),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /host must be a valid https URL/),
   );
@@ -159,7 +173,12 @@ test('UpdateAddressGroup rejects invalid host, key parts, and missing credential
     (err) => assert.match(err.message, /device_name contains invalid characters/),
   );
   await expectGrpcError(
-    () => rpcdef(buildCtx({ req: { ...validRequest(), user: '' } }))[UPDATE_ADDRESS_GROUP_PATH](),
+    () => rpcdef(buildCtx({ req: validRequest(), config: {}, secret: {} }))[UPDATE_ADDRESS_GROUP_PATH](),
+    'INVALID_ARGUMENT',
+    (err) => assert.match(err.message, /host is required/),
+  );
+  await expectGrpcError(
+    () => rpcdef(buildCtx({ req: validRequest(), config: { ...defaultConfig, user: '' } }))[UPDATE_ADDRESS_GROUP_PATH](),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /user is required/),
   );
@@ -208,7 +227,7 @@ test('UpdateAddressGroup enforces total address count limit', async () => {
   );
 });
 
-test('UpdateAddressGroup maps HTTP failures with raw body details', async () => {
+test('UpdateAddressGroup maps HTTP failures without raw body details', async () => {
   const cases = [
     [401, 'PERMISSION_DENIED', '<error>unauthorized</error>'],
     [403, 'PERMISSION_DENIED', '<error>forbidden</error>'],
@@ -228,7 +247,8 @@ test('UpdateAddressGroup maps HTTP failures with raw body details', async () => 
       code,
       (err, payload) => {
         assert.equal(payload.http_status, status);
-        assert.equal(payload.raw_body, body);
+        assert.equal(payload.raw_body, '');
+        assert.equal(payload.raw_body_length, body.length);
         assert.equal(payload.reason, `upstream http ${status}`);
         assert.equal(err.details.http_status, status);
       },
@@ -280,16 +300,25 @@ test('UpdateAddressGroup passes TLS skip flags when configured', async () => {
     };
   };
 
-  await handlers[METHOD_UPDATE_ADDRESS_GROUP_FULL](validRequest(), buildCtx({
+  await callHandler(METHOD_UPDATE_ADDRESS_GROUP_FULL, validRequest(), buildCtx({
     bindings: { skipTlsVerify: true },
   }));
 
-  assert.equal(captured.init.skipTlsVerify, true);
-  assert.equal(captured.init.tlsInsecureSkipVerify, true);
-  assert.equal(captured.init.insecureSkipVerify, true);
+  assert.equal(Object.hasOwn(captured.init, 'skipTlsVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'tlsInsecureSkipVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'insecureSkipVerify'), false);
+  assert.ok(captured.init.dispatcher);
+  assert.equal(Object.hasOwn(captured.init, 'skipTlsVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'tlsInsecureSkipVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'insecureSkipVerify'), false);
+  assert.ok(captured.init.dispatcher);
+  assert.equal(Object.hasOwn(captured.init, 'skipTlsVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'tlsInsecureSkipVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'insecureSkipVerify'), false);
+  assert.ok(captured.init.dispatcher);
 });
 
-test('config and secret aliases provide defaults while request fields win', async () => {
+test('config and secret aliases provide defaults while request business fields win', async () => {
   let captured;
   globalThis.fetch = async (url, init) => {
     captured = { url, init };
@@ -300,8 +329,10 @@ test('config and secret aliases provide defaults while request fields win', asyn
     };
   };
 
-  const result = await handlers[METHOD_UPDATE_ADDRESS_GROUP_FULL]({
+  const result = await callHandler(METHOD_UPDATE_ADDRESS_GROUP_FULL, {
     bookName: 'Request_Book',
+    user: 'request_user',
+    password: 'request-pass',
     ipv4List: ['198.51.100.10'],
   }, {
     config: {
@@ -313,15 +344,17 @@ test('config and secret aliases provide defaults while request fields win', asyn
       desc: 'Config <Desc>',
       headers: { 'X-Trace': 'abc' },
     },
-    secret: { password: 'secret-pass' },
+    secret: { username: 'secret_user', password: 'secret-pass' },
     meta: { instanceId: 'inst-2', requestId: 'req-2' },
   });
 
   assert.equal(captured.url, 'https://device.example:8447/restconf/data/huawei-address-set:address-set/addr-group=public,Request_Book');
-  assert.equal(captured.init.timeoutMs, 4500);
+  assert.equal(Object.hasOwn(captured.init, 'timeoutMs'), false);
+  assert.ok(captured.init.signal instanceof AbortSignal);
   assert.equal(captured.init.headers['X-Trace'], 'abc');
-  assert.equal(result.request_headers.Authorization, 'Basic ***');
-  assert.match(result.request_body, /Config &lt;Desc&gt;/);
+  assert.equal(Buffer.from(captured.init.headers.Authorization.replace(/^Basic\s+/, ''), 'base64').toString(), 'secret_user:secret-pass');
+  assert.deepEqual(result.request_headers, {});
+  assert.match(captured.init.body, /Config &lt;Desc&gt;/);
 });
 
 test('helpers cover parser and sanitizer edge cases', () => {
@@ -397,13 +430,13 @@ test('fallback branches handle null inputs and minimal failures', async () => {
   assert.equal(_test.escapeXml(null), '');
   assert.equal(_test.buildXmlBody('', [], []), '<addr-group><desc>API Block_IP</desc></addr-group>');
   assert.equal(_test.prepareRequest({
-    req: {
+    config: {
       host: 'https://device.example:8447',
       device_name: 'public',
       book_name: 'Book',
       user: 'u',
-      password: 'p',
     },
+    secret: { password: 'p' },
   }).requestModel.request_body, '<addr-group><desc>API Block_IP</desc></addr-group>');
 
   let captured;
@@ -411,7 +444,7 @@ test('fallback branches handle null inputs and minimal failures', async () => {
     throw {};
   };
   await expectGrpcError(
-    () => handlers[METHOD_UPDATE_ADDRESS_GROUP_FULL](validRequest(), { metadata: null }),
+    () => callHandler(METHOD_UPDATE_ADDRESS_GROUP_FULL, validRequest(), buildCtx({ metadata: null })),
     'UNAVAILABLE',
     (err, payload) => assert.equal(payload.reason, 'fetch failed'),
   );
@@ -423,7 +456,7 @@ test('fallback branches handle null inputs and minimal failures', async () => {
     },
   });
   await expectGrpcError(
-    () => rpcdef({ request: validRequest() })[UPDATE_ADDRESS_GROUP_PATH](),
+    () => rpcdef(buildCtx({ req: validRequest() }))[UPDATE_ADDRESS_GROUP_PATH](),
     'UNKNOWN',
     (err, payload) => {
       assert.equal(payload.http_status, 0);
@@ -435,10 +468,10 @@ test('fallback branches handle null inputs and minimal failures', async () => {
     ok: true,
     text: async () => '',
   });
-  const result = await rpcdef({
+  const result = await rpcdef(buildCtx({
     req: validRequest(),
     meta: {},
-  })[UPDATE_ADDRESS_GROUP_PATH]();
+  }))[UPDATE_ADDRESS_GROUP_PATH]();
   assert.equal(result.http_status, 0);
 
   const originalLog = console.log;

@@ -1,0 +1,29 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "qianxin-hunter",
+  "displayName": "QiAnXin Hunter",
+  "description": "OctoBus package for QiAnXin Hunter network space search API. Supports IP lookup, domain search, component identification, certificate search, and other cyber asset mapping capabilities.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/hunter.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "qianxin.hunter.v1.HunterService/Search": {
+          "name": "search",
+          "description": "Search Hunter network space engine with query syntax. Supports IP, domain, component, certificate, and geo queries."
+        }
+      }
+    }
+  }
+}

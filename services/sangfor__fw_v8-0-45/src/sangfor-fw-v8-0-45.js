@@ -1,4 +1,5 @@
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const METHOD_LOGIN_PATH = '/Sangfor_FW_V8045.Sangfor_FW_V8045/Login';
 export const METHOD_BLOCK_PATH = '/Sangfor_FW_V8045.Sangfor_FW_V8045/BlockIP';
@@ -19,6 +20,7 @@ export const BLOCK_SUCCESS_CODES = new Set([0, 17]);
 export const UNBLOCK_SUCCESS_CODES = new Set([0, 1004]);
 
 const SERVICE_NAME = 'Sangfor_FW_V8045';
+const sessionCache = new Map();
 
 const grpcCodeFor = (code) => ({
   FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
@@ -74,18 +76,10 @@ const ensureAddresses = (req = {}) => {
   return filtered;
 };
 
-const requireToken = (req = {}) => {
-  const token = unwrapString(firstDefined(req.token, req.Token)).trim();
-  if (!token) throw errorWithCode('INVALID_ARGUMENT', 'token is required');
-  return token;
-};
-
-const resolveLoginField = (reqValue, bindingValue, fieldName) => {
-  const candidate = pickString(reqValue);
-  if (candidate && candidate.trim()) return candidate.trim();
+const resolveLoginField = (bindingValue, fieldName) => {
   const binding = pickString(bindingValue);
   if (binding && binding.trim()) return binding.trim();
-  throw errorWithCode('INVALID_ARGUMENT', `${fieldName} is required via request or bindings.${fieldName}`);
+  throw errorWithCode('INVALID_ARGUMENT', `${fieldName} is required via secret or config`);
 };
 
 const toBoolean = (value) => {
@@ -110,8 +104,8 @@ const optionalUint32 = (value) => {
 
 const mergedBindings = (ctx = {}) => ({
   ...(ctx.config ?? {}),
-  ...(ctx.secret ?? {}),
   ...(ctx.bindings ?? {}),
+  ...(ctx.secret ?? {}),
 });
 
 const resolveCallContext = (ctx = {}) => ({
@@ -119,14 +113,28 @@ const resolveCallContext = (ctx = {}) => ({
   bindings: mergedBindings(ctx),
   limits: ctx.limits ?? {},
   meta: ctx.meta ?? {},
-  req: ctx.req ?? ctx.request ?? {},
+  req: ctx.request ?? ctx.req ?? {},
 });
+
+const requestFromContext = (ctx = {}) => ctx.request ?? ctx.req ?? {};
 
 const buildLogPrefix = (meta = {}, action) => {
   const labels = [];
   if (meta.instance_id || meta.instanceId) labels.push(`inst=${meta.instance_id || meta.instanceId}`);
   if (meta.request_id || meta.requestId) labels.push(`req=${meta.request_id || meta.requestId}`);
   return `[${SERVICE_NAME}][${action}]${labels.length ? `[${labels.join(' ')}]` : ''}`;
+};
+
+const getInstanceId = (ctx = {}) => String(ctx?.meta?.instance_id || ctx?.meta?.instanceId || 'unknown');
+const buildSessionKey = (ctx, baseUrl) => `${getInstanceId(ctx)}::${baseUrl}`;
+const setSession = (ctx, baseUrl, session) => sessionCache.set(buildSessionKey(ctx, baseUrl), session);
+const getSession = (ctx, baseUrl) => sessionCache.get(buildSessionKey(ctx, baseUrl));
+const clearSession = (ctx, baseUrl) => sessionCache.delete(buildSessionKey(ctx, baseUrl));
+const clearSessionCache = () => sessionCache.clear();
+const requireToken = (ctx, baseUrl) => {
+  const token = unwrapString(getSession(ctx, baseUrl)?.token).trim();
+  if (!token) throw errorWithCode('FAILED_PRECONDITION', 'call Login first');
+  return token;
 };
 
 const logInfo = (meta, action, payload) => {
@@ -166,13 +174,24 @@ const mapHttpError = (res, bodyText) => {
 
 const buildTlsOptions = (bindings = {}) => {
   if (!toBoolean(bindings.skipTlsVerify) && !toBoolean(bindings.tlsInsecureSkipVerify) && !toBoolean(bindings.insecureSkipVerify)) return {};
-  return { insecureSkipVerify: true, tlsInsecureSkipVerify: true, skipTlsVerify: true };
+  return { dispatcher: getInsecureTlsDispatcher() };
+};
+
+let insecureTlsDispatcher;
+
+const getInsecureTlsDispatcher = () => {
+  insecureTlsDispatcher ??= new Agent({ connect: { rejectUnauthorized: false } });
+  return insecureTlsDispatcher;
 };
 
 const fetchJson = async (url, init, { bindings = {}, timeoutMs }) => {
   let res;
   try {
-    res = await fetch(url, { ...init, timeoutMs, ...buildTlsOptions(bindings) });
+    res = await fetch(url, {
+      ...init,
+      signal: AbortSignal.timeout(timeoutMs),
+      ...buildTlsOptions(bindings),
+    });
   } catch (err) {
     const reason = err?.cause?.message || err?.message || 'fetch failed';
     throw errorWithCode('UNAVAILABLE', reason);
@@ -239,10 +258,10 @@ const makeRuntime = (ctx = {}) => {
   const timeoutMs = resolveTimeoutMs(callCtx, bindings);
   const engineHeaders = buildEngineHeaders(bindings, meta);
 
-  const runLogin = async (req = {}) => {
+  const runLogin = async (_req = {}) => {
     const baseUrl = ensureBaseUrl(bindings);
-    const name = resolveLoginField(req?.name, firstDefined(bindings.user, bindings.username), 'user');
-    const password = resolveLoginField(req?.password, bindings.password, 'password');
+    const name = resolveLoginField(pickString(bindings.user)?.trim() ? bindings.user : bindings.username, 'user');
+    const password = resolveLoginField(bindings.password, 'password');
     const payload = { name, password };
     logInfo(meta, 'Login:start', { baseUrl });
     let json;
@@ -264,13 +283,14 @@ const makeRuntime = (ctx = {}) => {
     }
     const token = unwrapString(body?.data?.loginResult?.token).trim();
     if (!token) throw errorWithCode('UNKNOWN', 'login succeeded but token is empty');
+    setSession(callCtx, baseUrl, { token });
     logInfo(meta, 'Login:success', { baseUrl });
-    return { ...mapped, token, data: body?.data ?? null };
+    return { ...mapped, token: '', data: null };
   };
 
   const runBlock = async (req = {}) => {
     const baseUrl = ensureBaseUrl(bindings);
-    const token = requireToken(req);
+    const token = requireToken(callCtx, baseUrl);
     const addresses = ensureAddresses(req);
     const description = unwrapString(req.description).trim() || 'Block IP';
     logInfo(meta, 'BlockIP:start', { baseUrl, count: addresses.length });
@@ -298,7 +318,7 @@ const makeRuntime = (ctx = {}) => {
 
   const runUnblock = async (req = {}) => {
     const baseUrl = ensureBaseUrl(bindings);
-    const token = requireToken(req);
+    const token = requireToken(callCtx, baseUrl);
     const addresses = ensureAddresses(req);
     logInfo(meta, 'UnblockIP:start', { baseUrl, count: addresses.length });
     let json;
@@ -325,7 +345,7 @@ const makeRuntime = (ctx = {}) => {
 
   const runLogout = async (req = {}) => {
     const baseUrl = ensureBaseUrl(bindings);
-    const token = requireToken(req);
+    const token = requireToken(callCtx, baseUrl);
     logInfo(meta, 'Logout:start', { baseUrl });
     let json;
     try {
@@ -343,6 +363,7 @@ const makeRuntime = (ctx = {}) => {
       logError(meta, 'Logout:failed', mapped);
       throw errorWithCode('FAILED_PRECONDITION', `logout failed: code=${mapped.code} message=${mapped.message || 'unknown'}`);
     }
+    clearSession(callCtx, baseUrl);
     logInfo(meta, 'Logout:success', { baseUrl });
     return mapped;
   };
@@ -361,10 +382,10 @@ export function rpcdef(ctx = {}) {
 }
 
 export const handlers = {
-  [METHOD_LOGIN_FULL]: (req, ctx = {}) => makeRuntime({ ...ctx, req }).runLogin(req),
-  [METHOD_BLOCK_FULL]: (req, ctx = {}) => makeRuntime({ ...ctx, req }).runBlock(req),
-  [METHOD_UNBLOCK_FULL]: (req, ctx = {}) => makeRuntime({ ...ctx, req }).runUnblock(req),
-  [METHOD_LOGOUT_FULL]: (req, ctx = {}) => makeRuntime({ ...ctx, req }).runLogout(req),
+  [METHOD_LOGIN_FULL]: (ctx = {}) => makeRuntime({ ...ctx, request: requestFromContext(ctx) }).runLogin(requestFromContext(ctx)),
+  [METHOD_BLOCK_FULL]: (ctx = {}) => makeRuntime({ ...ctx, request: requestFromContext(ctx) }).runBlock(requestFromContext(ctx)),
+  [METHOD_UNBLOCK_FULL]: (ctx = {}) => makeRuntime({ ...ctx, request: requestFromContext(ctx) }).runUnblock(requestFromContext(ctx)),
+  [METHOD_LOGOUT_FULL]: (ctx = {}) => makeRuntime({ ...ctx, request: requestFromContext(ctx) }).runLogout(requestFromContext(ctx)),
 };
 
 export const _test = {
@@ -372,8 +393,11 @@ export const _test = {
   buildCookie,
   buildEngineHeaders,
   buildLogPrefix,
+  buildSessionKey,
   buildTlsOptions,
   buildUnblockPayload,
+  clearSession,
+  clearSessionCache,
   ensureAddresses,
   ensureBaseUrl,
   ensureSuccessCode,
@@ -381,7 +405,9 @@ export const _test = {
   extractStringList,
   fetchJson,
   firstDefined,
+  getSession,
   hasOwn,
+  getInstanceId,
   logError,
   logInfo,
   makeRuntime,
@@ -396,6 +422,7 @@ export const _test = {
   resolveCallContext,
   resolveLoginField,
   resolveTimeoutMs,
+  setSession,
   toBoolean,
   unwrapString,
 };

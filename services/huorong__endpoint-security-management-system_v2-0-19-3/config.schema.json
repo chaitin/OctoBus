@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "endpoint": {
+      "type": "string",
+      "description": "火绒管理平台基础地址，例如 https://huorong.example.com。"
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "endpoint 的兼容别名。"
+    },
+    "restBaseUrl": {
+      "type": "string",
+      "description": "endpoint 的兼容别名。"
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 10000,
+      "description": "HTTP 请求超时时间，单位为毫秒。"
+    },
+    "signatureExpiresSeconds": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 300,
+      "description": "签名有效期，单位为秒。"
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "是否跳过 TLS 证书校验，仅建议在私有测试环境使用。"
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "发送给火绒平台的额外 HTTP 请求头。"
+    }
+  }
+}

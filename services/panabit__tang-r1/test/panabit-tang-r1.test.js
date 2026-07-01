@@ -28,17 +28,24 @@ const nextInst = () => `inst-${++instSeq}`;
 const buildCtx = (overrides = {}) => ({
   bindings: {
     restBaseUrl: 'http://localhost:18080',
-    bindUser: 'api_user',
-    bindPassword: 'SuperSecret!',
     headers: { 'X-Extra': 'demo' },
     ...(overrides.bindings || {}),
   },
   config: overrides.config || {},
-  secret: overrides.secret || {},
+  secret: {
+    bindUser: 'api_user',
+    bindPassword: 'SuperSecret!',
+    ...(overrides.secret || {}),
+  },
   limits: { timeoutMs: 10_000, ...(overrides.limits || {}) },
   meta: { instance_id: overrides.instance_id || nextInst(), request_id: 'req', ...(overrides.meta || {}) },
   req: overrides.req || {},
 });
+
+const callHandler = (method, request = {}, ctx = {}) => {
+  const handler = handlers[method];
+  return handler({ ...ctx, request });
+};
 
 const makeResponse = ({ ok = true, status = 200, body = '{}', contentType = 'application/json' } = {}) => ({
   ok,
@@ -74,6 +81,7 @@ const expectGrpcError = async (fn, legacyCode, checker = () => {}) => {
 
 test.afterEach(() => {
   globalThis.fetch = originalFetch;
+  _test.clearSessionCache();
 });
 
 test('service exports defineService result and handlers', () => {
@@ -84,23 +92,23 @@ test('service exports defineService result and handlers', () => {
 
 test('Login validates required bindings and base URL', async () => {
   await expectGrpcError(
-    () => rpcdef(buildCtx({ bindings: { restBaseUrl: 'localhost', user: 'u', password: 'p', bindUser: undefined, bindPassword: undefined } }))[LOGIN_PATH](),
+    () => rpcdef(buildCtx({ bindings: { restBaseUrl: 'localhost' }, secret: { user: 'u', password: 'p', bindUser: undefined, bindPassword: undefined } }))[LOGIN_PATH](),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /restBaseUrl\/baseUrl is required/),
   );
   await expectGrpcError(
-    () => rpcdef(buildCtx({ bindings: { bindUser: '', user: '', password: 'p' } }))[LOGIN_PATH](),
+    () => rpcdef(buildCtx({ secret: { bindUser: '', bind_user: '', user: '', username: '', password: 'p' } }))[LOGIN_PATH](),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /user is required in bindings/),
   );
   await expectGrpcError(
-    () => rpcdef(buildCtx({ bindings: { bindPassword: '', password: '' } }))[LOGIN_PATH](),
+    () => rpcdef(buildCtx({ secret: { bindPassword: '', bind_password: '', password: '' } }))[LOGIN_PATH](),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /password is required in bindings/),
   );
 });
 
-test('Login sends GET request, headers, timeout, TLS flags, and returns token', async () => {
+test('Login sends GET request, headers, timeout, TLS flags, and caches token', async () => {
   let captured;
   setFetch(async (url, init) => {
     captured = { url: String(url), init };
@@ -108,7 +116,8 @@ test('Login sends GET request, headers, timeout, TLS flags, and returns token', 
   });
 
   const res = await rpcdef(buildCtx({
-    bindings: { bindUser: 'api_user', bindPassword: 'StrongPass!', skipTlsVerify: true },
+    bindings: { skipTlsVerify: true },
+    secret: { bindUser: 'api_user', bindPassword: 'StrongPass!' },
     limits: { timeoutMs: undefined },
   }))[LOGIN_PATH]();
 
@@ -118,14 +127,16 @@ test('Login sends GET request, headers, timeout, TLS flags, and returns token', 
   assert.equal(url.searchParams.get('username'), 'api_user');
   assert.equal(url.searchParams.get('password'), 'StrongPass!');
   assert.equal(captured.init.method, 'GET');
-  assert.equal(captured.init.timeoutMs, 1500);
-  assert.equal(captured.init.insecureSkipVerify, true);
+  assert.ok(captured.init.signal instanceof AbortSignal);
+  assert.equal('timeoutMs' in captured.init, false);
+  assert.ok(captured.init.dispatcher);
+  assert.equal('insecureSkipVerify' in captured.init, false);
   assert.equal(captured.init.headers['X-Extra'], 'demo');
   assert.ok(captured.init.headers['x-engine-instance'].startsWith('inst-'));
   assert.equal(captured.init.headers['x-request-id'], 'req');
   assert.equal(res.code, 0);
-  assert.equal(res.api_token, 'test-token-123');
-  assert.deepEqual(res.raw.fields.code, { numberValue: 0 });
+  assert.equal(res.api_token, '');
+  assert.equal(res.raw, undefined);
 });
 
 test('Login returns business failure payload without throwing', async () => {
@@ -135,12 +146,16 @@ test('Login returns business failure payload without throwing', async () => {
 
   assert.equal(res.code, 1);
   assert.equal(res.api_token, '');
+  assert.equal(res.raw, undefined);
 });
 
-test('ListIPTable sends multipart form data and maps entries', async () => {
+test('ListIPTable sends multipart form data with cached token and maps entries', async () => {
   let captured;
+  let step = 0;
   setFetch(async (url, init) => {
+    step += 1;
     captured = { url: String(url), init };
+    if (step === 1) return makeResponse({ body: JSON.stringify({ code: 0, data: 'cached-token' }) });
     return makeResponse({
       body: JSON.stringify({
         code: 0,
@@ -153,14 +168,16 @@ test('ListIPTable sends multipart form data and maps entries', async () => {
     });
   });
 
-  const res = await rpcdef(buildCtx({ req: { apiToken: 'token123', keyword: 'Firewall' } }))[LIST_IPTABLE_PATH]();
+  const ctx = buildCtx();
+  await rpcdef(ctx)[LOGIN_PATH]();
+  const res = await rpcdef({ ...ctx, req: { apiToken: 'request-token', keyword: 'Firewall' } })[LIST_IPTABLE_PATH]();
 
   assert.equal(captured.url, 'http://localhost:18080/api/panabit.cgi');
   assert.equal(captured.init.method, 'POST');
   assert.match(captured.init.headers['content-type'], /^multipart\/form-data; boundary=/);
   assert.match(captured.init.body, /name="api_route"\r\n\r\nobject@iptable\r\n/);
   assert.match(captured.init.body, /name="api_action"\r\n\r\nlist_iptable\r\n/);
-  assert.match(captured.init.body, /name="api_token"\r\n\r\ntoken123\r\n/);
+  assert.match(captured.init.body, /name="api_token"\r\n\r\ncached-token\r\n/);
   assert.match(captured.init.body, /name="keyword"\r\n\r\nFirewall\r\n/);
   assert.equal(res.code, 0);
   assert.equal(res.msg, 'success');
@@ -172,34 +189,38 @@ test('ListIPTable sends multipart form data and maps entries', async () => {
 
 test('AddIPTable, BlockIP, and UnblockIP send expected multipart actions', async () => {
   const calls = [];
+  const ctx = buildCtx();
+  _test.setSession(ctx, 'http://localhost:18080', { apiToken: 'cached-token' });
   setFetch(async (url, init) => {
     calls.push({ url: String(url), init });
     return makeResponse({ body: JSON.stringify({ code: 0, msg: 'success' }) });
   });
 
-  const add = await handlers[METHOD_ADD_IPTABLE_FULL]({ api_token: 'token123', Name: 'NewGroup' }, buildCtx());
-  const block = await rpcdef(buildCtx({ req: { api_token: 'token123', Name: 'BlockGroup', Id: '1024', Ip: '203.0.113.10' } }))[BLOCK_IP_PATH]();
-  const unblock = await handlers[METHOD_UNBLOCK_IP_FULL]({ apiToken: 'token123', name: 'BlockGroup', id: '1024', ip: '::1' }, buildCtx());
+  const add = await callHandler(METHOD_ADD_IPTABLE_FULL, { api_token: 'request-token', Name: 'NewGroup' }, ctx);
+  const block = await rpcdef({ ...ctx, req: { api_token: 'request-token', Name: 'BlockGroup', Id: '1024', Ip: '203.0.113.10' } })[BLOCK_IP_PATH]();
+  const unblock = await callHandler(METHOD_UNBLOCK_IP_FULL, { apiToken: 'request-token', name: 'BlockGroup', id: '1024', ip: '::1' }, ctx);
 
   assert.equal(add.code, 0);
   assert.equal(block.code, 0);
   assert.equal(unblock.code, 0);
   assert.match(calls[0].init.body, /name="api_action"\r\n\r\nadd_iptable\r\n/);
   assert.match(calls[0].init.body, /name="name"\r\n\r\nNewGroup\r\n/);
+  assert.match(calls[0].init.body, /name="api_token"\r\n\r\ncached-token\r\n/);
   assert.match(calls[1].init.body, /name="api_action"\r\n\r\nadd_tabip\r\n/);
   assert.match(calls[1].init.body, /name="ip"\r\n\r\n203.0.113.10\r\n/);
   assert.match(calls[2].init.body, /name="api_action"\r\n\r\nrmv_tabip\r\n/);
   assert.match(calls[2].init.body, /name="ip"\r\n\r\n::1\r\n/);
 });
 
-test('business RPCs validate token, name, id, and IP fields', async () => {
-  await expectGrpcError(() => rpcdef(buildCtx({ req: {} }))[LIST_IPTABLE_PATH](), 'INVALID_ARGUMENT', (err) => assert.match(err.message, /api_token is required/));
-  await expectGrpcError(() => rpcdef(buildCtx({ req: { name: 'group' } }))[ADD_IPTABLE_PATH](), 'INVALID_ARGUMENT', (err) => assert.match(err.message, /api_token is required/));
-  await expectGrpcError(() => rpcdef(buildCtx({ req: { api_token: 'token' } }))[ADD_IPTABLE_PATH](), 'INVALID_ARGUMENT', (err) => assert.match(err.message, /name is required/));
-  await expectGrpcError(() => rpcdef(buildCtx({ req: { api_token: 'token', name: 'group', id: '1' } }))[BLOCK_IP_PATH](), 'INVALID_ARGUMENT', (err) => assert.match(err.message, /ip is required/));
-  await expectGrpcError(() => rpcdef(buildCtx({ req: { api_token: 'token', name: 'group', ip: '1.1.1.1' } }))[BLOCK_IP_PATH](), 'INVALID_ARGUMENT', (err) => assert.match(err.message, /id is required/));
-  await expectGrpcError(() => rpcdef(buildCtx({ req: { api_token: 'token', id: '1', ip: '1.1.1.1' } }))[BLOCK_IP_PATH](), 'INVALID_ARGUMENT', (err) => assert.match(err.message, /name is required/));
-  await expectGrpcError(() => rpcdef(buildCtx({ req: { api_token: 'token', name: 'group', id: '1', ip: 'invalid-ip' } }))[UNBLOCK_IP_PATH](), 'INVALID_ARGUMENT', (err) => assert.match(err.message, /ip format is invalid/));
+test('business RPCs require cached login token and validate name, id, and IP fields', async () => {
+  await expectGrpcError(() => rpcdef(buildCtx({ req: { api_token: 'request-token' } }))[LIST_IPTABLE_PATH](), 'FAILED_PRECONDITION', (err) => assert.match(err.message, /call Login first/));
+  const ctx = buildCtx();
+  _test.setSession(ctx, 'http://localhost:18080', { apiToken: 'cached-token' });
+  await expectGrpcError(() => rpcdef({ ...ctx, req: {} })[ADD_IPTABLE_PATH](), 'INVALID_ARGUMENT', (err) => assert.match(err.message, /name is required/));
+  await expectGrpcError(() => rpcdef({ ...ctx, req: { name: 'group', id: '1' } })[BLOCK_IP_PATH](), 'INVALID_ARGUMENT', (err) => assert.match(err.message, /ip is required/));
+  await expectGrpcError(() => rpcdef({ ...ctx, req: { name: 'group', ip: '1.1.1.1' } })[BLOCK_IP_PATH](), 'INVALID_ARGUMENT', (err) => assert.match(err.message, /id is required/));
+  await expectGrpcError(() => rpcdef({ ...ctx, req: { id: '1', ip: '1.1.1.1' } })[BLOCK_IP_PATH](), 'INVALID_ARGUMENT', (err) => assert.match(err.message, /name is required/));
+  await expectGrpcError(() => rpcdef({ ...ctx, req: { name: 'group', id: '1', ip: 'invalid-ip' } })[UNBLOCK_IP_PATH](), 'INVALID_ARGUMENT', (err) => assert.match(err.message, /ip format is invalid/));
 });
 
 test('HTTP and transport failures map to legacy gRPC codes', async () => {
@@ -209,11 +230,20 @@ test('HTTP and transport failures map to legacy gRPC codes', async () => {
     [404, 'FAILED_PRECONDITION'],
     [500, 'UNAVAILABLE'],
   ]) {
-    setFetch(async () => makeResponse({ ok: false, status, body: `http ${status}`, contentType: 'text/plain' }));
+    setFetch(async () => makeResponse({ ok: false, status, body: `http ${status} api_token=leaked-panabit-token`, contentType: 'text/plain' }));
     await expectGrpcError(
-      () => rpcdef(buildCtx({ req: { api_token: 'token' } }))[LIST_IPTABLE_PATH](),
+      () => {
+        const ctx = buildCtx();
+        _test.setSession(ctx, 'http://localhost:18080', { apiToken: 'cached-token' });
+        return rpcdef(ctx)[LIST_IPTABLE_PATH]();
+      },
       code,
-      (err) => assert.match(err.message, new RegExp(`upstream http ${status}`)),
+      (err) => {
+        assert.match(err.message, new RegExp(`upstream http ${status}`));
+        assert.match(err.message, /body_length=/);
+        assert.doesNotMatch(err.message, /leaked-panabit-token/);
+        assert.doesNotMatch(err.message, /api_token/);
+      },
     );
   }
 
@@ -225,13 +255,17 @@ test('HTTP and transport failures map to legacy gRPC codes', async () => {
 
 test('non-JSON and empty responses preserve legacy behavior', async () => {
   setFetch(async () => makeResponse({ body: 'not json', contentType: 'text/plain' }));
-  await expectGrpcError(() => rpcdef(buildCtx({ req: { api_token: 'token' } }))[LIST_IPTABLE_PATH](), 'UNKNOWN', (err) => assert.match(err.message, /response is not valid JSON/));
+  const badJsonCtx = buildCtx();
+  _test.setSession(badJsonCtx, 'http://localhost:18080', { apiToken: 'cached-token' });
+  await expectGrpcError(() => rpcdef(badJsonCtx)[LIST_IPTABLE_PATH](), 'UNKNOWN', (err) => assert.match(err.message, /response is not valid JSON/));
 
   setFetch(async () => makeResponse({ body: '' }));
-  const list = await rpcdef(buildCtx({ req: { api_token: 'token' } }))[LIST_IPTABLE_PATH]();
-  const add = await rpcdef(buildCtx({ req: { api_token: 'token', name: 'group' } }))[ADD_IPTABLE_PATH]();
-  const block = await rpcdef(buildCtx({ req: { api_token: 'token', name: 'group', id: '1', ip: '192.168.1.1' } }))[BLOCK_IP_PATH]();
-  const unblock = await rpcdef(buildCtx({ req: { api_token: 'token', name: 'group', id: '1', ip: '192.168.1.1' } }))[UNBLOCK_IP_PATH]();
+  const emptyCtx = buildCtx();
+  _test.setSession(emptyCtx, 'http://localhost:18080', { apiToken: 'cached-token' });
+  const list = await rpcdef(emptyCtx)[LIST_IPTABLE_PATH]();
+  const add = await rpcdef({ ...emptyCtx, req: { name: 'group' } })[ADD_IPTABLE_PATH]();
+  const block = await rpcdef({ ...emptyCtx, req: { name: 'group', id: '1', ip: '192.168.1.1' } })[BLOCK_IP_PATH]();
+  const unblock = await rpcdef({ ...emptyCtx, req: { name: 'group', id: '1', ip: '192.168.1.1' } })[UNBLOCK_IP_PATH]();
 
   assert.deepEqual(list, { code: 0, msg: '', data: [], raw: { fields: {} } });
   assert.deepEqual(add, { code: 0, msg: '', raw: { fields: {} } });
@@ -248,7 +282,7 @@ test('config and secret aliases supply base URL, credentials, timeout, and heade
     return makeResponse({ body: JSON.stringify({ code: 0, data: 'token' }) });
   });
 
-  const result = await handlers[METHOD_LOGIN_FULL]({}, {
+  const result = await callHandler(METHOD_LOGIN_FULL, {}, {
     config: {
       base_url: 'http://config.example/',
       timeout_ms: 2500,
@@ -259,9 +293,10 @@ test('config and secret aliases supply base URL, credentials, timeout, and heade
     meta: { instanceId: 'camel-inst', requestId: 'camel-req' },
   });
 
-  assert.equal(result.api_token, 'token');
+  assert.equal(result.api_token, '');
   assert.equal(captured.url, 'http://config.example/api/panabit.cgi/API?api_action=api_login&username=secret-user&password=secret-pass');
-  assert.equal(captured.init.timeoutMs, 2500);
+  assert.ok(captured.init.signal instanceof AbortSignal);
+  assert.equal('timeoutMs' in captured.init, false);
   assert.equal(captured.init.headers['X-Config'], 'yes');
   assert.equal(captured.init.headers['x-engine-instance'], 'camel-inst');
   assert.equal(captured.init.headers['x-request-id'], 'camel-req');
@@ -282,11 +317,7 @@ test('helpers cover URL, scalar, multipart, IP, response, and fallback branches'
   assert.equal(_test.toBoolean('off'), false);
   assert.equal(_test.toBoolean('maybe'), false);
   assert.deepEqual(_test.buildTlsOptions({}), {});
-  assert.deepEqual(_test.buildTlsOptions({ insecureSkipVerify: 'yes' }), {
-    insecureSkipVerify: true,
-    tlsInsecureSkipVerify: true,
-    skipTlsVerify: true,
-  });
+  assert.ok(_test.buildTlsOptions({ insecureSkipVerify: 'yes' }).dispatcher);
   assert.deepEqual(_test.buildHeaders({ bindings: {}, meta: {} }), {
     'x-engine-instance': 'unknown',
     'x-request-id': 'unknown',
@@ -332,18 +363,18 @@ test('mock upstream supports login, table lifecycle, block, and unblock', async 
     const ctx = buildCtx({ bindings: { restBaseUrl: mock.url }, instance_id: nextInst() });
     const login = await rpcdef(ctx)[LOGIN_PATH]();
     assert.equal(login.code, 0);
-    assert.ok(login.api_token);
+    assert.equal(login.api_token, '');
 
-    const list = await rpcdef({ ...ctx, req: { api_token: login.api_token, keyword: 'Firewall' } })[LIST_IPTABLE_PATH]();
+    const list = await rpcdef({ ...ctx, req: { api_token: 'request-token', keyword: 'Firewall' } })[LIST_IPTABLE_PATH]();
     assert.equal(list.data.length, 1);
 
-    const add = await rpcdef({ ...ctx, req: { api_token: login.api_token, name: 'NewGroup' } })[ADD_IPTABLE_PATH]();
+    const add = await rpcdef({ ...ctx, req: { name: 'NewGroup' } })[ADD_IPTABLE_PATH]();
     assert.equal(add.msg, 'add success');
 
-    const block = await rpcdef({ ...ctx, req: { api_token: login.api_token, name: 'Block_IP_Firewall-01', id: '1024', ip: '198.51.100.10' } })[BLOCK_IP_PATH]();
+    const block = await rpcdef({ ...ctx, req: { name: 'Block_IP_Firewall-01', id: '1024', ip: '198.51.100.10' } })[BLOCK_IP_PATH]();
     assert.equal(block.code, 0);
 
-    const unblock = await rpcdef({ ...ctx, req: { api_token: login.api_token, name: 'Block_IP_Firewall-01', id: '1024', ip: '198.51.100.10' } })[UNBLOCK_IP_PATH]();
+    const unblock = await rpcdef({ ...ctx, req: { name: 'Block_IP_Firewall-01', id: '1024', ip: '198.51.100.10' } })[UNBLOCK_IP_PATH]();
     assert.equal(unblock.code, 0);
 
     assert.equal(mock.requests[0].query.username, 'api_user');

@@ -38,6 +38,11 @@ const buildCtx = (overrides = {}) => ({
   req: overrides.req || {},
 });
 
+const callHandler = (method, request = {}, ctx = {}) => {
+  const handler = handlers[method];
+  return handler({ ...ctx, request });
+};
+
 const responseOf = (status, body) => ({
   ok: status >= 200 && status < 300,
   status,
@@ -91,17 +96,17 @@ test('mock upstream supports batch block, duplicate block, remove, and missing r
   const host = await mock.start();
   try {
     const ctx = buildCtx({ bindings: { baseUrl: host, skipTlsVerify: true, ipdirection: 2, ipstate: 101, listtype: '100' } });
-    const block = await handlers[METHOD_BATCH_BLOCK_FULL]({ ip_list: ['198.51.100.1'], request_id: 'r1' }, ctx);
+    const block = await callHandler(METHOD_BATCH_BLOCK_FULL, { ip_list: ['198.51.100.1'], request_id: 'r1' }, ctx);
     assert.equal(block.status, OPERATION_STATUS.SUCCESS);
     assert.equal(block.success_count, 1);
     assert.equal(block.request_id, 'r1');
-    const duplicate = await handlers[METHOD_BATCH_BLOCK_FULL]({ ipList: ['198.51.100.1'] }, ctx);
+    const duplicate = await callHandler(METHOD_BATCH_BLOCK_FULL, { ipList: ['198.51.100.1'] }, ctx);
     assert.equal(duplicate.upstream_result_code, '-391201');
     assert.equal(duplicate.results[0].succeeded, true);
-    const remove = await handlers[METHOD_REMOVE_IP_FULL]({ ip: '198.51.100.1', requestId: 'r2' }, ctx);
+    const remove = await callHandler(METHOD_REMOVE_IP_FULL, { ip: '198.51.100.1', requestId: 'r2' }, ctx);
     assert.equal(remove.status, OPERATION_STATUS.SUCCESS);
     assert.equal(remove.request_id, 'r2');
-    const removeAgain = await handlers[METHOD_REMOVE_IP_FULL]({ target: '198.51.100.1' }, ctx);
+    const removeAgain = await callHandler(METHOD_REMOVE_IP_FULL, { target: '198.51.100.1' }, ctx);
     assert.equal(removeAgain.upstream_result_code, '-391204');
     assert.equal(removeAgain.result.succeeded, true);
     assert.equal(mock.requests.length, 12);
@@ -119,7 +124,7 @@ test('BatchBlockIP sends expected payload, headers, token, and TLS options', asy
     return responseOf(200, JSON.stringify({ result: '0', message: 'logout ok' }));
   });
 
-  const res = await handlers[METHOD_BATCH_BLOCK_FULL]({ targets: { values: ['1.1.1.1', '2.2.2.2'] } }, buildCtx({
+  const res = await callHandler(METHOD_BATCH_BLOCK_FULL, { targets: { values: ['1.1.1.1', '2.2.2.2'] } }, buildCtx({
     bindings: {
       skipTlsVerify: true,
       ipdirection: '3',
@@ -131,7 +136,9 @@ test('BatchBlockIP sends expected payload, headers, token, and TLS options', asy
   assert.equal(res.requested_ip_count, 2);
   assert.equal(calls[0].body.customize_time_out, 90);
   assert.equal(calls[0].init.headers['x-env'], 'test');
-  assert.equal(calls[0].init.tlsInsecureSkipVerify, true);
+  assert.ok(calls[0].init.signal instanceof AbortSignal);
+  assert.equal(calls[0].init.dispatcher, _test.insecureTlsDispatcher);
+  assert.equal(calls[0].init.tlsInsecureSkipVerify, undefined);
   assert.equal(calls[1].init.headers.Authorization, 'Bearer tok');
   assert.equal(calls[1].body.listtype, '200');
   assert.deepEqual(calls[1].body.ipadd, ['1.1.1.1', '2.2.2.2']);
@@ -150,7 +157,7 @@ test('RemoveBlockedIP uses encoded query and failure result shape', async () => 
     return responseOf(200, JSON.stringify({ result: '0', message: 'logout ok' }));
   });
 
-  const res = await handlers[METHOD_REMOVE_IP_FULL]({ target: '2001:db8::1', request_id: 'rm' }, buildCtx({ bindings: { listtype: 'black list' } }));
+  const res = await callHandler(METHOD_REMOVE_IP_FULL, { target: '2001:db8::1', request_id: 'rm' }, buildCtx({ bindings: { listtype: 'black list' } }));
   assert.equal(res.status, OPERATION_STATUS.FAILED);
   assert.equal(res.result.error_code, '-900');
   assert.equal(res.result.error_message, '{"reason":"denied"}');
@@ -179,12 +186,12 @@ test('rpcdef merges default request and caches environment', async () => {
 });
 
 test('validation and upstream errors map to gRPC errors', async () => {
-  await expectGrpcError(() => handlers[METHOD_BATCH_BLOCK_FULL]({ ip_list: ['1.1.1.1'] }, buildCtx({ bindings: { baseUrl: 'venus.example.com' } })), 'FAILED_PRECONDITION');
-  await expectGrpcError(() => handlers[METHOD_BATCH_BLOCK_FULL]({ ip_list: ['1.1.1.1'] }, buildCtx({ bindings: { username: '' } })), 'FAILED_PRECONDITION');
-  await expectGrpcError(() => handlers[METHOD_BATCH_BLOCK_FULL]({}, buildCtx()), 'INVALID_ARGUMENT');
-  await expectGrpcError(() => handlers[METHOD_BATCH_BLOCK_FULL]({ ip_list: 'bad' }, buildCtx()), 'INVALID_ARGUMENT');
-  await expectGrpcError(() => handlers[METHOD_BATCH_BLOCK_FULL]({ ip_list: [''] }, buildCtx()), 'INVALID_ARGUMENT');
-  await expectGrpcError(() => handlers[METHOD_REMOVE_IP_FULL]({}, buildCtx()), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => callHandler(METHOD_BATCH_BLOCK_FULL, { ip_list: ['1.1.1.1'] }, buildCtx({ bindings: { baseUrl: 'venus.example.com' } })), 'FAILED_PRECONDITION');
+  await expectGrpcError(() => callHandler(METHOD_BATCH_BLOCK_FULL, { ip_list: ['1.1.1.1'] }, buildCtx({ bindings: { username: '' } })), 'FAILED_PRECONDITION');
+  await expectGrpcError(() => callHandler(METHOD_BATCH_BLOCK_FULL, {}, buildCtx()), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => callHandler(METHOD_BATCH_BLOCK_FULL, { ip_list: 'bad' }, buildCtx()), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => callHandler(METHOD_BATCH_BLOCK_FULL, { ip_list: [''] }, buildCtx()), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => callHandler(METHOD_REMOVE_IP_FULL, {}, buildCtx()), 'INVALID_ARGUMENT');
   setFetch(async () => { throw new Error('deterministic alias failure'); });
   assert.deepEqual(await _test.executeBatchBlock({
     log: () => {},
@@ -201,25 +208,25 @@ test('validation and upstream errors map to gRPC errors', async () => {
   }, { ipList: null, targets: ['1.1.1.1'] }).catch((err) => err.legacyCode), 'UNAVAILABLE');
 
   setFetch(async () => responseOf(200, JSON.stringify({ result: '-1', message: 'invalid credentials' })));
-  await expectGrpcError(() => handlers[METHOD_BATCH_BLOCK_FULL]({ ip_list: ['1.1.1.1'] }, buildCtx()), 'UNAUTHENTICATED');
+  await expectGrpcError(() => callHandler(METHOD_BATCH_BLOCK_FULL, { ip_list: ['1.1.1.1'] }, buildCtx()), 'UNAUTHENTICATED');
 
   setFetch(async () => responseOf(403, 'forbidden'));
-  await expectGrpcError(() => handlers[METHOD_BATCH_BLOCK_FULL]({ ip_list: ['1.1.1.1'] }, buildCtx()), 'PERMISSION_DENIED');
+  await expectGrpcError(() => callHandler(METHOD_BATCH_BLOCK_FULL, { ip_list: ['1.1.1.1'] }, buildCtx()), 'PERMISSION_DENIED');
 
   setFetch(async () => responseOf(404, 'not found'));
-  await expectGrpcError(() => handlers[METHOD_BATCH_BLOCK_FULL]({ ip_list: ['1.1.1.1'] }, buildCtx()), 'FAILED_PRECONDITION');
+  await expectGrpcError(() => callHandler(METHOD_BATCH_BLOCK_FULL, { ip_list: ['1.1.1.1'] }, buildCtx()), 'FAILED_PRECONDITION');
 
   setFetch(async () => responseOf(500, 'broken'));
-  await expectGrpcError(() => handlers[METHOD_BATCH_BLOCK_FULL]({ ip_list: ['1.1.1.1'] }, buildCtx()), 'UNAVAILABLE');
+  await expectGrpcError(() => callHandler(METHOD_BATCH_BLOCK_FULL, { ip_list: ['1.1.1.1'] }, buildCtx()), 'UNAVAILABLE');
 
   setFetch(async () => responseOf(200, 'not-json'));
-  await expectGrpcError(() => handlers[METHOD_BATCH_BLOCK_FULL]({ ip_list: ['1.1.1.1'] }, buildCtx()), 'UNKNOWN');
+  await expectGrpcError(() => callHandler(METHOD_BATCH_BLOCK_FULL, { ip_list: ['1.1.1.1'] }, buildCtx()), 'UNKNOWN');
 
   setFetch(async () => { throw Object.assign(new Error('outer'), { cause: new Error('timeout') }); });
-  await expectGrpcError(() => handlers[METHOD_BATCH_BLOCK_FULL]({ ip_list: ['1.1.1.1'] }, buildCtx()), 'UNAVAILABLE', (err) => assert.match(err.message, /timeout/));
+  await expectGrpcError(() => callHandler(METHOD_BATCH_BLOCK_FULL, { ip_list: ['1.1.1.1'] }, buildCtx()), 'UNAVAILABLE', (err) => assert.match(err.message, /timeout/));
 
   setFetch(async () => { throw 'boom'; });
-  await expectGrpcError(() => handlers[METHOD_BATCH_BLOCK_FULL]({ ip_list: ['1.1.1.1'] }, buildCtx()), 'UNAVAILABLE', (err) => assert.match(err.message, /fetch failed/));
+  await expectGrpcError(() => callHandler(METHOD_BATCH_BLOCK_FULL, { ip_list: ['1.1.1.1'] }, buildCtx()), 'UNAVAILABLE', (err) => assert.match(err.message, /fetch failed/));
 });
 
 test('mock upstream covers invalid credentials, missing auth, bad delete, bad JSON, and not found', async () => {
@@ -274,7 +281,7 @@ test('logout errors are logged but do not mask action result', async () => {
     return responseOf(500, 'logout failed');
   });
 
-  const res = await handlers[METHOD_BATCH_BLOCK_FULL]({ ip_list: ['1.1.1.1'] }, buildCtx());
+  const res = await callHandler(METHOD_BATCH_BLOCK_FULL, { ip_list: ['1.1.1.1'] }, buildCtx());
   assert.equal(res.status, OPERATION_STATUS.SUCCESS);
   assert.equal(errors.length, 1);
   assert.match(errors[0], /logout_failed/);

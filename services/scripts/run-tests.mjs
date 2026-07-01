@@ -21,6 +21,9 @@ function parseArgs(argv) {
       continue;
     }
     if (arg === "--coverage-threshold") {
+      if (i + 1 >= argv.length || argv[i + 1] === "") {
+        throw new Error("--coverage-threshold must be a number from 0 to 100");
+      }
       const threshold = parseCoverageThreshold(argv[++i], "--coverage-threshold");
       opts.coverageBranches = threshold;
       opts.coverageFunctions = threshold;
@@ -35,6 +38,9 @@ function parseArgs(argv) {
       continue;
     }
     if (arg === "--service-dir") {
+      if (i + 1 >= argv.length || argv[i + 1] === "") {
+        throw new Error("--service-dir must not be empty");
+      }
       opts.serviceDir = argv[++i];
       continue;
     }
@@ -117,5 +123,10 @@ export function main(argv = process.argv.slice(2), root = process.cwd()) {
 }
 
 if (process.argv[1] != null && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
-  process.exitCode = main();
+  try {
+    process.exitCode = main();
+  } catch (error) {
+    console.error(`error: ${error.message}`);
+    process.exitCode = 1;
+  }
 }

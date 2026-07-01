@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "description": "FOFA API base URL, for example https://fofa.info/api/v1."
+    },
+    "endpoint": {
+      "type": "string",
+      "description": "Legacy alias for baseUrl."
+    },
+    "restBaseUrl": {
+      "type": "string",
+      "description": "Legacy alias for baseUrl."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional extra HTTP headers sent to FOFA."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 30000,
+      "description": "HTTP timeout in milliseconds."
+    }
+  }
+}

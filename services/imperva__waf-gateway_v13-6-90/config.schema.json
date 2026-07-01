@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "host": {
+      "type": "string",
+      "description": "Imperva MX 管理地址，例如 mx.example 或 https://mx.example:8083。"
+    },
+    "port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535,
+      "default": 8083,
+      "description": "Imperva MX 管理端口；host 已包含端口时此字段不会覆盖。"
+    },
+    "restBaseUrl": {
+      "type": "string",
+      "description": "host 的兼容别名。"
+    },
+    "rest_base_url": {
+      "type": "string",
+      "description": "host 的兼容别名。"
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "host 的兼容别名。"
+    },
+    "base_url": {
+      "type": "string",
+      "description": "host 的兼容别名。"
+    },
+    "endpoint": {
+      "type": "string",
+      "description": "host 的兼容别名。"
+    },
+    "apiVersion": {
+      "type": "string",
+      "default": "v1",
+      "description": "Imperva MX Open API 版本。"
+    },
+    "api_version": {
+      "type": "string",
+      "description": "apiVersion 的兼容别名。"
+    },
+    "ipGroupName": {
+      "type": "string",
+      "default": "OctoBus黑名单IP组",
+      "description": "用于封禁和解封的 Imperva IP Group 名称；缺省时自动使用 OctoBus黑名单IP组。"
+    },
+    "ip_group_name": {
+      "type": "string",
+      "description": "ipGroupName 的兼容别名。"
+    },
+    "groupName": {
+      "type": "string",
+      "description": "ipGroupName 的兼容别名。"
+    },
+    "group_name": {
+      "type": "string",
+      "description": "ipGroupName 的兼容别名。"
+    },
+    "policyName": {
+      "type": "string",
+      "default": "OctoBus黑名单策略",
+      "description": "用于拦截 IP 的 Web Service Custom Policy 名称；缺省时自动使用 OctoBus黑名单策略。"
+    },
+    "policy_name": {
+      "type": "string",
+      "description": "policyName 的兼容别名。"
+    },
+    "blockPolicyName": {
+      "type": "string",
+      "description": "policyName 的兼容别名。"
+    },
+    "block_policy_name": {
+      "type": "string",
+      "description": "policyName 的兼容别名。"
+    },
+    "followedAction": {
+      "type": "string",
+      "description": "可选的 Imperva Followed Action 名称。"
+    },
+    "followed_action": {
+      "type": "string",
+      "description": "followedAction 的兼容别名。"
+    },
+    "policySeverity": {
+      "type": "string",
+      "enum": [
+        "high",
+        "medium",
+        "low",
+        "informative",
+        "noAlert"
+      ],
+      "default": "high",
+      "description": "自定义策略告警级别。"
+    },
+    "policy_severity": {
+      "type": "string",
+      "description": "policySeverity 的兼容别名。"
+    },
+    "displayResponsePage": {
+      "type": "boolean",
+      "default": true,
+      "description": "拦截时是否展示响应页面。"
+    },
+    "display_response_page": {
+      "type": "boolean",
+      "description": "displayResponsePage 的兼容别名。"
+    },
+    "oneAlertPerSession": {
+      "type": "boolean",
+      "default": false,
+      "description": "是否每个会话只产生一条告警。"
+    },
+    "one_alert_per_session": {
+      "type": "boolean",
+      "description": "oneAlertPerSession 的兼容别名。"
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 300000,
+      "description": "HTTP 请求超时时间，单位毫秒。"
+    },
+    "timeout_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "timeoutMs 的兼容别名。"
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "是否跳过 TLS 证书校验，仅用于内网或自签证书环境。"
+    },
+    "tlsInsecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "skipTlsVerify 的兼容别名。"
+    },
+    "insecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "skipTlsVerify 的兼容别名。"
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "额外 HTTP 请求头。"
+    }
+  }
+}

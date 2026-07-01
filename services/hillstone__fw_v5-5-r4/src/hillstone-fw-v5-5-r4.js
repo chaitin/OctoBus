@@ -17,6 +17,9 @@ export const DEFAULT_LANG = 'zh_CN';
 export const DEFAULT_TIMEOUT_MS = 5000;
 export const DEFAULT_LIMIT = 50;
 export const DEFAULT_PAGE = 1;
+let insecureDispatcherPromise;
+
+const SESSION_CACHE = new Map();
 
 const grpcCodeFor = (code) => ({
   FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
@@ -50,6 +53,8 @@ const pickFirst = (source, keys) => {
 const pickRequestOrBinding = (req, ctx, requestKeys, bindingKeys = requestKeys) =>
   firstDefined(pickFirst(req, requestKeys), pickFirst(ctx?.bindings ?? {}, bindingKeys));
 
+const pickBinding = (ctx, bindingKeys) => pickFirst(mergedBindings(ctx), bindingKeys);
+
 const toTrimmedString = (value) => {
   const raw = unwrapScalar(value);
   if (raw === undefined || raw === null) return '';
@@ -78,8 +83,8 @@ const requireHost = (value) => {
 
 const mergedBindings = (ctx = {}) => ({
   ...(ctx?.config ?? {}),
-  ...(ctx?.secret ?? {}),
   ...(ctx?.bindings ?? {}),
+  ...(ctx?.secret ?? {}),
 });
 
 const resolveCallContext = (ctx = {}) => ({
@@ -96,13 +101,48 @@ const resolveTimeoutMs = (ctx) => {
   return Number.isFinite(timeout) && timeout > 0 ? timeout : DEFAULT_TIMEOUT_MS;
 };
 
-const buildTlsOptions = (bindings) => {
-  if (!bindings?.skipTlsVerify && !bindings?.tlsInsecureSkipVerify && !bindings?.insecureSkipVerify) return {};
-  return {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  };
+const shouldSkipTlsVerify = (bindings) => Boolean(bindings?.skipTlsVerify || bindings?.tlsInsecureSkipVerify || bindings?.insecureSkipVerify);
+
+const createTlsDispatcher = async (skipTlsVerify) => {
+  if (!skipTlsVerify) return undefined;
+  insecureDispatcherPromise ??= import('undici').then(({ Agent }) => new Agent({
+    connect: { rejectUnauthorized: false },
+  }));
+  return insecureDispatcherPromise;
+};
+
+const buildTlsOptions = async (bindings) => {
+  const dispatcher = await createTlsDispatcher(shouldSkipTlsVerify(bindings));
+  return dispatcher ? { dispatcher } : {};
+};
+
+const fetchWithTimeout = async (url, init = {}, options = {}) => {
+  const rawTimeout = Number(options.timeoutMs);
+  const timeoutMs = Number.isFinite(rawTimeout) && rawTimeout > 0 ? rawTimeout : DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const parentSignal = init.signal;
+  const abortFromParent = () => controller.abort(parentSignal.reason);
+  if (parentSignal) {
+    if (parentSignal.aborted) {
+      controller.abort(parentSignal.reason);
+    } else if (typeof parentSignal.addEventListener === 'function') {
+      parentSignal.addEventListener('abort', abortFromParent, { once: true });
+    }
+  }
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const tlsOptions = await buildTlsOptions(options.bindings);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+      ...tlsOptions,
+    });
+  } finally {
+    clearTimeout(timer);
+    if (parentSignal && typeof parentSignal.removeEventListener === 'function') {
+      parentSignal.removeEventListener('abort', abortFromParent);
+    }
+  }
 };
 
 const buildHeaders = (ctx, extra = {}) => ({
@@ -113,11 +153,13 @@ const buildHeaders = (ctx, extra = {}) => ({
 });
 
 const throwStructuredError = (code, message, options = {}) => {
+  const bodyText = String(options.httpBody ?? '');
   const payload = {
     code,
     message,
     http_status: Number(options.httpStatus ?? 0),
-    http_body: String(options.httpBody ?? ''),
+    http_body: '',
+    http_body_length: bodyText.length,
   };
   if (options.reason) payload.reason = String(options.reason);
   throw errorWithCode(code, JSON.stringify(payload));
@@ -138,11 +180,7 @@ const fetchText = async (ctx, url, init = {}) => {
   const callCtx = resolveCallContext(ctx);
   let response;
   try {
-    response = await fetch(url, {
-      timeoutMs: resolveTimeoutMs(callCtx),
-      ...buildTlsOptions(callCtx.bindings),
-      ...init,
-    });
+    response = await fetchWithTimeout(url, init, { timeoutMs: resolveTimeoutMs(callCtx), bindings: callCtx.bindings });
   } catch (err) {
     throwStructuredError('UNAVAILABLE', 'hillstone upstream request failed', {
       httpStatus: 0,
@@ -152,10 +190,12 @@ const fetchText = async (ctx, url, init = {}) => {
   }
   const bodyText = String((await response.text()) ?? '');
   if (!response.ok) throwForHttpStatus(response.status, bodyText);
-  return {
+  const result = {
     http_status: Number(response.status),
-    http_body: bodyText,
+    http_body: '',
   };
+  Object.defineProperty(result, 'body_text', { value: bodyText, enumerable: false });
+  return result;
 };
 
 const asArray = (value) => {
@@ -186,6 +226,29 @@ const buildCookieHeader = (cookie) => {
     ['lang', cookie.lang],
   ];
   return pairs.map(([key, value]) => `${key}=${value}`).join('; ');
+};
+
+const getInstanceKey = (ctx) => String(ctx?.meta?.instance_id || ctx?.meta?.instanceId || 'default');
+
+const getInstanceSessionMap = (ctx) => {
+  const key = getInstanceKey(ctx);
+  let map = SESSION_CACHE.get(key);
+  if (!map) {
+    map = new Map();
+    SESSION_CACHE.set(key, map);
+  }
+  return map;
+};
+
+const getSession = (ctx, host) => getInstanceSessionMap(ctx).get(host);
+const setSession = (ctx, host, session) => getInstanceSessionMap(ctx).set(host, session);
+const clearSession = (ctx, host) => getInstanceSessionMap(ctx).delete(host);
+const clearAllSessions = () => SESSION_CACHE.clear();
+
+const requireSession = (ctx, host) => {
+  const session = getSession(ctx, host);
+  if (!session) throw errorWithCode('FAILED_PRECONDITION', 'call Login first');
+  return session;
 };
 
 const mapAddressBookIP = (item) => ({
@@ -230,8 +293,8 @@ const buildAddressBooks = (value) => {
 };
 
 const buildLoginPayload = (req, ctx) => ({
-  userName: requireString(pickRequestOrBinding(req, ctx, ['user_name', 'userName']), 'user_name'),
-  password: requireString(pickRequestOrBinding(req, ctx, ['password']), 'password'),
+  userName: requireString(pickBinding(ctx, ['user_name', 'userName', 'username', 'user']), 'user_name'),
+  password: requireString(pickBinding(ctx, ['password']), 'password'),
   ifVsysId: toTrimmedString(pickFirst(req, ['if_vsys_id', 'ifVsysId'])) || DEFAULT_IF_VSYS_ID,
   vrId: toTrimmedString(pickFirst(req, ['vr_id', 'vrId'])) || DEFAULT_VR_ID,
   lang: toTrimmedString(pickFirst(req, ['lang'])) || DEFAULT_LANG,
@@ -251,34 +314,68 @@ const buildQueryUrl = (host, req) => {
   return `${host}/rest/doc/addrbook?query=${encodeURIComponent(JSON.stringify(query))}`;
 };
 
+const normalizeLoginResult = (parsed) => {
+  if (Array.isArray(parsed?.result)) return parsed.result[0];
+  if (parsed?.result && typeof parsed.result === 'object') return parsed.result;
+  return null;
+};
+
+const extractSessionFromLogin = (ctx, httpStatus, httpBody, lang) => {
+  if (httpStatus < 200 || httpStatus >= 300) return null;
+  let parsed;
+  try {
+    parsed = JSON.parse(String(httpBody ?? ''));
+  } catch {
+    return null;
+  }
+  if (parsed?.success === false) return null;
+  const result = normalizeLoginResult(parsed);
+  if (!result || typeof result !== 'object') return null;
+  const token = toTrimmedString(pickFirst(result, ['token']));
+  if (!token) return null;
+  return {
+    fromrootvsys: toTrimmedString(pickFirst(result, ['fromrootvsys'])),
+    role: toTrimmedString(pickFirst(result, ['role'])),
+    vsysId: toTrimmedString(pickFirst(result, ['vsys_id', 'vsysId'])),
+    token,
+    username: requireString(pickBinding(ctx, ['user_name', 'userName', 'username', 'user']), 'user_name'),
+    lang: lang || DEFAULT_LANG,
+  };
+};
+
 const runLogin = async (req, ctx) => {
   const callCtx = resolveCallContext(ctx);
   const host = requireHost(pickRequestOrBinding(req, callCtx, ['host']));
-  return fetchText(callCtx, `${host}/rest/doc/login`, {
+  const lang = toTrimmedString(pickFirst(req, ['lang'])) || DEFAULT_LANG;
+  const response = await fetchText(callCtx, `${host}/rest/doc/login`, {
     method: 'POST',
     headers: buildHeaders(callCtx),
     body: JSON.stringify(buildLoginPayload(req, callCtx)),
   });
+  const session = extractSessionFromLogin(callCtx, response.http_status, response.body_text, lang);
+  if (session) setSession(callCtx, host, session);
+  return { http_status: response.http_status, http_body: '' };
 };
 
 const runCreateAddressGroup = async (req, ctx) => {
   const callCtx = resolveCallContext(ctx);
   const host = requireHost(pickRequestOrBinding(req, callCtx, ['host']));
-  const cookie = buildCookieContext(pickFirst(req, ['cookie']) || {});
-  return fetchText(callCtx, `${host}/rest/doc/addrbook`, {
+  const session = requireSession(callCtx, host);
+  const response = await fetchText(callCtx, `${host}/rest/doc/addrbook`, {
     method: 'POST',
-    headers: buildHeaders(callCtx, { Cookie: buildCookieHeader(cookie) }),
+    headers: buildHeaders(callCtx, { Cookie: buildCookieHeader(session) }),
     body: JSON.stringify(buildAddressBooks(pickFirst(req, ['address_books', 'addressBooks']))),
   });
+  return response;
 };
 
 const runUpdateAddressGroup = async (req, ctx) => {
   const callCtx = resolveCallContext(ctx);
   const host = requireHost(pickRequestOrBinding(req, callCtx, ['host']));
-  const cookie = buildCookieContext(pickFirst(req, ['cookie']) || {});
+  const session = requireSession(callCtx, host);
   return fetchText(callCtx, `${host}/rest/doc/addrbook`, {
     method: 'PUT',
-    headers: buildHeaders(callCtx, { Cookie: buildCookieHeader(cookie) }),
+    headers: buildHeaders(callCtx, { Cookie: buildCookieHeader(session) }),
     body: JSON.stringify(buildAddressBooks(pickFirst(req, ['address_books', 'addressBooks']))),
   });
 };
@@ -286,10 +383,10 @@ const runUpdateAddressGroup = async (req, ctx) => {
 const runQueryAddressGroup = async (req, ctx) => {
   const callCtx = resolveCallContext(ctx);
   const host = requireHost(pickRequestOrBinding(req, callCtx, ['host']));
-  const cookie = buildCookieContext(pickFirst(req, ['cookie']) || {});
+  const session = requireSession(callCtx, host);
   return fetchText(callCtx, buildQueryUrl(host, req), {
     method: 'GET',
-    headers: buildHeaders(callCtx, { Cookie: buildCookieHeader(cookie) }),
+    headers: buildHeaders(callCtx, { Cookie: buildCookieHeader(session) }),
   });
 };
 
@@ -325,10 +422,17 @@ rpcdef.__test__ = {
   buildLoginPayload,
   buildQueryUrl,
   buildTlsOptions,
+  clearAllSessions,
+  clearSession,
   CONTENT_TYPE,
+  createTlsDispatcher,
   errorWithCode,
+  extractSessionFromLogin,
+  fetchWithTimeout,
   fetchText,
   firstDefined,
+  getInstanceKey,
+  getSession,
   hasOwn,
   mapAddressBook,
   mapAddressBookEntry,
@@ -336,10 +440,12 @@ rpcdef.__test__ = {
   mapAddressBookIP,
   mapAddressBookRange,
   pickFirst,
+  pickBinding,
   pickRequestOrBinding,
   readInteger,
   registerHandlers,
   requireHost,
+  requireSession,
   requireString,
   resolveCallContext,
   resolveTimeoutMs,
@@ -347,6 +453,8 @@ rpcdef.__test__ = {
   runLogin,
   runQueryAddressGroup,
   runUpdateAddressGroup,
+  setSession,
+  shouldSkipTlsVerify,
   throwForHttpStatus,
   throwStructuredError,
   toTrimmedString,

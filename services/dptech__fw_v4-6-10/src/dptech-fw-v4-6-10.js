@@ -24,6 +24,7 @@ export const METHOD_GET_SECURITY_POLICY_FULL = 'DPtech_FW_V4610.DPtech_FW_V4610/
 export const METHOD_CREATE_SECURITY_POLICY_FULL = 'DPtech_FW_V4610.DPtech_FW_V4610/CreateSecurityPolicy';
 export const METHOD_UPDATE_SECURITY_POLICY_FULL = 'DPtech_FW_V4610.DPtech_FW_V4610/UpdateSecurityPolicy';
 export const METHOD_DELETE_SECURITY_POLICY_FULL = 'DPtech_FW_V4610.DPtech_FW_V4610/DeleteSecurityPolicy';
+let insecureDispatcherPromise;
 
 const JSON_HEADERS = {
   'content-type': 'application/json',
@@ -177,14 +178,48 @@ const resolveTimeoutMs = (ctx) => {
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;
 };
 
-const buildTlsOptions = (bindings) => {
-  const enabled = Boolean(bindings?.skipTlsVerify || bindings?.tlsInsecureSkipVerify || bindings?.insecureSkipVerify);
-  if (!enabled) return {};
-  return {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  };
+const shouldSkipTlsVerify = (bindings) => Boolean(bindings?.skipTlsVerify || bindings?.tlsInsecureSkipVerify || bindings?.insecureSkipVerify);
+
+const createTlsDispatcher = async (skipTlsVerify) => {
+  if (!skipTlsVerify) return undefined;
+  insecureDispatcherPromise ??= import('undici').then(({ Agent }) => new Agent({
+    connect: { rejectUnauthorized: false },
+  }));
+  return insecureDispatcherPromise;
+};
+
+const buildTlsOptions = async (bindings) => {
+  const dispatcher = await createTlsDispatcher(shouldSkipTlsVerify(bindings));
+  return dispatcher ? { dispatcher } : {};
+};
+
+const fetchWithTimeout = async (url, init = {}, options = {}) => {
+  const rawTimeout = Number(options.timeoutMs);
+  const timeoutMs = Number.isFinite(rawTimeout) && rawTimeout > 0 ? rawTimeout : DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const parentSignal = init.signal;
+  const abortFromParent = () => controller.abort(parentSignal.reason);
+  if (parentSignal) {
+    if (parentSignal.aborted) {
+      controller.abort(parentSignal.reason);
+    } else if (typeof parentSignal.addEventListener === 'function') {
+      parentSignal.addEventListener('abort', abortFromParent, { once: true });
+    }
+  }
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const tlsOptions = await buildTlsOptions(options.bindings);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+      ...tlsOptions,
+    });
+  } finally {
+    clearTimeout(timer);
+    if (parentSignal && typeof parentSignal.removeEventListener === 'function') {
+      parentSignal.removeEventListener('abort', abortFromParent);
+    }
+  }
 };
 
 const buildAuthHeader = (bindings) => {
@@ -224,15 +259,16 @@ const tryParseJson = (text) => {
 };
 
 const throwStructuredError = (code, message, options = {}) => {
+  const rawBody = String(options.rawBody ?? '');
   const payload = {
     code,
     message,
     http_status: Number(options.httpStatus ?? 0),
-    raw_body: String(options.rawBody ?? ''),
+    raw_body: '',
+    raw_body_length: rawBody.length,
   };
   if (options.reason) payload.reason = String(options.reason);
   if (options.ret !== undefined) payload.ret = String(options.ret);
-  if (options.rawJson !== undefined) payload.raw_json = options.rawJson;
   throw errorWithCode(code, JSON.stringify(payload));
 };
 
@@ -261,12 +297,10 @@ const fetchUpstream = async (ctx, path, init = {}, query = {}) => {
   const timeoutMs = resolveTimeoutMs(ctx);
   let res;
   try {
-    res = await fetch(url, {
-      timeoutMs,
-      ...buildTlsOptions(bindings),
+    res = await fetchWithTimeout(url, {
       ...init,
       headers: buildHeaders(bindings, init.headers || {}),
-    });
+    }, { timeoutMs, bindings });
   } catch (err) {
     throwStructuredError('UNAVAILABLE', 'dptech upstream request failed', {
       httpStatus: 0,
@@ -299,8 +333,8 @@ const fetchUpstream = async (ctx, path, init = {}, query = {}) => {
 const successResponse = (httpStatus, rawBody, json, extra = {}) => ({
   http_status: Number(httpStatus),
   ret: json && hasOwn(json, 'ret') ? unwrapScalar(json.ret) : '',
-  raw_body: String(rawBody ?? ''),
-  raw_json: toValue(json),
+  raw_body: '',
+  raw_json: undefined,
   ...extra,
 });
 
@@ -597,8 +631,10 @@ export const _test = {
   buildHeaders,
   buildTlsOptions,
   buildUrl,
+  createTlsDispatcher,
   encodeBase64,
   errorWithCode,
+  fetchWithTimeout,
   fetchUpstream,
   firstDefined,
   handleCreateAddressGroup,
@@ -627,6 +663,7 @@ export const _test = {
   resolvePassword,
   resolveTimeoutMs,
   resolveUser,
+  shouldSkipTlsVerify,
   successResponse,
   throwStructuredError,
   toAddressGroupItems,

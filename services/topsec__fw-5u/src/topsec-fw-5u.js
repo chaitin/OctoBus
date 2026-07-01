@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import net from 'node:net';
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const METHOD_LOGIN_PATH = '/TopSec_FW_5U.TopSec_FW_5U/Login';
 export const METHOD_REFRESH_PATH = '/TopSec_FW_5U.TopSec_FW_5U/Refresh';
@@ -32,6 +33,7 @@ const grpcCodeFor = (code) => ({
   FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
   INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT,
   PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED,
+  UNAUTHENTICATED: grpcStatus.UNAUTHENTICATED,
   UNAVAILABLE: grpcStatus.UNAVAILABLE,
   UNKNOWN: grpcStatus.UNKNOWN,
 })[code] ?? grpcStatus.UNKNOWN;
@@ -41,7 +43,6 @@ const errorWithCode = (code, message, details = {}) => {
     code,
     message,
     http_status: Number(details.http_status || 0),
-    raw_body: String(details.raw_body || ''),
     reason: String(details.reason || message || ''),
   };
   const err = new GrpcError(grpcCodeFor(code), JSON.stringify(payload));
@@ -85,16 +86,18 @@ const pickBoolean = (...values) => {
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 const mergedBindings = (ctx = {}) => ({
+  ...(ctx.bindings ?? {}),
   ...(ctx.config ?? {}),
   ...(ctx.secret ?? {}),
-  ...(ctx.bindings ?? {}),
 });
 
 const resolveCallContext = (ctx = {}) => ({
   ...ctx,
   bindings: mergedBindings(ctx),
+  config: ctx.config ?? {},
+  secret: ctx.secret ?? {},
   limits: ctx.limits ?? {},
-  meta: ctx.meta ?? {},
+  meta: ctx.meta ?? ctx.metadata ?? {},
   req: ctx.req ?? ctx.request ?? {},
 });
 
@@ -218,17 +221,28 @@ const mapHttpStatusToCode = (status) => {
   return 'UNAVAILABLE';
 };
 
+const insecureTlsDispatcher = new Agent({ connect: { rejectUnauthorized: false } });
+
+const buildTlsOptions = (options = {}) => (options.skipTlsVerify ? { dispatcher: insecureTlsDispatcher } : {});
+
+const makeTimeoutSignal = (timeoutMs) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  return { signal: controller.signal, clear: () => clearTimeout(timeoutId) };
+};
+
 const fetchText = async (ctx, url, init = {}, options = {}) => {
-  const tlsOptions = options.skipTlsVerify ? { insecureSkipVerify: true, tlsInsecureSkipVerify: true } : {};
+  const timeout = makeTimeoutSignal(resolveTimeoutMs(ctx));
   let response;
   try {
-    response = await fetch(url, { ...init, timeoutMs: resolveTimeoutMs(ctx), ...tlsOptions });
+    response = await fetch(url, { ...init, signal: timeout.signal, ...buildTlsOptions(options) });
   } catch (err) {
     throw errorWithCode('UNAVAILABLE', 'topsec upstream request failed', {
       http_status: 0,
-      raw_body: '',
       reason: err?.cause?.message || err?.message || 'fetch failed',
     });
+  } finally {
+    timeout.clear();
   }
   let text = '';
   try {
@@ -236,14 +250,12 @@ const fetchText = async (ctx, url, init = {}, options = {}) => {
   } catch (err) {
     throw errorWithCode('UNKNOWN', 'topsec upstream response body read failed', {
       http_status: response?.status || 0,
-      raw_body: '',
       reason: err?.message || 'read body failed',
     });
   }
   if (response.status < 200 || response.status > 299) {
     throw errorWithCode(mapHttpStatusToCode(response.status), 'topsec upstream request failed', {
       http_status: response.status,
-      raw_body: text,
       reason: `upstream http ${response.status}`,
     });
   }
@@ -255,7 +267,6 @@ const parseSuccessfulPayload = (status, text) => {
   if (!isObject(decoded)) {
     throw errorWithCode('UNKNOWN', 'topsec upstream response is not valid', {
       http_status: status,
-      raw_body: text,
       reason: 'response is neither expected token-prefixed payload nor valid JSON',
     });
   }
@@ -271,6 +282,14 @@ const buildSessionContext = (base, overrides = {}) => ({
   allow_http: Boolean(overrides.allow_http ?? base.allow_http),
   vendor_state: overrides.vendor_state || base.vendor_state || null,
 });
+
+const sessionCache = new Map();
+
+const cacheIdentity = (ctx = {}, host = '', username = '') => {
+  const serviceId = pickString(ctx.serviceId, ctx.service_id, ctx.meta?.service_id, ctx.meta?.serviceId) || 'topsec__fw-5u';
+  const instanceId = pickString(ctx.instanceId, ctx.instance_id, ctx.meta?.instance_id, ctx.meta?.instanceId, ctx.workdir) || 'default';
+  return JSON.stringify([serviceId, instanceId, host, username]);
+};
 
 const ensureSession = (session) => {
   if (!isObject(session)) throw errorWithCode('INVALID_ARGUMENT', 'session is required');
@@ -303,7 +322,6 @@ const interpretLogin = (status, text, decoded, rotatedToken, sessionBase) => {
   if (!Boolean(decoded.result)) {
     throw errorWithCode('PERMISSION_DENIED', 'topsec login failed', {
       http_status: status,
-      raw_body: text,
       reason: resolveDecodedMessage(decoded) || 'login failed',
     });
   }
@@ -312,7 +330,6 @@ const interpretLogin = (status, text, decoded, rotatedToken, sessionBase) => {
   if (!userMark || !token) {
     throw errorWithCode('UNKNOWN', 'topsec login response missing session fields', {
       http_status: status,
-      raw_body: text,
       reason: 'missing token or authid',
     });
   }
@@ -321,8 +338,6 @@ const interpretLogin = (status, text, decoded, rotatedToken, sessionBase) => {
     message: resolveDecodedMessage(decoded) || 'login success',
     session: buildSessionContext(sessionBase, { token, user_mark: userMark, vendor_state: decoded }),
     http_status: status,
-    raw_body: text,
-    raw_json: decoded,
   };
 };
 
@@ -330,7 +345,6 @@ const interpretRefresh = (status, text, decoded, rotatedToken, session) => {
   if (!Boolean(decoded.result)) {
     throw errorWithCode('FAILED_PRECONDITION', 'topsec refresh failed', {
       http_status: status,
-      raw_body: text,
       reason: resolveDecodedMessage(decoded) || 'refresh failed',
     });
   }
@@ -339,8 +353,6 @@ const interpretRefresh = (status, text, decoded, rotatedToken, session) => {
     message: resolveDecodedMessage(decoded) || 'refresh success',
     session: buildSessionContext(session, { token: rotatedToken || extractTokenFromDecoded(decoded) || session.token, vendor_state: decoded }),
     http_status: status,
-    raw_body: text,
-    raw_json: decoded,
   };
 };
 
@@ -352,7 +364,6 @@ const interpretOperation = (status, text, decoded, rotatedToken, session, ip, ac
   if (!success && !duplicate && !missing) {
     throw errorWithCode('FAILED_PRECONDITION', `topsec ${action} failed`, {
       http_status: status,
-      raw_body: text,
       reason: message,
     });
   }
@@ -363,8 +374,6 @@ const interpretOperation = (status, text, decoded, rotatedToken, session, ip, ac
     message: success ? (resolveDecodedMessage(decoded) || 'success') : message,
     session: buildSessionContext(session, { token: rotatedToken || extractTokenFromDecoded(decoded) || session.token, vendor_state: decoded }),
     http_status: status,
-    raw_body: text,
-    raw_json: decoded,
   };
 };
 
@@ -372,7 +381,6 @@ const interpretLogout = (status, text, decoded) => {
   if (!Boolean(decoded.result)) {
     throw errorWithCode('FAILED_PRECONDITION', 'topsec logout failed', {
       http_status: status,
-      raw_body: text,
       reason: resolveDecodedMessage(decoded) || 'logout failed',
     });
   }
@@ -380,23 +388,27 @@ const interpretLogout = (status, text, decoded) => {
     success: true,
     message: resolveDecodedMessage(decoded) || 'logout success',
     http_status: status,
-    raw_body: text,
-    raw_json: decoded,
   };
 };
 
 const encodeForm = (pairs) => pairs.map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`).join('&');
 
-const runLogin = async (req = {}, ctx = {}) => {
+const sanitizeResponse = (result = {}) => ({
+  success: Boolean(result.success),
+  message: pickString(result.message) || (result.success ? 'success' : ''),
+  http_status: Number(result.http_status || 0),
+});
+
+const runLoginSession = async (req = {}, ctx = {}) => {
   const callCtx = resolveCallContext({ ...ctx, req });
   const bindings = callCtx.bindings || {};
   const allowHttp = pickBoolean(req.allow_http, req.allowHttp, bindings.allow_http, bindings.allowHttp) || false;
   const host = normalizeBaseUrl(pickString(req.host, bindings.host, bindings.baseUrl, bindings.restBaseUrl), allowHttp);
-  const username = pickString(req.username, bindings.user, bindings.username);
-  const password = pickString(req.password, bindings.password, callCtx.secret?.password);
+  const username = pickString(callCtx.secret?.username, bindings.user, bindings.username);
+  const password = pickString(callCtx.secret?.password, bindings.password);
   const skipTlsVerify = pickBoolean(req.skip_tls_verify, req.skipTlsVerify, bindings.skipTlsVerify, bindings.tlsInsecureSkipVerify) || false;
   if (!username) throw errorWithCode('INVALID_ARGUMENT', 'username is required');
-  if (!password) throw errorWithCode('INVALID_ARGUMENT', 'password is required');
+  if (!password) throw errorWithCode('UNAUTHENTICATED', 'password is required');
   const upstream = await fetchText(callCtx, `${host}${LOGIN_HTTP_PATH}`, {
     method: 'POST',
     headers: {
@@ -410,7 +422,7 @@ const runLogin = async (req = {}, ctx = {}) => {
     ]),
   }, { skipTlsVerify });
   const { decoded, rotatedToken } = parseSuccessfulPayload(upstream.status, upstream.text);
-  return interpretLogin(upstream.status, upstream.text, decoded, rotatedToken, {
+  const interpreted = interpretLogin(upstream.status, upstream.text, decoded, rotatedToken, {
     host,
     token: '',
     user_mark: '',
@@ -419,11 +431,37 @@ const runLogin = async (req = {}, ctx = {}) => {
     allow_http: allowHttp,
     vendor_state: decoded,
   });
+  const key = cacheIdentity(callCtx, host, username);
+  sessionCache.set(key, interpreted.session);
+  return { ...interpreted, key, host, username };
+};
+
+const getSession = async (req = {}, ctx = {}) => {
+  const callCtx = resolveCallContext({ ...ctx, req });
+  const bindings = callCtx.bindings || {};
+  const allowHttp = pickBoolean(req.allow_http, req.allowHttp, bindings.allow_http, bindings.allowHttp) || false;
+  const host = normalizeBaseUrl(pickString(req.host, bindings.host, bindings.baseUrl, bindings.restBaseUrl), allowHttp);
+  const username = pickString(callCtx.secret?.username, bindings.user, bindings.username);
+  if (!username) throw errorWithCode('INVALID_ARGUMENT', 'username is required');
+  const key = cacheIdentity(callCtx, host, username);
+  const cached = sessionCache.get(key);
+  if (cached) return { key, session: cached };
+  return runLoginSession(req, callCtx);
+};
+
+const updateCachedSession = (key, session) => {
+  if (key && session) sessionCache.set(key, session);
+  return session;
+};
+
+const runLogin = async (req = {}, ctx = {}) => {
+  const result = await runLoginSession(req, ctx);
+  return sanitizeResponse(result);
 };
 
 const runRefresh = async (req = {}, ctx = {}) => {
   const callCtx = resolveCallContext({ ...ctx, req });
-  const session = ensureSession(req.session);
+  const { key, session } = await getSession(req, callCtx);
   const upstream = await fetchText(callCtx, `${session.host}${REFRESH_HTTP_PATH}?userMark=${encodeURIComponent(session.user_mark)}`, {
     method: 'POST',
     headers: {
@@ -434,12 +472,14 @@ const runRefresh = async (req = {}, ctx = {}) => {
     body: '',
   }, { skipTlsVerify: session.skip_tls_verify });
   const { decoded, rotatedToken } = parseSuccessfulPayload(upstream.status, upstream.text);
-  return interpretRefresh(upstream.status, upstream.text, decoded, rotatedToken, session);
+  const result = interpretRefresh(upstream.status, upstream.text, decoded, rotatedToken, session);
+  updateCachedSession(key, result.session);
+  return sanitizeResponse(result);
 };
 
 const runAdd = async (req = {}, ctx = {}) => {
   const callCtx = resolveCallContext({ ...ctx, req });
-  const session = ensureSession(req.session);
+  const { key, session } = await getSession(req, callCtx);
   const ip = requireIp(req.ip);
   const upstream = await fetchText(callCtx, `${session.host}${ADD_HTTP_PATH}?userMark=${encodeURIComponent(session.user_mark)}`, {
     method: 'POST',
@@ -454,12 +494,15 @@ const runAdd = async (req = {}, ctx = {}) => {
     ]),
   }, { skipTlsVerify: session.skip_tls_verify });
   const { decoded, rotatedToken } = parseSuccessfulPayload(upstream.status, upstream.text);
-  return interpretOperation(upstream.status, upstream.text, decoded, rotatedToken, session, ip, 'add');
+  const result = interpretOperation(upstream.status, upstream.text, decoded, rotatedToken, session, ip, 'add');
+  updateCachedSession(key, result.session);
+  const sanitized = sanitizeResponse(result);
+  return { ip: result.ip, success: result.success, idempotent_success: result.idempotent_success, message: result.message, http_status: sanitized.http_status };
 };
 
 const runRemove = async (req = {}, ctx = {}) => {
   const callCtx = resolveCallContext({ ...ctx, req });
-  const session = ensureSession(req.session);
+  const { key, session } = await getSession(req, callCtx);
   const ip = requireIp(req.ip);
   const upstream = await fetchText(callCtx, `${session.host}${REMOVE_HTTP_PATH}?userMark=${encodeURIComponent(session.user_mark)}`, {
     method: 'POST',
@@ -474,12 +517,15 @@ const runRemove = async (req = {}, ctx = {}) => {
     ]),
   }, { skipTlsVerify: session.skip_tls_verify });
   const { decoded, rotatedToken } = parseSuccessfulPayload(upstream.status, upstream.text);
-  return interpretOperation(upstream.status, upstream.text, decoded, rotatedToken, session, ip, 'remove');
+  const result = interpretOperation(upstream.status, upstream.text, decoded, rotatedToken, session, ip, 'remove');
+  updateCachedSession(key, result.session);
+  const sanitized = sanitizeResponse(result);
+  return { ip: result.ip, success: result.success, idempotent_success: result.idempotent_success, message: result.message, http_status: sanitized.http_status };
 };
 
 const runLogout = async (req = {}, ctx = {}) => {
   const callCtx = resolveCallContext({ ...ctx, req });
-  const session = ensureSession(req.session);
+  const { key, session } = await getSession(req, callCtx);
   const upstream = await fetchText(callCtx, `${session.host}${LOGOUT_HTTP_PATH}?userMark=${encodeURIComponent(session.user_mark)}&token=${encodeURIComponent(session.token)}`, {
     method: 'GET',
     headers: {
@@ -488,7 +534,9 @@ const runLogout = async (req = {}, ctx = {}) => {
     },
   }, { skipTlsVerify: session.skip_tls_verify });
   const { decoded } = parseSuccessfulPayload(upstream.status, upstream.text);
-  return interpretLogout(upstream.status, upstream.text, decoded);
+  const result = interpretLogout(upstream.status, upstream.text, decoded);
+  sessionCache.delete(key);
+  return sanitizeResponse(result);
 };
 
 export function rpcdef(ctx = {}) {
@@ -503,11 +551,11 @@ export function rpcdef(ctx = {}) {
 }
 
 export const handlers = {
-  [METHOD_LOGIN_FULL]: (req, ctx = {}) => runLogin(req, ctx),
-  [METHOD_REFRESH_FULL]: (req, ctx = {}) => runRefresh(req, ctx),
-  [METHOD_ADD_FULL]: (req, ctx = {}) => runAdd(req, ctx),
-  [METHOD_REMOVE_FULL]: (req, ctx = {}) => runRemove(req, ctx),
-  [METHOD_LOGOUT_FULL]: (req, ctx = {}) => runLogout(req, ctx),
+  [METHOD_LOGIN_FULL]: (ctx = {}) => runLogin(ctx.request ?? ctx.req ?? {}, ctx),
+  [METHOD_REFRESH_FULL]: (ctx = {}) => runRefresh(ctx.request ?? ctx.req ?? {}, ctx),
+  [METHOD_ADD_FULL]: (ctx = {}) => runAdd(ctx.request ?? ctx.req ?? {}, ctx),
+  [METHOD_REMOVE_FULL]: (ctx = {}) => runRemove(ctx.request ?? ctx.req ?? {}, ctx),
+  [METHOD_LOGOUT_FULL]: (ctx = {}) => runLogout(ctx.request ?? ctx.req ?? {}, ctx),
 };
 
 export const _test = {
@@ -515,6 +563,8 @@ export const _test = {
   base64Encode,
   buildEngineHeaders,
   buildSessionContext,
+  buildTlsOptions,
+  cacheIdentity,
   decodeTopSecBody,
   encodeForm,
   encryptPassword,
@@ -529,8 +579,10 @@ export const _test = {
   interpretLogout,
   interpretOperation,
   interpretRefresh,
+  insecureTlsDispatcher,
   isObject,
   isValidIP,
+  makeTimeoutSignal,
   mapHttpStatusToCode,
   normalizeBaseUrl,
   parseSuccessfulPayload,
@@ -540,6 +592,7 @@ export const _test = {
   resolveCallContext,
   resolveDecodedMessage,
   resolveTimeoutMs,
+  sessionCache,
   tryParseJson,
   unwrapScalar,
   zeroPadBuffer,

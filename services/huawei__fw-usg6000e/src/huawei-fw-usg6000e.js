@@ -9,6 +9,7 @@ export const MAX_TOTAL_ADDRESSES = 1000;
 export const IPV4_SUFFIX = '/32';
 export const IPV6_SUFFIX = '/64';
 export const CONTENT_TYPE = 'application/yang-data+xml';
+let insecureDispatcherPromise;
 
 const grpcCodeFor = (code) => ({
   FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
@@ -192,8 +193,8 @@ const shouldPreview = (metadata) => {
 
 const mergedBindings = (ctx = {}) => ({
   ...(ctx?.config ?? {}),
-  ...(ctx?.secret ?? {}),
   ...(ctx?.bindings ?? {}),
+  ...(ctx?.secret ?? {}),
 });
 
 const resolveCallContext = (ctx = {}) => ({
@@ -202,11 +203,15 @@ const resolveCallContext = (ctx = {}) => ({
   limits: ctx.limits ?? {},
   meta: ctx.meta ?? {},
   metadata: ctx.metadata ?? {},
-  req: ctx.req ?? ctx.request ?? {},
+  req: ctx.request ?? ctx.req ?? {},
 });
+
+const requestFromContext = (ctx = {}) => ctx?.request ?? ctx?.req ?? {};
 
 const pickRequestOrBinding = (req, bindings, requestKeys, bindingKeys = requestKeys) =>
   firstDefined(pickFirst(req, requestKeys), pickFirst(bindings, bindingKeys));
+
+const pickBinding = (bindings, bindingKeys) => pickFirst(bindings, bindingKeys);
 
 const resolveTimeoutMs = (ctx) => {
   const bindings = mergedBindings(ctx);
@@ -219,6 +224,43 @@ const shouldSkipTlsVerify = (ctx) => {
   return toBoolean(bindings.skipTlsVerify) ||
     toBoolean(bindings.tlsInsecureSkipVerify) ||
     toBoolean(bindings.insecureSkipVerify);
+};
+
+const createTlsDispatcher = async (skipTlsVerify) => {
+  if (!skipTlsVerify) return undefined;
+  insecureDispatcherPromise ??= import('undici').then(({ Agent }) => new Agent({
+    connect: { rejectUnauthorized: false },
+  }));
+  return insecureDispatcherPromise;
+};
+
+const fetchWithTimeout = async (url, init = {}, options = {}) => {
+  const rawTimeout = Number(options.timeoutMs);
+  const timeoutMs = Number.isFinite(rawTimeout) && rawTimeout > 0 ? rawTimeout : DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const parentSignal = init.signal;
+  const abortFromParent = () => controller.abort(parentSignal.reason);
+  if (parentSignal) {
+    if (parentSignal.aborted) {
+      controller.abort(parentSignal.reason);
+    } else if (typeof parentSignal.addEventListener === 'function') {
+      parentSignal.addEventListener('abort', abortFromParent, { once: true });
+    }
+  }
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const dispatcher = await createTlsDispatcher(options.skipTlsVerify);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+      ...(dispatcher ? { dispatcher } : {}),
+    });
+  } finally {
+    clearTimeout(timer);
+    if (parentSignal && typeof parentSignal.removeEventListener === 'function') {
+      parentSignal.removeEventListener('abort', abortFromParent);
+    }
+  }
 };
 
 const logFlow = (ctx, action, details) => {
@@ -236,7 +278,8 @@ const logFlow = (ctx, action, details) => {
 
 const buildErrorDetails = (requestModel, httpStatus, rawBody, reason) => ({
   http_status: httpStatus,
-  raw_body: rawBody,
+  raw_body: '',
+  raw_body_length: String(rawBody ?? '').length,
   reason,
   request_method: requestModel.request_method,
   request_url: requestModel.request_url,
@@ -245,25 +288,25 @@ const buildErrorDetails = (requestModel, httpStatus, rawBody, reason) => ({
 const buildResponse = (input) => ({
   success: true,
   http_status: input.httpStatus,
-  raw_body: input.rawBody,
+  raw_body: '',
   message: input.message,
   preview_only: input.previewOnly,
   request_method: input.requestModel.request_method,
   request_url: input.requestModel.request_url,
-  request_headers: input.requestModel.request_headers,
-  request_body: input.requestModel.request_body,
+  request_headers: {},
+  request_body: '',
 });
 
 const prepareRequest = (ctx) => {
   const callCtx = resolveCallContext(ctx);
   const req = callCtx.req || {};
   const bindings = callCtx.bindings || {};
-  const host = normalizeHttpsUrl(requireNonEmpty(pickRequestOrBinding(req, bindings, ['host']), 'host'));
+  const host = normalizeHttpsUrl(requireNonEmpty(pickBinding(bindings, ['host']), 'host'));
   if (!host) throw errorWithCode('INVALID_ARGUMENT', 'host must be a valid https URL');
   const deviceName = validateKeyPart(pickRequestOrBinding(req, bindings, ['device_name', 'deviceName']), 'device_name');
   const bookName = validateKeyPart(pickRequestOrBinding(req, bindings, ['book_name', 'bookName']), 'book_name');
-  const user = requireNonEmpty(pickRequestOrBinding(req, bindings, ['user'], ['user', 'username']), 'user');
-  const password = requireNonEmpty(pickRequestOrBinding(req, bindings, ['password']), 'password');
+  const user = requireNonEmpty(pickBinding(bindings, ['user', 'username']), 'user');
+  const password = requireNonEmpty(pickBinding(bindings, ['password']), 'password');
   const desc = String(unwrapScalar(firstDefined(req?.desc, bindings.desc)) ?? '').trim() || DEFAULT_DESC;
   const { ipv4List, ipv6List } = validateAddressLists(req);
   const headers = buildHeaders(buildAuthorization(user, password), bindings.headers || {});
@@ -314,21 +357,13 @@ const handleUpdateAddressGroup = async (req, ctx = {}) => {
     method: 'PUT',
     headers: fetchHeaders,
     body: fetchBody,
-    timeoutMs,
-    ...(skipTlsVerify
-      ? {
-          insecureSkipVerify: true,
-          skipTlsVerify: true,
-          tlsInsecureSkipVerify: true,
-        }
-      : {}),
   };
 
   logFlow(callCtx, 'UpdateAddressGroup:start', { url: requestModel.request_url });
 
   let response;
   try {
-    response = await fetch(requestModel.request_url, fetchOptions);
+    response = await fetchWithTimeout(requestModel.request_url, fetchOptions, { timeoutMs, skipTlsVerify });
   } catch (error) {
     const reason = error?.cause?.message || error?.message || 'fetch failed';
     throw errorWithCode('UNAVAILABLE', 'upstream request failed', buildErrorDetails(requestModel, 0, '', reason));
@@ -363,7 +398,7 @@ export function rpcdef(ctx) {
 }
 
 export const handlers = {
-  [METHOD_UPDATE_ADDRESS_GROUP_FULL]: (req, ctx = {}) => handleUpdateAddressGroup(req, ctx),
+  [METHOD_UPDATE_ADDRESS_GROUP_FULL]: (ctx = {}) => handleUpdateAddressGroup(requestFromContext(ctx), ctx),
 };
 
 export const _test = {
@@ -373,8 +408,10 @@ export const _test = {
   buildRequestUrl,
   buildResponse,
   buildXmlBody,
+  createTlsDispatcher,
   errorWithCode,
   escapeXml,
+  fetchWithTimeout,
   getStringList,
   isIPv4,
   isIPv6,

@@ -13,64 +13,66 @@ service TopSec_FW_2U {
 }
 
 message SessionContext {
-  string token = 1;
-  string user_mark = 2;
-  string cookie = 3;
-  string secret = 4;
+  string token = 1 [deprecated = true];
+  string user_mark = 2 [deprecated = true];
+  string cookie = 3 [deprecated = true];
+  string secret = 4 [deprecated = true];
 }
 
 message LoginRequest {
   string host = 1;
-  string username = 2;
-  string password = 3;
+  string username = 2 [deprecated = true];
+  string password = 3 [deprecated = true];
 }
 
 message LoginResponse {
   int32 status_code = 1;
-  string raw_body = 2;
-  SessionContext session = 3;
+  bool success = 2;
+  string message = 3;
 }
 
 message ActivatePermissionRequest {
   string host = 1;
-  SessionContext session = 2;
+  SessionContext session = 2 [deprecated = true];
 }
 
 message ActivatePermissionResponse {
   int32 status_code = 1;
-  string raw_body = 2;
+  bool success = 2;
+  string message = 3;
 }
 
 message AddBlacklistIPRequest {
   string host = 1;
-  SessionContext session = 2;
+  SessionContext session = 2 [deprecated = true];
   repeated string ips = 3;
 }
 
 message AddBlacklistIPResponse {
   int32 status_code = 1;
-  string raw_body = 2;
-  SessionContext session = 3;
+  bool success = 2;
+  string message = 3;
 }
 
 message DeleteBlacklistIPRequest {
   string host = 1;
-  SessionContext session = 2;
+  SessionContext session = 2 [deprecated = true];
   repeated string ips = 3;
 }
 
 message DeleteBlacklistIPResponse {
   int32 status_code = 1;
-  string raw_body = 2;
-  SessionContext session = 3;
+  bool success = 2;
+  string message = 3;
 }
 
 message LogoutRequest {
   string host = 1;
-  SessionContext session = 2;
+  SessionContext session = 2 [deprecated = true];
 }
 
 message LogoutResponse {
   int32 status_code = 1;
-  string raw_body = 2;
+  bool success = 2;
+  string message = 3;
 }

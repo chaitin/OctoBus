@@ -1,0 +1,49 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "defectdojo",
+  "displayName": "DefectDojo",
+  "description": "OctoBus package for DefectDojo API v2 products, engagements, findings, and scan imports.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/defectdojo.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "DefectDojo.DefectDojo/ListProducts": {
+          "name": "list-products",
+          "description": "List DefectDojo products."
+        },
+        "DefectDojo.DefectDojo/ListEngagements": {
+          "name": "list-engagements",
+          "description": "List DefectDojo engagements."
+        },
+        "DefectDojo.DefectDojo/ListFindings": {
+          "name": "list-findings",
+          "description": "List DefectDojo findings."
+        },
+        "DefectDojo.DefectDojo/GetFinding": {
+          "name": "get-finding",
+          "description": "Get one DefectDojo finding by ID."
+        },
+        "DefectDojo.DefectDojo/ImportScan": {
+          "name": "import-scan",
+          "description": "Import a scan report into DefectDojo."
+        },
+        "DefectDojo.DefectDojo/ReimportScan": {
+          "name": "reimport-scan",
+          "description": "Reimport a scan report into DefectDojo."
+        }
+      }
+    }
+  }
+}

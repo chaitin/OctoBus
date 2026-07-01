@@ -1,0 +1,17 @@
+{
+  "name": "ruijie-behavior-firewall-r2-3-2-t0",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "ruijie-behavior-firewall-r2-3-2-t0": "bin/ruijie-behavior-firewall-r2-3-2-t0.js"
+  },
+  "scripts": {
+    "test": "node --test",
+    "validate": "octobus-sdk validate --strict"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.5.0",
+    "undici": "^6.21.1"
+  }
+}

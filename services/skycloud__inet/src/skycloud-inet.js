@@ -1,4 +1,5 @@
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const METHOD_BATCH_BLOCK_PATH = '/SKYCloud_INET.SKYCloud_INET/BatchBlockIP';
 export const METHOD_BATCH_UNBLOCK_PATH = '/SKYCloud_INET.SKYCloud_INET/BatchUnblockIP';
@@ -74,8 +75,8 @@ const normalizeBaseUrl = (value, allowHttp = false) => {
 
 const mergedBindings = (ctx = {}) => ({
   ...(ctx.config ?? {}),
-  ...(ctx.secret ?? {}),
   ...(ctx.bindings ?? {}),
+  ...(ctx.secret ?? {}),
 });
 
 const resolveCallContext = (ctx = {}) => ({
@@ -83,8 +84,10 @@ const resolveCallContext = (ctx = {}) => ({
   bindings: mergedBindings(ctx),
   limits: ctx.limits ?? {},
   meta: ctx.meta ?? {},
-  req: ctx.req ?? ctx.request ?? {},
+  req: ctx.request ?? ctx.req ?? {},
 });
+
+const requestFromContext = (ctx = {}) => ctx.request ?? ctx.req ?? {};
 
 const optionalUint32 = (value) => {
   const raw = value && typeof value === 'object' && hasOwn(value, 'value') ? value.value : value;
@@ -100,9 +103,16 @@ const resolveTimeoutMs = (ctx = {}) => firstDefined(
   DEFAULT_TIMEOUT_MS,
 );
 
+let insecureTlsDispatcher;
+
+const getInsecureTlsDispatcher = () => {
+  insecureTlsDispatcher ??= new Agent({ connect: { rejectUnauthorized: false } });
+  return insecureTlsDispatcher;
+};
+
 const buildTlsOptions = (bindings = {}) => {
   if (!toBoolean(bindings.skipTlsVerify) && !toBoolean(bindings.tlsInsecureSkipVerify) && !toBoolean(bindings.insecureSkipVerify)) return {};
-  return { skipTlsVerify: true, tlsInsecureSkipVerify: true, insecureSkipVerify: true };
+  return { dispatcher: getInsecureTlsDispatcher() };
 };
 
 const buildHeaders = (ctx = {}, extra = {}) => {
@@ -147,7 +157,7 @@ const httpPostJson = async (ctx, url, body, opts = {}) => {
       method: 'POST',
       headers,
       body: JSON.stringify(body ?? {}),
-      timeoutMs,
+      signal: AbortSignal.timeout(timeoutMs),
       ...buildTlsOptions(ctx.bindings),
     });
   } catch (err) {
@@ -163,9 +173,8 @@ const httpPostJson = async (ctx, url, body, opts = {}) => {
 };
 
 const requireHost = (ctx = {}) => {
-  const req = ctx.req || {};
   const bindings = ctx.bindings || {};
-  const rawHost = firstDefined(req.connection?.host, req.host, req.base_url, req.baseUrl, bindings.host, bindings.restBaseUrl, bindings.baseUrl);
+  const rawHost = firstDefined(bindings.host, bindings.restBaseUrl, bindings.baseUrl);
   const allowHttp = toBoolean(bindings.allowHttpBaseUrl) || toBoolean(bindings.allowHttpHost) || toBoolean(bindings.allowHttpUrl);
   const host = normalizeBaseUrl(rawHost, allowHttp);
   if (!host) throw errorWithCode('INVALID_ARGUMENT', 'host/restBaseUrl must be an https URL');
@@ -173,17 +182,15 @@ const requireHost = (ctx = {}) => {
 };
 
 const requireUsername = (ctx = {}) => {
-  const req = ctx.req || {};
   const bindings = ctx.bindings || {};
-  const username = unwrapString(firstDefined(req.connection?.username, req.username, req.user, bindings.username, bindings.user));
+  const username = unwrapString(firstDefined(bindings.username, bindings.user));
   if (!username) throw errorWithCode('INVALID_ARGUMENT', 'username is required');
   return username;
 };
 
 const requirePassword = (ctx = {}) => {
-  const req = ctx.req || {};
   const bindings = ctx.bindings || {};
-  const password = unwrapString(firstDefined(req.connection?.password, req.password, bindings.password));
+  const password = unwrapString(firstDefined(bindings.password));
   if (!password) throw errorWithCode('INVALID_ARGUMENT', 'password is required');
   return password;
 };
@@ -406,14 +413,14 @@ const handleBatchOperation = async (ctx, type) => {
 export function rpcdef(ctx = {}) {
   const callCtx = resolveCallContext(ctx);
   return {
-    [METHOD_BATCH_BLOCK_PATH]: async (req) => handleBatchOperation({ ...callCtx, req: req ?? callCtx.req ?? {} }, 'BLOCKER'),
-    [METHOD_BATCH_UNBLOCK_PATH]: async (req) => handleBatchOperation({ ...callCtx, req: req ?? callCtx.req ?? {} }, 'UN_BLOCKER'),
+    [METHOD_BATCH_BLOCK_PATH]: async (req) => handleBatchOperation({ ...callCtx, req: req ?? callCtx.req ?? {}, request: req ?? callCtx.req ?? {} }, 'BLOCKER'),
+    [METHOD_BATCH_UNBLOCK_PATH]: async (req) => handleBatchOperation({ ...callCtx, req: req ?? callCtx.req ?? {}, request: req ?? callCtx.req ?? {} }, 'UN_BLOCKER'),
   };
 }
 
 export const handlers = {
-  [METHOD_BATCH_BLOCK_FULL]: (req, ctx = {}) => handleBatchOperation({ ...ctx, req }, 'BLOCKER'),
-  [METHOD_BATCH_UNBLOCK_FULL]: (req, ctx = {}) => handleBatchOperation({ ...ctx, req }, 'UN_BLOCKER'),
+  [METHOD_BATCH_BLOCK_FULL]: (ctx = {}) => handleBatchOperation({ ...ctx, request: requestFromContext(ctx) }, 'BLOCKER'),
+  [METHOD_BATCH_UNBLOCK_FULL]: (ctx = {}) => handleBatchOperation({ ...ctx, request: requestFromContext(ctx) }, 'UN_BLOCKER'),
 };
 
 export const _test = {

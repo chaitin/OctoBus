@@ -51,3 +51,13 @@ daemon 主日志和 access log 不记录请求体、响应体、Authorization、
 daemon 主日志可以记录 lifecycle 和错误摘要，例如 instance id、service id、hash、
 runtime mode、状态码和 route，但不能记录 config/secret 原文。access log 只记录路由和
 状态维度，业务 metadata 即使被透传给 service package，也不进入 access log。
+
+## Service Package 安全面
+
+service package 的 RPC request 不应把 token、password、cookie、webhook URL、session、
+AK/SK 或私钥作为正常输入。凭证应从 instance secret 读取；兼容旧字段时，runtime 也不能让
+request credential 覆盖 instance secret。
+
+service package 对上游 HTTP/API 的错误处理只能返回安全摘要，例如 HTTP status、body length
+或上游业务 code，不返回完整上游 raw body。需要跳过 TLS 校验时必须使用 per-request/per-client
+dispatcher，不允许修改 `NODE_TLS_REJECT_UNAUTHORIZED` 等全局进程状态。

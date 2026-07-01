@@ -1,4 +1,5 @@
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const BLOCK_IP_PATH = '/Nsfcous_ADS_V45R90F06.Nsfcous_ADS_V45R90F06/BlockIP';
 export const UNBLOCK_IP_PATH = '/Nsfcous_ADS_V45R90F06.Nsfcous_ADS_V45R90F06/UnblockIP';
@@ -110,7 +111,8 @@ const parseResponseBody = (input) => {
   } catch {
     throw errorWithCode('UNKNOWN', 'response is not valid JSON', {
       status_code: input?.statusCode,
-      raw_body: text,
+      raw_body: '',
+      raw_body_length: text.length,
     });
   }
 };
@@ -132,16 +134,17 @@ const buildResponse = (input) => ({
   success: true,
   status_code: input.statusCode,
   message: input.message,
-  raw_body: input.rawBody,
-  raw_json: input.rawJSON,
+  raw_body: '',
+  raw_json: undefined,
   idempotent_success: Boolean(input.idempotentSuccess),
 });
 
 const buildErrorDetails = (input) => ({
   success: false,
   status_code: input.statusCode,
-  raw_body: input.rawBody,
-  raw_json: input.rawJSON,
+  raw_body: '',
+  raw_body_length: String(input.rawBody ?? '').length,
+  raw_json: undefined,
   idempotent_success: Boolean(input.idempotentSuccess),
 });
 
@@ -207,6 +210,19 @@ const buildTransportErrorDetails = (baseUrl, ip, actionType, reason) => ({
   reason,
 });
 
+let insecureTlsDispatcher;
+
+const getInsecureTlsDispatcher = () => {
+  insecureTlsDispatcher ??= new Agent({ connect: { rejectUnauthorized: false } });
+  return insecureTlsDispatcher;
+};
+
+const buildFetchInit = (init, timeoutMs, skipTlsVerify) => ({
+  ...init,
+  signal: AbortSignal.timeout(timeoutMs),
+  ...(skipTlsVerify ? { dispatcher: getInsecureTlsDispatcher() } : {}),
+});
+
 const fetchUpstream = async (baseUrl, key, headers, timeoutMs, skipTlsVerify, ip, actionType) => {
   const url = `${baseUrl}${UPSTREAM_PATH}?${encodeQuery({
     auth_key: key,
@@ -214,15 +230,10 @@ const fetchUpstream = async (baseUrl, key, headers, timeoutMs, skipTlsVerify, ip
     action_type: actionType,
     ip,
   })}`;
-  const init = {
+  const init = buildFetchInit({
     method: 'GET',
     headers,
-    timeoutMs,
-  };
-  if (skipTlsVerify) {
-    init.insecureSkipVerify = true;
-    init.tlsInsecureSkipVerify = true;
-  }
+  }, timeoutMs, skipTlsVerify);
 
   try {
     const response = await fetch(url, init);
@@ -257,9 +268,9 @@ const logFlow = (meta, action, details) => {
 };
 
 const mergedBindings = (ctx = {}) => ({
+  ...(ctx?.bindings ?? {}),
   ...(ctx?.config ?? {}),
   ...(ctx?.secret ?? {}),
-  ...(ctx?.bindings ?? {}),
 });
 
 const resolveCallContext = (ctx = {}) => ({
@@ -267,8 +278,10 @@ const resolveCallContext = (ctx = {}) => ({
   bindings: mergedBindings(ctx),
   limits: ctx.limits ?? {},
   meta: ctx.meta ?? {},
-  req: ctx.req ?? ctx.request ?? {},
+  req: ctx.request ?? ctx.req ?? {},
 });
+
+const requestFromContext = (ctx = {}) => ctx?.request ?? ctx?.req ?? {};
 
 const toPositiveTimeout = (value) => {
   const timeout = Number(unwrapScalar(value));
@@ -334,8 +347,8 @@ export function rpcdef(ctx) {
 }
 
 export const handlers = {
-  [METHOD_BLOCK_IP_FULL]: (req, ctx = {}) => callAction(ctx, req, 'add'),
-  [METHOD_UNBLOCK_IP_FULL]: (req, ctx = {}) => callAction(ctx, req, 'delete'),
+  [METHOD_BLOCK_IP_FULL]: (ctx = {}) => callAction(ctx, requestFromContext(ctx), 'add'),
+  [METHOD_UNBLOCK_IP_FULL]: (ctx = {}) => callAction(ctx, requestFromContext(ctx), 'delete'),
 };
 
 export const _test = {

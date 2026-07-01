@@ -25,6 +25,11 @@ const buildCtx = (overrides = {}) => ({
   req: overrides.req || {},
 });
 
+const callHandler = (method, request = {}, ctx = {}) => {
+  const handler = handlers[method];
+  return handler({ ...ctx, request });
+};
+
 const setFetch = (impl) => {
   globalThis.fetch = impl;
 };
@@ -102,7 +107,7 @@ test('BlockIP sends expected query parameters and returns success payload', asyn
   assert.equal(result.success, true);
   assert.equal(result.status_code, 200);
   assert.equal(result.message, 'block ip succeeded');
-  assert.deepEqual(result.raw_json, { code: 0, content: { affected: 1 } });
+  assert.equal(result.raw_json, undefined);
   assert.equal(result.idempotent_success, false);
 });
 
@@ -116,7 +121,7 @@ test('BlockIP uses binding timeout, custom headers, TLS flags, IPv6 and alias fi
     };
   });
 
-  const result = await handlers[METHOD_BLOCK_IP_FULL]({ Ip: '2001:db8::1' }, buildCtx({
+  const result = await callHandler(METHOD_BLOCK_IP_FULL, { Ip: '2001:db8::1' }, buildCtx({
     bindings: {
       baseUrl: 'http://localhost:18081/',
       restBaseUrl: undefined,
@@ -132,11 +137,13 @@ test('BlockIP uses binding timeout, custom headers, TLS flags, IPv6 and alias fi
 
   assert.match(captured.url, /auth_key=alias-key/);
   assert.match(captured.url, /ip=2001%3Adb8%3A%3A1$/);
-  assert.equal(captured.init.timeoutMs, 3210);
+  assert.ok(captured.init.signal instanceof AbortSignal);
+  assert.equal('timeoutMs' in captured.init, false);
   assert.equal(captured.init.headers['X-Extra'], 'demo');
   assert.equal(captured.init.headers['x-engine-instance'], 'inst-2');
-  assert.equal(captured.init.insecureSkipVerify, true);
-  assert.equal(captured.init.tlsInsecureSkipVerify, true);
+  assert.ok(captured.init.dispatcher);
+  assert.equal('insecureSkipVerify' in captured.init, false);
+  assert.equal('tlsInsecureSkipVerify' in captured.init, false);
   assert.equal(result.success, true);
 });
 
@@ -173,8 +180,8 @@ test('BlockIP accepts empty, plain text, and JSON array success bodies', async (
     const result = await rpcdef(buildCtx({ req: { ip: '1.1.1.1' } }))[BLOCK_IP_PATH]();
     assert.equal(result.success, true);
     assert.equal(result.status_code, status);
-    assert.equal(result.raw_body, body);
-    assert.equal(result.raw_json, rawJSON);
+    assert.equal(result.raw_body, '');
+    assert.equal(result.raw_json, undefined);
   }
 });
 
@@ -210,7 +217,8 @@ test('business failures return FAILED_PRECONDITION with raw body envelope', asyn
       (err, payload) => {
         assert.equal(payload.message, message);
         assert.equal(payload.status_code, status);
-        assert.equal(payload.raw_body, body);
+        assert.equal(payload.raw_body, '');
+        assert.equal(payload.raw_body_length, body.length);
       },
     );
   }
@@ -231,7 +239,8 @@ test('401 and 403 responses map to PERMISSION_DENIED with raw body envelope', as
       (err, payload) => {
         assert.equal(payload.message, 'upstream permission denied');
         assert.equal(payload.status_code, status);
-        assert.equal(payload.raw_body, body);
+        assert.equal(payload.raw_body, '');
+        assert.equal(payload.raw_body_length, body.length);
       },
     );
   }
@@ -248,7 +257,8 @@ test('invalid JSON object response maps to UNKNOWN', async () => {
     'UNKNOWN',
     (err, payload) => {
       assert.equal(payload.status_code, 200);
-      assert.equal(payload.raw_body, '{');
+      assert.equal(payload.raw_body, '');
+      assert.equal(payload.raw_body_length, 1);
     },
   );
 });
@@ -279,7 +289,7 @@ test('config and secret aliases supply bindings', async () => {
     };
   });
 
-  const result = await handlers[METHOD_UNBLOCK_IP_FULL]({ ip: '1.1.1.1' }, {
+  const result = await callHandler(METHOD_UNBLOCK_IP_FULL, { ip: '1.1.1.1' }, {
     config: {
       rest_base_url: 'http://localhost:18081',
       timeout_ms: 2500,
@@ -290,9 +300,61 @@ test('config and secret aliases supply bindings', async () => {
   });
 
   assert.match(captured.url, /auth_key=secret-key/);
-  assert.equal(captured.init.timeoutMs, 2500);
+  assert.ok(captured.init.signal instanceof AbortSignal);
+  assert.equal('timeoutMs' in captured.init, false);
   assert.equal(captured.init.headers['X-Config'], 'yes');
   assert.equal(result.message, 'unblock ip succeeded');
+});
+
+test('secret key overrides deprecated config and legacy binding credentials', async () => {
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url, init };
+    return {
+      status: 200,
+      text: async () => JSON.stringify({ code: 0 }),
+    };
+  });
+
+  const result = await callHandler(METHOD_BLOCK_IP_FULL, { ip: '1.1.1.1' }, {
+    bindings: {
+      restBaseUrl: 'http://legacy.local',
+      key: 'legacy-binding-key',
+    },
+    config: {
+      restBaseUrl: 'http://config.local',
+      key: 'deprecated-config-key',
+    },
+    secret: {
+      key: 'secret-key',
+    },
+    limits: {},
+  });
+
+  assert.match(captured.url, /^http:\/\/config\.local\/facade\/unifiedInterface\.php/);
+  assert.match(captured.url, /auth_key=secret-key/);
+  assert.equal(result.message, 'block ip succeeded');
+});
+
+test('deprecated config key remains a lower-priority fallback', async () => {
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url, init };
+    return {
+      status: 200,
+      text: async () => JSON.stringify({ code: 0 }),
+    };
+  });
+
+  await callHandler(METHOD_BLOCK_IP_FULL, { ip: '1.1.1.1' }, {
+    config: {
+      restBaseUrl: 'http://config.local',
+      key: 'deprecated-config-key',
+    },
+    limits: {},
+  });
+
+  assert.match(captured.url, /auth_key=deprecated-config-key/);
 });
 
 test('helpers cover parser, classifier, logging, and fallback branches', async () => {

@@ -1,0 +1,53 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "sangfor-xdr-v2-0-45",
+  "displayName": "Sangfor XDR V2.0.45",
+  "description": "OctoBus package for Sangfor XDR incident, alert, asset, risk-host, and vulnerability investigation APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/sangfor_xdr_v2_0_45.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "sangfor.xdr.v2_0_45.SangforXdrService/SearchIncidents": {
+          "name": "search-incidents",
+          "description": "Search Sangfor XDR security incidents."
+        },
+        "sangfor.xdr.v2_0_45.SangforXdrService/GetIncidentContext": {
+          "name": "get-incident-context",
+          "description": "Get incident proof and related process, file, host, IP, and DNS entities."
+        },
+        "sangfor.xdr.v2_0_45.SangforXdrService/SearchAlerts": {
+          "name": "search-alerts",
+          "description": "Search Sangfor XDR security alerts."
+        },
+        "sangfor.xdr.v2_0_45.SangforXdrService/GetAlertContext": {
+          "name": "get-alert-context",
+          "description": "Get evidence and complete context for one XDR alert."
+        },
+        "sangfor.xdr.v2_0_45.SangforXdrService/SearchAssets": {
+          "name": "search-assets",
+          "description": "Search Sangfor XDR assets."
+        },
+        "sangfor.xdr.v2_0_45.SangforXdrService/SearchRiskHosts": {
+          "name": "search-risk-hosts",
+          "description": "Search hosts currently assessed as risky by XDR."
+        },
+        "sangfor.xdr.v2_0_45.SangforXdrService/SearchVulnerabilities": {
+          "name": "search-vulnerabilities",
+          "description": "Search vulnerabilities and weak-password findings."
+        }
+      }
+    }
+  }
+}

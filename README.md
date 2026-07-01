@@ -6,6 +6,12 @@
   <a href="https://github.com/chaitin/OctoBus/actions/workflows/ci.yml">
     <img src="https://github.com/chaitin/OctoBus/actions/workflows/ci.yml/badge.svg?branch=main" alt="ci">
   </a>
+  <a href="./CONTRIBUTING.md">
+    <img src="https://img.shields.io/badge/Contributing-Guide-blue" alt="contributing">
+  </a>
+  <a href="./SECURITY.md">
+    <img src="https://img.shields.io/badge/Security-Feedback-blue" alt="security">
+  </a>
 </p>
 
 ---

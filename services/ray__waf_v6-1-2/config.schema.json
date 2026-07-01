@@ -23,10 +23,6 @@
       "type": "string",
       "description": "Alias for user."
     },
-    "random": {
-      "type": "string",
-      "description": "Session random token returned by Login; non-login requests should normally pass this explicitly."
-    },
     "timeoutMs": {
       "type": "integer",
       "minimum": 1,

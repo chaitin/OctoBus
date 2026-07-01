@@ -183,13 +183,28 @@ For long-running instances, OctoBus executes:
   --host 127.0.0.1 \
   --port <port> \
   --config <instance-workdir>/config.json \
-  --secret <instance-workdir>/secret.json \
+  --secret-fd 3 \
   --workdir <instance-workdir> \
   --service <service-id> \
   --instance <instance-id>
 ```
 
-For on-demand requests, OctoBus invokes the package entry with `--runtime invoke` and passes method/config/secret/metadata paths. The SDK implements this.
+File descriptor 3 contains the instance secret JSON. The SDK reads this fd directly, so service packages should not write the raw secret to ordinary files. If a package needs to persist derived state, write it under the instance workdir and avoid saving original credentials.
+
+For on-demand requests, OctoBus invokes:
+
+```text
+<runtime>/<node_entry> --runtime invoke \
+  --method <full-method> \
+  --config <instance-workdir>/config.json \
+  --secret-fd 3 \
+  --metadata <request-metadata.json> \
+  --workdir <instance-workdir> \
+  --service <service-id> \
+  --instance <instance-id>
+```
+
+`serve` and `invoke` both support `--secret-fd <fd>` for daemon-provided secrets. The SDK also supports `--secret <file>` for local development, but daemon protocol examples use `--secret-fd 3`.
 
 Runtime environment:
 

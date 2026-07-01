@@ -19,23 +19,23 @@ message HttpHeader {
 
 message LoginRequest {
   string host = 1;
-  string username = 2;
-  string password = 3;
+  string username = 2 [deprecated = true];
+  string password = 3 [deprecated = true];
 }
 
 message LoginResult {
   string error_code = 1;
-  string token = 2;
-  google.protobuf.Value raw = 3;
+  string token = 2 [deprecated = true];
+  google.protobuf.Value raw = 3 [deprecated = true];
 }
 
 message LoginResponse {
   bool success = 1;
   LoginResult result = 2;
   int32 http_status = 3;
-  string raw_body = 4;
-  google.protobuf.Value raw_json = 5;
-  repeated HttpHeader headers = 6;
+  string raw_body = 4 [deprecated = true];
+  google.protobuf.Value raw_json = 5 [deprecated = true];
+  repeated HttpHeader headers = 6 [deprecated = true];
 }
 
 message AddressItem {
@@ -80,19 +80,19 @@ message UpdateAddressGroupResponse {
   UpdateAddressGroupResponseHead head = 1;
   google.protobuf.Value body = 2;
   int32 http_status = 3;
-  string raw_body = 4;
-  google.protobuf.Value raw_json = 5;
-  repeated HttpHeader headers = 6;
+  string raw_body = 4 [deprecated = true];
+  google.protobuf.Value raw_json = 5 [deprecated = true];
+  repeated HttpHeader headers = 6 [deprecated = true];
 }
 
 message LogoutRequest {
   string host = 1;
-  string username = 2;
+  string username = 2 [deprecated = true];
 }
 
 message LogoutResponse {
-  google.protobuf.Value raw_json = 1;
+  google.protobuf.Value raw_json = 1 [deprecated = true];
   int32 http_status = 2;
-  string raw_body = 3;
-  repeated HttpHeader headers = 4;
+  string raw_body = 3 [deprecated = true];
+  repeated HttpHeader headers = 4 [deprecated = true];
 }

@@ -5,7 +5,7 @@ This package preserves legacy gRPC package and method names where applicable.
 Import it into OctoBus with:
 
 ```bash
-octobus service import --id hillstone-fw-v5-5-r10 ./services//hillstone__fw_v5-5-r10
+octobus service import --id hillstone-fw-v5-5-r10 ./services/hillstone__fw_v5-5-r10
 ```
 
 ## Package Files
@@ -22,7 +22,7 @@ octobus service import --id hillstone-fw-v5-5-r10 ./services//hillstone__fw_v5-5
 
 ## Configuration
 
-Every RPC accepts `host` in the request for legacy compatibility. New instances may also place `host`, `username`, and `password` in config/secret bindings.
+Every RPC accepts `host` in the request for legacy compatibility. New instances should place `username` in config or secret and `password` in secret. Deprecated `LoginRequest.username` and `LoginRequest.password` are ignored by the handler.
 
 ```json
 {
@@ -50,7 +50,7 @@ Every RPC accepts `host` in the request for legacy compatibility. New instances 
 
 ## Behavior Notes
 
-- `Login` posts fixed Hillstone login fields and caches the latest successful session by OctoBus instance and host.
+- `Login` posts fixed Hillstone login fields and caches the latest successful session by OctoBus instance and host. Its response only returns HTTP status and does not expose the upstream token or raw login body.
 - Address-group mutation and query RPCs require a prior successful `Login` for the same instance and host.
 - Upstream HTTP failures still return gRPC OK and preserve upstream `http_status` and response body semantics, matching the legacy service.
 - HTTP 401 and 403 on address-book calls clear the cached session.
@@ -65,3 +65,29 @@ npm run validate -- --service-dir hillstone__fw_v5-5-r10
 npm test -- --service-dir hillstone__fw_v5-5-r10 --coverage
 npm run pack:check
 ```
+
+## Service Contract
+
+- Service name: `hillstone-fw-v5-5-r10`
+- Service dir: `services/hillstone__fw_v5-5-r10`
+- Runtime mode: `long-running`
+- Config: `host` with explicit port is required; `username`, `timeoutMs`, `skipTlsVerify`, and `headers` are optional.
+- Secret: `password` is required; `username` or `user` may be supplied in secret.
+- RPC read/write properties:
+  - `Login`: write/session setup, logs in and caches the device session.
+  - `AddAddressGroup`: write, adds an address-group definition.
+  - `OverwriteAddressGroup`: write, replaces an address-group definition.
+  - `QueryAddressGroup`: read, queries an address group by name and pagination fields.
+
+OctoBus example:
+
+```bash
+octobus service import --id hillstone-fw-v5-5-r10 ./services/hillstone__fw_v5-5-r10
+octobus instance create hillstone-fw-v5-5-r10 hillstone-r10-demo --config config.json --secret secret.json
+octobus capset create security-devices
+octobus capset add-instance security-devices hillstone-r10-demo
+```
+
+Connect path example: `/capsets/security-devices/connect/hillstone-r10-demo/HILLSTONE_FW_V55R10.HILLSTONE_FW_V55R10/QueryAddressGroup`.
+
+Known limitations: address-group RPCs require a prior `Login`. Some legacy successful responses expose non-sensitive response body structure for compatibility; login tokens, cookies, and raw login bodies are not returned. `skipTlsVerify` is per request.

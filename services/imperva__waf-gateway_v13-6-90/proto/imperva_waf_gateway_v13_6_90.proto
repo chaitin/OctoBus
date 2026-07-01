@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package Imperva_WAF_Gateway_v13_6_90;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Imperva_WAF_Gateway_v13_6_90";
+
+service Imperva_WAF_Gateway_v13_6_90 {
+  // 检查 Imperva WAF 管理接口在线状态。
+  rpc CheckOnline(CheckOnlineRequest) returns (CheckOnlineResponse) {}
+
+  // 添加一个封禁 IP。
+  rpc BlockIP(BlockIPRequest) returns (BlockIPResponse) {}
+
+  // 查询当前封禁 IP 列表。
+  rpc ListBlockedIPs(ListBlockedIPsRequest) returns (ListBlockedIPsResponse) {}
+
+  // 删除一个封禁 IP。
+  rpc UnblockIP(UnblockIPRequest) returns (UnblockIPResponse) {}
+}
+
+message CheckOnlineRequest {}
+
+message CheckOnlineResponse {
+  bool success = 1; // 归一化后的成功标志。
+  int32 http_status = 2; // 上游 HTTP 状态码。
+  string message = 3; // 上游响应中的消息字段。
+  string raw_body = 4; // 上游原始响应文本。
+  google.protobuf.Value raw_json = 5; // 上游原始 JSON 响应。
+}
+
+message BlockIPRequest {
+  string ip = 1; // 待封禁的 IPv4 或 IPv6 地址。
+  string comment = 2; // 可选备注。
+}
+
+message BlockIPResponse {
+  bool success = 1; // 归一化后的成功标志。
+  int32 http_status = 2; // 上游 HTTP 状态码。
+  string message = 3; // 上游响应中的消息字段。
+  string raw_body = 4; // 上游原始响应文本。
+  google.protobuf.Value raw_json = 5; // 上游原始 JSON 响应。
+}
+
+message ListBlockedIPsRequest {}
+
+message BlockedIP {
+  string ip = 1; // 封禁 IP。
+  string comment = 2; // 备注或原因。
+  string created_at = 3; // 创建时间。
+  google.protobuf.Value raw_json = 4; // 当前条目的原始 JSON。
+}
+
+message ListBlockedIPsResponse {
+  repeated BlockedIP items = 1; // 封禁 IP 条目列表。
+  int32 http_status = 2; // 上游 HTTP 状态码。
+  string raw_body = 3; // 上游原始响应文本。
+  google.protobuf.Value raw_json = 4; // 上游原始 JSON 响应。
+}
+
+message UnblockIPRequest {
+  string ip = 1; // 待解封的 IPv4 或 IPv6 地址。
+}
+
+message UnblockIPResponse {
+  bool success = 1; // 归一化后的成功标志。
+  int32 http_status = 2; // 上游 HTTP 状态码。
+  string message = 3; // 上游响应中的消息字段。
+  string raw_body = 4; // 上游原始响应文本。
+  google.protobuf.Value raw_json = 5; // 上游原始 JSON 响应。
+}

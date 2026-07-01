@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "description": "Hunter API base URL. Default: https://hunter.qianxin.com",
+      "default": "https://hunter.qianxin.com"
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1000,
+      "default": 15000,
+      "description": "HTTP request timeout in milliseconds."
+    },
+    "defaultPageSize": {
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 100,
+      "default": 10,
+      "description": "Default page size when not specified in request."
+    },
+    "apiKey": {
+      "type": "string",
+      "deprecated": true,
+      "description": "Deprecated compatibility fallback for the Hunter API key. New instances must use secret.apiKey."
+    },
+    "api_key": {
+      "type": "string",
+      "deprecated": true,
+      "description": "Deprecated compatibility fallback alias for apiKey. New instances must use secret.api_key."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification."
+    }
+  }
+}

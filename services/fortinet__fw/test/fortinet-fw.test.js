@@ -101,7 +101,8 @@ test('CreateAddress appends vdom query and authorization header', async () => {
 
   assert.equal(captured.url, 'https://device.example:8443/api/v2/cmdb/firewall/address?vdom=root');
   assert.equal(captured.init.method, 'POST');
-  assert.equal(captured.init.timeoutMs, 10_000);
+  assert.equal(Object.hasOwn(captured.init, 'timeoutMs'), false);
+  assert.ok(captured.init.signal instanceof AbortSignal);
   assert.equal(captured.init.headers.Authorization, 'Bearer fortinet-token');
   assert.equal(captured.init.headers['Content-Type'], 'application/json');
   assert.equal(captured.init.headers['x-engine-instance'], 'inst');
@@ -331,12 +332,16 @@ test('HTTP and network errors map to gRPC status codes', async () => {
   ];
 
   for (const [status, code, pattern] of cases) {
-    globalThis.fetch = async () => responseWithStatus(status, JSON.stringify({ message: 'error' }));
+    const sensitiveBody = JSON.stringify({ message: 'error', token: 'leaked-fortinet-token' });
+    globalThis.fetch = async () => responseWithStatus(status, sensitiveBody);
     await assert.rejects(
       () => rpcdef(buildCtx({ req: { ip: '203.0.113.10' } }))[GET_ADDRESS_PATH](),
       (err) => {
         assert.equal(err.code, code);
         assert.match(err.message, pattern);
+        assert.match(err.message, /body_length=/);
+        assert.doesNotMatch(err.message, /leaked-fortinet-token/);
+        assert.doesNotMatch(err.message, /"token"/);
         return true;
       },
     );
@@ -385,11 +390,18 @@ test('SDK handlers merge config and secret and expose all methods', async () => 
 
   assert.equal(res.http_status, 200);
   assert.equal(captured.url, 'https://config-device.example/api/v2/cmdb/firewall/address');
-  assert.equal(captured.init.timeoutMs, 3100);
+  assert.equal(Object.hasOwn(captured.init, 'timeoutMs'), false);
+  assert.ok(captured.init.signal instanceof AbortSignal);
   assert.equal(captured.init.headers.Authorization, 'Bearer secret-token');
   assert.equal(captured.init.headers['X-Custom'], 'value');
-  assert.equal(captured.init.skipTlsVerify, true);
-  assert.equal(captured.init.tlsInsecureSkipVerify, true);
+  assert.equal(Object.hasOwn(captured.init, 'skipTlsVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'tlsInsecureSkipVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'insecureSkipVerify'), false);
+  assert.ok(captured.init.dispatcher);
+  assert.equal(Object.hasOwn(captured.init, 'skipTlsVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'tlsInsecureSkipVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'insecureSkipVerify'), false);
+  assert.ok(captured.init.dispatcher);
   assert.ok(service);
 
   assert.deepEqual(Object.keys(handlers).sort(), [
@@ -404,6 +416,54 @@ test('SDK handlers merge config and secret and expose all methods', async () => 
     METHOD_GET_ADDR_GROUP_FULL,
     METHOD_REMOVE_ADDR_GROUP_MEMBER_FULL,
   ].sort());
+});
+
+test('SDK handlers prefer secret token over deprecated config and legacy bindings', async () => {
+  let captured;
+  globalThis.fetch = async (url, init) => {
+    captured = { url, init };
+    return okResponse(JSON.stringify({ status: 'success', http_status: 200 }));
+  };
+
+  await handlers[METHOD_CREATE_ADDRESS_FULL]({
+    bindings: {
+      restBaseUrl: 'https://legacy-device.example',
+      token: 'legacy-binding-token',
+    },
+    config: {
+      restBaseUrl: 'https://config-device.example',
+      token: 'deprecated-config-token',
+    },
+    secret: {
+      token: 'secret-token',
+    },
+    request: {
+      ip: '203.0.113.21',
+    },
+  });
+
+  assert.equal(captured.url, 'https://config-device.example/api/v2/cmdb/firewall/address');
+  assert.equal(captured.init.headers.Authorization, 'Bearer secret-token');
+});
+
+test('SDK handlers keep deprecated config token as lower-priority fallback', async () => {
+  let captured;
+  globalThis.fetch = async (url, init) => {
+    captured = { url, init };
+    return okResponse(JSON.stringify({ status: 'success', http_status: 200 }));
+  };
+
+  await handlers[METHOD_CREATE_ADDRESS_FULL]({
+    config: {
+      restBaseUrl: 'https://config-device.example',
+      token: 'deprecated-config-token',
+    },
+    request: {
+      ip: '203.0.113.22',
+    },
+  });
+
+  assert.equal(captured.init.headers.Authorization, 'Bearer deprecated-config-token');
 });
 
 test('direct handlers cover get, delete, group, and member SDK paths', async () => {
@@ -441,12 +501,25 @@ test('direct handlers cover get, delete, group, and member SDK paths', async () 
 test('helper functions keep legacy-compatible edge behavior', async () => {
   assert.equal(_test.appendQuery('http://x/path', { a: 1, b: '', c: null }), 'http://x/path?a=1');
   assert.equal(_test.appendQuery('http://x/path?x=1', { a: 'two words' }), 'http://x/path?x=1&a=two%20words');
-  assert.deepEqual(_test.buildTlsOptions({ tlsInsecureSkipVerify: true }), {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  });
-  assert.deepEqual(_test.buildTlsOptions({}), {});
+  const tlsOptions = await _test.buildTlsOptions({ tlsInsecureSkipVerify: true });
+  assert.ok(tlsOptions.dispatcher);
+  assert.equal(Object.hasOwn(tlsOptions, 'tlsInsecureSkipVerify'), false);
+  assert.deepEqual(await _test.buildTlsOptions({}), {});
+  const parent = new AbortController();
+  let parentSignalSeen = false;
+  globalThis.fetch = async (_url, init) => {
+    parentSignalSeen = init.signal instanceof AbortSignal;
+    return okResponse(JSON.stringify({ status: 'success', http_status: 200 }));
+  };
+  await _test.fetchWithTimeout('https://device.example/api', { signal: parent.signal }, { timeoutMs: 100 });
+  assert.equal(parentSignalSeen, true);
+  const aborted = new AbortController();
+  aborted.abort('already-aborted');
+  globalThis.fetch = async (_url, init) => {
+    assert.equal(init.signal.aborted, true);
+    return okResponse(JSON.stringify({ status: 'success', http_status: 200 }));
+  };
+  await _test.fetchWithTimeout('https://device.example/api', { signal: aborted.signal }, { timeoutMs: 100 });
   assert.equal(_test.toBool('yes'), true);
   assert.equal(_test.toBool('off'), false);
   assert.equal(_test.toBool({}), true);
@@ -458,7 +531,7 @@ test('helper functions keep legacy-compatible edge behavior', async () => {
   assert.equal(_test.hasOwn({ a: 1 }, 'a'), true);
   assert.equal(_test.hasOwn(null, 'a'), false);
   assert.equal(_test.firstDefined(undefined, null, 'x'), 'x');
-  assert.deepEqual(_test.mergedBindings({ config: { a: 1 }, secret: { b: 2 }, bindings: { c: 3 } }), { a: 1, b: 2, c: 3 });
+  assert.deepEqual(_test.mergedBindings({ config: { a: 1 }, secret: { b: 2 }, bindings: { c: 3 } }), { c: 3, a: 1, b: 2 });
   assert.deepEqual(_test.resolveCallContext({ request: { ip: '1.1.1.1' } }).req, { ip: '1.1.1.1' });
   assert.deepEqual(_test.readRepeatedStrings({ values: [{ value: 'a' }, 'b'] }), ['a', 'b']);
   assert.deepEqual(_test.readRepeatedStrings('bad'), []);
