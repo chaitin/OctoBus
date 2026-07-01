@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const METHOD_BATCH_BLOCK_PATH = '/ThreatBook_OneSIG.ThreatBook_OneSIG/BatchBlockIP';
 export const METHOD_LIST_ENTRIES_PATH = '/ThreatBook_OneSIG.ThreatBook_OneSIG/ListInboundBlacklistEntries';
@@ -75,8 +76,10 @@ const resolveCallContext = (ctx = {}) => ({
   bindings: mergedBindings(ctx),
   limits: ctx.limits ?? {},
   meta: ctx.meta ?? {},
-  req: ctx.req ?? ctx.request ?? {},
+  req: ctx.request ?? ctx.req ?? {},
 });
+
+const requestFromContext = (ctx = {}) => ctx.request ?? ctx.req ?? {};
 
 const normalizeBaseUrl = (raw, { allowInsecure } = {}) => {
   const candidate = trimString(raw);
@@ -189,6 +192,31 @@ const computeHmacSha1Base64 = (key, data) => crypto.createHmac('sha1', String(ke
 
 const encodeQueryComponent = (value) => encodeURIComponent(String(value ?? ''));
 
+const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const redactUrlSensitiveQuery = (url) => {
+  try {
+    const parsed = new URL(String(url));
+    for (const key of ['apikey', 'api_key', 'sign']) {
+      if (parsed.searchParams.has(key)) parsed.searchParams.set(key, '***');
+    }
+    return parsed.toString();
+  } catch {
+    return String(url).replace(/((?:apikey|api_key|sign)=)[^&\s]+/gi, '$1***');
+  }
+};
+
+const sanitizeSensitiveText = (value, sensitiveValues = []) => {
+  let text = String(value ?? '');
+  text = text.replace(/((?:apikey|api_key|sign)=)[^&\s"'<>]+/gi, '$1***');
+  for (const secretValue of sensitiveValues) {
+    const secretText = String(secretValue ?? '');
+    if (secretText.length < 3) continue;
+    text = text.replace(new RegExp(escapeRegExp(secretText), 'g'), '***');
+  }
+  return text;
+};
+
 const buildLogPrefix = (meta = {}, action) => {
   const traceParts = [];
   if (meta.instance_id || meta.instanceId) traceParts.push(`inst=${meta.instance_id || meta.instanceId}`);
@@ -255,6 +283,16 @@ const resolveTimeoutMs = (ctx = {}) => {
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;
 };
 
+const insecureTlsDispatcher = new Agent({ connect: { rejectUnauthorized: false } });
+
+const buildTlsOptions = (bindings = {}) => (bindings.skipTlsVerify ? { dispatcher: insecureTlsDispatcher } : {});
+
+const makeTimeoutSignal = (timeoutMs) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  return { signal: controller.signal, clear: () => clearTimeout(timeoutId) };
+};
+
 const callOneSig = async ({
   action,
   meta,
@@ -273,16 +311,17 @@ const callOneSig = async ({
     timestampPrecision: bindings.timestampPrecision,
     encodeSign: bindings.encodeSign,
   });
+  const sensitiveValues = [bindings.apiKey, bindings.secret, sign];
   const headers = {
     'content-type': 'application/json',
     ...bindings.headers,
     'x-engine-instance': meta?.instance_id || meta?.instanceId || 'unknown',
     'x-request-id': meta?.request_id || meta?.requestId || 'unknown',
   };
-  const tlsOptions = bindings.skipTlsVerify ? { insecureSkipVerify: true, skipTlsVerify: true, tlsInsecureSkipVerify: true } : {};
   const payload = body === undefined ? {} : body;
+  const timeout = makeTimeoutSignal(timeoutMs);
   logFlow(meta, `${action}:request`, {
-    url,
+    url: redactUrlSensitiveQuery(url),
     method,
     bodyKeys: Object.keys(payload),
     timeoutMs,
@@ -298,23 +337,26 @@ const callOneSig = async ({
       method,
       headers,
       body: JSON.stringify(payload),
-      timeoutMs,
-      ...tlsOptions,
+      signal: timeout.signal,
+      ...buildTlsOptions(bindings),
     });
   } catch (err) {
-    logFlow(meta, `${action}:network-error`, { message: err?.message });
-    throw errorWithCode('UNAVAILABLE', err?.message || 'fetch failed');
+    const message = sanitizeSensitiveText(err?.message || 'fetch failed', sensitiveValues);
+    logFlow(meta, `${action}:network-error`, { message });
+    throw errorWithCode('UNAVAILABLE', message);
+  } finally {
+    timeout.clear();
   }
 
   let text;
   try {
     text = await res.text();
   } catch (err) {
-    throw errorWithCode('UNAVAILABLE', err?.message || 'response read failed');
+    throw errorWithCode('UNAVAILABLE', sanitizeSensitiveText(err?.message || 'response read failed', sensitiveValues));
   }
   logFlow(meta, `${action}:response`, { status: res.status, length: text.length });
 
-  if (res.status !== 200) throw errorWithCode('UNAVAILABLE', `upstream http ${res.status}: ${text}`);
+  if (res.status !== 200) throw errorWithCode('UNAVAILABLE', `upstream http ${res.status}: ${sanitizeSensitiveText(text, sensitiveValues)}`);
   if (!text.trim()) throw errorWithCode('UNKNOWN', 'response body is empty');
 
   let json;
@@ -326,7 +368,7 @@ const callOneSig = async ({
 
   const responseCodeRaw = firstDefined(json.responseCode, json.code, json.status);
   const responseCode = Number(responseCodeRaw);
-  const verboseMsg = trimString(firstDefined(json.verboseMsg, json.message));
+  const verboseMsg = sanitizeSensitiveText(trimString(firstDefined(json.verboseMsg, json.message)), sensitiveValues);
   if (responseCode !== 0) {
     logFlow(meta, `${action}:business-error`, { responseCode, verboseMsg });
     throw errorWithCode('FAILED_PRECONDITION', `responseCode=${responseCode}: ${verboseMsg || 'OneSIG business failure'}`);
@@ -481,20 +523,22 @@ export function rpcdef(ctx = {}) {
 }
 
 export const handlers = {
-  [METHOD_BATCH_BLOCK_FULL]: (req, ctx = {}) => handleBatchBlock(req, ctx),
-  [METHOD_LIST_ENTRIES_FULL]: (req, ctx = {}) => handleListEntries(req, ctx),
-  [METHOD_BATCH_UNBLOCK_FULL]: (req, ctx = {}) => handleBatchUnblock(req, ctx),
+  [METHOD_BATCH_BLOCK_FULL]: (ctx = {}) => handleBatchBlock(requestFromContext(ctx), ctx),
+  [METHOD_LIST_ENTRIES_FULL]: (ctx = {}) => handleListEntries(requestFromContext(ctx), ctx),
+  [METHOD_BATCH_UNBLOCK_FULL]: (ctx = {}) => handleBatchUnblock(requestFromContext(ctx), ctx),
 };
 
 export const _test = {
   buildLogPrefix,
   buildSignedUrl,
+  buildTlsOptions,
   callOneSig,
   computeHmacSha1Base64,
   computeTimestampValue,
   encodeQueryComponent,
   enforceMaxLength,
   errorWithCode,
+  escapeRegExp,
   extractEntries,
   firstDefined,
   grpcCodeFor,
@@ -502,7 +546,9 @@ export const _test = {
   handleBatchUnblock,
   handleListEntries,
   hasOwn,
+  insecureTlsDispatcher,
   logFlow,
+  makeTimeoutSignal,
   mapEntriesToProto,
   matchSupportedValue,
   mergedBindings,
@@ -514,10 +560,12 @@ export const _test = {
   normalizeStringList,
   pickSignaturePayload,
   prepareRuntime,
+  redactUrlSensitiveQuery,
   requireEntryIds,
   requireIpList,
   resolveCallContext,
   resolveTimeoutMs,
+  sanitizeSensitiveText,
   toBoolean,
   trimString,
   unwrapScalar,

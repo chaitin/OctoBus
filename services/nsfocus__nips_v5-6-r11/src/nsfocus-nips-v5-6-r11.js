@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const LOGIN_PATH = '/Nsfocus_NIPS_V56R11.Nsfocus_NIPS_V56R11/Login';
 export const BLOCK_PATH = '/Nsfocus_NIPS_V56R11.Nsfocus_NIPS_V56R11/BlockIP';
@@ -51,9 +52,9 @@ const normalizeBaseUrl = (value) => {
 };
 
 const mergedBindings = (ctx = {}) => ({
+  ...(ctx?.bindings ?? {}),
   ...(ctx?.config ?? {}),
   ...(ctx?.secret ?? {}),
-  ...(ctx?.bindings ?? {}),
 });
 
 const resolveCallContext = (ctx = {}) => ({
@@ -61,8 +62,10 @@ const resolveCallContext = (ctx = {}) => ({
   bindings: mergedBindings(ctx),
   limits: ctx.limits ?? {},
   meta: ctx.meta ?? {},
-  req: ctx.req ?? ctx.request ?? {},
+  req: ctx.request ?? ctx.req ?? {},
 });
+
+const requestFromContext = (ctx = {}) => ctx?.request ?? ctx?.req ?? {};
 
 const resolveBaseUrl = (bindings) => normalizeBaseUrl(firstDefined(
   bindings?.host,
@@ -90,13 +93,16 @@ const toBoolean = (value) => {
   return false;
 };
 
+let insecureTlsDispatcher;
+
+const getInsecureTlsDispatcher = () => {
+  insecureTlsDispatcher ??= new Agent({ connect: { rejectUnauthorized: false } });
+  return insecureTlsDispatcher;
+};
+
 const buildTlsOptions = (bindings) => {
   if (!toBoolean(bindings?.skipTlsVerify) && !toBoolean(bindings?.tlsInsecureSkipVerify) && !toBoolean(bindings?.insecureSkipVerify)) return {};
-  return {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  };
+  return { dispatcher: getInsecureTlsDispatcher() };
 };
 
 const getInstanceId = (ctx) => String(ctx?.meta?.instance_id || ctx?.meta?.instanceId || 'unknown');
@@ -180,9 +186,9 @@ const fetchJsonEvenOnHttpError = async (ctx, url, init = {}) => {
   let res;
   try {
     res = await fetch(url, {
-      timeoutMs: resolveTimeoutMs(callCtx),
-      ...buildTlsOptions(callCtx.bindings),
       ...init,
+      signal: AbortSignal.timeout(resolveTimeoutMs(callCtx)),
+      ...buildTlsOptions(callCtx.bindings),
       headers: {
         ...(callCtx.bindings?.headers || {}),
         ...(init.headers || {}),
@@ -196,6 +202,18 @@ const fetchJsonEvenOnHttpError = async (ctx, url, init = {}) => {
   if (!String(text || '').trim()) throw errorWithCode('UNKNOWN', 'response body is empty');
   const json = parseJsonOrThrow(text);
   return { status: toInteger(res.status, 0), text, json, res };
+};
+
+const pickCredential = (callCtx, fieldNames, fieldLabel) => {
+  const secret = callCtx?.secret || {};
+  const config = callCtx?.config || {};
+  const bindings = callCtx?.bindings || {};
+  for (const field of fieldNames) {
+    const value = firstDefined(secret[field], config[field], bindings[field]);
+    const text = String(unwrapScalar(value) ?? '').trim();
+    if (text) return text;
+  }
+  throw errorWithCode('INVALID_ARGUMENT', `${fieldLabel} is required`);
 };
 
 const getSetCookies = (res) => {
@@ -244,7 +262,7 @@ const buildSignQuery = (session, restUriPath, extra = {}) => {
   };
 };
 
-const toNipsResponse = ({ status, text, json }) => {
+const toNipsResponse = ({ status, json }) => {
   const code = toInteger(json?.code, 0);
   const message = String(json?.message ?? '');
   return {
@@ -252,19 +270,16 @@ const toNipsResponse = ({ status, text, json }) => {
     message,
     data: toValue(json?.data),
     http_status: toInteger(status, 0),
-    raw_body: String(text ?? ''),
-    raw_json: toValue(json),
+    raw_body: '',
+    raw_json: undefined,
   };
 };
 
 const handleLogin = async (req, ctx) => {
   const callCtx = resolveCallContext(ctx);
   const host = requireHost(callCtx);
-  const bindings = callCtx.bindings || {};
-  const username = String(firstDefined(req?.username, bindings.user, bindings.username, '') || '').trim();
-  const password = String(firstDefined(req?.password, bindings.password, '') || '').trim();
-  if (!username) throw errorWithCode('INVALID_ARGUMENT', 'username is required');
-  if (!password) throw errorWithCode('INVALID_ARGUMENT', 'password is required');
+  const username = pickCredential(callCtx, ['user', 'username'], 'username');
+  const password = pickCredential(callCtx, ['password'], 'password');
   const lang = String(firstDefined(req?.lang, 'zh_CN') || 'zh_CN').trim() || 'zh_CN';
   const inst = getInstanceId(callCtx);
 
@@ -299,12 +314,12 @@ const handleLogin = async (req, ctx) => {
     return {
       code,
       message,
-      data: toValue(json?.data),
-      api_key: apiKey,
-      security_key: securityKey,
+      data: undefined,
+      api_key: '',
+      security_key: '',
       http_status: toInteger(status, 0),
-      raw_body: String(text ?? ''),
-      raw_json: toValue(json),
+      raw_body: '',
+      raw_json: undefined,
     };
   })().finally(() => {
     loginInFlightByInstanceId.delete(inst);
@@ -428,11 +443,11 @@ export function rpcdef(ctx) {
 }
 
 export const handlers = {
-  [METHOD_LOGIN_FULL]: (req, ctx = {}) => handleLogin(req, ctx),
-  [METHOD_BLOCK_FULL]: (req, ctx = {}) => handleBlockIP(req, ctx),
-  [METHOD_LIST_FULL]: (req, ctx = {}) => handleListBlacklist(req, ctx),
-  [METHOD_UNBLOCK_FULL]: (req, ctx = {}) => handleUnblockByIds(req, ctx),
-  [METHOD_APPLY_FULL]: (req, ctx = {}) => handleApplyConfig(req, ctx),
+  [METHOD_LOGIN_FULL]: (ctx = {}) => handleLogin(requestFromContext(ctx), ctx),
+  [METHOD_BLOCK_FULL]: (ctx = {}) => handleBlockIP(requestFromContext(ctx), ctx),
+  [METHOD_LIST_FULL]: (ctx = {}) => handleListBlacklist(requestFromContext(ctx), ctx),
+  [METHOD_UNBLOCK_FULL]: (ctx = {}) => handleUnblockByIds(requestFromContext(ctx), ctx),
+  [METHOD_APPLY_FULL]: (ctx = {}) => handleApplyConfig(requestFromContext(ctx), ctx),
 };
 
 export const _test = {

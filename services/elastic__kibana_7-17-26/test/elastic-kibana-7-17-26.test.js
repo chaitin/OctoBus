@@ -88,21 +88,22 @@ test('CheckStatus calls /api/status with basic auth', async () => {
 
   assert.equal(captured.url, 'http://kibana.local:8443/api/status');
   assert.equal(captured.init.method, 'GET');
-  assert.equal(captured.init.timeoutMs, 10_000);
+  assert.equal(Object.hasOwn(captured.init, 'timeoutMs'), false);
+  assert.ok(captured.init.signal instanceof AbortSignal);
   assert.equal(captured.init.headers.Accept, 'application/json');
   assert.equal(captured.init.headers['kbn-xsrf'], 'octobus');
   assert.equal(captured.init.headers['kbn-version'], '7.17.26');
   assert.equal(captured.init.headers['X-Test'], '1');
   assert.equal(captured.init.headers.Authorization, `Basic ${Buffer.from('elastic:secret').toString('base64')}`);
   assert.equal(result.http_status, 200);
-  assert.match(result.http_body, /7.17.26/);
+  assert.equal(result.http_body, '');
 });
 
 test('handlers accept SDK runtime context shape', async () => {
   setFetch(async () => response(200, { ok: true }));
   const result = await handlers[METHOD_CHECK_STATUS_FULL](buildCtx());
   assert.equal(result.http_status, 200);
-  assert.match(result.http_body, /"ok":true/);
+  assert.equal(result.http_body, '');
 });
 
 test('CallKibanaAPI supports generic GET query and response headers', async () => {
@@ -130,7 +131,7 @@ test('CallKibanaAPI supports generic GET query and response headers', async () =
   assert.equal(captured.init.headers['X-Trace'], 'octobus');
   assert.equal(captured.init.body, undefined);
   assert.equal(result.http_status, 200);
-  assert.match(result.http_body, /"ok":true/);
+  assert.equal(result.http_body, '');
   assert.deepEqual(JSON.parse(result.response_headers_json), { 'content-type': 'application/json' });
 });
 
@@ -156,6 +157,46 @@ test('CallKibanaAPI supports generic POST body, content type, and space prefix',
   assert.equal(captured.init.method, 'POST');
   assert.equal(captured.init.headers['Content-Type'], 'application/json');
   assert.equal(captured.init.body, '{"attributes":{"title":"logs-*"}}');
+});
+
+test('CallKibanaAPI write path accepts single SDK ctx and keeps credentials out of errors', async () => {
+  const secret = 'kibana-secret-password';
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url: String(url), init };
+    return response(500, {
+      message: `upstream failed with ${secret}`,
+      token: 'raw-upstream-token',
+    });
+  });
+
+  await expectGrpcError(
+    () => handlers[METHOD_CALL_KIBANA_API_FULL]({
+      request: {
+        method: 'POST',
+        path: '/api/saved_objects/index-pattern',
+        body: '{"attributes":{"title":"logs-*"}}',
+      },
+      config: {
+        endpoint: 'http://kibana.local:8443',
+        spaceId: 'default',
+      },
+      secret: {
+        username: 'elastic',
+        password: secret,
+      },
+    }),
+    'UNAVAILABLE',
+    (err) => {
+      assert.equal(captured.url, 'http://kibana.local:8443/s/default/api/saved_objects/index-pattern');
+      assert.equal(captured.init.method, 'POST');
+      assert.equal(captured.init.body, '{"attributes":{"title":"logs-*"}}');
+      assert.equal(captured.init.headers.Authorization, `Basic ${Buffer.from(`elastic:${secret}`).toString('base64')}`);
+      assert.equal(err.response.http_body, '');
+      assert.ok(err.response.http_body_length > 0);
+      assert.doesNotMatch(JSON.stringify(err), /kibana-secret-password|raw-upstream-token/);
+    },
+  );
 });
 
 test('CallKibanaAPI supports rpcdef, HEAD, and content type override', async () => {
@@ -299,7 +340,8 @@ test('maps HTTP and network failures with response details', async () => {
       legacyCode,
       (err) => {
         assert.equal(err.response.http_status, status);
-        assert.match(err.response.http_body, new RegExp(`status ${status}`));
+        assert.equal(err.response.http_body, '');
+        assert.ok(err.response.http_body_length > 0);
       },
     );
   }
@@ -312,7 +354,8 @@ test('maps HTTP and network failures with response details', async () => {
     'UNAVAILABLE',
     (err) => {
       assert.equal(err.response.http_status, 0);
-      assert.match(err.response.http_body, /connection refused/);
+      assert.equal(err.response.http_body, '');
+      assert.ok(err.response.http_body_length > 0);
     },
   );
 
@@ -327,12 +370,13 @@ test('maps HTTP and network failures with response details', async () => {
     'UNAVAILABLE',
     (err) => {
       assert.equal(err.response.http_status, 0);
-      assert.match(err.response.http_body, /read failed/);
+      assert.equal(err.response.http_body, '');
+      assert.ok(err.response.http_body_length > 0);
     },
   );
 });
 
-test('helpers cover aliases and tls options', () => {
+test('helpers cover aliases and tls options', async () => {
   assert.equal(_test.grpcCodeFor('NOPE'), grpcStatus.UNKNOWN);
   assert.equal(_test.errorWithCode('NOPE', 'bad').code, grpcStatus.UNKNOWN);
   assert.equal(_test.hasOwn(null, 'x'), false);
@@ -349,12 +393,10 @@ test('helpers cover aliases and tls options', () => {
   assert.equal(_test.resolveKbnVersion({ kbn_version: '7.17.25' }), '7.17.25');
   assert.equal(_test.resolveTimeoutMs({ bindings: { timeoutMs: 15 } }), 15);
   assert.equal(_test.resolveTimeoutMs({ bindings: { timeoutMs: -1 } }), 1500);
-  assert.deepEqual(_test.buildTlsOptions({}), {});
-  assert.deepEqual(_test.buildTlsOptions({ skipTlsVerify: true }), {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  });
+  assert.deepEqual(await _test.buildTlsOptions({}), {});
+  const tlsOptions = await _test.buildTlsOptions({ skipTlsVerify: true });
+  assert.ok(tlsOptions.dispatcher);
+  assert.equal(Object.hasOwn(tlsOptions, 'skipTlsVerify'), false);
   assert.equal(_test.encodeQueryPairs({ a: 'x y', b: '', c: null, d: 0 }), 'a=x%20y&d=0');
   assert.equal(_test.appendQuery('http://kibana/api/status?x=1', { a: 'b' }), 'http://kibana/api/status?x=1&a=b');
   assert.equal(_test.buildApiUrl('http://kibana', '/api/status'), 'http://kibana/api/status');

@@ -141,6 +141,43 @@ test('QueryIPReputation with optional params', async () => {
   assert.equal(url.searchParams.get('lang'), 'zh');
 });
 
+test('single-argument SDK context uses ctx.req, keeps secret authoritative, and redacts logs', async () => {
+  const logs = [];
+  console.log = (...args) => logs.push(args.map((arg) => String(arg)).join(' '));
+  let captured;
+  setFetch(async (url) => {
+    captured = String(url);
+    return response(200, { response_code: 0, verbose_msg: 'Ok', data: [] });
+  });
+
+  const ctx = buildCtx({
+    secret: {
+      ngtip_apikey: 'test_api_key',
+      salt: 'test_salt',
+      auth_mode: 'token',
+    },
+    req: {
+      resource: '8.8.8.8',
+      ngtip_apikey: 'request_supplied_key',
+      apiKey: 'request_supplied_key',
+    },
+  });
+
+  const result = await handlers[METHOD_QUERY_IP_REPUTATION_FULL](ctx);
+  const url = new URL(captured);
+  const token = url.searchParams.get('token');
+  assert.equal(result.response_code, 0);
+  assert.equal(url.searchParams.get('apikey'), 'test_api_key');
+  assert.equal(url.searchParams.get('resource'), '8.8.8.8');
+  assert.ok(token);
+  assert.ok(logs.length >= 2);
+  const renderedLogs = logs.join('\n');
+  assert.doesNotMatch(renderedLogs, /test_api_key/);
+  assert.doesNotMatch(renderedLogs, /test_salt/);
+  assert.doesNotMatch(renderedLogs, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.doesNotMatch(renderedLogs, /request_supplied_key/);
+});
+
 test('business failure (response_code != 0) still returns gRPC OK with structured fields', async () => {
   setFetch(async () => response(200, { response_code: 1001, verbose_msg: 'IP not found', data: [] }));
   const result = await handlers[METHOD_QUERY_IP_REPUTATION_FULL]({ resource: '1.1.1.1' }, buildCtx());
@@ -186,7 +223,7 @@ test('QueryIPLocation sends correct path', async () => {
 });
 
 test('maps HTTP failures to gRPC errors', async () => {
-  for (const [status, legacyCode] of [[401, 'PERMISSION_DENIED'], [403, 'PERMISSION_DENIED'], [400, 'FAILED_PRECONDITION'], [500, 'UNAVAILABLE']]) {
+  for (const [status, legacyCode] of [[401, 'PERMISSION_DENIED'], [403, 'PERMISSION_DENIED'], [400, 'FAILED_PRECONDITION'], [404, 'FAILED_PRECONDITION'], [429, 'FAILED_PRECONDITION'], [500, 'UNAVAILABLE']]) {
     setFetch(async () => response(status, { response_code: -1, verbose_msg: `status ${status}` }));
     await expectGrpcError(
       () => handlers[METHOD_QUERY_IP_REPUTATION_FULL]({ resource: '8.8.8.8' }, buildCtx()),
@@ -207,6 +244,24 @@ test('network and read errors map to UNAVAILABLE', async () => {
     () => handlers[METHOD_QUERY_IP_REPUTATION_FULL]({ resource: '8.8.8.8' }, buildCtx()),
     'UNAVAILABLE',
   );
+});
+
+test('all non-IP RPCs expose upstream failure mapping', async () => {
+  const cases = [
+    [METHOD_QUERY_DNS_COMPROMISED_FULL, { resource: 'evil.com' }, 403, 'PERMISSION_DENIED'],
+    [METHOD_QUERY_FILE_REPUTATION_FULL, { resource: 'abc123' }, 404, 'FAILED_PRECONDITION'],
+    [METHOD_QUERY_VULNERABILITY_FULL, { vuln_id: 'CVE-2024-1234' }, 429, 'FAILED_PRECONDITION'],
+    [METHOD_QUERY_IP_LOCATION_FULL, { resource: '119.219.36.24' }, 500, 'UNAVAILABLE'],
+  ];
+
+  for (const [method, request, status, legacyCode] of cases) {
+    setFetch(async () => response(status, { response_code: -1, verbose_msg: `status ${status}` }));
+    await expectGrpcError(
+      () => handlers[method](request, buildCtx()),
+      legacyCode,
+      (err) => assert.match(err.message, new RegExp(`upstream http ${status}`)),
+    );
+  }
 });
 
 test('token auth computes correct HMAC-SHA1 signature', async () => {
@@ -284,7 +339,7 @@ test('helper functions', async () => {
   assert.equal(_test.grpcCodeFor('NOPE'), grpcStatus.UNKNOWN);
   assert.equal(_test.normalizeBaseUrl('ftp://bad'), '');
   assert.equal(_test.normalizeBaseUrl(' http://10.0.0.1:8090/ '), 'http://10.0.0.1:8090');
-  assert.deepEqual(_test.buildTlsOptions({ skipTlsVerify: true }), { skipTlsVerify: true, tlsInsecureSkipVerify: true, insecureSkipVerify: true });
+  assert.equal(_test.buildTlsOptions({ skipTlsVerify: true }).dispatcher, _test.insecureTlsDispatcher);
   assert.equal(_test.encodeQueryPairs({ a: 'x y', b: '', c: null }), 'a=x%20y');
   assert.equal(_test.mapHttpStatusToCode(401), 'PERMISSION_DENIED');
   assert.equal(_test.mapHttpStatusToCode(500), 'UNAVAILABLE');

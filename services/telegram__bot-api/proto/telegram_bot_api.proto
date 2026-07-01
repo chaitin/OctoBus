@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package Telegram_Bot_API;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Telegram_Bot_API";
+
+service Telegram_Bot_API {
+  rpc GetMe(GetMeRequest) returns (TelegramResponse) {}
+  rpc SendMessage(SendMessageRequest) returns (TelegramResponse) {}
+}
+
+message GetMeRequest {}
+
+message SendMessageRequest {
+  string chat_id = 1;
+  string text = 2;
+  string parse_mode = 3;
+  bool disable_web_page_preview = 4;
+  bool disable_notification = 5;
+  string reply_to_message_id = 6;
+}
+
+message TelegramResponse {
+  int32 http_status = 1;
+  string raw_body = 2;
+  google.protobuf.Struct body_json = 3;
+  bool ok = 4;
+}

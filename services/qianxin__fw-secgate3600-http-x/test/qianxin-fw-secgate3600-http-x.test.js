@@ -13,7 +13,7 @@ import {
   _test,
   handlers,
   rpcdef,
-} from '../src/qianxin-fw-secgate36003600-http-x.js';
+} from '../src/qianxin-fw-secgate3600-http-x.js';
 import { service } from '../src/service.js';
 import { createMockServer } from './mock_upstream.js';
 
@@ -26,11 +26,16 @@ const buildCtx = (overrides = {}) => ({
     ...(overrides.bindings || {}),
   },
   config: overrides.config || {},
-  secret: overrides.secret || {},
+  secret: { user: 'admin', password: 'secret', ...(overrides.secret || {}) },
   limits: { timeoutMs: 10_000, ...(overrides.limits || {}) },
   meta: { instance_id: 'inst', request_id: 'req', ...(overrides.meta || {}) },
   req: overrides.req || {},
 });
+
+const callHandler = (method, request = {}, ctx = {}) => {
+  const handler = handlers[method];
+  return handler({ ...ctx, request });
+};
 
 const createHeaders = (entries = {}) => {
   const map = new Map();
@@ -81,6 +86,7 @@ const expectGrpcError = async (fn, legacyCode, checker = () => {}) => {
 
 test.afterEach(() => {
   globalThis.fetch = originalFetch;
+  _test.clearAllSessions();
 });
 
 test('service exports defineService result and handlers', () => {
@@ -97,18 +103,18 @@ test('Login requires host, user, and password', async () => {
     (err) => assert.match(err.message, /host\/baseUrl is required/),
   );
   await expectGrpcError(
-    () => rpcdef(buildCtx({ req: { password: 'secret' } }))[LOGIN_PATH](),
+    () => rpcdef(buildCtx({ req: { password: 'secret' }, secret: { user: '' } }))[LOGIN_PATH](),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /user is required/),
   );
   await expectGrpcError(
-    () => rpcdef(buildCtx({ req: { user: 'admin' } }))[LOGIN_PATH](),
+    () => rpcdef(buildCtx({ req: { user: 'admin' }, secret: { password: '' } }))[LOGIN_PATH](),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /password is required/),
   );
 });
 
-test('Login builds GET query, headers, TLS, and parses JSON response', async () => {
+test('Login builds GET query from secret and sanitizes response surface', async () => {
   let captured;
   setFetch(async (url, init) => {
     captured = { url: String(url), init };
@@ -121,8 +127,8 @@ test('Login builds GET query, headers, TLS, and parses JSON response', async () 
   const res = await rpcdef(buildCtx({
     req: {
       host: 'https://secgate.local:8443/',
-      user: 'admin',
-      password: 'secret',
+      user: 'ignored-user',
+      password: 'ignored-password',
       txtLanguage: { value: 'zh-cn' },
       loginType: { value: 'normal' },
       client: { value: 'webui' },
@@ -133,8 +139,10 @@ test('Login builds GET query, headers, TLS, and parses JSON response', async () 
   }))[LOGIN_PATH]();
 
   assert.equal(captured.init.method, 'GET');
-  assert.equal(captured.init.timeoutMs, 2222);
-  assert.equal(captured.init.skipTlsVerify, true);
+  assert.ok(captured.init.signal instanceof AbortSignal);
+  assert.equal('timeoutMs' in captured.init, false);
+  assert.ok(captured.init.dispatcher);
+  assert.equal('skipTlsVerify' in captured.init, false);
   assert.equal(captured.init.headers['x-engine-instance'], 'inst-1');
   assert.equal(captured.init.headers['x-request-id'], 'req-1');
   assert.ok(!('content-type' in captured.init.headers));
@@ -147,12 +155,12 @@ test('Login builds GET query, headers, TLS, and parses JSON response', async () 
   assert.equal(parsedUrl.searchParams.get('client'), 'webui');
   assert.equal(res.statusCode, 200);
   assert.equal(res.status_code, 200);
-  assert.equal(res.effectiveUrl, captured.url);
-  assert.equal(res.effective_url, captured.url);
-  assert.equal(res.bodyJson.uuid, 'mock-uuid');
-  assert.equal(res.body_json.fields.uuid.stringValue, 'mock-uuid');
-  assert.equal(res.rawBody, JSON.stringify({ result: 'ok', uuid: 'mock-uuid' }));
-  assert.deepEqual(res.headers.find((h) => h.key === 'set-cookie')?.values, ['a', 'b']);
+  assert.equal(res.effectiveUrl, '');
+  assert.equal(res.effective_url, res.effectiveUrl);
+  assert.deepEqual(res.bodyJson, {});
+  assert.deepEqual(res.body_json, { fields: {} });
+  assert.equal(res.rawBody, '');
+  assert.deepEqual(res.headers.find((h) => h.key === 'set-cookie'), undefined);
 });
 
 test('BlockIP defaults mask and propagates upstream status', async () => {
@@ -161,8 +169,10 @@ test('BlockIP defaults mask and propagates upstream status', async () => {
     captured = { url: String(url), init };
     return response(500, JSON.stringify({ result: 'failed', err: 1 }));
   });
+  const ctx = buildCtx({ req: { host: 'http://device.local', ip: '1.2.3.4' } });
+  _test.setSession(_test.resolveCallContext(ctx), 'http://device.local', { uuid: 'abc' });
 
-  const res = await rpcdef(buildCtx({ req: { host: 'http://device.local', uuid: 'abc', ip: '1.2.3.4' } }))[BLOCK_PATH]();
+  const res = await rpcdef(ctx)[BLOCK_PATH]();
 
   assert.ok(captured.url.includes('/webui/blacklist/set?uuid=abc'));
   assert.equal(captured.init.method, 'POST');
@@ -172,7 +182,9 @@ test('BlockIP defaults mask and propagates upstream status', async () => {
   assert.equal(body.mask, '255.255.255.0');
   assert.ok(!('undo' in body));
   assert.equal(res.statusCode, 500);
-  assert.deepEqual(res.bodyJson, { result: 'failed', err: 1 });
+  assert.equal(res.rawBody, '');
+  assert.equal(res.effectiveUrl, '');
+  assert.deepEqual(res.bodyJson, {});
 });
 
 test('UnblockIP sets undo flag and respects optional fields', async () => {
@@ -181,14 +193,15 @@ test('UnblockIP sets undo flag and respects optional fields', async () => {
     captured = { url: String(url), init };
     return response(200, JSON.stringify({ result: 'ok' }));
   });
+  const ctx = buildCtx();
+  _test.setSession(_test.resolveCallContext(ctx), 'http://device.local', { uuid: 'token-uuid' });
 
-  await handlers[METHOD_UNBLOCK_FULL]({
+  await callHandler(METHOD_UNBLOCK_FULL, {
     host: 'http://device.local',
-    uuid: 'token-uuid',
     ip: '5.6.7.8',
     mask: { value: '255.255.255.128' },
     description: { value: 'undo entry' },
-  }, buildCtx());
+  }, ctx);
 
   const parsed = JSON.parse(captured.init.body);
   assert.equal(parsed.mask, '255.255.255.128');
@@ -198,11 +211,13 @@ test('UnblockIP sets undo flag and respects optional fields', async () => {
 
 test('non-JSON body is preserved as raw text with empty parsed object', async () => {
   setFetch(async () => response(403, 'permission denied'));
+  const ctx = buildCtx({ req: { host: 'http://device.local', ip: '9.9.9.9' } });
+  _test.setSession(_test.resolveCallContext(ctx), 'http://device.local', { uuid: 'id' });
 
-  const res = await rpcdef(buildCtx({ req: { host: 'http://device.local', uuid: 'id', ip: '9.9.9.9' } }))[BLOCK_PATH]();
+  const res = await rpcdef(ctx)[BLOCK_PATH]();
 
   assert.equal(res.statusCode, 403);
-  assert.equal(res.rawBody, 'permission denied');
+  assert.equal(res.rawBody, '');
   assert.deepEqual(res.bodyJson, {});
   assert.deepEqual(res.body_json, { fields: {} });
 });
@@ -226,26 +241,29 @@ test('host can come from bindings, config aliases, and request aliases', async (
     return response(200, JSON.stringify({ ok: true }));
   });
 
-  await rpcdef(buildCtx({ bindings: { host: undefined, restBaseUrl: 'https://binding-host:4443/' }, req: { user: 'admin', password: 'secret' } }))[LOGIN_PATH]();
+  await rpcdef(buildCtx({ bindings: { host: undefined, restBaseUrl: 'https://binding-host:4443/' }, req: { user: 'ignored', password: 'ignored' } }))[LOGIN_PATH]();
   await rpcdef({
     config: { base_url: 'https://config-host:4443/' },
-    req: { user: 'admin', password: 'secret' },
+    secret: { user: 'admin', password: 'secret' },
+    req: { user: 'ignored', password: 'ignored' },
   })[LOGIN_PATH]();
-  await rpcdef(buildCtx({ req: { base_url: 'https://request-host:4443/', user: 'admin', password: 'secret' } }))[LOGIN_PATH]();
+  await rpcdef(buildCtx({ req: { base_url: 'https://request-host:4443/', user: 'ignored', password: 'ignored' } }))[LOGIN_PATH]();
 
   assert.ok(urls[0].startsWith('https://binding-host:4443/webui/login/auth'));
   assert.ok(urls[1].startsWith('https://config-host:4443/webui/login/auth'));
   assert.ok(urls[2].startsWith('https://request-host:4443/webui/login/auth'));
 });
 
-test('Blacklist requests validate uuid and ip', async () => {
+test('Blacklist requests validate cached session and ip', async () => {
   await expectGrpcError(
     () => rpcdef(buildCtx({ req: { host: 'http://device.local', ip: '1.1.1.1' } }))[BLOCK_PATH](),
     'INVALID_ARGUMENT',
-    (err) => assert.match(err.message, /uuid is required/),
+    (err) => assert.match(err.message, /call Login first/),
   );
+  const ctx = buildCtx({ req: { host: 'http://device.local' } });
+  _test.setSession(_test.resolveCallContext(ctx), 'http://device.local', { uuid: 'id' });
   await expectGrpcError(
-    () => rpcdef(buildCtx({ req: { host: 'http://device.local', uuid: 'id' } }))[UNBLOCK_PATH](),
+    () => rpcdef(ctx)[UNBLOCK_PATH](),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /ip is required/),
   );
@@ -293,21 +311,9 @@ test('helpers cover scalar, URL, timeout, headers, body, response, and fallback 
   assert.equal(_test.toBoolean('maybe'), false);
   assert.equal(_test.toBoolean({ value: 0 }), false);
   assert.deepEqual(_test.buildTlsOptions({ bindings: {} }), {});
-  assert.deepEqual(_test.buildTlsOptions({ bindings: { skipTlsVerify: true } }), {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  });
-  assert.deepEqual(_test.buildTlsOptions({ bindings: { tlsInsecureSkipVerify: 1 } }), {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  });
-  assert.deepEqual(_test.buildTlsOptions({ bindings: { insecureSkipVerify: 'yes' } }), {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  });
+  assert.ok(_test.buildTlsOptions({ bindings: { skipTlsVerify: true } }).dispatcher);
+  assert.ok(_test.buildTlsOptions({ bindings: { tlsInsecureSkipVerify: 1 } }).dispatcher);
+  assert.ok(_test.buildTlsOptions({ bindings: { insecureSkipVerify: 'yes' } }).dispatcher);
   assert.deepEqual(_test.buildHeaders({ bindings: {}, meta: { instanceId: 'camel-inst', requestId: 'camel-req' } }), {
     'x-engine-instance': 'camel-inst',
     'x-request-id': 'camel-req',
@@ -322,20 +328,22 @@ test('helpers cover scalar, URL, timeout, headers, body, response, and fallback 
   assert.equal(_test.buildUrl('http://x.test/', '/p', { n: 0, f: false }), 'http://x.test/p?n=0&f=false');
   assert.equal(_test.buildUrl('http://x.test', '', {}), 'http://x.test/');
   assert.equal(_test.buildUrl('http://x.test', '/p', { z: undefined }), 'http://x.test/p');
-  assert.deepEqual(_test.buildLoginQuery({ user: 'u', password: 'p', txtLanguage: 'zh', loginType: 'normal', client: 'webui' }), {
+  assert.deepEqual(_test.buildLoginQuery({ user: 'ignored', password: 'ignored', txtLanguage: 'zh', loginType: 'normal', client: 'webui' }, { secret: { user: 'u', password: 'p' } }), {
     user: 'u',
     password: 'p',
     txt_language: 'zh',
     login_type: 'normal',
     client: 'webui',
   });
-  assert.deepEqual(_test.buildLoginQuery({ user: 'u', password: 'p', txt_language: 'zh', login_type: 'normal', client: '' }), {
+  assert.deepEqual(_test.buildLoginQuery({ user: 'ignored', password: 'ignored', txt_language: 'zh', login_type: 'normal', client: '' }, { secret: { user: 'u', password: 'p' } }), {
     user: 'u',
     password: 'p',
     txt_language: 'zh',
     login_type: 'normal',
   });
-  assert.deepEqual(_test.buildBlacklistQuery({ uuid: 'id' }), { uuid: 'id' });
+  const queryCtx = _test.resolveCallContext(buildCtx({ req: { host: 'http://device.local' } }));
+  _test.setSession(queryCtx, 'http://device.local', { uuid: 'id' });
+  assert.deepEqual(_test.buildBlacklistQuery(queryCtx), { uuid: 'id' });
   assert.deepEqual(_test.buildBlacklistBody({ ip: '1.1.1.1', mask: '255.255.255.128', description: 'd' }, false), {
     ip: '1.1.1.1',
     mask: '255.255.255.128',
@@ -375,6 +383,16 @@ test('helpers cover scalar, URL, timeout, headers, body, response, and fallback 
   const emptyStatus = _test.normalizeResponse('bad', [], null, 'http://x.test');
   assert.equal(emptyStatus.statusCode, 0);
   assert.equal(emptyStatus.rawBody, '');
+  const sanitized = _test.normalizeResponse(200, [{ key: 'set-cookie', values: ['SID=abc'] }, { key: 'x', values: ['1'] }], '{"token":"secret"}', 'http://x.test/p?user=u&password=p', {
+    omitRawBody: true,
+    omitParsedBody: true,
+    sanitizeUrl: true,
+  });
+  assert.deepEqual(sanitized.headers, [{ key: 'x', values: ['1'] }]);
+  assert.equal(sanitized.rawBody, '');
+  assert.deepEqual(sanitized.bodyJson, {});
+  assert.equal(new URL(sanitized.effectiveUrl).searchParams.get('password'), 'REDACTED');
+  assert.equal(_test.normalizeResponse(200, [], '{}', 'not a url', { sanitizeUrl: true }).effectiveUrl, '');
   assert.equal(_test.errorWithCode('NOT_REAL', 'fallback').code, grpcStatus.UNKNOWN);
 });
 
@@ -393,15 +411,15 @@ test('fetchHttp maps thrown errors without message to UNAVAILABLE fallback', asy
 test('mock upstream supports login, block, and unblock lifecycle', async () => {
   const mock = await createMockServer();
   try {
-    const ctx = buildCtx({ bindings: { host: mock.url }, req: { user: 'admin', password: 'secret' } });
+    const ctx = buildCtx({ bindings: { host: mock.url }, req: { user: 'ignored', password: 'ignored' } });
     const login = await rpcdef(ctx)[LOGIN_PATH]();
     assert.equal(login.statusCode, 200);
-    assert.equal(login.bodyJson.result, 'ok');
+    assert.deepEqual(login.bodyJson, {});
 
-    const block = await rpcdef({ ...ctx, req: { uuid: 'mock-uuid', ip: '198.51.100.10' } })[BLOCK_PATH]();
-    assert.equal(block.bodyJson.action, 'block');
-    const unblock = await rpcdef({ ...ctx, req: { uuid: 'mock-uuid', ip: '198.51.100.10' } })[UNBLOCK_PATH]();
-    assert.equal(unblock.bodyJson.action, 'undo');
+    const block = await rpcdef({ ...ctx, req: { ip: '198.51.100.10' } })[BLOCK_PATH]();
+    assert.deepEqual(block.bodyJson, {});
+    const unblock = await rpcdef({ ...ctx, req: { ip: '198.51.100.10' } })[UNBLOCK_PATH]();
+    assert.deepEqual(unblock.bodyJson, {});
 
     assert.equal(mock.requests[0].query.user, 'admin');
     assert.equal(mock.requests[1].body.mask, '255.255.255.0');

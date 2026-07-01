@@ -77,3 +77,38 @@ IP 封禁能力基于 Imperva IP Group：
   "ip": "203.0.113.45"
 }
 ```
+
+## 本地验证
+
+```bash
+cd services
+npm run validate -- --service-dir imperva__waf-gateway_v13-6-90
+npm test -- --service-dir imperva__waf-gateway_v13-6-90 --coverage
+npm run pack:check
+```
+
+## Service Contract
+
+- Service name: `imperva-waf-gateway-v13-6-90`
+- Service dir: `services/imperva__waf-gateway_v13-6-90`
+- Runtime mode: `long-running`
+- Config: `host` is required; `port`, `apiVersion`, IP group/policy names, `timeoutMs`, `skipTlsVerify`, and `headers` are optional.
+- Secret: `username` and `password` are required; `user` is accepted as a username alias.
+- RPC read/write properties:
+  - `CheckOnline`: read, authenticates and reads MX version.
+  - `BlockIP`: write, ensures IP group and block policy exist, then adds one IP.
+  - `ListBlockedIPs`: read, lists entries in the configured IP group.
+  - `UnblockIP`: write, removes one IP from the configured IP group.
+
+OctoBus example:
+
+```bash
+octobus service import --id imperva-waf-gateway-v13-6-90 ./services/imperva__waf-gateway_v13-6-90
+octobus instance create imperva-waf-gateway-v13-6-90 imperva-demo --config config.json --secret secret.json
+octobus capset create security-devices
+octobus capset add-instance security-devices imperva-demo
+```
+
+Connect path example: `/capsets/security-devices/connect/imperva-demo/Imperva_WAF_Gateway_v13_6_90.Imperva_WAF_Gateway_v13_6_90/CheckOnline`.
+
+Known limitations: no real Imperva appliance is required for tests; `test/mock_upstream.js` covers the local path. Session cookies, Basic credentials, Authorization headers, and upstream raw bodies are not returned. `skipTlsVerify` is only for private/self-signed MX deployments and is applied per request.

@@ -9,8 +9,11 @@ import {
   DISABLE_FIREWALL_RULE_PATH,
   ENABLE_FIREWALL_RULE_PATH,
   LIST_FIREWALL_RULES_PATH,
+  METHOD_LIST_FIREWALL_RULES,
   MODIFY_FIREWALL_RULE_PATH,
   _test,
+  createClient,
+  handlers,
   rpcdef,
 } from '../src/alibaba-cloud-simple-application-server-firewall.js';
 import { service } from '../src/service.js';
@@ -52,6 +55,71 @@ test('normalizes and validates firewall rule input', () => {
   assert.equal(_test.requirePort('-1', 'ICMP'), '-1/-1');
   assert.throws(() => _test.normalizeRuleProtocol('GRE'), /rule_protocol must be/);
   assert.throws(() => _test.requirePort('0', 'TCP'), /between 1 and 65535/);
+});
+
+test('helper branches cover protobuf values and credential validation', () => {
+  assert.deepEqual(_test.compactObject({ a: 0, b: '', c: null, d: undefined, e: 'x' }), { a: 0, e: 'x' });
+  assert.equal(_test.toInt('7.9'), 7);
+  assert.equal(_test.toInt('bad', 3), 3);
+  assert.equal(_test.toPositiveInt(undefined, 'page_size', 5), 5);
+  assert.equal(_test.toPositiveInt(null, 'page_size', 5), 5);
+  assert.equal(_test.toPositiveInt('', 'page_size', 5), 5);
+  assert.equal(_test.toPositiveInt('8', 'page_size'), 8);
+  assert.throws(() => _test.toPositiveInt('1.2', 'page_size'), /positive integer/);
+  assert.equal(_test.requirePort('80/81', 'TCP'), '80/81');
+  assert.throws(() => _test.requirePort('81/80', 'TCP'), /between 1 and 65535/);
+  assert.throws(() => _test.requirePort('bad', 'TCP'), /number or start\/end range/);
+  assert.deepEqual(_test.normalizeRuleInput({ ruleProtocol: 'icmp', port: '-1' }), {
+    ruleProtocol: 'ICMP',
+    port: '-1/-1',
+  });
+  assert.deepEqual(_test.normalizeFirewallRule({
+    FirewallId: 'fw-1',
+    RuleId: 'rule-upper',
+    RuleProtocol: 'UDP',
+    Port: '53',
+    SourceCidrIp: '0.0.0.0/0',
+    Tags: 'bad',
+  }), {
+    firewall_rule_id: 'fw-1',
+    rule_id: 'fw-1',
+    firewall_id: 'fw-1',
+    rule_protocol: 'UDP',
+    port: '53',
+    source_cidr_ip: '0.0.0.0/0',
+    remark: '',
+    status: '',
+    policy: '',
+    tags: [],
+    raw_json: undefined,
+  });
+  assert.equal(_test.toValue(undefined), undefined);
+  assert.deepEqual(_test.toValue(null), { nullValue: 'NULL_VALUE' });
+  assert.deepEqual(_test.toValue(Number.NaN), { stringValue: 'NaN' });
+  assert.deepEqual(_test.toValue(true), { boolValue: true });
+  assert.deepEqual(_test.toValue(['x', undefined]), { listValue: { values: [{ stringValue: 'x' }] } });
+  assert.deepEqual(_test.toValue({ a: 1, b: undefined }), {
+    structValue: { fields: { a: { numberValue: 1 } } },
+  });
+  assert.deepEqual(_test.toValue(Symbol.for('x')), { stringValue: 'Symbol(x)' });
+  assert.equal(_test.resolveTimeoutMs({ bindings: {}, limits: { timeoutMs: 2500 } }), 2500);
+  assert.equal(_test.resolveTimeoutMs({ bindings: { timeout_ms: 3000 }, limits: {} }), 3000);
+  assert.equal(_test.resolveTimeoutMs({ bindings: { timeoutMs: -1 }, limits: {} }), 10_000);
+  assert.equal(_test.classifyAlibabaError({ statusCode: 400 }), 'FAILED_PRECONDITION');
+  assert.equal(_test.classifyAlibabaError({ statusCode: 408 }), 'DEADLINE_EXCEEDED');
+  assert.equal(_test.classifyAlibabaError({ statusCode: 401 }), 'PERMISSION_DENIED');
+  assert.equal(_test.classifyAlibabaError({ code: 'AccessDenied' }), 'PERMISSION_DENIED');
+  assert.equal(_test.classifyAlibabaError({ code: 'InvalidParameter' }), 'FAILED_PRECONDITION');
+  assert.equal(_test.classifyAlibabaError({ code: 'TimeoutError' }), 'DEADLINE_EXCEEDED');
+  assert.equal(_test.classifyAlibabaError({ statusCode: 502 }), 'UNAVAILABLE');
+  assert.equal(_test.safeAlibabaMessage('listFirewallRulesWithOptions', { message: 'see https://secret.example/token' }), 'see [REDACTED_URL]');
+  assert.equal(_test.safeAlibabaMessage('listFirewallRulesWithOptions', { code: 'X', description: {} }), 'X: listFirewallRulesWithOptions failed');
+  assert.equal(_test.safeAlibabaMessage('listFirewallRulesWithOptions', {}), 'listFirewallRulesWithOptions failed');
+  assert.throws(
+    () => createClient({ bindings: { accessKeyId: 'ak' }, limits: {} }),
+    /accessKeySecret is required/,
+  );
+  assert.doesNotThrow(() => createClient({ bindings: { access_key_id: 'ak', access_key_secret: 'sk', security_token: 'sts', region_id: 'cn-test' }, limits: {} }));
 });
 
 test('CreateFirewallRule requires credentials and rule fields before calling upstream', async () => {
@@ -119,7 +187,7 @@ test('normalizes listed firewall rules from mixed SDK field names', () => {
   assert.equal(rule.rule_protocol, 'TCP');
   assert.equal(rule.source_cidr_ip, '203.0.113.10/32');
   assert.deepEqual(rule.tags, [{ key: 'env', value: 'test' }]);
-  assert.equal(rule.raw_json.structValue.fields.FirewallRuleId.stringValue, 'rule-1');
+  assert.equal(rule.raw_json, undefined);
 });
 
 test('CreateFirewallRule maps request through batch create API with source CIDR', async () => {
@@ -192,6 +260,36 @@ test('ListFirewallRules maps pagination, rule ID, and response fields', async ()
   assert.equal(result.firewall_rules[0].source_cidr_ip, '203.0.113.10/32');
 });
 
+test('SDK handlers accept single ctx with request, config, and secret', async () => {
+  const client = new MockSWASClient();
+  const ctx = {
+    bindings: {},
+    config: {
+      regionId: 'cn-shanghai',
+      instanceId: 'i-from-config',
+      endpoint: 'swas.cn-shanghai.aliyuncs.com',
+    },
+    secret: {
+      accessKeyId: 'ak-from-secret',
+      accessKeySecret: 'sk-from-secret',
+    },
+    request: {
+      pageNumber: 2,
+      pageSize: 20,
+    },
+    limits: { timeoutMs: 12_000 },
+    clientFactory: () => client,
+  };
+
+  const result = await handlers[METHOD_LIST_FIREWALL_RULES](ctx);
+
+  assert.equal(result.request_id, 'mock-list-request');
+  assert.equal(client.lastCall().request.regionId, 'cn-shanghai');
+  assert.equal(client.lastCall().request.instanceId, 'i-from-config');
+  assert.equal(client.lastCall().request.pageNumber, 2);
+  assert.equal(client.lastCall().request.pageSize, 20);
+});
+
 test('Modify/Enable/Disable/Delete map rule ID and fields', async () => {
   const modify = createMockContext({
     req: {
@@ -226,12 +324,18 @@ test('Modify/Enable/Disable/Delete map rule ID and fields', async () => {
 });
 
 test('Alibaba Cloud SDK errors map to gRPC-compatible errors', async () => {
+  const secret = 'mock-access-key-secret';
   const client = new MockSWASClient({
     errors: {
       listFirewallRulesWithOptions: Object.assign(new Error('Forbidden.RAM: permission denied'), {
         code: 'Forbidden.RAM',
         statusCode: 403,
         requestId: 'mock-denied-request',
+        data: {
+          RequestId: 'mock-denied-request',
+          Message: `permission denied for ${secret}`,
+          AccessKeySecret: secret,
+        },
       }),
     },
   });
@@ -242,7 +346,33 @@ test('Alibaba Cloud SDK errors map to gRPC-compatible errors', async () => {
     (err) => {
       assert.equal(err.legacyCode, 'PERMISSION_DENIED');
       assert.match(err.message, /mock-denied-request/);
+      assert.doesNotMatch(JSON.stringify(err), new RegExp(secret));
       return true;
     },
+  );
+
+  const serverError = new MockSWASClient({
+    errors: {
+      listFirewallRulesWithOptions: Object.assign(new Error('InternalError: upstream unavailable'), {
+        code: 'InternalError',
+        statusCode: 500,
+      }),
+    },
+  });
+  await assert.rejects(
+    () => rpcdef(createMockContext({ client: serverError, req: {} }).ctx)[LIST_FIREWALL_RULES_PATH](),
+    (err) => err.legacyCode === 'UNAVAILABLE',
+  );
+
+  const unknownError = new MockSWASClient({
+    errors: {
+      listFirewallRulesWithOptions: Object.assign(new Error('unexpected'), {
+        code: 'UnexpectedCode',
+      }),
+    },
+  });
+  await assert.rejects(
+    () => rpcdef(createMockContext({ client: unknownError, req: {} }).ctx)[LIST_FIREWALL_RULES_PATH](),
+    (err) => err.legacyCode === 'UNKNOWN',
   );
 });

@@ -8,7 +8,7 @@ option go_package = "miner/grpc-service/DingDing_GroupRobot";
 service DingDing_GroupRobot {
   // SendTextMessage 向已配置的钉钉群机器人发送一条文本消息。
   // 仅支持 msgtype="text" 类型的消息，包含文本内容和 @ 相关控制。
-  // 响应中完整透出下游 HTTP 调用的状态码和原始响应体。
+  // 响应中返回下游 HTTP 状态码，响应体字段为兼容旧协议固定置空。
   rpc SendTextMessage(SendTextMessageRequest) returns (SendTextMessageResponse) {}
 }
 
@@ -29,13 +29,12 @@ message SendTextMessageRequest {
   repeated string send_DingDingID = 4;
 }
 
-// SendTextMessageResponse 返回消息发送结果，完整透出下游 HTTP 调用信息。
+// SendTextMessageResponse 返回消息发送结果。
 message SendTextMessageResponse {
   // http_status 为下游钉钉 Webhook 返回的 HTTP 状态码。
   // 当网络错误或请求未发出时，该值为 0。
   int32 http_status = 1;
 
-  // http_body 为下游钉钉 Webhook 返回的响应体原始内容。
-  // 调用方可据此解析其中的 errcode、errmsg 等业务字段。
+  // http_body 兼容旧响应字段。当前实现为避免泄露上游内容固定返回空字符串。
   string http_body = 2;
 }

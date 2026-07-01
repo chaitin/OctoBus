@@ -317,7 +317,7 @@ describe("runSdkCli", () => {
         "echo-service": "bin/echo-service.js",
       },
       dependencies: {
-        "@chaitin-ai/octobus-sdk": "*",
+        "@chaitin-ai/octobus-sdk": "^0.6.0",
       },
     });
 
@@ -345,6 +345,11 @@ describe("runSdkCli", () => {
     const source = fs.readFileSync(entry, "utf8");
     expect(source).toContain(`import { defineService, runServiceMain } from "@chaitin-ai/octobus-sdk";`);
     expect(source).toContain(`"echo.service.v1.EchoService/Echo"`);
+    expect(source).toContain(`ctx.getMetadata("x-octobus-ext-business-request-id")`);
+    expect(source).not.toContain("x-business-request-id");
+
+    const readme = fs.readFileSync(path.join(outDir, "README.md"), "utf8");
+    expect(readme).toContain(`node bin/echo-service.js --runtime dev --port 50051 --config-json '{}' --secret-json '{}'`);
 
     const validateStdout = writableBuffer();
     await expect(runSdkCli({

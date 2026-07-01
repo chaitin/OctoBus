@@ -7,6 +7,7 @@
     "ray-waf-v6-1-2": "bin/ray-waf-v6-1-2.js"
   },
   "dependencies": {
-    "@chaitin-ai/octobus-sdk": "^0.5.0"
+    "@chaitin-ai/octobus-sdk": "^0.6.0",
+    "undici": "^7.16.0"
   }
 }

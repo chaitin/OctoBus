@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "additionalProperties": true,
+  "additionalProperties": false,
   "properties": {
     "endpoint": {
       "type": "string",
@@ -17,6 +17,7 @@
     },
     "headers": {
       "type": "object",
+      "default": {},
       "additionalProperties": {
         "type": "string"
       },
@@ -32,6 +33,16 @@
       "type": "boolean",
       "default": false,
       "description": "Skip TLS certificate verification for private SafeLine deployments."
+    },
+    "apiToken": {
+      "type": "string",
+      "deprecated": true,
+      "description": "Deprecated API token fallback. Prefer secret.apiToken."
+    },
+    "api_token": {
+      "type": "string",
+      "deprecated": true,
+      "description": "Deprecated API token fallback. Prefer secret.apiToken."
     }
   }
 }

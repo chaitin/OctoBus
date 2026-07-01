@@ -208,6 +208,43 @@ package root 或 `--workdir` 查找。
 本地业务 CLI 的 root help 会显示 Environment 小节，method help 的 JSON contract 会包含
 `environment.OCTOBUS_SERVICE_CONTEXT` 描述。文档和错误信息不得输出完整 secret 值。
 
+## Runtime Helper Surface
+
+SDK 运行时对 service adapter 暴露一组可复用 helper，目标是收敛重复的 context、错误、HTTP 和
+descriptor JSON 处理，而不是替代 service 自己的上游业务语义。
+
+context helper：
+
+- `normalizeContext` 规范化 handler context。
+- `mergeConfigSecret` 返回 `{ ...ctx.config, ...ctx.secret }`，用于不需要兼容旧 bindings 的
+  service。
+- `getMetadataValue` 按统一规则读取 metadata key。
+
+error helper：
+
+- `grpcCodeFor` 把字符串 code 转成 gRPC status code。
+- `serviceError`、`missingSecretError` 用于构造常见 service error。
+- `redactSensitive`、`safeErrorSummary` 用于生成不泄露 secret 的错误摘要。
+- `httpStatusError` 和 `mapHttpStatusToCode` 提供默认 HTTP status 到 gRPC code 的映射。
+
+HTTP helper：
+
+- `normalizeTimeoutMs` 解析 timeout，并在非法或缺失时回退到默认值。
+- `createTlsDispatcher(true)` 创建 per-request/per-client TLS skip dispatcher，避免全局修改
+  `NODE_TLS_REJECT_UNAUTHORIZED`。
+- `fetchWithTimeout` 使用真实 abort 机制：timeout 映射为 `DEADLINE_EXCEEDED`，外部 abort 映射为
+  `CANCELLED`，网络失败映射为 `UNAVAILABLE`。
+- `readResponseText`、`readResponseJson` 和 `assertOkResponse` 提供 response 读取和基础校验。
+
+protobuf JSON helper：
+
+- `messageJsonSchema`、`protobufMessageToProtoJson`、`fieldJsonName`、`normalizeTypeName` 面向
+  descriptor-backed CLI、schema 和 ProtoJSON 输出。
+
+这些 helper 是可选复用层。service adapter 可以只复用其中不会改变行为的一部分；HTTP status
+映射、非法 JSON 映射、protobuf `google.protobuf.Value` shape、登录/session、签名、业务 code
+和 response payload shape 仍由具体 service 的测试与文档维护。
+
 ## 实现模块
 
 主要实现集中在 `sdk/src`：
@@ -220,7 +257,11 @@ package root 或 `--workdir` 查找。
 - `client-stub.ts`：从 loaded service package 生成 Connect/gRPC wrapper source。
 - `client-package.ts`：生成 descriptor-backed npm client package，并处理 bundle/publish。
 - `connect-stub.ts`：Connect RPC client runtime。
+- `context.ts`：规范化 handler context，并提供 config/secret 合并和 metadata 读取 helper。
+- `errors.ts`：提供 gRPC status helper、HTTP status 映射和敏感信息脱敏辅助。
 - `grpc-stub.ts`：gRPC client runtime 和 streaming adapter。
+- `http.ts`：提供真实 timeout、per-request TLS dispatcher、response text/JSON 安全读取和 HTTP
+  response helper。
 - `protobuf-json.ts`：service CLI JSON Schema 和 ProtoJSON 输出。
 
 模块之间的依赖关系以 descriptor 为中心：

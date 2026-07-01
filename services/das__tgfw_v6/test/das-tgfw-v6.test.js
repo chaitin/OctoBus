@@ -124,8 +124,12 @@ test('QueryBlacklist returns parsed vals and builds query params', async () => {
   assert.ok(String(captured.url).includes('s_addr=1.1.1.1'));
   assert.equal(captured.init.method, 'GET');
   assert.equal(captured.init.headers.AuthorizationToken, 'Token');
-  assert.equal(captured.init.timeoutMs, 10_000);
-  assert.equal(captured.init.skipTlsVerify, true);
+  assert.equal(Object.hasOwn(captured.init, 'timeoutMs'), false);
+  assert.ok(captured.init.signal instanceof AbortSignal);
+  assert.equal(Object.hasOwn(captured.init, 'skipTlsVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'tlsInsecureSkipVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'insecureSkipVerify'), false);
+  assert.ok(captured.init.dispatcher);
 });
 
 test('QueryBlacklist handles empty, non-JSON, and non-2xx responses', async () => {
@@ -143,7 +147,7 @@ test('QueryBlacklist handles empty, non-JSON, and non-2xx responses', async () =
   globalThis.fetch = async () => responseWithStatus(200, 'plain');
   assert.deepEqual(await handler(), {
     http_status: 200,
-    raw_body: 'plain',
+    raw_body: '',
     raw_json: undefined,
     vals: [],
     msg: '',
@@ -152,7 +156,7 @@ test('QueryBlacklist handles empty, non-JSON, and non-2xx responses', async () =
   globalThis.fetch = async () => responseWithStatus(200, '{bad');
   assert.deepEqual(await handler(), {
     http_status: 200,
-    raw_body: '{bad',
+    raw_body: '',
     raw_json: undefined,
     vals: [],
     msg: '',
@@ -267,7 +271,8 @@ test('AddBlacklist defaults lifespan and enable, and maps transport failures', a
   const sent = JSON.parse(captured.init.body);
   assert.equal(sent.val.lifespan, DEFAULT_LIFESPAN);
   assert.equal(sent.val.enable, true);
-  assert.equal(captured.init.timeoutMs, DEFAULT_TIMEOUT_MS);
+  assert.equal(Object.hasOwn(captured.init, 'timeoutMs'), false);
+  assert.ok(captured.init.signal instanceof AbortSignal);
 
   globalThis.fetch = async () => {
     throw new Error('network down');
@@ -352,8 +357,12 @@ test('SDK handlers use config and secret without request credential overrides', 
   assert.equal(queryRes.http_status, 200);
   assert.equal(captured.url, 'https://sdk.example/api/v1/blacklist?page=1&size=10&is_ip6=false&s_addr=1.1.1.1');
   assert.equal(captured.init.headers.AuthorizationToken, 'SecretToken');
-  assert.equal(captured.init.timeoutMs, 2500);
-  assert.equal(captured.init.insecureSkipVerify, true);
+  assert.equal(Object.hasOwn(captured.init, 'timeoutMs'), false);
+  assert.ok(captured.init.signal instanceof AbortSignal);
+  assert.equal(Object.hasOwn(captured.init, 'skipTlsVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'tlsInsecureSkipVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'insecureSkipVerify'), false);
+  assert.ok(captured.init.dispatcher);
 
   globalThis.fetch = async () => responseWithStatus(200, JSON.stringify({ msg: 'success' }));
   assert.equal((await handlers[METHOD_ADD_BLACKLIST_FULL]({
@@ -379,7 +388,7 @@ test('service wrapper exposes SDK handlers', () => {
   assert.equal(service.handlers[METHOD_QUERY_BLACKLIST_FULL], handlers[METHOD_QUERY_BLACKLIST_FULL]);
 });
 
-test('helper utilities cover aliases and edge cases', () => {
+test('helper utilities cover aliases and edge cases', async () => {
   assert.equal(_test.normalizeBaseUrl('ftp://bad'), '');
   assert.equal(_test.normalizeBaseUrl('https://example///'), 'https://example');
   assert.equal(_test.requireHost({ bindings: { baseUrl: 'https://base.example/' } }), 'https://base.example');
@@ -392,17 +401,11 @@ test('helper utilities cover aliases and edge cases', () => {
   assert.equal(_test.resolveTimeoutMs({ bindings: { timeoutMs: 3000 } }), 3000);
   assert.equal(_test.resolveTimeoutMs({ limits: { timeoutMs: 1200 }, bindings: { timeoutMs: 3000 } }), 1200);
   assert.equal(_test.resolveTimeoutMs({ bindings: { timeout_ms: 'bad' } }), DEFAULT_TIMEOUT_MS);
-  assert.deepEqual(_test.buildTlsOptions({ skipTlsVerify: true }), {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  });
-  assert.deepEqual(_test.buildTlsOptions({ tlsInsecureSkipVerify: true }), {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  });
-  assert.deepEqual(_test.buildTlsOptions({}), {});
+  const skipTlsOptions = await _test.buildTlsOptions({ skipTlsVerify: true });
+  assert.ok(skipTlsOptions.dispatcher);
+  assert.equal(Object.hasOwn(skipTlsOptions, 'skipTlsVerify'), false);
+  assert.ok((await _test.buildTlsOptions({ tlsInsecureSkipVerify: true })).dispatcher);
+  assert.deepEqual(await _test.buildTlsOptions({}), {});
   assert.equal(_test.toInteger('3.9'), 3);
   assert.equal(_test.toInteger('bad', 7), 7);
   assert.equal(_test.unwrapScalar(undefined), undefined);
@@ -444,8 +447,8 @@ test('helper utilities cover aliases and edge cases', () => {
   assert.deepEqual(_test.buildHeaders('T'), { 'Content-Type': 'application/json;charset=UTF-8', AuthorizationToken: 'T' });
   assert.deepEqual(_test.parseBusinessResponse(200, JSON.stringify({ msg: 'success' })), {
     http_status: 200,
-    raw_body: '{"msg":"success"}',
-    raw_json: { structValue: { fields: { msg: { stringValue: 'success' } } } },
+    raw_body: '',
+    raw_json: undefined,
     msg: 'success',
   });
   assert.deepEqual(_test.parseBusinessResponse(204, ''), {

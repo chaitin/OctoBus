@@ -1,13 +1,8 @@
-import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { GrpcError, grpcCodeFor, normalizeTimeoutMs } from '@chaitin-ai/octobus-sdk';
 
 export const METHOD_SEND_TEXT_PATH = '/Slack_GroupRobot.Slack_GroupRobot/SendTextMessage';
 export const METHOD_SEND_TEXT_FULL = 'Slack_GroupRobot.Slack_GroupRobot/SendTextMessage';
 export const DEFAULT_TIMEOUT_MS = 5000;
-
-const grpcCodeFor = (code) => ({
-  INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT,
-  UNAVAILABLE: grpcStatus.UNAVAILABLE,
-})[code] ?? grpcStatus.UNKNOWN;
 
 const errorWithCode = (code, message) => {
   const err = new GrpcError(grpcCodeFor(code), message);
@@ -45,9 +40,16 @@ const resolveBindingString = (bindings, keys) => {
 
 const mergedBindings = (ctx = {}) => ({
   ...(ctx?.config ?? {}),
-  ...(ctx?.secret ?? {}),
   ...(ctx?.bindings ?? {}),
+  ...(ctx?.secret ?? {}),
 });
+
+const resolveWebhook = (ctx = {}) => {
+  const keys = ['webhook', 'webhook_url', 'webhookUrl', 'url'];
+  return resolveBindingString(ctx.secret || {}, keys)
+    || resolveBindingString(ctx.config || {}, keys)
+    || resolveBindingString(ctx.bindings || {}, keys);
+};
 
 const resolveCallContext = (ctx = {}) => ({
   ...ctx,
@@ -59,8 +61,34 @@ const resolveCallContext = (ctx = {}) => ({
 
 const resolveTimeoutMs = (ctx) => {
   const bindings = mergedBindings(ctx);
-  const raw = Number(firstDefined(bindings.timeoutMs, bindings.timeout_ms, ctx?.limits?.timeoutMs, DEFAULT_TIMEOUT_MS));
-  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;
+  return normalizeTimeoutMs(firstDefined(bindings.timeoutMs, bindings.timeout_ms, ctx?.limits?.timeoutMs), DEFAULT_TIMEOUT_MS);
+};
+
+const toBoolean = (candidate) => {
+  if (typeof candidate === 'boolean') return candidate;
+  if (typeof candidate === 'number') return Number.isFinite(candidate) && candidate !== 0;
+  if (typeof candidate === 'string') {
+    const normalized = candidate.trim().toLowerCase();
+    if (['1', 'true', 'yes', 'y', 'on'].includes(normalized)) return true;
+    if (['0', 'false', 'no', 'n', 'off', ''].includes(normalized)) return false;
+  }
+  if (candidate && typeof candidate === 'object' && hasOwn(candidate, 'value')) return toBoolean(candidate.value);
+  return false;
+};
+
+const tlsSkipRequested = (bindings = {}) => (
+  toBoolean(firstDefined(bindings.skipTlsVerify, bindings.tlsInsecureSkipVerify, bindings.insecureSkipVerify))
+);
+
+const assertSupportedTlsConfig = (bindings = {}) => {
+  if (!tlsSkipRequested(bindings)) return;
+  throw errorWithCode('INVALID_ARGUMENT', 'skipTlsVerify is not supported by this service');
+};
+
+const makeTimeoutSignal = (timeoutMs) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  return { signal: controller.signal, clear: () => clearTimeout(timeoutId) };
 };
 
 const redactWebhook = (url) => String(url).replace(/\/services\/[^/?#]+\/[^/?#]+\/[^/?#]+/, '/services/***/***/***');
@@ -82,6 +110,8 @@ const createLogger = (meta = {}) => (action, details) => {
 const buildPayload = (message) => ({ text: message });
 
 const sendToSlack = async (ctx, webhook, payload, log) => {
+  assertSupportedTlsConfig(ctx.bindings || {});
+  const timeout = makeTimeoutSignal(resolveTimeoutMs(ctx));
   log('SendTextMessage:start', {
     webhook: redactWebhook(webhook),
     messageLength: payload.text.length,
@@ -93,7 +123,7 @@ const sendToSlack = async (ctx, webhook, payload, log) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-      timeoutMs: resolveTimeoutMs(ctx),
+      signal: timeout.signal,
     });
   } catch (err) {
     const reason = err?.cause?.message || err?.message || 'fetch failed';
@@ -102,33 +132,47 @@ const sendToSlack = async (ctx, webhook, payload, log) => {
     error.httpStatus = 0;
     error.httpBody = '';
     throw error;
+  } finally {
+    timeout.clear();
   }
 
   const httpStatus = Number(res.status || 0);
-  const httpBody = String((await res.text()) ?? '');
+  let httpBody;
+  try {
+    httpBody = String((await res.text()) ?? '');
+  } catch (err) {
+    const reason = err?.message || 'read response failed';
+    log('SendTextMessage:failure', { reason, stage: 'read', httpStatus });
+    const error = errorWithCode('UNAVAILABLE', reason);
+    error.httpStatus = httpStatus;
+    error.httpBody = '';
+    error.httpBodyLength = 0;
+    throw error;
+  }
   log('SendTextMessage:response', {
     httpStatus,
     httpBodyLength: httpBody.length,
   });
 
   if (httpStatus !== 200) {
-    const err = errorWithCode('UNAVAILABLE', `upstream http ${httpStatus}: ${httpBody}`);
+    const err = errorWithCode('UNAVAILABLE', `upstream http ${httpStatus}`);
     err.httpStatus = httpStatus;
-    err.httpBody = httpBody;
+    err.httpBody = '';
+    err.httpBodyLength = httpBody.length;
     throw err;
   }
 
   return {
     http_status: httpStatus,
-    http_body: httpBody,
+    http_body: '',
   };
 };
 
 const handleSendTextMessage = async (req, ctx) => {
   const callCtx = resolveCallContext(ctx);
-  const webhook = normalizeWebhook(resolveBindingString(callCtx.bindings, ['webhook', 'webhook_url', 'webhookUrl', 'url']));
+  const webhook = normalizeWebhook(resolveWebhook(callCtx));
   if (!webhook) {
-    throw errorWithCode('INVALID_ARGUMENT', 'webhook is required (https://hooks.slack.com/services/T.../B.../xxxx)');
+    throw errorWithCode('INVALID_ARGUMENT', 'webhook is required in instance secret (https://hooks.slack.com/services/T.../B.../xxxx)');
   }
 
   const message = coerceString(firstDefined(req?.message, req?.send_msg, req?.sendMsg, req?.text)).trim();
@@ -157,6 +201,7 @@ export const handlers = {
 };
 
 rpcdef.__test__ = {
+  assertSupportedTlsConfig,
   buildPayload,
   coerceString,
   createLogger,
@@ -164,6 +209,7 @@ rpcdef.__test__ = {
   firstDefined,
   handleSendTextMessage,
   hasOwn,
+  makeTimeoutSignal,
   mergedBindings,
   normalizeWebhook,
   redactWebhook,
@@ -171,7 +217,10 @@ rpcdef.__test__ = {
   resolveBindingString,
   resolveCallContext,
   resolveTimeoutMs,
+  resolveWebhook,
   sendToSlack,
+  tlsSkipRequested,
+  toBoolean,
 };
 
 export const _test = rpcdef.__test__;

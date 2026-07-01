@@ -1,4 +1,5 @@
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const METHOD_BLOCK_IP_PATH = '/WD_K01.WD_K01/BlockIP';
 export const METHOD_UNBLOCK_IP_PATH = '/WD_K01.WD_K01/UnblockIP';
@@ -100,8 +101,10 @@ const resolveCallContext = (ctx = {}) => ({
   },
   limits: ctx.limits ?? {},
   meta: ctx.meta ?? {},
-  req: ctx.req ?? ctx.request ?? {},
+  req: ctx.request ?? ctx.req ?? {},
 });
+
+const requestFromContext = (ctx = {}) => ctx.request ?? ctx.req ?? {};
 
 const resolveHost = (bindings = {}) => normalizeBaseUrl(pickFirstString([bindings.host, bindings.restBaseUrl, bindings.baseUrl]));
 const resolveUser = (bindings = {}) => pickStringFrom(bindings, ['user', 'username']);
@@ -112,9 +115,17 @@ const resolveTimeoutMs = (ctx = {}) => {
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;
 };
 
+const insecureTlsDispatcher = new Agent({ connect: { rejectUnauthorized: false } });
+
 const buildTlsOptions = (bindings = {}) => {
   const enabled = pickFirstBoolean([bindings.skipTlsVerify, bindings.tlsInsecureSkipVerify, bindings.insecureSkipVerify]) || false;
-  return enabled ? { skipTlsVerify: true, tlsInsecureSkipVerify: true, insecureSkipVerify: true } : {};
+  return enabled ? { dispatcher: insecureTlsDispatcher } : {};
+};
+
+const makeTimeoutSignal = (timeoutMs) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  return { signal: controller.signal, clear: () => clearTimeout(timeoutId) };
 };
 
 const sanitizeHeaders = (headers) => {
@@ -146,16 +157,19 @@ const throwForHttpStatus = (status, text) => {
 
 const fetchRaw = async (ctx, url, init = {}) => {
   const callCtx = resolveCallContext(ctx);
+  const timeout = makeTimeoutSignal(resolveTimeoutMs(callCtx));
   let response;
   try {
     response = await fetch(url, {
-      timeoutMs: resolveTimeoutMs(callCtx),
+      signal: timeout.signal,
       ...buildTlsOptions(callCtx.bindings),
       ...init,
       headers: buildHeaders(callCtx.bindings, callCtx.meta, init.headers || {}),
     });
   } catch (err) {
     throw errorWithCode('UNAVAILABLE', err?.cause?.message || err?.message || 'fetch failed');
+  } finally {
+    timeout.clear();
   }
   const text = await response.text();
   if (!response.ok) throwForHttpStatus(response.status, text);
@@ -289,7 +303,7 @@ const handleBlock = async (ctx = {}, token, params) => {
   const success = isBlockSemanticSuccess(msgType, msg);
   logFlow(callCtx, 'BlockIP', { host: callCtx.host, user: callCtx.user, ip: params.ip, elapsed_ms: Date.now() - started, success, msgType });
   if (!success) throw errorWithCode('FAILED_PRECONDITION', String(msg || '封禁IP失败'));
-  return { success: true, msg_type: String(msgType || ''), msg: String(msg || ''), raw_json: text };
+  return { success: true, msg_type: String(msgType || ''), msg: String(msg || ''), raw_json: '' };
 };
 
 const handleUnblock = async (ctx = {}, token, params) => {
@@ -314,7 +328,7 @@ const handleUnblock = async (ctx = {}, token, params) => {
     success: true,
     msg_type: String(msgType || ''),
     msg: String(msg || ''),
-    raw_json: text,
+    raw_json: '',
     computed_id: params.computedId,
     computed_ip: params.ipWithMask,
   };
@@ -344,17 +358,19 @@ const withSession = async (ctx = {}, actionFn) => {
 };
 
 const runBlockIP = async (req = {}, ctx = {}) => {
-  const callCtx = resolveCallContext({ ...ctx, req: { ...(ctx.req || {}), ...(req || {}) } });
+  const request = { ...requestFromContext(ctx), ...(req || {}) };
+  const callCtx = resolveCallContext({ ...ctx, req: request, request });
   const params = validateBlockReq(callCtx.req || {});
   const { result, loginRaw, logoutText } = await withSession(callCtx, (login) => handleBlock(callCtx, login.token, params));
-  return { ...result, login_raw_json: loginRaw, logout_raw_text: logoutText };
+  return { ...result, login_raw_json: '', logout_raw_text: logoutText ? '[redacted]' : '' };
 };
 
 const runUnblockIP = async (req = {}, ctx = {}) => {
-  const callCtx = resolveCallContext({ ...ctx, req: { ...(ctx.req || {}), ...(req || {}) } });
+  const request = { ...requestFromContext(ctx), ...(req || {}) };
+  const callCtx = resolveCallContext({ ...ctx, req: request, request });
   const params = validateUnblockReq(callCtx.req || {});
   const { result, loginRaw, logoutText } = await withSession(callCtx, (login) => handleUnblock(callCtx, login.token, params));
-  return { ...result, login_raw_json: loginRaw, logout_raw_text: logoutText };
+  return { ...result, login_raw_json: '', logout_raw_text: logoutText ? '[redacted]' : '' };
 };
 
 export function rpcdef(ctx = {}) {
@@ -366,8 +382,8 @@ export function rpcdef(ctx = {}) {
 }
 
 export const handlers = {
-  [METHOD_BLOCK_IP_FULL]: (req, ctx = {}) => runBlockIP(req, ctx),
-  [METHOD_UNBLOCK_IP_FULL]: (req, ctx = {}) => runUnblockIP(req, ctx),
+  [METHOD_BLOCK_IP_FULL]: (ctx = {}) => runBlockIP(requestFromContext(ctx), ctx),
+  [METHOD_UNBLOCK_IP_FULL]: (ctx = {}) => runUnblockIP(requestFromContext(ctx), ctx),
 };
 
 export const _test = {
@@ -382,10 +398,12 @@ export const _test = {
   handleLogout,
   handleUnblock,
   hasOwn,
+  insecureTlsDispatcher,
   isBlockSemanticSuccess,
   isIPv4,
   isUnblockSemanticSuccess,
   logFlow,
+  makeTimeoutSignal,
   msgContains,
   normalizeBaseUrl,
   normalizeIpMask,

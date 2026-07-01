@@ -197,7 +197,7 @@ npx octobus-sdk client-package --transport grpc --name @acme/example-grpc-client
 - `service.json` proto paths match actual files.
 - root `package.json bin` target for the selected service exists and is executable.
 - Handler keys match proto exactly.
-- `npx octobus-sdk validate --strict` passes or missing handlers are intentionally documented.
+- `npx octobus-sdk validate --strict` passes with handlers for every declared unary and streaming method.
 - Generated client stubs/packages are checked when a consumer-facing client is part of the task.
 - Tests cover success and failure behavior.
 - `npm pack --dry-run` includes all runtime files.

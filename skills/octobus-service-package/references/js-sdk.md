@@ -33,7 +33,7 @@ For manual single-service packages, one `package.json bin` target is enough. Mul
     "calculator": "bin/calculator.js"
   },
   "dependencies": {
-    "@chaitin-ai/octobus-sdk": "^0.4.3"
+    "@chaitin-ai/octobus-sdk": "^0.5.0"
   },
   "scripts": {
     "validate": "octobus-sdk validate --strict",
@@ -83,7 +83,7 @@ Handlers receive:
 
 The SDK can register unary and streaming handlers in long-running `--runtime serve` / `--runtime dev` mode. `--runtime invoke`, on-demand OctoBus runtime, and the generated business CLI used without `--runtime` support unary methods only. Agent/tool-facing methods should normally stay unary.
 
-Missing handlers return `UNIMPLEMENTED`; `octobus-sdk validate --strict` turns missing unary handlers into validation errors.
+Missing handlers return `UNIMPLEMENTED`; `octobus-sdk validate --strict` turns missing unary and streaming handlers into validation errors.
 
 ## Errors
 
@@ -118,7 +118,7 @@ npx octobus-sdk client-package --transport connect --name @acme/calculator-clien
 Service bin commands from `runServiceMain(service)`:
 
 ```bash
-node bin/service.js --runtime dev --port 50051 --config-json '{}'
+node bin/service.js --runtime dev --port 50051 --config-json '{}' --secret-json '{}'
 node bin/service.js --help
 node bin/service.js add --data-json '{"left":1,"right":2}' --config-json '{}'
 node bin/service.js --runtime client-stub --transport connect --factory createCalculatorClient

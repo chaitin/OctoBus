@@ -23,12 +23,20 @@ let instanceSeq = 0;
 
 const nextInstanceId = () => `inst-${++instanceSeq}`;
 
+const defaultConfig = {
+  username: 'api_user',
+};
+
+const defaultSecret = {
+  password: 'SuperSecret!',
+};
+
 const buildCtx = (overrides = {}) => ({
   bindings: {
     ...(overrides.bindings || {}),
   },
-  config: overrides.config || {},
-  secret: overrides.secret || {},
+  config: overrides.config === undefined ? defaultConfig : overrides.config,
+  secret: overrides.secret === undefined ? defaultSecret : overrides.secret,
   limits: { timeoutMs: 10_000, ...(overrides.limits || {}) },
   meta: { instance_id: nextInstanceId(), request_id: 'req', ...(overrides.meta || {}) },
   req: overrides.req || {},
@@ -51,8 +59,8 @@ test.afterEach(() => {
 
 const loginReq = (host = 'https://203.0.113.10:8443') => ({
   host,
-  username: 'api_user',
-  password: 'SuperSecret!',
+  username: 'request_user',
+  password: 'RequestSecret!',
 });
 
 const loginOnce = async (instanceId, host = 'https://203.0.113.10:8443') => {
@@ -83,7 +91,8 @@ test('Login sends fixed fields and caches session for later calls', async () => 
 
   assert.equal(loginCaptured.url, 'https://203.0.113.10:8443/rest/api/login');
   assert.equal(loginCaptured.init.method, 'POST');
-  assert.equal(loginCaptured.init.timeoutMs, 10_000);
+  assert.equal(Object.hasOwn(loginCaptured.init, 'timeoutMs'), false);
+  assert.ok(loginCaptured.init.signal instanceof AbortSignal);
   assert.equal(loginCaptured.init.headers['content-type'], 'text/plain;charset=UTF-8');
   assert.deepEqual(JSON.parse(loginCaptured.init.body), {
     userName: 'api_user',
@@ -93,8 +102,9 @@ test('Login sends fixed fields and caches session for later calls', async () => 
     lang: 'zh_CN',
   });
   assert.equal(loginRes.http_status, 200);
-  assert.equal(loginRes.body.is_json, true);
-  assert.deepEqual(loginRes.body.json_value.structValue.fields.result.listValue.values[0].structValue.fields.token, { stringValue: 'token-123' });
+  assert.equal(loginRes.body.is_json, false);
+  assert.equal(loginRes.body.raw_text, '');
+  assert.equal(loginRes.body.json_value, null);
 
   await rpcdef(buildCtx({
     req: {
@@ -329,8 +339,12 @@ test('SDK handlers merge config and secret bindings', async () => {
 
   assert.equal(result.http_status, 200);
   assert.equal(captured.url, 'https://198.51.100.10:9443/rest/api/login');
-  assert.equal(captured.init.timeoutMs, 3100);
-  assert.equal(captured.init.skipTlsVerify, true);
+  assert.equal(Object.hasOwn(captured.init, 'timeoutMs'), false);
+  assert.ok(captured.init.signal instanceof AbortSignal);
+  assert.equal(Object.hasOwn(captured.init, 'skipTlsVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'tlsInsecureSkipVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'insecureSkipVerify'), false);
+  assert.ok(captured.init.dispatcher);
   assert.equal(captured.init.headers['X-Custom'], 'value');
   assert.deepEqual(JSON.parse(captured.init.body).userName, 'config_user');
   assert.ok(service);
@@ -408,14 +422,12 @@ test('helper validation and body wrappers keep legacy edge behavior', async () =
   assert.equal(_test.buildQueryUrl('https://h:1', { group_name: 'g', start: 0, limit: 0, page: 0 }).includes('%22limit%22%3A50'), true);
   assert.equal(_test.getInstanceKey({ meta: { instanceId: 'i' } }), 'i');
   assert.equal(_test.getInstanceKey({}), 'default');
-  assert.deepEqual(_test.buildTlsOptions({ tlsInsecureSkipVerify: true }), {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  });
-  assert.deepEqual(_test.buildTlsOptions({}), {});
+  const tlsOptions = await _test.buildTlsOptions({ tlsInsecureSkipVerify: true });
+  assert.ok(tlsOptions.dispatcher);
+  assert.equal(Object.hasOwn(tlsOptions, 'tlsInsecureSkipVerify'), false);
+  assert.deepEqual(await _test.buildTlsOptions({}), {});
   assert.equal(_test.resolveTimeoutMs({ bindings: { timeoutMs: -1 }, limits: { timeoutMs: 0 } }), 5000);
-  assert.deepEqual(_test.resolveCallContext({ config: { a: 1 }, secret: { b: 2 }, bindings: { c: 3 }, request: { x: 1 } }).bindings, { a: 1, b: 2, c: 3 });
+  assert.deepEqual(_test.resolveCallContext({ config: { a: 1, password: 'config' }, secret: { b: 2, password: 'secret' }, bindings: { c: 3, password: 'binding' }, request: { x: 1 } }).bindings, { a: 1, b: 2, c: 3, password: 'secret' });
   assert.equal(_test.firstDefined(undefined, null, 'x'), 'x');
   assert.equal(_test.hasOwn({ a: 1 }, 'a'), true);
 

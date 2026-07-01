@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const METHOD_ADD_PRECISE_BLACK_PATH = '/Tencent_TSec_V251.Tencent_TSec_V251/AddPreciseBlack';
 export const METHOD_DELETE_PRECISE_BLACK_PATH = '/Tencent_TSec_V251.Tencent_TSec_V251/DeletePreciseBlack';
@@ -129,14 +130,24 @@ const resolveCallContext = (ctx = {}) => ({
   bindings: mergedBindings(ctx),
   limits: ctx.limits ?? {},
   meta: ctx.meta ?? {},
-  req: ctx.req ?? ctx.request ?? {},
+  req: ctx.request ?? ctx.req ?? {},
 });
+
+const requestFromContext = (ctx = {}) => ctx.request ?? ctx.req ?? {};
 
 const resolveTimeoutMs = (ctx = {}) => optionalUint32(ctx.bindings?.timeoutMs) ?? optionalUint32(ctx.limits?.timeoutMs) ?? DEFAULT_TIMEOUT_MS;
 
+const insecureTlsDispatcher = new Agent({ connect: { rejectUnauthorized: false } });
+
 const buildTlsOptions = (bindings = {}) => {
   if (!toBoolean(bindings.tlsInsecureSkipVerify) && !toBoolean(bindings.skipTlsVerify) && !toBoolean(bindings.insecureSkipVerify)) return {};
-  return { insecureSkipVerify: true, tlsInsecureSkipVerify: true, skipTlsVerify: true };
+  return { dispatcher: insecureTlsDispatcher };
+};
+
+const makeTimeoutSignal = (timeoutMs) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  return { signal: controller.signal, clear: () => clearTimeout(timeoutId) };
 };
 
 const buildHeaders = (ctx = {}) => {
@@ -265,19 +276,22 @@ const parseGlobalResponse = (text, allowedSet, action, expected) => {
 };
 
 const callTencentAPI = async (ctx, payload, successChecker) => {
+  const timeout = makeTimeoutSignal(resolveTimeoutMs(ctx));
   let res;
   try {
     res = await fetch(ctx.host, {
       method: 'POST',
       headers: buildHeaders(ctx),
       body: JSON.stringify(payload),
-      timeoutMs: resolveTimeoutMs(ctx),
+      signal: timeout.signal,
       ...buildTlsOptions(ctx.bindings),
     });
   } catch (err) {
     const reason = err?.cause?.message || err?.message || 'fetch failed';
     logFlow(ctx.meta, 'error', { action: payload.action, error: reason });
     throw errorWithCode('UNAVAILABLE', `upstream error: ${reason}`);
+  } finally {
+    timeout.clear();
   }
   const text = await res.text();
   if (!TRANSPORT_SUCCESS_CODES.has(res.status)) {
@@ -423,10 +437,10 @@ export function rpcdef(ctx = {}) {
 }
 
 export const handlers = {
-  [METHOD_ADD_PRECISE_BLACK_FULL]: (req, ctx = {}) => addPreciseBlack(req, ctx),
-  [METHOD_DELETE_PRECISE_BLACK_FULL]: (req, ctx = {}) => deletePreciseBlack(req, ctx),
-  [METHOD_ADD_GLOBAL_BLACK_FULL]: (req, ctx = {}) => addGlobalBlack(req, ctx),
-  [METHOD_DELETE_GLOBAL_BLACK_FULL]: (req, ctx = {}) => deleteGlobalBlack(req, ctx),
+  [METHOD_ADD_PRECISE_BLACK_FULL]: (ctx = {}) => addPreciseBlack(requestFromContext(ctx), ctx),
+  [METHOD_DELETE_PRECISE_BLACK_FULL]: (ctx = {}) => deletePreciseBlack(requestFromContext(ctx), ctx),
+  [METHOD_ADD_GLOBAL_BLACK_FULL]: (ctx = {}) => addGlobalBlack(requestFromContext(ctx), ctx),
+  [METHOD_DELETE_GLOBAL_BLACK_FULL]: (ctx = {}) => deleteGlobalBlack(requestFromContext(ctx), ctx),
 };
 
 export const _test = {
@@ -445,7 +459,9 @@ export const _test = {
   generateSigRandom,
   getTimestamp,
   hasOwn,
+  insecureTlsDispatcher,
   logFlow,
+  makeTimeoutSignal,
   mergedBindings,
   optionalUint32,
   parseDefaultTencentResponse,

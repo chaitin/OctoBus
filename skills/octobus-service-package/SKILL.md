@@ -36,7 +36,7 @@ Read only the references needed for the task:
    - `npx octobus-sdk validate --strict` when all declared methods should be implemented
    - `npx octobus-sdk client-stub --transport connect` or `--transport grpc` when client generation matters
    - package tests (`npm test`, `node --test`, `vitest`, etc.)
-   - `node <bin> --runtime dev --port 50051 --config-json '{}'` for runtime smoke tests when useful
+   - `node <bin> --runtime dev --port 50051 --config-json '{}' --secret-json '{}'` for runtime smoke tests when useful
    - `npm pack --dry-run` to confirm package contents
    - `octobus service import --id <id> <package-dir>` for end-to-end import when OctoBus is available
 

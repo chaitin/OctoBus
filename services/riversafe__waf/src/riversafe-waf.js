@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const METHOD_SYNC_PATH = '/RiverSafeplusd_WAF.RiverSafeplusd_WAF/SyncIPBlacklist';
 export const METHOD_SYNC_FULL = 'RiverSafeplusd_WAF.RiverSafeplusd_WAF/SyncIPBlacklist';
@@ -208,12 +209,21 @@ const resolveCallContext = (ctx = {}) => ({
   bindings: mergedBindings(ctx),
   limits: ctx.limits ?? {},
   meta: ctx.meta ?? {},
-  req: ctx.req ?? ctx.request ?? {},
+  req: ctx.request ?? ctx.req ?? {},
 });
+
+const requestFromContext = (ctx = {}) => ctx.request ?? ctx.req ?? {};
 
 const resolveTimeoutMs = (ctx = {}) => {
   const value = Number(firstDefined(ctx.bindings?.timeoutMs, ctx.limits?.timeoutMs, DEFAULT_TIMEOUT_MS));
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_TIMEOUT_MS;
+};
+
+let insecureTlsDispatcher;
+
+const getInsecureTlsDispatcher = () => {
+  insecureTlsDispatcher ??= new Agent({ connect: { rejectUnauthorized: false } });
+  return insecureTlsDispatcher;
 };
 
 const buildLogPrefix = (meta = {}, action) => {
@@ -233,7 +243,7 @@ const logFlow = (meta, action, details) => {
 };
 
 const syncIPBlacklist = async (req = {}, ctx = {}) => {
-  const callCtx = resolveCallContext({ ...ctx, req });
+  const callCtx = resolveCallContext({ ...ctx, req, request: req });
   const bindings = callCtx.bindings || {};
   const meta = callCtx.meta || {};
 
@@ -272,8 +282,8 @@ const syncIPBlacklist = async (req = {}, ctx = {}) => {
     method: 'POST',
     headers: buildHeaders(bindings, meta),
     body,
-    timeoutMs: resolveTimeoutMs(callCtx),
-    ...(skipTlsVerify ? { insecureSkipVerify: true, tlsInsecureSkipVerify: true, skipTlsVerify: true } : {}),
+    signal: AbortSignal.timeout(resolveTimeoutMs(callCtx)),
+    ...(skipTlsVerify ? { dispatcher: getInsecureTlsDispatcher() } : {}),
   };
 
   logFlow(meta, 'SyncIPBlacklist:start', { host: baseUrl, item_count: normalizedItems.length });
@@ -289,11 +299,11 @@ const syncIPBlacklist = async (req = {}, ctx = {}) => {
 
   const text = await res.text();
   if (!TRANSPORT_SUCCESS_CODES.has(res.status)) {
-    const excerpt = text.length > 256 ? `${text.slice(0, 256)}...` : text;
-    logFlow(meta, 'SyncIPBlacklist:transport_error', { http_status: res.status, response: excerpt });
-    if (res.status === 401 || res.status === 403) throw errorWithCode('PERMISSION_DENIED', `upstream http ${res.status}: ${excerpt}`);
-    if (res.status >= 400 && res.status < 500) throw errorWithCode('FAILED_PRECONDITION', `upstream http ${res.status}: ${excerpt}`);
-    throw errorWithCode('UNAVAILABLE', `upstream http ${res.status}: ${excerpt}`);
+    const summary = `upstream http ${res.status}; body_length=${text.length}`;
+    logFlow(meta, 'SyncIPBlacklist:transport_error', { http_status: res.status, body_length: text.length });
+    if (res.status === 401 || res.status === 403) throw errorWithCode('PERMISSION_DENIED', summary);
+    if (res.status >= 400 && res.status < 500) throw errorWithCode('FAILED_PRECONDITION', summary);
+    throw errorWithCode('UNAVAILABLE', summary);
   }
 
   if (!String(text || '').trim()) {
@@ -334,7 +344,7 @@ export function rpcdef(ctx = {}) {
 }
 
 export const handlers = {
-  [METHOD_SYNC_FULL]: (req, ctx = {}) => syncIPBlacklist(req, ctx),
+  [METHOD_SYNC_FULL]: (ctx = {}) => syncIPBlacklist(requestFromContext(ctx), ctx),
 };
 
 export const _test = {

@@ -17,6 +17,9 @@ function writeJSON(filePath, value) {
 function writeText(filePath, value = "fixture\n") {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, value);
+  if (value.startsWith("#!")) {
+    fs.chmodSync(filePath, 0o755);
+  }
 }
 
 function fixture() {
@@ -24,7 +27,7 @@ function fixture() {
   writeJSON(path.join(root, "package.json"), {
     name: "@chaitin-ai/octobus-tentacles",
     dependencies: {
-      "@chaitin-ai/octobus-sdk": "^0.5.0",
+      "@chaitin-ai/octobus-sdk": "^0.6.0",
       commander: "^12.1.0",
     },
     bundledDependencies: [
@@ -38,6 +41,7 @@ function fixture() {
     files: [
       "bin/octobus-tentacles.js",
       "bin/safeline-waf.js",
+      "chaitin__safeline-waf",
     ],
   });
   writeText(path.join(root, "bin", "octobus-tentacles.js"), `#!/usr/bin/env node
@@ -82,6 +86,13 @@ runServiceMain(service, {
   writeText(path.join(root, "chaitin__safeline-waf", "config.schema.json"), "{}\n");
   writeText(path.join(root, "chaitin__safeline-waf", "secret.schema.json"), "{}\n");
   writeText(path.join(root, "chaitin__safeline-waf", "proto", "safeline_waf.proto"), 'syntax = "proto3";\n');
+  writeText(path.join(root, "chaitin__safeline-waf", "src", "safeline-waf.js"), "export const handlers = {};\n");
+  writeText(path.join(root, "chaitin__safeline-waf", "src", "service.js"), `import { defineService } from "@chaitin-ai/octobus-sdk";
+import { handlers } from "./safeline-waf.js";
+
+export { handlers } from "./safeline-waf.js";
+export const service = defineService({ handlers });
+`);
   writeJSON(path.join(root, "chaitin__safeline-waf", "service.json"), {
     schema: "chaitin.octobus.service.v1",
     name: "safeline-waf",
@@ -101,13 +112,23 @@ test("validates a migrated external service package root", () => {
   assert.deepEqual(result.errors, []);
 });
 
+test("requires executable root wrappers and service entries", () => {
+  const root = fixture();
+  fs.chmodSync(path.join(root, "bin", "safeline-waf.js"), 0o644);
+  fs.chmodSync(path.join(root, "chaitin__safeline-waf", "bin", "safeline-waf.js"), 0o644);
+
+  const errors = validateRepository(root, { serviceDir: "chaitin__safeline-waf" }).errors.join("\n");
+  assert.match(errors, /package\.json bin safeline-waf target "bin\/safeline-waf\.js" must be executable/);
+  assert.match(errors, /service entry "bin\/safeline-waf\.js" must be executable/);
+});
+
 test("allows numeric service package names", () => {
   const root = fixture();
   fs.renameSync(path.join(root, "chaitin__safeline-waf"), path.join(root, "vendor__fw_v1-2-3"));
   writeJSON(path.join(root, "package.json"), {
     name: "@chaitin-ai/octobus-tentacles",
     dependencies: {
-      "@chaitin-ai/octobus-sdk": "^0.5.0",
+      "@chaitin-ai/octobus-sdk": "^0.6.0",
       commander: "^12.1.0",
     },
     bundledDependencies: [
@@ -121,6 +142,7 @@ test("allows numeric service package names", () => {
     files: [
       "bin/octobus-tentacles.js",
       "bin/vendor-fw-v1-2-3.js",
+      "vendor__fw_v1-2-3",
     ],
   });
   writeJSON(path.join(root, "vendor__fw_v1-2-3", "service.json"), {
@@ -146,6 +168,12 @@ runServiceMain(service, {
 });
 `);
   fs.renameSync(path.join(root, "vendor__fw_v1-2-3", "bin", "safeline-waf.js"), path.join(root, "vendor__fw_v1-2-3", "bin", "vendor-fw-v1-2-3.js"));
+  fs.writeFileSync(path.join(root, "vendor__fw_v1-2-3", "src", "service.js"), `import { defineService } from "@chaitin-ai/octobus-sdk";
+import { handlers } from "./safeline-waf.js";
+
+export { handlers } from "./safeline-waf.js";
+export const service = defineService({ handlers });
+`);
   fs.writeFileSync(path.join(root, "bin", "octobus-tentacles.js"), `#!/usr/bin/env node
 import { fileURLToPath } from "node:url";
 import { runServiceMain } from "@chaitin-ai/octobus-sdk";
@@ -242,7 +270,7 @@ test("reports missing root dispatcher metadata and wrapper entryFile handling", 
   writeJSON(path.join(root, "package.json"), {
     name: "@chaitin-ai/octobus-tentacles",
     dependencies: {
-      "@chaitin-ai/octobus-sdk": "^0.5.0",
+      "@chaitin-ai/octobus-sdk": "^0.6.0",
     },
     bundledDependencies: [
       "@chaitin-ai/octobus-sdk",
@@ -267,6 +295,60 @@ runServiceMain(service);
   assert.match(errors, /must import fileURLToPath/);
   assert.match(errors, /must pass runServiceMain options/);
   assert.match(errors, /must set entryFile to "\.\.\/chaitin__safeline-waf\/bin\/safeline-waf\.js"/);
+});
+
+test("reports package files omissions for service roots and wrappers", () => {
+  const root = fixture();
+  writeJSON(path.join(root, "package.json"), {
+    name: "@chaitin-ai/octobus-tentacles",
+    dependencies: {
+      "@chaitin-ai/octobus-sdk": "^0.6.0",
+      commander: "^12.1.0",
+    },
+    bundledDependencies: [
+      "@chaitin-ai/octobus-sdk",
+      "commander",
+    ],
+    bin: {
+      "octobus-tentacles": "bin/octobus-tentacles.js",
+      "safeline-waf": "bin/safeline-waf.js",
+    },
+    files: [
+      "bin/octobus-tentacles.js",
+    ],
+  });
+
+  const errors = validateRepository(root, { serviceDir: "chaitin__safeline-waf" }).errors.join("\n");
+  assert.match(errors, /files must include root wrapper "bin\/safeline-waf\.js"/);
+  assert.match(errors, /files must include service root "chaitin__safeline-waf"/);
+});
+
+test("reports invalid service imports and high-risk service content", () => {
+  const root = fixture();
+  fs.writeFileSync(path.join(root, "chaitin__safeline-waf", "src", "service.js"), `import { defineService } from "@chaitin-ai/octobus-sdk";
+import { handlers } from "./missing.js";
+export const service = defineService({ handlers });
+`);
+  fs.writeFileSync(path.join(root, "chaitin__safeline-waf", "src", "safeline-waf.js"), `process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+const proxy = globalThis.proxy;
+export const handlers = {
+  ["/pkg.Service/Method"]: (req, ctx = {}) => ({ ok: true }),
+};
+`);
+  writeText(path.join(root, "chaitin__safeline-waf", "debug.log"), "debug\n");
+  writeText(path.join(root, "chaitin__safeline-waf", "sdk", "sdk.tgz"), "artifact\n");
+  writeText(path.join(root, "chaitin__safeline-waf", ".env"), "TOKEN=x\n");
+  fs.mkdirSync(path.join(root, "chaitin__safeline-waf", "node_modules"), { recursive: true });
+
+  const errors = validateRepository(root, { serviceDir: "chaitin__safeline-waf" }).errors.join("\n");
+  assert.match(errors, /src\/service\.js import target "src\/missing\.js" must exist/);
+  assert.match(errors, /must not modify NODE_TLS_REJECT_UNAUTHORIZED/);
+  assert.match(errors, /must not depend on globalThis\.proxy/);
+  assert.match(errors, /must not export handler entries with \(req, ctx\) signature/);
+  assert.match(errors, /forbidden package artifact "debug\.log"/);
+  assert.match(errors, /forbidden package artifact "sdk\/sdk\.tgz"/);
+  assert.match(errors, /forbidden package artifact "\.env"/);
+  assert.match(errors, /forbidden package artifact "node_modules"/);
 });
 
 test("reports incomplete root dispatcher implementation", () => {
@@ -427,7 +509,9 @@ test("CLI main functions parse supported arguments", () => {
   assert.equal(validateMain(["--root", validateRoot, "--service-dir", "chaitin__safeline-waf"]), 0);
   assert.equal(validateMain([`--root=${validateRoot}`, "--service-dir=chaitin__safeline-waf"]), 0);
   assert.throws(() => validateMain(["--root", ""]), /--root must not be empty/);
+  assert.throws(() => validateMain(["--root"]), /--root must not be empty/);
   assert.throws(() => validateMain(["--service-dir", ""]), /--service-dir must not be empty/);
+  assert.throws(() => validateMain(["--service-dir"]), /--service-dir must not be empty/);
   assert.throws(() => validateMain(["--bad"]), /unknown argument/);
 
   const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "octobus-services-run-main-"));
@@ -436,8 +520,10 @@ test("CLI main functions parse supported arguments", () => {
   assert.equal(runTestsMain(["--coverage"], testRoot), 0);
   assert.throws(() => runTestsMain(["--coverage-threshold=bad"], testRoot), /--coverage-threshold must be a number from 0 to 100/);
   assert.throws(() => runTestsMain(["--coverage-threshold", "101"], testRoot), /--coverage-threshold must be a number from 0 to 100/);
+  assert.throws(() => runTestsMain(["--coverage-threshold"], testRoot), /--coverage-threshold must be a number from 0 to 100/);
   assert.throws(() => runTestsMain(["--service-dir="], testRoot), /--service-dir must not be empty/);
   assert.throws(() => runTestsMain(["--service-dir", ""], testRoot), /--service-dir must not be empty/);
+  assert.throws(() => runTestsMain(["--service-dir"], testRoot), /--service-dir must not be empty/);
   assert.throws(() => runTestsMain(["--unknown"], testRoot), /unknown argument/);
 });
 

@@ -256,14 +256,15 @@ const toValue = (value) => {
 };
 
 const throwStructuredError = (code, message, options = {}) => {
+  const rawBody = String(options.rawBody ?? '');
   const payload = {
     code,
     message,
     http_status: Number(options.httpStatus ?? 0),
-    raw_body: String(options.rawBody ?? ''),
+    raw_body: '',
+    raw_body_length: rawBody.length,
   };
   if (options.reason) payload.reason = String(options.reason);
-  if (options.rawJson !== undefined) payload.raw_json = options.rawJson;
   throw errorWithCode(code, JSON.stringify(payload));
 };
 
@@ -292,10 +293,11 @@ const fetchUpstream = async (url, ctx = {}) => {
       signal: timeout.signal,
     });
   } catch (err) {
+    if (err instanceof GrpcError) throw err;
     throwStructuredError('UNAVAILABLE', 'defectdojo upstream request failed', {
       httpStatus: 0,
       rawBody: '',
-      reason: err?.cause?.message || err?.message || 'fetch failed',
+      reason: 'fetch failed',
     });
   } finally {
     timeout.clear();
@@ -309,7 +311,7 @@ const fetchUpstream = async (url, ctx = {}) => {
     throwStructuredError('UNAVAILABLE', 'defectdojo upstream response read failed', {
       httpStatus,
       rawBody: '',
-      reason: err?.message || 'response read failed',
+      reason: 'response read failed',
     });
   }
   return { httpStatus, rawBody: String(rawBody ?? '') };
@@ -332,10 +334,11 @@ const postMultipartUpstream = async (url, ctx = {}, fields = {}, file = {}) => {
       signal: timeout.signal,
     });
   } catch (err) {
+    if (err instanceof GrpcError) throw err;
     throwStructuredError('UNAVAILABLE', 'defectdojo upstream request failed', {
       httpStatus: 0,
       rawBody: '',
-      reason: err?.cause?.message || err?.message || 'fetch failed',
+      reason: 'fetch failed',
     });
   } finally {
     timeout.clear();
@@ -349,7 +352,7 @@ const postMultipartUpstream = async (url, ctx = {}, fields = {}, file = {}) => {
     throwStructuredError('UNAVAILABLE', 'defectdojo upstream response read failed', {
       httpStatus,
       rawBody: '',
-      reason: err?.message || 'response read failed',
+      reason: 'response read failed',
     });
   }
   return { httpStatus, rawBody: String(rawBody ?? '') };
@@ -375,9 +378,9 @@ const parseDefectDojoResponse = ({ httpStatus, rawBody }) => {
   }
   return {
     http_status: httpStatus,
-    raw_body: rawBody,
+    raw_body: '',
     json: parsed.value,
-    raw_json: toValue(parsed.value),
+    raw_json: undefined,
   };
 };
 

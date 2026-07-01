@@ -13,7 +13,7 @@ import {
   _test,
   handlers,
   rpcdef,
-} from '../src/qianxin-fw-secgate36003600.js';
+} from '../src/qianxin-fw-secgate3600.js';
 import { service } from '../src/service.js';
 import { createMockServer } from './mock_upstream.js';
 
@@ -25,16 +25,19 @@ const nextInstanceId = () => `inst-${++instanceSeq}`;
 const buildCtx = (overrides = {}) => ({
   bindings: {
     host: 'https://203.0.113.10:8443',
-    user: 'api_user',
-    password: 'SuperSecret!',
     ...(overrides.bindings || {}),
   },
   config: overrides.config || {},
-  secret: overrides.secret || {},
+  secret: { user: 'api_user', password: 'SuperSecret!', ...(overrides.secret || {}) },
   limits: { timeoutMs: 10_000, ...(overrides.limits || {}) },
   meta: { instance_id: overrides.instance_id || nextInstanceId(), request_id: 'req', ...(overrides.meta || {}) },
   req: overrides.req || {},
 });
+
+const callHandler = (method, request = {}, ctx = {}) => {
+  const handler = handlers[method];
+  return handler({ ...ctx, request });
+};
 
 const createHeaders = (entries = {}) => {
   const map = new Map();
@@ -134,7 +137,7 @@ test('service exports defineService result and handlers', () => {
   assert.equal(typeof handlers[METHOD_LOGOUT_FULL], 'function');
 });
 
-test('Login sends request body, falls back to bindings, and caches cookie for later calls', async () => {
+test('Login sends secret credentials and caches cookie for later calls', async () => {
   const instanceId = nextInstanceId();
   let loginCaptured;
   let updateCaptured;
@@ -153,21 +156,26 @@ test('Login sends request body, falls back to bindings, and caches cookie for la
 
   const loginRes = await rpcdef(buildCtx({
     instance_id: instanceId,
+    req: { username: 'ignored-user', password: 'ignored-password' },
     bindings: { headers: { 'X-Extra': 'demo' }, skipTlsVerify: true },
   }))[LOGIN_PATH]();
 
   assert.equal(loginCaptured.url, 'https://203.0.113.10:8443/v1.0/login');
   assert.equal(loginCaptured.init.method, 'POST');
-  assert.equal(loginCaptured.init.timeoutMs, 10_000);
-  assert.equal(loginCaptured.init.insecureSkipVerify, true);
+  assert.ok(loginCaptured.init.signal instanceof AbortSignal);
+  assert.equal('timeoutMs' in loginCaptured.init, false);
+  assert.ok(loginCaptured.init.dispatcher);
+  assert.equal('insecureSkipVerify' in loginCaptured.init, false);
   assert.equal(loginCaptured.init.headers['Content-Type'], 'application/json');
   assert.equal(loginCaptured.init.headers['X-Extra'], 'demo');
   assert.deepEqual(JSON.parse(loginCaptured.init.body), { username: 'api_user', password: 'SuperSecret!' });
   assert.equal(loginRes.success, true);
   assert.equal(loginRes.result.error_code, 'success');
-  assert.equal(loginRes.result.token, 'token-123');
+  assert.equal(loginRes.result.token, '');
   assert.equal(loginRes.http_status, 200);
-  assert.equal(loginRes.headers.find((item) => item.key === 'set-cookie').values.length, 2);
+  assert.equal(loginRes.raw_body, '');
+  assert.equal(loginRes.raw_json, undefined);
+  assert.deepEqual(loginRes.headers, []);
 
   await rpcdef(buildCtx({ instance_id: instanceId, req: buildUpdateRequest() }))[UPDATE_PATH]();
 
@@ -185,12 +193,12 @@ test('Login validates host, username, password, and malformed schema', async () 
     (err) => assert.match(err.message, /host is required/),
   );
   await expectGrpcError(
-    () => rpcdef(buildCtx({ bindings: { user: '', username: '', password: 'pw' } }))[LOGIN_PATH](),
+    () => rpcdef(buildCtx({ secret: { user: '', username: '', password: 'pw' } }))[LOGIN_PATH](),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /username is required/),
   );
   await expectGrpcError(
-    () => rpcdef(buildCtx({ bindings: { password: '' } }))[LOGIN_PATH](),
+    () => rpcdef(buildCtx({ secret: { password: '' } }))[LOGIN_PATH](),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /password is required/),
   );
@@ -305,7 +313,7 @@ test('Login business failure does not cache session', async () => {
     'set-cookie': ['SID=abc; Path=/'],
   }));
 
-  const loginRes = await rpcdef(buildCtx({ instance_id: instanceId, req: { password: 'bad' } }))[LOGIN_PATH]();
+  const loginRes = await rpcdef(buildCtx({ instance_id: instanceId, secret: { password: 'bad' } }))[LOGIN_PATH]();
   assert.equal(loginRes.success, false);
   assert.equal(loginRes.result.error_code, 'bad_password');
   await expectGrpcError(() => rpcdef(buildCtx({ instance_id: instanceId, req: buildUpdateRequest() }))[UPDATE_PATH](), 'FAILED_PRECONDITION');
@@ -351,7 +359,7 @@ test('Logout accepts 2xx empty body and clears cached session', async () => {
   assert.equal(res.http_status, 204);
   assert.equal(res.raw_body, '');
   assert.equal(res.raw_json, undefined);
-  assert.deepEqual(res.headers, [{ key: 'x-trace-id', values: ['logout-ok'] }]);
+  assert.deepEqual(res.headers, []);
   await expectGrpcError(() => rpcdef(buildCtx({ instance_id: instanceId, req: { host: 'https://203.0.113.10:8443', username: 'api_user' } }))[LOGOUT_PATH](), 'FAILED_PRECONDITION');
 });
 
@@ -365,9 +373,9 @@ test('Logout parses JSON body and rejects non-2xx empty body', async () => {
   });
 
   await rpcdef(buildCtx({ instance_id: instanceId }))[LOGIN_PATH]();
-  const ok = await handlers[METHOD_LOGOUT_FULL]({}, buildCtx({ instance_id: instanceId }));
+  const ok = await callHandler(METHOD_LOGOUT_FULL, {}, buildCtx({ instance_id: instanceId }));
   assert.equal(ok.http_status, 200);
-  assert.deepEqual(ok.raw_json.structValue.fields.code, { numberValue: 0 });
+  assert.equal(ok.raw_json, undefined);
 
   _test.setSession(buildCtx({ instance_id: 'logout-empty' }), 'https://203.0.113.10:8443', { token: 't', cookie: 'token=t', username: 'api_user' });
   setFetch(async () => response(500, ''));
@@ -381,7 +389,7 @@ test('config and secret aliases supply bindings, timeout, TLS, and headers', asy
     return response(200, JSON.stringify(loginSuccessPayload), { 'set-cookie': ['SID=abc; Path=/'] });
   });
 
-  const result = await handlers[METHOD_LOGIN_FULL]({}, {
+  const result = await callHandler(METHOD_LOGIN_FULL, {}, {
     config: {
       base_url: 'https://198.51.100.1:8443/',
       timeout_ms: 2500,
@@ -395,8 +403,10 @@ test('config and secret aliases supply bindings, timeout, TLS, and headers', asy
 
   assert.equal(result.success, true);
   assert.equal(captured.url, 'https://198.51.100.1:8443/v1.0/login');
-  assert.equal(captured.init.timeoutMs, 2500);
-  assert.equal(captured.init.skipTlsVerify, true);
+  assert.ok(captured.init.signal instanceof AbortSignal);
+  assert.equal('timeoutMs' in captured.init, false);
+  assert.ok(captured.init.dispatcher);
+  assert.equal('skipTlsVerify' in captured.init, false);
   assert.equal(captured.init.headers['X-Config'], 'yes');
   assert.deepEqual(JSON.parse(captured.init.body), { username: 'secret-user', password: 'secret-pass' });
 });
@@ -429,11 +439,7 @@ test('helpers cover parser, scalar, cookie, schema, and normalization branches',
   assert.equal(_test.toBoolean('maybe'), false);
   assert.equal(_test.toBoolean({ value: 1 }), true);
   assert.deepEqual(_test.buildTlsOptions({}), {});
-  assert.deepEqual(_test.buildTlsOptions({ skipTlsVerify: 'yes' }), {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  });
+  assert.ok(_test.buildTlsOptions({ skipTlsVerify: 'yes' }).dispatcher);
   assert.equal(_test.toInt64('42.9'), 42);
   assert.equal(_test.toInt64('bad', 7), 7);
   assert.equal(_test.toInt64('', 7), 7);
@@ -466,6 +472,14 @@ test('helpers cover parser, scalar, cookie, schema, and normalization branches',
   assert.throws(() => _test.normalizeUpdateEntries({ entries: [{ head: {}, body: { obj_addr: [] } }] }), /obj_addr must be a non-empty array/);
   assert.deepEqual(_test.toUpdateResponse(200, '{"head":{}}', {}, { head: { errmsg: 'm' } }).head.message, 'm');
   assert.equal(_test.toLoginResponse(200, '{}', {}, { success: false, result: [] }).result.error_code, '');
+  assert.deepEqual(_test.toLoginResponse(200, '{"token":"secret"}', { headers: createHeaders({ 'set-cookie': ['SID=abc'] }) }, { success: true, result: { error_code: 'success', token: 'secret' } }), {
+    success: true,
+    result: { error_code: 'success', token: '', raw: undefined },
+    http_status: 200,
+    raw_body: '',
+    raw_json: undefined,
+    headers: [],
+  });
   assert.equal(_test.toLogoutResponse(200, '', {}, undefined).raw_json, undefined);
   assert.equal(_test.errorWithCode('NOT_REAL', 'fallback').code, grpcStatus.UNKNOWN);
 });

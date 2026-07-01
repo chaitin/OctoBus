@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+import { grpcStatus } from '@chaitin-ai/octobus-sdk';
+
 const listProductsPath = '/DefectDojo.DefectDojo/ListProducts';
 const listEngagementsPath = '/DefectDojo.DefectDojo/ListEngagements';
 const listFindingsPath = '/DefectDojo.DefectDojo/ListFindings';
@@ -50,9 +52,15 @@ test('helpers normalize bindings, scalars, booleans, query strings, and headers'
   assert.equal(_test.toOptionalInt('0', { min: 1 }), undefined);
   assert.equal(_test.toOptionalBool({ value: 'false' }), false);
   assert.equal(_test.toOptionalBool(1), true);
+  assert.equal(_test.toOptionalBool(0), false);
+  assert.equal(_test.toOptionalBool(2), undefined);
+  assert.equal(_test.toOptionalBool('true'), true);
+  assert.equal(_test.toOptionalBool('false'), false);
+  assert.equal(_test.toOptionalBool(''), undefined);
   assert.equal(_test.toOptionalBool('bad'), undefined);
   assert.deepEqual(_test.parseHeaders('{"X-A":"1"}'), { 'X-A': '1' });
   assert.deepEqual(_test.parseHeaders('{'), {});
+  assert.deepEqual(_test.parseHeaders(['bad']), {});
   assert.equal(_test.encodeQueryPairs({ a: 'x y', empty: '', missing: undefined }), 'a=x%20y');
   assert.equal(_test.buildUrl('http://x/', '/api/v2/products/', { limit: 2 }), 'http://x/api/v2/products/?limit=2');
   assert.equal(_test.boolField({ value: true }), 'true');
@@ -80,6 +88,59 @@ test('helpers normalize bindings, scalars, booleans, query strings, and headers'
   assert.doesNotMatch(multipart.body, /name="empty"/);
   assert.match(multipart.body, /name="file"; filename="zap.xml"/);
   assert.match(multipart.body, /Content-Type: application\/xml\r\n\r\n<xml \/>/);
+  assert.deepEqual(_test.toValue(['x', null]), { listValue: { values: [{ stringValue: 'x' }, { nullValue: 'NULL_VALUE' }] } });
+  assert.deepEqual(_test.toValue({ missing: undefined, count: Number.NaN }), {
+    structValue: {
+      fields: {
+        missing: { nullValue: 'NULL_VALUE' },
+        count: { stringValue: 'NaN' },
+      },
+    },
+  });
+  assert.deepEqual(_test.toValue(Symbol.for('dojo')), { stringValue: 'Symbol(dojo)' });
+  assert.equal(_test.mapHttpStatusToGrpcCode(401), 'PERMISSION_DENIED');
+  assert.equal(_test.mapHttpStatusToGrpcCode(418), 'FAILED_PRECONDITION');
+  assert.equal(_test.mapHttpStatusToGrpcCode(503), 'UNAVAILABLE');
+  assert.equal(_test.mapHttpStatusToGrpcCode(302), 'UNAVAILABLE');
+  assert.equal(_test.grpcCodeFor('NOPE'), grpcStatus.UNKNOWN);
+  assert.equal(_test.errorWithCode('NOPE', null).message, '');
+  assert.equal(_test.firstDefined(undefined, null, 0, 'x'), 0);
+  assert.equal(_test.hasOwn(null, 'x'), false);
+  assert.deepEqual(_test.resolveHandlerArgs({ request: { limit: 1 }, config: {} }), {
+    req: { limit: 1 },
+    ctx: { request: { limit: 1 }, config: {} },
+  });
+  assert.deepEqual(_test.resolveHandlerArgs({ limit: 2 }), { req: { limit: 2 }, ctx: {} });
+  assert.deepEqual(_test.resolveHandlerArgs(null, null), { req: {}, ctx: {} });
+  assert.deepEqual(_test.resolveCallContext({ request: { id: 1 }, limits: null }), {
+    request: { id: 1 },
+    limits: {},
+    bindings: {},
+    meta: {},
+    req: { id: 1 },
+  });
+  assert.equal(_test.resolveBaseUrl({ restBaseUrl: 'https://dojo.example/' }), 'https://dojo.example');
+  assert.equal(_test.resolveApiKey({ apiKey: 'api-key' }), 'api-key');
+  assert.equal(_test.resolveApiKey({ token: 'token-key' }), 'token-key');
+  assert.equal(_test.resolveTimeoutMs({ bindings: { timeoutMs: -1 }, limits: {} }), 1500);
+  assert.deepEqual(_test.commonPagingQuery({ limit: 0, offset: -1 }), { limit: undefined, offset: undefined });
+  assert.deepEqual(_test.parseListResponse({ httpStatus: 200, rawBody: '{}' }), {
+    http_status: 200,
+    raw_body: '',
+    count: 0,
+    next: '',
+    previous: '',
+    results: [],
+    raw_json: undefined,
+  });
+  assert.throws(
+    () => _test.parseDefectDojoResponse({ httpStatus: 500, rawBody: 'upstream-secret-body' }),
+    (error) => /"raw_body":""/.test(error.message) && /"raw_body_length":20/.test(error.message) && !/upstream-secret-body/.test(error.message),
+  );
+  assert.throws(
+    () => _test.throwStructuredError('UNAVAILABLE', 'failed', { httpStatus: 500, rawBody: 'secret-body' }),
+    (error) => /"raw_body":""/.test(error.message) && /"raw_body_length":11/.test(error.message) && !/secret-body/.test(error.message),
+  );
   assert.deepEqual(_test.buildRequestHeaders(buildCtx().bindings ? buildCtx() : {}), {
     Accept: 'application/json',
     'X-Test': 'yes',
@@ -169,6 +230,40 @@ test('sdk handlers still accept legacy request and context arguments', async () 
   assert.equal(res.count, 0);
 });
 
+test('all sdk handlers accept single call context wrappers', async () => {
+  const { handlers } = await import('../src/defectdojo.js');
+  const calls = [];
+  setFetch(async (url, init) => {
+    calls.push({ url, method: init.method });
+    return {
+      status: 200,
+      text: async () => JSON.stringify({ count: 0, results: [], id: 1 }),
+    };
+  });
+  const ctx = (request) => ({
+    request,
+    config: { defectdojo_base_url: 'http://localhost:8080' },
+    secret: { defectdojo_api_key: 'sdk-token' },
+  });
+
+  await handlers['DefectDojo.DefectDojo/ListEngagements'](ctx({ product: 1 }));
+  await handlers['DefectDojo.DefectDojo/ListFindings'](ctx({ active: true }));
+  await handlers['DefectDojo.DefectDojo/GetFinding'](ctx({ id: 1 }));
+  await handlers['DefectDojo.DefectDojo/ImportScan'](ctx({
+    scan_type: 'Generic Findings Import',
+    file_name: 'findings.json',
+    file_content: '{}',
+  }));
+  await handlers['DefectDojo.DefectDojo/ReimportScan'](ctx({
+    scan_type: 'Generic Findings Import',
+    test: 1,
+    file_name: 'findings.json',
+    file_content: '{}',
+  }));
+
+  assert.deepEqual(calls.map((call) => call.method), ['GET', 'GET', 'GET', 'POST', 'POST']);
+});
+
 test('ListEngagements forwards product and status filters', async () => {
   let capturedUrl;
   setFetch(async (url) => {
@@ -234,7 +329,7 @@ test('GetFinding validates id and returns object response', async () => {
   const res = await handler();
 
   assert.equal(capturedUrl, 'http://localhost:8080/api/v2/findings/9/');
-  assert.equal(res.raw_json.structValue.fields.title.stringValue, 'XSS');
+  assert.equal(res.raw_json, undefined);
 });
 
 test('ImportScan sends multipart report upload', async () => {
@@ -271,7 +366,7 @@ test('ImportScan sends multipart report upload', async () => {
   assert.match(captured.init.body, /name="close_old_findings"\r\n\r\nfalse\r\n/);
   assert.match(captured.init.body, /name="file"; filename="zap.xml"/);
   assert.match(captured.init.body, /<OWASPZAPReport><\/OWASPZAPReport>/);
-  assert.equal(res.raw_json.structValue.fields.test.numberValue, 10);
+  assert.equal(res.raw_json, undefined);
 });
 
 test('ReimportScan sends multipart report upload with test selector', async () => {
@@ -302,7 +397,7 @@ test('ReimportScan sends multipart report upload with test selector', async () =
   assert.match(captured.init.body, /name="test"\r\n\r\n11\r\n/);
   assert.match(captured.init.body, /name="do_not_reactivate"\r\n\r\nfalse\r\n/);
   assert.match(captured.init.body, /name="file"; filename="generic.json"/);
-  assert.equal(res.raw_json.structValue.fields.findings_count.numberValue, 1);
+  assert.equal(res.raw_json, undefined);
 });
 
 test('ImportScan and ReimportScan validate required fields before downstream call', async () => {
@@ -326,10 +421,17 @@ test('ImportScan and ReimportScan validate required fields before downstream cal
 });
 
 test('errors cover missing configuration, upstream failures, HTTP errors, and invalid JSON', async () => {
-  const noBaseUrl = await loadHandler(listProductsPath, {}, { bindings: { defectdojo_base_url: '' } });
+  const { rpcdef } = await import('../src/defectdojo.js');
+  const noBaseUrl = rpcdef({
+    config: {},
+    secret: { defectdojo_api_key: 'secret-token' },
+  })[listProductsPath];
   await assert.rejects(() => noBaseUrl(), /defectdojo_base_url is required/);
 
-  const noApiKey = await loadHandler(listProductsPath, {}, { bindings: { defectdojo_api_key: '' } });
+  const noApiKey = rpcdef({
+    config: { defectdojo_base_url: 'http://localhost:8080' },
+    secret: {},
+  })[listProductsPath];
   await assert.rejects(() => noApiKey(), /defectdojo_api_key is required/);
 
   setFetch(async () => {
@@ -354,6 +456,49 @@ test('errors cover missing configuration, upstream failures, HTTP errors, and in
 
   const invalidTls = await loadHandler(listProductsPath, {}, { bindings: { skipTlsVerify: true } });
   await assert.rejects(() => invalidTls(), /skipTlsVerify is not supported/);
+
+  setFetch(async () => ({
+    status: 200,
+    text: async () => {
+      throw new Error('read failed with secret-token');
+    },
+  }));
+  const getReadFailure = await loadHandler(listProductsPath, {});
+  await assert.rejects(
+    () => getReadFailure(),
+    (error) => /defectdojo upstream response read failed/.test(error.message) && !/"raw_body":"secret-token"/.test(error.message),
+  );
+});
+
+test('multipart errors cover network and response read failures without raw body leaks', async () => {
+  setFetch(async () => {
+    throw Object.assign(new Error('connect failed with secret-token'), { cause: new Error('socket closed') });
+  });
+  const networkFailure = await loadHandler(importScanPath, {
+    scan_type: 'Generic Findings Import',
+    file_name: 'findings.json',
+    file_content: '{}',
+  });
+  await assert.rejects(
+    () => networkFailure(),
+    (error) => /defectdojo upstream request failed/.test(error.message) && !/secret-token/.test(error.message),
+  );
+
+  setFetch(async () => ({
+    status: 200,
+    text: async () => {
+      throw new Error('read failed with secret-token');
+    },
+  }));
+  const readFailure = await loadHandler(reimportScanPath, {
+    scan_type: 'Generic Findings Import',
+    file_name: 'findings.json',
+    file_content: '{}',
+  });
+  await assert.rejects(
+    () => readFailure(),
+    (error) => /defectdojo upstream response read failed/.test(error.message) && !/"raw_body":"secret-token"/.test(error.message),
+  );
 });
 
 test('applies upstream timeout through AbortController', async () => {
@@ -363,5 +508,5 @@ test('applies upstream timeout through AbortController', async () => {
   }));
 
   const handler = await loadHandler(listProductsPath, {}, { limits: { timeoutMs: 1 } });
-  await assert.rejects(() => handler(), /aborted by test timeout/);
+  await assert.rejects(() => handler(), /defectdojo upstream request failed/);
 });

@@ -9,11 +9,11 @@
     },
     "username": {
       "type": "string",
-      "description": "Hillstone login username. Prefer secret.username for new instances."
+      "description": "Hillstone login username. Prefer secret.username for credential-only deployments."
     },
     "user": {
       "type": "string",
-      "description": "Alias for username."
+      "description": "Alias for username. Prefer secret.user for credential-only deployments."
     },
     "timeoutMs": {
       "type": "integer",

@@ -4,6 +4,7 @@
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
 const DEFAULT_TIMEOUT_MS = 15000;
+let insecureDispatcherPromise;
 
 // ── gRPC status code mapping ──────────────────────────────────────────
 
@@ -95,8 +96,8 @@ const LIST_BUSINESS_UNITS_PATH         = '/CloudAtlas.CloudAtlas/ListBusinessUni
 
 const mergedBindings = (ctx = {}) => ({
   ...(ctx?.config ?? {}),
-  ...(ctx?.secret ?? {}),
   ...(ctx?.bindings ?? {}),
+  ...(ctx?.secret ?? {}),
 });
 
 const parseHeaders = (value) => {
@@ -161,6 +162,43 @@ const unwrapList = (source) => {
 };
 
 const firstDefined = (...vals) => vals.find((v) => v !== undefined && v !== null);
+
+const createTlsDispatcher = async (skipTlsVerify) => {
+  if (!skipTlsVerify) return undefined;
+  insecureDispatcherPromise ??= import('undici').then(({ Agent }) => new Agent({
+    connect: { rejectUnauthorized: false },
+  }));
+  return insecureDispatcherPromise;
+};
+
+const fetchWithTimeout = async (url, init = {}, options = {}) => {
+  const timeout = Number(options.timeoutMs);
+  const timeoutMs = Number.isFinite(timeout) && timeout > 0 ? timeout : DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const parentSignal = init.signal;
+  const abortFromParent = () => controller.abort(parentSignal.reason);
+  if (parentSignal) {
+    if (parentSignal.aborted) {
+      controller.abort(parentSignal.reason);
+    } else if (typeof parentSignal.addEventListener === 'function') {
+      parentSignal.addEventListener('abort', abortFromParent, { once: true });
+    }
+  }
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const dispatcher = await createTlsDispatcher(options.skipTlsVerify);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+      ...(dispatcher ? { dispatcher } : {}),
+    });
+  } finally {
+    clearTimeout(timer);
+    if (parentSignal && typeof parentSignal.removeEventListener === 'function') {
+      parentSignal.removeEventListener('abort', abortFromParent);
+    }
+  }
+};
 
 const toQueryNumber = (val, allowZero = false) => {
   if (val === undefined || val === null) return undefined;
@@ -228,15 +266,15 @@ export function rpcdef(ctx) {
   const baseHeaders = parseHeaders(bindings.headers);
   const meta = ctx.meta || {};
   const skipTlsVerify = Boolean(bindings.tlsInsecureSkipVerify || bindings.skipTlsVerify || bindings.skip_tls_verify || bindings.tls_insecure_skip_verify);
+  const resolvedToken = String(firstDefined(bindings.token, bindings.Token) || '').trim();
 
   const requestWithDefaults = (req = {}) => {
-    const token = firstDefined(req?.token, req?.Token, bindings.token, bindings.Token);
     const space = firstDefined(req?.space, req?.Space, defaultSpace);
-    if (token === undefined && token === null && space === undefined && space === null) return req ?? {};
+    const { token: _requestToken, Token: _requestTokenUpper, ...rest } = req ?? {};
+    if (space === undefined && space === null) return rest;
     return {
-      ...(token !== undefined && token !== null ? { token } : {}),
       ...(space !== undefined && space !== null ? { space } : {}),
-      ...(req ?? {}),
+      ...rest,
     };
   };
 
@@ -261,20 +299,9 @@ export function rpcdef(ctx) {
     'x-request-id': meta.request_id || meta.requestId || 'unknown',
   });
 
-  const tlsOptions = () => (skipTlsVerify
-    ? {
-        insecureSkipVerify: true,
-        tlsInsecureSkipVerify: true,
-      }
-    : {});
-
   const fetchCloudAtlas = async (url, init) => {
     try {
-      return await fetch(url, {
-        ...init,
-        timeoutMs,
-        ...tlsOptions(),
-      });
+      return await fetchWithTimeout(url, init, { timeoutMs, skipTlsVerify });
     } catch (e) {
       const reason = e?.cause?.message || e?.message || 'fetch failed';
       throw errorWithCode('UNAVAILABLE', reason);
@@ -316,15 +343,14 @@ export function rpcdef(ctx) {
   // ── Common request helpers ──────────────────────────────────────────
 
   const ensureTokenAndBaseUrl = (req) => {
-    const token = String(firstDefined(req?.token, req?.Token) || '').trim();
-    if (!token) {
+    if (!resolvedToken) {
       throw errorWithCode('INVALID_ARGUMENT', 'token is required');
     }
     const baseUrl = normalizeBaseUrl(restBaseUrl);
     if (!baseUrl) {
       throw errorWithCode('INVALID_ARGUMENT', 'baseUrl is required (http/https)');
     }
-    return { token, baseUrl };
+    return { token: resolvedToken, baseUrl };
   };
 
   const callGet = async (token, url) => {
@@ -2134,7 +2160,9 @@ export const handlers = {
 
 export const _test = {
   buildQuery,
+  createTlsDispatcher,
   errorWithCode,
+  fetchWithTimeout,
   grpcCodeFor,
   mergedBindings,
   normalizeBaseUrl,

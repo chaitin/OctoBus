@@ -19,6 +19,7 @@ export const DEFAULT_START = 0;
 export const DEFAULT_LANG = 'zh_CN';
 
 const SESSION_CACHE = new Map();
+let insecureDispatcherPromise;
 
 const grpcCodeFor = (code) => ({
   FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
@@ -99,8 +100,8 @@ const requireHost = (value) => {
 
 const mergedBindings = (ctx = {}) => ({
   ...(ctx?.config ?? {}),
-  ...(ctx?.secret ?? {}),
   ...(ctx?.bindings ?? {}),
+  ...(ctx?.secret ?? {}),
 });
 
 const resolveCallContext = (ctx = {}) => ({
@@ -112,8 +113,8 @@ const resolveCallContext = (ctx = {}) => ({
 });
 
 const requestHost = (req, ctx) => firstDefined(req?.host, ctx?.bindings?.host);
-const requestUsername = (req, ctx) => firstDefined(req?.username, req?.user, ctx?.bindings?.username, ctx?.bindings?.user);
-const requestPassword = (req, ctx) => firstDefined(req?.password, ctx?.bindings?.password);
+const requestUsername = (_req, ctx) => firstDefined(ctx?.bindings?.username, ctx?.bindings?.user);
+const requestPassword = (_req, ctx) => firstDefined(ctx?.bindings?.password);
 const requestGroupName = (req) => firstDefined(req?.group_name, req?.groupName);
 
 const resolveTimeoutMs = (ctx) => {
@@ -122,13 +123,48 @@ const resolveTimeoutMs = (ctx) => {
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;
 };
 
-const buildTlsOptions = (bindings) => {
-  if (!bindings?.skipTlsVerify && !bindings?.tlsInsecureSkipVerify && !bindings?.insecureSkipVerify) return {};
-  return {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  };
+const shouldSkipTlsVerify = (bindings) => Boolean(bindings?.skipTlsVerify || bindings?.tlsInsecureSkipVerify || bindings?.insecureSkipVerify);
+
+const createTlsDispatcher = async (skipTlsVerify) => {
+  if (!skipTlsVerify) return undefined;
+  insecureDispatcherPromise ??= import('undici').then(({ Agent }) => new Agent({
+    connect: { rejectUnauthorized: false },
+  }));
+  return insecureDispatcherPromise;
+};
+
+const buildTlsOptions = async (bindings) => {
+  const dispatcher = await createTlsDispatcher(shouldSkipTlsVerify(bindings));
+  return dispatcher ? { dispatcher } : {};
+};
+
+const fetchWithTimeout = async (url, init = {}, options = {}) => {
+  const rawTimeout = Number(options.timeoutMs);
+  const timeoutMs = Number.isFinite(rawTimeout) && rawTimeout > 0 ? rawTimeout : DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const parentSignal = init.signal;
+  const abortFromParent = () => controller.abort(parentSignal.reason);
+  if (parentSignal) {
+    if (parentSignal.aborted) {
+      controller.abort(parentSignal.reason);
+    } else if (typeof parentSignal.addEventListener === 'function') {
+      parentSignal.addEventListener('abort', abortFromParent, { once: true });
+    }
+  }
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const tlsOptions = await buildTlsOptions(options.bindings);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+      ...tlsOptions,
+    });
+  } finally {
+    clearTimeout(timer);
+    if (parentSignal && typeof parentSignal.removeEventListener === 'function') {
+      parentSignal.removeEventListener('abort', abortFromParent);
+    }
+  }
 };
 
 const buildHeaders = (ctx, extra = {}) => ({
@@ -211,13 +247,14 @@ const buildHttpResponse = (status, text) => ({
   body: buildBodyWrapper(text),
 });
 
+const buildSanitizedHttpResponse = (status) => ({
+  http_status: Number(status),
+  body: buildBodyWrapper(''),
+});
+
 const fetchUpstream = async (ctx, url, init = {}) => {
   try {
-    const response = await fetch(url, {
-      timeoutMs: resolveTimeoutMs(ctx),
-      ...buildTlsOptions(ctx?.bindings),
-      ...init,
-    });
+    const response = await fetchWithTimeout(url, init, { timeoutMs: resolveTimeoutMs(ctx), bindings: ctx?.bindings });
     const text = await response.text();
     return {
       status: Number(response.status),
@@ -335,7 +372,7 @@ const runLogin = async (req, ctx) => {
   });
   const session = extractSessionFromLogin(req, callCtx, upstream.status, upstream.text);
   if (session) setSession(callCtx, host, session);
-  return buildHttpResponse(upstream.status, upstream.text);
+  return buildSanitizedHttpResponse(upstream.status);
 };
 
 const runAddressGroupMutation = async (req, ctx, method) => {
@@ -394,14 +431,17 @@ rpcdef.__test__ = {
   buildCookieHeader,
   buildHeaders,
   buildHttpResponse,
+  buildSanitizedHttpResponse,
   buildQueryUrl,
   buildTlsOptions,
   clearAllSessions,
   clearSession,
   CONTENT_TYPE,
+  createTlsDispatcher,
   DEFAULT_LANG,
   errorWithCode,
   extractSessionFromLogin,
+  fetchWithTimeout,
   fetchUpstream,
   firstDefined,
   getInstanceKey,
@@ -425,6 +465,7 @@ rpcdef.__test__ = {
   runLogin,
   runQueryAddressGroup,
   setSession,
+  shouldSkipTlsVerify,
   toTrimmedString,
   toValue,
   unwrapScalar,

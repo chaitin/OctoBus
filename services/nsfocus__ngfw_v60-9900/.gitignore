@@ -1,0 +1,9 @@
+# Node.js 依赖
+node_modules/
+
+# 测试报告和生成脚本
+*.docx
+generate_test_report.py
+
+# 系统文件
+.DS_Store

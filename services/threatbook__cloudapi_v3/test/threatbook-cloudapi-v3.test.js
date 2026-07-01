@@ -43,6 +43,11 @@ const buildCtx = (overrides = {}) => ({
   req: overrides.req || {},
 });
 
+const callHandler = (method, request = {}, ctx = {}) => {
+  const handler = handlers[method];
+  return handler({ ...ctx, request });
+};
+
 const expectGrpcError = async (fn, legacyCode, checker = () => {}) => {
   let caught;
   try {
@@ -80,22 +85,22 @@ test('service exports handlers and rpcdef paths', () => {
 
 test('validates required bindings and resource', async () => {
   await expectGrpcError(
-    () => handlers[METHOD_IP_REPUTATION_FULL]({ resource: '8.8.8.8' }, buildCtx({ config: { threatbook_domain: '' } })),
+    () => callHandler(METHOD_IP_REPUTATION_FULL, { resource: '8.8.8.8' }, buildCtx({ config: { threatbook_domain: '' } })),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /threatbook_domain/),
   );
   await expectGrpcError(
-    () => handlers[METHOD_IP_REPUTATION_FULL]({ resource: '8.8.8.8' }, buildCtx({ secret: { threatbook_apikey: '' } })),
+    () => callHandler(METHOD_IP_REPUTATION_FULL, { resource: '8.8.8.8' }, buildCtx({ secret: { threatbook_apikey: '' } })),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /threatbook_apikey/),
   );
   await expectGrpcError(
-    () => handlers[METHOD_IP_REPUTATION_FULL]({}, buildCtx()),
+    () => callHandler(METHOD_IP_REPUTATION_FULL, {}, buildCtx()),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /resource is required/),
   );
   await expectGrpcError(
-    () => handlers[METHOD_DOMAIN_QUERY_FULL]({ domain: { value: '   ' } }, buildCtx()),
+    () => callHandler(METHOD_DOMAIN_QUERY_FULL, { domain: { value: '   ' } }, buildCtx()),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /resource is required/),
   );
@@ -124,7 +129,7 @@ test('IpReputation sends default query and returns raw body and raw json', async
     return response(200, { response_code: 0, verbose_msg: 'OK', data: { risk: 'low' } });
   });
 
-  const result = await handlers[METHOD_IP_REPUTATION_FULL](
+  const result = await callHandler(METHOD_IP_REPUTATION_FULL,
     { ip: { value: ' 8.8.8.8 ' } },
     buildCtx({ bindings: { skipTlsVerify: true }, limits: { timeoutMs: 25 } }),
   );
@@ -135,13 +140,15 @@ test('IpReputation sends default query and returns raw body and raw json', async
   assert.equal(url.searchParams.get('lang'), 'zh');
   assert.equal(url.searchParams.get('resource'), '8.8.8.8');
   assert.equal(captured.init.method, 'GET');
-  assert.equal(captured.init.timeoutMs, 25);
-  assert.equal(captured.init.skipTlsVerify, true);
-  assert.equal(captured.init.tlsInsecureSkipVerify, true);
-  assert.equal(captured.init.insecureSkipVerify, true);
+  assert.ok(captured.init.signal instanceof AbortSignal);
+  assert.equal(captured.init.timeoutMs, undefined);
+  assert.equal(captured.init.dispatcher, _test.insecureTlsDispatcher);
+  assert.equal(captured.init.skipTlsVerify, undefined);
+  assert.equal(captured.init.tlsInsecureSkipVerify, undefined);
+  assert.equal(captured.init.insecureSkipVerify, undefined);
   assert.equal(result.http_status, 200);
-  assert.match(result.raw_body, /"response_code":0/);
-  assert.deepEqual(result.raw_json.structValue.fields.data.structValue.fields.risk, { stringValue: 'low' });
+  assert.equal(result.raw_body, '');
+  assert.equal(result.raw_json, undefined);
 });
 
 test('DomainQuery sends default exclude and supports aliases', async () => {
@@ -151,7 +158,7 @@ test('DomainQuery sends default exclude and supports aliases', async () => {
     return response(200, { responseCode: 0, verboseMsg: 'OK', data: { kind: 'domain_query' } });
   });
 
-  const result = await handlers[METHOD_DOMAIN_QUERY_FULL](
+  const result = await callHandler(METHOD_DOMAIN_QUERY_FULL,
     { domain: 'example.com', lang: 'en' },
     buildCtx({
       config: { threatbook_domain: undefined, domain: ' http://mock.local/ ' },
@@ -167,8 +174,9 @@ test('DomainQuery sends default exclude and supports aliases', async () => {
   assert.equal(url.searchParams.get('lang'), 'en');
   assert.equal(url.searchParams.get('resource'), 'example.com');
   assert.equal(url.searchParams.get('exclude'), 'cas');
-  assert.equal(captured.init.timeoutMs, 40);
-  assert.deepEqual(result.raw_json.structValue.fields.data.structValue.fields.kind, { stringValue: 'domain_query' });
+  assert.ok(captured.init.signal instanceof AbortSignal);
+  assert.equal(captured.init.timeoutMs, undefined);
+  assert.equal(result.raw_json, undefined);
 });
 
 test('DomainQuery sends explicit exclude from scalar wrapper', async () => {
@@ -188,36 +196,78 @@ test('DomainQuery sends explicit exclude from scalar wrapper', async () => {
   assert.equal(url.searchParams.get('exclude'), 'intel');
 });
 
+test('request fields cannot override secret and structured errors redact api key', async () => {
+  let captured;
+  setFetch(async (url) => {
+    captured = String(url);
+    return response(200, {
+      response_code: 1400,
+      verbose_msg: 'upstream echoed test_api_key',
+      data: {},
+    });
+  });
+
+  await expectGrpcError(
+    () => callHandler(METHOD_IP_REPUTATION_FULL, {
+      resource: '8.8.8.8',
+      apikey: 'request_supplied_key',
+      apiKey: 'request_supplied_key',
+    }, buildCtx()),
+    'FAILED_PRECONDITION',
+    (err) => {
+      assert.equal(new URL(captured).searchParams.get('apikey'), 'test_api_key');
+      assert.doesNotMatch(err.message, /test_api_key/);
+      assert.doesNotMatch(err.message, /request_supplied_key/);
+      assert.equal(parseStructuredError(err).verbose_msg, 'upstream echoed <redacted>');
+    },
+  );
+});
+
 test('maps HTTP, business, JSON, and response_code failures to structured errors', async () => {
   setFetch(async () => response(401, { response_code: 1101, verbose_msg: 'invalid apikey' }));
   await expectGrpcError(
-    () => handlers[METHOD_IP_REPUTATION_FULL]({ resource: '8.8.8.8' }, buildCtx()),
+    () => callHandler(METHOD_IP_REPUTATION_FULL, { resource: '8.8.8.8' }, buildCtx()),
     'PERMISSION_DENIED',
     (err) => {
       const payload = parseStructuredError(err);
       assert.equal(payload.http_status, 401);
       assert.equal(payload.reason, 'upstream http 401');
-      assert.equal(payload.raw_json.response_code, 1101);
+      assert.equal(payload.raw_json, undefined);
+      assert.ok(payload.raw_body_length > 0);
     },
+  );
+
+  setFetch(async () => response(403, { response_code: 1103, verbose_msg: 'forbidden' }));
+  await expectGrpcError(
+    () => callHandler(METHOD_IP_REPUTATION_FULL, { resource: '8.8.8.8' }, buildCtx()),
+    'PERMISSION_DENIED',
+    (err) => assert.equal(parseStructuredError(err).http_status, 403),
   );
 
   setFetch(async () => response(404, { response_code: 1204, verbose_msg: 'not found' }));
   await expectGrpcError(
-    () => handlers[METHOD_IP_REPUTATION_FULL]({ resource: '8.8.8.8' }, buildCtx()),
+    () => callHandler(METHOD_IP_REPUTATION_FULL, { resource: '8.8.8.8' }, buildCtx()),
     'FAILED_PRECONDITION',
     (err) => assert.equal(parseStructuredError(err).http_status, 404),
   );
 
+  setFetch(async () => response(429, { response_code: 1429, verbose_msg: 'rate limited' }));
+  await expectGrpcError(
+    () => callHandler(METHOD_IP_REPUTATION_FULL, { resource: '8.8.8.8' }, buildCtx()),
+    'FAILED_PRECONDITION',
+    (err) => assert.equal(parseStructuredError(err).reason, 'upstream http 429'),
+  );
+
   setFetch(async () => response(503, { message: 'down' }));
   await expectGrpcError(
-    () => handlers[METHOD_IP_REPUTATION_FULL]({ resource: '8.8.8.8' }, buildCtx()),
+    () => callHandler(METHOD_IP_REPUTATION_FULL, { resource: '8.8.8.8' }, buildCtx()),
     'UNAVAILABLE',
     (err) => assert.equal(parseStructuredError(err).http_status, 503),
   );
 
   setFetch(async () => response(200, { response_code: 1400, verbose_msg: 'business failed', data: {} }));
   await expectGrpcError(
-    () => handlers[METHOD_IP_REPUTATION_FULL]({ resource: '8.8.8.8' }, buildCtx()),
+    () => callHandler(METHOD_IP_REPUTATION_FULL, { resource: '8.8.8.8' }, buildCtx()),
     'FAILED_PRECONDITION',
     (err) => {
       const payload = parseStructuredError(err);
@@ -229,14 +279,14 @@ test('maps HTTP, business, JSON, and response_code failures to structured errors
 
   setFetch(async () => response(200, 'not-json'));
   await expectGrpcError(
-    () => handlers[METHOD_IP_REPUTATION_FULL]({ resource: '8.8.8.8' }, buildCtx()),
+    () => callHandler(METHOD_IP_REPUTATION_FULL, { resource: '8.8.8.8' }, buildCtx()),
     'UNKNOWN',
     (err) => assert.equal(parseStructuredError(err).reason, 'response is not valid JSON'),
   );
 
   setFetch(async () => response(200, { verbose_msg: 'missing code' }));
   await expectGrpcError(
-    () => handlers[METHOD_IP_REPUTATION_FULL]({ resource: '8.8.8.8' }, buildCtx()),
+    () => callHandler(METHOD_IP_REPUTATION_FULL, { resource: '8.8.8.8' }, buildCtx()),
     'UNKNOWN',
     (err) => assert.equal(parseStructuredError(err).reason, 'response_code missing'),
   );
@@ -247,7 +297,7 @@ test('maps network and response read errors', async () => {
     throw Object.assign(new Error('outer'), { cause: new Error('connection refused') });
   });
   await expectGrpcError(
-    () => handlers[METHOD_IP_REPUTATION_FULL]({ resource: '8.8.8.8' }, buildCtx()),
+    () => callHandler(METHOD_IP_REPUTATION_FULL, { resource: '8.8.8.8' }, buildCtx()),
     'UNAVAILABLE',
     (err) => {
       const payload = parseStructuredError(err);
@@ -264,7 +314,7 @@ test('maps network and response read errors', async () => {
     },
   }));
   await expectGrpcError(
-    () => handlers[METHOD_IP_REPUTATION_FULL]({ resource: '8.8.8.8' }, buildCtx()),
+    () => callHandler(METHOD_IP_REPUTATION_FULL, { resource: '8.8.8.8' }, buildCtx()),
     'UNAVAILABLE',
     (err) => {
       const payload = parseStructuredError(err);
@@ -274,10 +324,19 @@ test('maps network and response read errors', async () => {
   );
 });
 
+test('DomainQuery exposes upstream failure mapping', async () => {
+  setFetch(async () => response(500, { message: 'domain query down' }));
+  await expectGrpcError(
+    () => callHandler(METHOD_DOMAIN_QUERY_FULL, { resource: 'example.com' }, buildCtx()),
+    'UNAVAILABLE',
+    (err) => assert.equal(parseStructuredError(err).http_status, 500),
+  );
+});
+
 test('rpcdef falls back to context request when call request is omitted', async () => {
   setFetch(async () => response(200, { response_code: 0, verbose_msg: 'OK', data: { resource: '1.1.1.1' } }));
   const result = await rpcdef(buildCtx({ req: { resource: '1.1.1.1' } }))[METHOD_IP_REPUTATION_PATH]();
-  assert.deepEqual(result.raw_json.structValue.fields.data.structValue.fields.resource, { stringValue: '1.1.1.1' });
+  assert.equal(result.raw_json, undefined);
 });
 
 test('helper functions cover normalization branches', () => {
@@ -299,11 +358,7 @@ test('helper functions cover normalization branches', () => {
   assert.equal(_test.resolveTimeoutMs({ limits: {}, bindings: { timeoutMs: 10 } }), 10);
   assert.equal(_test.resolveTimeoutMs(), 1500);
   assert.deepEqual(_test.buildTlsOptions({}), {});
-  assert.deepEqual(_test.buildTlsOptions({ insecureSkipVerify: 1 }), {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  });
+  assert.equal(_test.buildTlsOptions({ insecureSkipVerify: 1 }).dispatcher, _test.insecureTlsDispatcher);
   assert.deepEqual(_test.mergedBindings({ config: { a: 1 }, secret: { b: 2 }, bindings: { a: 3 } }), { a: 3, b: 2 });
   assert.deepEqual(_test.resolveCallContext({ request: { resource: 'r' } }).req, { resource: 'r' });
   assert.equal(_test.requireResource({ ip: '8.8.4.4' }, 'ip'), '8.8.4.4');
@@ -335,9 +390,7 @@ test('helper functions cover normalization branches', () => {
   assert.deepEqual(_test.parseThreatBookResponse({
     httpStatus: 200,
     rawBody: '{"response_code":0,"data":[null]}',
-  }).raw_json.structValue.fields.data, {
-    listValue: { values: [{ nullValue: 'NULL_VALUE' }] },
-  });
+  }).raw_json, undefined);
 });
 
 test('throwStructuredError includes optional fields', () => {
@@ -353,7 +406,8 @@ test('throwStructuredError includes optional fields', () => {
     (err) => {
       assert.ok(err instanceof GrpcError);
       const payload = parseStructuredError(err);
-      assert.equal(payload.raw_json.response_code, 1);
+      assert.equal(payload.raw_json, undefined);
+      assert.ok(payload.raw_body_length > 0);
       assert.equal(payload.response_code, 1);
       assert.equal(payload.verbose_msg, 'bad');
       assert.equal(payload.reason, 'why');
@@ -371,7 +425,8 @@ test('fetchUpstream can be used directly', async () => {
   const result = await _test.fetchUpstream('http://api.local/path', buildCtx({ bindings: { timeoutMs: 15 } }));
   assert.equal(captured.url, 'http://api.local/path');
   assert.equal(captured.init.method, 'GET');
-  assert.equal(captured.init.timeoutMs, 10_000);
+  assert.ok(captured.init.signal instanceof AbortSignal);
+  assert.equal(captured.init.timeoutMs, undefined);
   assert.deepEqual(result, { httpStatus: 200, rawBody: 'ok' });
 });
 
@@ -379,15 +434,15 @@ test('mock upstream handles success and simulated failures', async () => {
   const server = await createMockServer();
   try {
     const ctx = buildCtx({ config: { threatbook_domain: server.url } });
-    const ip = await handlers[METHOD_IP_REPUTATION_FULL]({ resource: '8.8.8.8' }, ctx);
-    const domain = await handlers[METHOD_DOMAIN_QUERY_FULL]({ resource: 'example.com' }, ctx);
-    assert.deepEqual(ip.raw_json.structValue.fields.data.structValue.fields.kind, { stringValue: 'ip_reputation' });
-    assert.deepEqual(domain.raw_json.structValue.fields.data.structValue.fields.exclude, { stringValue: 'cas' });
+    const ip = await callHandler(METHOD_IP_REPUTATION_FULL, { resource: '8.8.8.8' }, ctx);
+    const domain = await callHandler(METHOD_DOMAIN_QUERY_FULL, { resource: 'example.com' }, ctx);
+    assert.equal(ip.raw_json, undefined);
+    assert.equal(domain.raw_json, undefined);
 
-    await expectGrpcError(() => handlers[METHOD_IP_REPUTATION_FULL]({ resource: 'bizfail.example' }, ctx), 'FAILED_PRECONDITION');
-    await expectGrpcError(() => handlers[METHOD_IP_REPUTATION_FULL]({ resource: 'http401.example' }, ctx), 'PERMISSION_DENIED');
-    await expectGrpcError(() => handlers[METHOD_IP_REPUTATION_FULL]({ resource: 'http500.example' }, ctx), 'UNAVAILABLE');
-    await expectGrpcError(() => handlers[METHOD_IP_REPUTATION_FULL]({ resource: 'invalid-json.example' }, ctx), 'UNKNOWN');
+    await expectGrpcError(() => callHandler(METHOD_IP_REPUTATION_FULL, { resource: 'bizfail.example' }, ctx), 'FAILED_PRECONDITION');
+    await expectGrpcError(() => callHandler(METHOD_IP_REPUTATION_FULL, { resource: 'http401.example' }, ctx), 'PERMISSION_DENIED');
+    await expectGrpcError(() => callHandler(METHOD_IP_REPUTATION_FULL, { resource: 'http500.example' }, ctx), 'UNAVAILABLE');
+    await expectGrpcError(() => callHandler(METHOD_IP_REPUTATION_FULL, { resource: 'invalid-json.example' }, ctx), 'UNKNOWN');
 
     assert.equal(server.requests[0].path, '/1.1.1/scene/ip_reputation');
     assert.equal(server.requests[1].path, '/1.1.1/domain/query');

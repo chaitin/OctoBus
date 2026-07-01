@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "host": {
+      "type": "string",
+      "description": "NSFOCUS NGFW NETCONF host, for example 192.168.0.1. A https:// prefix is accepted and ignored."
+    },
+    "port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535,
+      "default": 830,
+      "description": "NETCONF SSH port."
+    },
+    "netconfPort": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535,
+      "description": "Alias for port."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 20000,
+      "description": "NETCONF SSH timeout in milliseconds."
+    }
+  }
+}

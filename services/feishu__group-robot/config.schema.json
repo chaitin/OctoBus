@@ -1,24 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "additionalProperties": true,
+  "additionalProperties": false,
   "properties": {
-    "webhook": {
-      "type": "string",
-      "description": "Feishu group robot webhook URL."
-    },
-    "webhook_url": {
-      "type": "string",
-      "description": "Alias for webhook."
-    },
-    "webhookUrl": {
-      "type": "string",
-      "description": "Alias for webhook."
-    },
-    "url": {
-      "type": "string",
-      "description": "Alias for webhook."
-    },
     "timeoutMs": {
       "type": "integer",
       "minimum": 1,

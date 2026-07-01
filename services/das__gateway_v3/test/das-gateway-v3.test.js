@@ -71,8 +71,12 @@ test('BlockIP maps successful requests to DAS blacklist create API', async () =>
   assert.equal(captured.url, 'http://localhost:18081/api/v3/Objects/Blacklist');
   assert.equal(captured.init.method, 'POST');
   assert.equal(captured.init.headers.Authorization, 'Basic dXNlcjpwYXNzd29yZA==');
-  assert.equal(captured.init.timeoutMs, 2000);
-  assert.equal(captured.init.tlsInsecureSkipVerify, true);
+  assert.equal(Object.hasOwn(captured.init, 'timeoutMs'), false);
+  assert.ok(captured.init.signal instanceof AbortSignal);
+  assert.equal(Object.hasOwn(captured.init, 'skipTlsVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'tlsInsecureSkipVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'insecureSkipVerify'), false);
+  assert.ok(captured.init.dispatcher);
   assert.deepEqual(JSON.parse(captured.init.body), {
     blist_entry: [
       { blist: '1.1.1.1', age: '-1', reason: 'API Block-IP', enable: '1' },
@@ -145,7 +149,8 @@ test('UnblockIP maps successful requests and encodes IP path segments', async ()
   assert.equal(captured.url, 'http://localhost:18081/api/v3/Objects/Blacklist/blist/1.1.1.1%2F32');
   assert.equal(captured.init.method, 'DELETE');
   assert.equal(captured.init.body, '{}');
-  assert.equal(captured.init.timeoutMs, DEFAULT_TIMEOUT_MS);
+  assert.equal(Object.hasOwn(captured.init, 'timeoutMs'), false);
+  assert.ok(captured.init.signal instanceof AbortSignal);
   assert.equal(res.http_status_code, 200);
 });
 
@@ -229,7 +234,8 @@ test('SDK handlers use config and secret fields', async () => {
   assert.equal(blockRes.http_status_code, 200);
   assert.equal(captured.url, 'https://das.example.local/api/v3/Objects/Blacklist');
   assert.equal(captured.init.headers.Authorization, 'Basic YXBpLXVzZXI6YXBpLXBhc3M=');
-  assert.equal(captured.init.timeoutMs, 3100);
+  assert.equal(Object.hasOwn(captured.init, 'timeoutMs'), false);
+  assert.ok(captured.init.signal instanceof AbortSignal);
 
   const unblockRes = await handlers[METHOD_UNBLOCK_IP_FULL]({
     config: {

@@ -43,7 +43,7 @@ service Chaitin_WAF_SAFELINE {
 }
 
 message AggregateDetectLogRequest {
-  string api_token = 1; // 访问凭证，必填
+  string api_token = 1 [deprecated = true]; // 访问凭证，必填
   google.protobuf.Int64Value time_interval = 2; // 聚合时间窗（秒），可选，默认 86400，范围 1~86400
   google.protobuf.Int64Value log_size = 3; // 返回条数，可选，默认 100，范围 1~1000
   string condition = 4; // 聚合维度，可选，默认 "src_ip_keyword"；允许：attack_type / rule_id / src_ip_keyword / site_uuid,attack_type,src_ip_keyword
@@ -54,7 +54,7 @@ message AggregateDetectLogResponse {
 }
 
 message CreateIPGroupRequest {
-  string api_token = 1; // 访问凭证，必填
+  string api_token = 1 [deprecated = true]; // 访问凭证，必填
   string name = 2; // IP 组名称，必填，非空
   string comment = 3; // 备注，可选，默认空字符串
   repeated string original = 4; // IP/网段/范围列表，可选，默认 []
@@ -69,7 +69,7 @@ message CreateIPGroupResponse {
 }
 
 message UpdateIPGroupRequest {
-  string api_token = 1; // 访问凭证，必填
+  string api_token = 1 [deprecated = true]; // 访问凭证，必填
   int64 id = 2; // IP 组 ID，必填
   google.protobuf.StringValue name = 3; // IP 组名称，可选，出现则覆盖（允许空字符串）
   google.protobuf.StringValue comment = 4; // 备注，可选，出现则覆盖（允许空字符串）
@@ -89,7 +89,7 @@ message UpdateIPGroupResponse {
 }
 
 message ListIPGroupsRequest {
-  string api_token = 1; // 访问凭证，必填
+  string api_token = 1 [deprecated = true]; // 访问凭证，必填
   repeated string name = 2; // 名称筛选，可选，多值为并列匹配
   string cidr = 3; // CIDR/IP 精确匹配，可选
   repeated string comment = 4; // 备注筛选，可选，多值为并列匹配
@@ -114,7 +114,7 @@ message IPGroupRecord {
 }
 
 message DeleteIPGroupRequest {
-  string api_token = 1; // 访问凭证，必填
+  string api_token = 1 [deprecated = true]; // 访问凭证，必填
   repeated int64 id__in = 2; // 按 ID 列表删除；与 delete_all_resources 互斥
   bool delete_all_resources = 3; // true 表示删除全部 IP 组
 }
@@ -126,7 +126,7 @@ message DeleteIPGroupResponse {
 }
 
 message DeleteIPGroupItemsRequest {
-  string api_token = 1; // 访问凭证，必填
+  string api_token = 1 [deprecated = true]; // 访问凭证，必填
   int64 id = 2; // IP 组 ID，必填
   repeated string targets = 3; // 要删除的 IP/IP 段列表，可选；未提供不发送
 }
@@ -138,7 +138,7 @@ message DeleteIPGroupItemsResponse {
 }
 
 message AddIPGroupItemsRequest {
-  string api_token = 1; // 访问凭证，必填
+  string api_token = 1 [deprecated = true]; // 访问凭证，必填
   int64 id = 2; // IP 组 ID，必填
   repeated string targets = 3; // 待追加的 IP/IP 段列表，可选；未提供不发送；允许空数组和重复
 }
@@ -150,7 +150,7 @@ message AddIPGroupItemsResponse {
 }
 
 message BlockIPRequest {
-  string api_token = 1; // 访问凭证，必填
+  string api_token = 1 [deprecated = true]; // 访问凭证，必填
   int64 group_id = 2; // IP 组 ID，可选，优先使用
   string group_name = 3; // IP 组名称，可选，用于查找/创建；缺省默认 block_ip
   string comment = 4; // 备注，可选，仅在创建新组时使用
@@ -164,7 +164,7 @@ message BlockIPResponse {
 }
 
 message UnblockIPRequest {
-  string api_token = 1; // 访问凭证，必填
+  string api_token = 1 [deprecated = true]; // 访问凭证，必填
   int64 group_id = 2; // IP 组 ID，可选，优先使用
   string group_name = 3; // IP 组名称，可选，用于查找/创建；缺省默认 block_ip
   repeated string targets = 4; // 待解禁的 IP/IP 段，必填且非空
@@ -185,7 +185,7 @@ message AddIPGroupItemsData {
 }
 
 message GetDetectorStateRequest {
-  string api_token = 1; // 访问凭证，必填
+  string api_token = 1 [deprecated = true]; // 访问凭证，必填
 }
 
 message GetDetectorStateResponse {
@@ -200,7 +200,7 @@ message DetectorStateData {
 }
 
 message UpdateDetectorStateRequest {
-  string api_token = 1; // 访问凭证，必填
+  string api_token = 1 [deprecated = true]; // 访问凭证，必填
   bool is_enabled = 2; // 是否启用检测，必填布尔值，true 启用 / false 停用
 }
 

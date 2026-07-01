@@ -14,6 +14,7 @@ export const DEFAULT_TIMEOUT_MS = 1500;
 export const DEFAULT_TYPE = 2;
 export const DEFAULT_SEVERITY = 2;
 export const DEFAULT_TRIGGER_POLICY = '';
+let insecureDispatcherPromise;
 
 const grpcCodeFor = (code) => ({
   FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
@@ -79,14 +80,48 @@ const resolveTimeoutMs = (ctx) => {
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;
 };
 
-const buildTlsOptions = (bindings) => {
-  const enabled = Boolean(bindings?.skipTlsVerify || bindings?.tlsInsecureSkipVerify || bindings?.insecureSkipVerify);
-  if (!enabled) return {};
-  return {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  };
+const shouldSkipTlsVerify = (bindings) => Boolean(bindings?.skipTlsVerify || bindings?.tlsInsecureSkipVerify || bindings?.insecureSkipVerify);
+
+const createTlsDispatcher = async (skipTlsVerify) => {
+  if (!skipTlsVerify) return undefined;
+  insecureDispatcherPromise ??= import('undici').then(({ Agent }) => new Agent({
+    connect: { rejectUnauthorized: false },
+  }));
+  return insecureDispatcherPromise;
+};
+
+const buildTlsOptions = async (bindings) => {
+  const dispatcher = await createTlsDispatcher(shouldSkipTlsVerify(bindings));
+  return dispatcher ? { dispatcher } : {};
+};
+
+const fetchWithTimeout = async (url, init = {}, options = {}) => {
+  const rawTimeout = Number(options.timeoutMs);
+  const timeoutMs = Number.isFinite(rawTimeout) && rawTimeout > 0 ? rawTimeout : DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const parentSignal = init.signal;
+  const abortFromParent = () => controller.abort(parentSignal.reason);
+  if (parentSignal) {
+    if (parentSignal.aborted) {
+      controller.abort(parentSignal.reason);
+    } else if (typeof parentSignal.addEventListener === 'function') {
+      parentSignal.addEventListener('abort', abortFromParent, { once: true });
+    }
+  }
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const tlsOptions = await buildTlsOptions(options.bindings);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+      ...tlsOptions,
+    });
+  } finally {
+    clearTimeout(timer);
+    if (parentSignal && typeof parentSignal.removeEventListener === 'function') {
+      parentSignal.removeEventListener('abort', abortFromParent);
+    }
+  }
 };
 
 const utf8Bytes = (value) => {
@@ -244,10 +279,12 @@ const classifyHttpStatus = (status) => {
 };
 
 const failWithResponse = (code, message, status, rawBody, rawJSON, reason) => {
+  const bodyText = String(rawBody ?? '');
   throw errorWithCode(code, message, {
     http_status: status,
-    raw_body: rawBody,
-    raw_json: rawJSON,
+    raw_body: '',
+    raw_body_length: bodyText.length,
+    raw_json: undefined,
     reason,
   });
 };
@@ -265,12 +302,10 @@ const fetchJSON = async (ctx, url, init = {}) => {
   const password = requireBindingsPassword(callCtx.bindings);
   let response;
   try {
-    response = await fetch(url, {
-      timeoutMs: resolveTimeoutMs(callCtx),
-      ...buildTlsOptions(callCtx.bindings),
+    response = await fetchWithTimeout(url, {
       ...init,
       headers: buildHeaders(callCtx.bindings, callCtx.meta, username, password, init.headers || {}),
-    });
+    }, { timeoutMs: resolveTimeoutMs(callCtx), bindings: callCtx.bindings });
   } catch (err) {
     failWithResponse('UNAVAILABLE', 'fortinet waf upstream request failed', 0, '', null, err?.cause?.message || err?.message || 'fetch failed');
   }
@@ -307,8 +342,8 @@ const toOnlineResponse = (statusCode, rawBody, rawJSON) => ({
   status: toInt(rawJSON?.status, 0),
   msg: trimString(rawJSON?.msg),
   version: trimString(rawJSON?.version),
-  raw_body: rawBody,
-  raw_json: toValue(rawJSON),
+  raw_body: '',
+  raw_json: undefined,
 });
 
 const toMutationResponse = (statusCode, rawBody, rawJSON) => ({
@@ -317,8 +352,8 @@ const toMutationResponse = (statusCode, rawBody, rawJSON) => ({
   status: toInt(rawJSON?.status, 0),
   affected: toInt(rawJSON?.affected, 0),
   msg: trimString(rawJSON?.msg),
-  raw_body: rawBody,
-  raw_json: toValue(rawJSON),
+  raw_body: '',
+  raw_json: undefined,
 });
 
 const mapMember = (item, statusCode, rawBody) => {
@@ -394,8 +429,8 @@ const handleListMembers = async (req, ctx) => {
   return {
     members,
     http_status: result.status,
-    raw_body: result.rawBody,
-    raw_json: toValue(result.rawJSON),
+    raw_body: '',
+    raw_json: undefined,
   };
 };
 
@@ -444,11 +479,13 @@ rpcdef.__test__ = {
   CHECK_ONLINE_PATH,
   BLOCK_IP_PATH,
   classifyHttpStatus,
+  createTlsDispatcher,
   DEFAULT_SEVERITY,
   DEFAULT_TRIGGER_POLICY,
   DEFAULT_TYPE,
   errorWithCode,
   failWithResponse,
+  fetchWithTimeout,
   fetchJSON,
   firstDefined,
   handleBlockIP,
@@ -476,6 +513,7 @@ rpcdef.__test__ = {
   resolvePassword,
   resolveTimeoutMs,
   resolveUsername,
+  shouldSkipTlsVerify,
   stringifyJson,
   toBase64,
   toInt,

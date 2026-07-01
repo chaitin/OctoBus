@@ -1,4 +1,5 @@
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const METHOD_IP_REPUTATION_PATH = '/ThreatBook_CloudAPI_V3.ThreatBook_CloudAPI_V3/IpReputation';
 export const METHOD_DOMAIN_QUERY_PATH = '/ThreatBook_CloudAPI_V3.ThreatBook_CloudAPI_V3/DomainQuery';
@@ -40,6 +41,16 @@ const toTrimmedString = (value) => {
   return String(raw).trim();
 };
 
+const redactSensitive = (value, sensitiveValues = []) => {
+  let out = String(value ?? '');
+  for (const sensitive of sensitiveValues || []) {
+    const raw = toTrimmedString(sensitive);
+    if (!raw) continue;
+    out = out.split(raw).join('<redacted>');
+  }
+  return out;
+};
+
 const normalizeBaseUrl = (value) => {
   const raw = toTrimmedString(value);
   if (!/^https?:\/\//i.test(raw)) return '';
@@ -57,8 +68,10 @@ const resolveCallContext = (ctx = {}) => ({
   bindings: mergedBindings(ctx),
   limits: ctx.limits ?? {},
   meta: ctx.meta ?? {},
-  req: ctx.req ?? ctx.request ?? {},
+  req: ctx.request ?? ctx.req ?? {},
 });
+
+const requestFromContext = (ctx = {}) => ctx.request ?? ctx.req ?? {};
 
 const resolveDomain = (bindings = {}) => normalizeBaseUrl(firstDefined(
   bindings.threatbook_domain,
@@ -78,14 +91,18 @@ const resolveTimeoutMs = (ctx = {}) => {
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;
 };
 
+const insecureTlsDispatcher = new Agent({ connect: { rejectUnauthorized: false } });
+
 const buildTlsOptions = (bindings = {}) => {
   const enabled = Boolean(bindings.skipTlsVerify || bindings.tlsInsecureSkipVerify || bindings.insecureSkipVerify);
   if (!enabled) return {};
-  return {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  };
+  return { dispatcher: insecureTlsDispatcher };
+};
+
+const makeTimeoutSignal = (timeoutMs) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  return { signal: controller.signal, clear: () => clearTimeout(timeoutId) };
 };
 
 const requireDomain = (ctx = {}) => {
@@ -158,16 +175,18 @@ const toValue = (value) => {
 };
 
 const throwStructuredError = (code, message, options = {}) => {
+  const rawBody = String(options.rawBody ?? '');
+  const sensitiveValues = options.sensitiveValues || [];
   const payload = {
     code,
-    message,
+    message: redactSensitive(message, sensitiveValues),
     http_status: Number(options.httpStatus ?? 0),
-    raw_body: String(options.rawBody ?? ''),
+    raw_body: '',
+    raw_body_length: rawBody.length,
   };
-  if (options.reason) payload.reason = String(options.reason);
-  if (options.rawJson !== undefined) payload.raw_json = options.rawJson;
+  if (options.reason) payload.reason = redactSensitive(options.reason, sensitiveValues);
   if (options.responseCode !== undefined) payload.response_code = options.responseCode;
-  if (options.verboseMsg !== undefined) payload.verbose_msg = options.verboseMsg;
+  if (options.verboseMsg !== undefined) payload.verbose_msg = redactSensitive(options.verboseMsg, sensitiveValues);
   throw errorWithCode(code, JSON.stringify(payload));
 };
 
@@ -180,12 +199,14 @@ const mapHttpStatusToGrpcCode = (status) => {
 
 const fetchUpstream = async (url, ctx = {}) => {
   const bindings = ctx.bindings || {};
+  const sensitiveValues = [resolveApiKey(bindings)].filter(Boolean);
   const timeoutMs = resolveTimeoutMs(ctx);
+  const timeout = makeTimeoutSignal(timeoutMs);
   let res;
   try {
     res = await fetch(url, {
       method: 'GET',
-      timeoutMs,
+      signal: timeout.signal,
       ...buildTlsOptions(bindings),
     });
   } catch (err) {
@@ -193,7 +214,10 @@ const fetchUpstream = async (url, ctx = {}) => {
       httpStatus: 0,
       rawBody: '',
       reason: err?.cause?.message || err?.message || 'fetch failed',
+      sensitiveValues,
     });
+  } finally {
+    timeout.clear();
   }
 
   const httpStatus = Number(res?.status || 0);
@@ -205,9 +229,12 @@ const fetchUpstream = async (url, ctx = {}) => {
       httpStatus,
       rawBody: '',
       reason: err?.message || 'response read failed',
+      sensitiveValues,
     });
   }
-  return { httpStatus, rawBody: String(rawBody ?? '') };
+  const result = { httpStatus, rawBody: String(rawBody ?? '') };
+  if (sensitiveValues.length) result.sensitiveValues = sensitiveValues;
+  return result;
 };
 
 const assertThreatBookSuccess = ({ httpStatus, rawBody }, parsed) => {
@@ -218,6 +245,7 @@ const assertThreatBookSuccess = ({ httpStatus, rawBody }, parsed) => {
       rawBody,
       rawJson: parsed.ok ? parsed.value : undefined,
       reason: `upstream http ${httpStatus}`,
+      sensitiveValues: parsed.sensitiveValues,
     });
   }
 
@@ -226,6 +254,7 @@ const assertThreatBookSuccess = ({ httpStatus, rawBody }, parsed) => {
       httpStatus,
       rawBody,
       reason: 'response is not valid JSON',
+      sensitiveValues: parsed.sensitiveValues,
     });
   }
 
@@ -238,6 +267,7 @@ const assertThreatBookSuccess = ({ httpStatus, rawBody }, parsed) => {
       rawBody,
       rawJson: parsed.value,
       reason: 'response_code missing',
+      sensitiveValues: parsed.sensitiveValues,
     });
   }
 
@@ -249,6 +279,7 @@ const assertThreatBookSuccess = ({ httpStatus, rawBody }, parsed) => {
       responseCode,
       verboseMsg,
       reason: 'response_code != 0',
+      sensitiveValues: parsed.sensitiveValues,
     });
   }
 
@@ -258,11 +289,12 @@ const assertThreatBookSuccess = ({ httpStatus, rawBody }, parsed) => {
 const parseThreatBookResponse = (result) => {
   const trimmed = result.rawBody.trim();
   const parsed = trimmed ? tryParseJson(trimmed) : { ok: false };
+  parsed.sensitiveValues = result.sensitiveValues || [];
   const ok = assertThreatBookSuccess(result, parsed);
   return {
     http_status: result.httpStatus,
-    raw_body: result.rawBody,
-    raw_json: toValue(ok.json),
+    raw_body: '',
+    raw_json: undefined,
   };
 };
 
@@ -305,8 +337,8 @@ export function rpcdef(ctx = {}) {
 }
 
 export const handlers = {
-  [METHOD_IP_REPUTATION_FULL]: (req, ctx = {}) => handleIpReputation(req, ctx),
-  [METHOD_DOMAIN_QUERY_FULL]: (req, ctx = {}) => handleDomainQuery(req, ctx),
+  [METHOD_IP_REPUTATION_FULL]: (ctx = {}) => handleIpReputation(requestFromContext(ctx), ctx),
+  [METHOD_DOMAIN_QUERY_FULL]: (ctx = {}) => handleDomainQuery(requestFromContext(ctx), ctx),
 };
 
 export const _test = {
@@ -321,12 +353,15 @@ export const _test = {
   handleDomainQuery,
   handleIpReputation,
   hasOwn,
+  insecureTlsDispatcher,
+  makeTimeoutSignal,
   mapHttpStatusToGrpcCode,
   mergedBindings,
   normalizeBaseUrl,
   normalizeExclude,
   normalizeLang,
   parseThreatBookResponse,
+  redactSensitive,
   requireApiKey,
   requireDomain,
   requireResource,

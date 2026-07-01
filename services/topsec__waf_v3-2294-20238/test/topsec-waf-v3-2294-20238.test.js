@@ -109,6 +109,17 @@ test('internal helpers', async (t) => {
     assert.equal(cfg.skipTlsVerify, true);
   });
 
+  await t.test('session key isolates host, user, and TLS mode', () => {
+    assert.notEqual(
+      _test.sessionKeyFor({ host: 'https://a', username: 'u1', skipTlsVerify: true }),
+      _test.sessionKeyFor({ host: 'https://a', username: 'u2', skipTlsVerify: true }),
+    );
+    assert.notEqual(
+      _test.sessionKeyFor({ host: 'https://a', username: 'u1', skipTlsVerify: true }),
+      _test.sessionKeyFor({ host: 'https://a', username: 'u1', skipTlsVerify: false }),
+    );
+  });
+
   await t.test('buildCondition produces base64', () => {
     const b64 = _test.buildCondition('/admin/login.php', 'contains');
     assert.ok(typeof b64 === 'string');
@@ -405,6 +416,39 @@ test('session retry: WAF 401 triggers re-login and retry', async () => {
   assert.equal(result.rows.length, 1);
   assert.equal(result.rows[0].name, 'ok');
   _test.resetSession();
+});
+
+test('TLS skip uses per-request dispatcher without global TLS downgrade', async () => {
+  const { _test } = await import('../src/topsec-waf-v3-2294-20238.js');
+  _test.resetSession();
+
+  const previous = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+  delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+  const captured = [];
+  mockFetch(async (url, init) => {
+    captured.push({ url: String(url), init });
+    if (String(url).endsWith('/api/v1/get_miks')) return mockMiksResponse();
+    if (String(url).endsWith('/api/v1/login')) return mockLoginSuccess();
+    if (String(url).endsWith('/api/v1/ip_group_show')) return mockWafRows([{ name: 'ok' }]);
+    return new Response('{}', { status: 200 });
+  });
+
+  try {
+    const { rpcdef } = await import('../src/topsec-waf-v3-2294-20238.js');
+    const handler = rpcdef(buildCtx({}, { config: { host: 'https://waf.example', skipTlsVerify: true } }))[listPath];
+    await handler();
+
+    assert.equal(process.env.NODE_TLS_REJECT_UNAUTHORIZED, undefined);
+    assert.equal(captured.length, 3);
+    assert.ok(captured.every(({ init }) => init?.dispatcher));
+  } finally {
+    if (previous === undefined) {
+      delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    } else {
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED = previous;
+    }
+    _test.resetSession();
+  }
 });
 
 // ── error handling tests ──────────────────────────────────────────

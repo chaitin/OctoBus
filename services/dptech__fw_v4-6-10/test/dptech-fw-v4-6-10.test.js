@@ -88,7 +88,8 @@ test('GetPacketFilterStatus sends fixed query and basic auth', async () => {
 
   assert.equal(captured.url, 'http://device.example:9090/func/web_main/api/system/sysinfolist/pfInEfList?ipVersion=4');
   assert.equal(captured.init.method, 'GET');
-  assert.equal(captured.init.timeoutMs, 10_000);
+  assert.equal(Object.hasOwn(captured.init, 'timeoutMs'), false);
+  assert.ok(captured.init.signal instanceof AbortSignal);
   assert.equal(captured.init.headers.accept, 'application/json');
   assert.equal(captured.init.headers.authorization, `Basic ${NativeBuffer.from('dptech_user:dptech_password').toString('base64')}`);
   assert.equal(result.http_status, 200);
@@ -109,7 +110,7 @@ test('EnablePacketFilterImmediate returns ret and raw json', async () => {
   assert.equal(captured.init.method, 'PUT');
   assert.deepEqual(JSON.parse(captured.init.body), { pfInEfList: { ipVersion: '4', enable: 'true' } });
   assert.equal(result.ret, '0');
-  assert.equal(result.raw_json.structValue.fields.ret.stringValue, '0');
+  assert.equal(result.raw_json, undefined);
 });
 
 test('basic auth fallback handles utf8 without Buffer or TextEncoder', () => {
@@ -126,7 +127,7 @@ test('basic auth fallback handles utf8 without Buffer or TextEncoder', () => {
   assert.deepEqual(_test.utf8Bytes('a'), [0x61]);
 });
 
-test('host, user, password, timeout, TLS, and header resolution cover aliases', () => {
+test('host, user, password, timeout, TLS, and header resolution cover aliases', async () => {
   const ctx = buildCtx({
     bindings: {
       host: '',
@@ -147,11 +148,9 @@ test('host, user, password, timeout, TLS, and header resolution cover aliases', 
   assert.equal(_test.resolvePassword(ctx.bindings), 'binding-pass');
   assert.equal(_test.pickString({ user: '', username: { value: 'second' } }, ['user', 'username']), 'second');
   assert.equal(_test.resolveTimeoutMs(ctx), 3000);
-  assert.deepEqual(_test.buildTlsOptions(ctx.bindings), {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  });
+  const tlsOptions = await _test.buildTlsOptions(ctx.bindings);
+  assert.ok(tlsOptions.dispatcher);
+  assert.equal(Object.hasOwn(tlsOptions, 'skipTlsVerify'), false);
   assert.equal(_test.buildHeaders(ctx.bindings, { accept: 'text/plain' }).accept, 'text/plain');
   assert.equal(_test.buildHeaders(ctx.bindings)['x-extra'], '1');
   assert.equal(_test.buildUrl('https://fw.example/', '/path', { a: 'b c', empty: '', n: 1 }), 'https://fw.example/path?a=b%20c&n=1');
@@ -224,7 +223,7 @@ test('UpdateAddressGroup handles empty, duplicate text, JSON success, and non-JS
   assert.deepEqual(await handler(req), { http_status: 200, ret: '', raw_body: '', raw_json: undefined });
 
   globalThis.fetch = async () => okResponse('Duplicate IP address ranges.');
-  assert.equal((await handler({ ...req, new_group_name: 'DUPLICATE' })).raw_body, 'Duplicate IP address ranges.');
+  assert.equal((await handler({ ...req, new_group_name: 'DUPLICATE' })).raw_body, '');
 
   globalThis.fetch = async () => okResponse(JSON.stringify({ ret: '0' }));
   assert.equal((await handler(req)).ret, '0');
@@ -333,7 +332,8 @@ test('HTTP statuses and business ret failures become structured errors', async (
     'PERMISSION_DENIED',
     (payload) => {
       assert.equal(payload.http_status, 401);
-      assert.deepEqual(payload.raw_json, { ret: '-401', msg: 'unauthorized' });
+      assert.equal(payload.raw_json, undefined);
+      assert.ok(payload.raw_body_length > 0);
     },
   );
 
@@ -367,7 +367,8 @@ test('non-JSON 200 and fetch failures become structured errors', async () => {
   globalThis.fetch = async () => okResponse('not-json');
   await expectStructuredError(() => rpcdef(buildCtx())[GET_PACKET_FILTER_STATUS_PATH](), 'UNKNOWN', (payload) => {
     assert.equal(payload.http_status, 200);
-    assert.equal(payload.raw_body, 'not-json');
+    assert.equal(payload.raw_body, '');
+    assert.equal(payload.raw_body_length, 'not-json'.length);
     assert.equal(payload.reason, 'response is not valid JSON');
   });
 
@@ -409,10 +410,14 @@ test('SDK handlers merge config and secret fields', async () => {
   });
 
   assert.equal(captured.url, 'https://fw.example.local/func/web_main/api/system/sysinfolist/pfInEfList?ipVersion=4');
-  assert.equal(captured.init.timeoutMs, 3100);
+  assert.equal(Object.hasOwn(captured.init, 'timeoutMs'), false);
+  assert.ok(captured.init.signal instanceof AbortSignal);
   assert.equal(captured.init.headers.authorization, `Basic ${NativeBuffer.from('secret_user:secret_password').toString('base64')}`);
   assert.equal(captured.init.headers['x-trace'], 'abc');
-  assert.equal(captured.init.skipTlsVerify, true);
+  assert.equal(Object.hasOwn(captured.init, 'skipTlsVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'tlsInsecureSkipVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'insecureSkipVerify'), false);
+  assert.ok(captured.init.dispatcher);
   assert.equal(result.enable, 'false');
 });
 
@@ -432,7 +437,7 @@ test('SDK handlers and service wrapper expose expected entries', async () => {
     },
   });
 
-  assert.equal(result.raw_body, 'Duplicate IP address ranges.');
+  assert.equal(result.raw_body, '');
   assert.ok(service);
 });
 
@@ -521,7 +526,7 @@ test('helper defaults and null request fallbacks are stable', async () => {
     http_status: 200,
     ret: '',
     raw_body: '',
-    raw_json: { structValue: { fields: { msg: { stringValue: 'ok' } } } },
+    raw_json: undefined,
   });
   assert.throws(
     () => _test.throwStructuredError('NOT_A_GRPC_CODE', 'fallback status'),

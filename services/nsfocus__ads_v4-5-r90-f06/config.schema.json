@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "additionalProperties": true,
+  "additionalProperties": false,
   "properties": {
     "restBaseUrl": {
       "type": "string",
@@ -21,15 +21,18 @@
     },
     "key": {
       "type": "string",
-      "description": "Upstream auth_key query parameter. Prefer secret.key for persistent credentials."
+      "deprecated": true,
+      "description": "Deprecated compatibility fallback for the upstream auth_key query parameter. New instances must use secret.key."
     },
     "auth_key": {
       "type": "string",
-      "description": "Alias for key."
+      "deprecated": true,
+      "description": "Deprecated compatibility fallback alias for key. New instances must use secret.auth_key."
     },
     "authKey": {
       "type": "string",
-      "description": "Alias for key."
+      "deprecated": true,
+      "description": "Deprecated compatibility fallback alias for key. New instances must use secret.authKey."
     },
     "timeoutMs": {
       "type": "integer",

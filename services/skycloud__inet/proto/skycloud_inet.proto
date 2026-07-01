@@ -43,7 +43,7 @@ message TicketTemplate {
 message ConnectionProfile {
   string host = 1;
   string username = 2;
-  string password = 3;
+  string password = 3 [deprecated = true];
 }
 
 message BatchOperateIPResponse {

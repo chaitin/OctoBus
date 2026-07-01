@@ -23,7 +23,7 @@ The implementation follows the public API shape documented at:
 Service root: `services/threatbook__claudsandbox_v3`.
 
 ```bash
-octobus service import --id threatbook-claudsandbox-v3 ./services//threatbook__claudsandbox_v3
+octobus service import --id threatbook-claudsandbox-v3 ./services/threatbook__claudsandbox_v3
 ```
 
 ## Instance
@@ -92,7 +92,7 @@ Behavior:
 - Sends `POST {threatbook_domain}/v3/file/upload`.
 - Sends multipart form fields `apikey`, `file`, optional `sandbox_type`, optional `run_time`.
 - Success requires HTTP `200` and ThreatBook `response_code == 0`.
-- Response returns `http_status`, `raw_body`, parsed `raw_json`, `sha256`, and `permalink`.
+- Response returns `http_status`, `sha256`, and `permalink`. `raw_body` is intentionally empty and `raw_json` is not populated to avoid retaining upstream payloads that may contain sensitive data.
 
 ### GetFileReport
 
@@ -118,7 +118,7 @@ Behavior:
 - Sends query parameters `apikey`, `resource`, `sandbox_type`, and repeated optional `query_fields`.
 - `resource` and `sha256` are accepted aliases.
 - Success requires HTTP `200` and ThreatBook `response_code == 0`.
-- Response returns `http_status`, `raw_body`, parsed `raw_json`, normalized `summary`, `permalink`, and raw `data`.
+- Response returns `http_status`, normalized `summary`, `permalink`, and raw `data`. `raw_body` is intentionally empty and `raw_json` is not populated to avoid retaining upstream payloads that may contain sensitive data.
 
 ### GetMultiEnginesReport
 
@@ -142,7 +142,7 @@ Behavior:
 - Sends query parameters `apikey` and `resource`.
 - `resource` and `sha256` are accepted aliases.
 - Success requires HTTP `200` and ThreatBook `response_code == 0`.
-- Response returns `http_status`, `raw_body`, parsed `raw_json`, normalized `multiengines`, and raw `data`.
+- Response returns `http_status`, normalized `multiengines`, and raw `data`. `raw_body` is intentionally empty and `raw_json` is not populated to avoid retaining upstream payloads that may contain sensitive data.
 
 Connect RPC example:
 
@@ -171,7 +171,7 @@ node threatbook__claudsandbox_v3/bin/threatbook-claudsandbox-v3.js get-multi-eng
 - Invalid JSON or missing `response_code`: `UNKNOWN`.
 - HTTP `200` with `response_code != 0`: `FAILED_PRECONDITION`, except known auth-like code `1101`, which maps to `UNAUTHENTICATED`.
 
-Upstream failure messages are structured JSON containing `http_status`, `raw_body`, and when available `response_code`, `verbose_msg`, `raw_json`, and `reason`.
+Upstream failure messages are structured JSON containing `http_status`, empty `raw_body`, `raw_body_length`, and when available `response_code`, redacted `verbose_msg`, and `reason`.
 
 ## Write Semantics
 

@@ -1,4 +1,5 @@
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const METHOD_SEND_TEXT_PATH = '/Tencent_QYWeiXin_GroupRobot.Tencent_QYWeiXin_GroupRobot/SendText';
 export const METHOD_SEND_TEXT_FULL = 'Tencent_QYWeiXin_GroupRobot.Tencent_QYWeiXin_GroupRobot/SendText';
@@ -23,7 +24,8 @@ const upstreamError = (code, message, details = {}) => {
     code,
     message,
     http_status_code: Number.isFinite(Number(details.httpStatusCode)) ? Number(details.httpStatusCode) : 0,
-    http_body: typeof details.httpBody === 'string' ? details.httpBody : '',
+    http_body: '',
+    http_body_length: typeof details.httpBody === 'string' ? details.httpBody.length : 0,
     reason: String(details.reason || '').trim(),
   };
   if (Number.isFinite(Number(details.errcode))) payload.errcode = Number(details.errcode);
@@ -68,17 +70,26 @@ const requireString = (value, fieldName) => {
 
 const mergedBindings = (ctx = {}) => ({
   ...(ctx.config ?? {}),
-  ...(ctx.secret ?? {}),
   ...(ctx.bindings ?? {}),
+  ...(ctx.secret ?? {}),
 });
+
+const resolveWebhook = (ctx = {}) => {
+  const keys = ['webhook', 'webhook_url', 'webhookUrl', 'url'];
+  return pickFirst(ctx.secret || {}, keys)
+    ?? pickFirst(ctx.config || {}, keys)
+    ?? pickFirst(ctx.bindings || {}, keys);
+};
 
 const resolveCallContext = (ctx = {}) => ({
   ...ctx,
   bindings: mergedBindings(ctx),
   limits: ctx.limits ?? {},
   meta: ctx.meta ?? {},
-  req: ctx.req ?? ctx.request ?? {},
+  req: ctx.request ?? ctx.req ?? {},
 });
+
+const requestFromContext = (ctx = {}) => ctx.request ?? ctx.req ?? {};
 
 const optionalUint32 = (value) => {
   const raw = unwrapScalar(value);
@@ -107,7 +118,15 @@ const toBoolean = (value) => {
 
 const buildTlsOptions = (bindings = {}) => {
   if (!toBoolean(bindings.skipTlsVerify) && !toBoolean(bindings.tlsInsecureSkipVerify) && !toBoolean(bindings.insecureSkipVerify)) return {};
-  return { skipTlsVerify: true, tlsInsecureSkipVerify: true, insecureSkipVerify: true };
+  return { dispatcher: insecureTlsDispatcher };
+};
+
+const insecureTlsDispatcher = new Agent({ connect: { rejectUnauthorized: false } });
+
+const makeTimeoutSignal = (timeoutMs) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  return { signal: controller.signal, clear: () => clearTimeout(timeoutId) };
 };
 
 const buildHeaders = (ctx = {}) => {
@@ -154,11 +173,12 @@ const mapHttpStatusToCode = (status) => {
 };
 
 const fetchWecom = async (ctx, webhook, payload) => {
+  const timeout = makeTimeoutSignal(resolveTimeoutMs(ctx));
   let response;
   try {
     response = await fetch(webhook, {
       method: 'POST',
-      timeoutMs: resolveTimeoutMs(ctx),
+      signal: timeout.signal,
       headers: buildHeaders(ctx),
       body: JSON.stringify(payload),
       ...buildTlsOptions(ctx.bindings || {}),
@@ -169,6 +189,8 @@ const fetchWecom = async (ctx, webhook, payload) => {
       httpBody: '',
       reason: err?.cause?.message || err?.message || 'fetch failed',
     });
+  } finally {
+    timeout.clear();
   }
 
   let bodyText;
@@ -198,7 +220,7 @@ const buildWecomPayload = (message, mentionedMobiles) => {
 
 const handleSendText = async (req = {}, ctx = {}) => {
   const callCtx = resolveCallContext(ctx);
-  const webhook = requireWebhook(pickFirst(req, ['webhook']));
+  const webhook = requireWebhook(resolveWebhook(callCtx));
   const message = requireString(pickFirst(req, ['message']), 'message');
   const mentionedMobiles = splitMentionedMobiles(pickFirst(req, ['mentioned_mobiles', 'mentionedMobiles']));
   const payload = buildWecomPayload(message, mentionedMobiles);
@@ -235,7 +257,7 @@ const handleSendText = async (req = {}, ctx = {}) => {
 
   return {
     http_status_code: upstream.status,
-    http_body: upstream.bodyText,
+    http_body: '',
     errcode: bodyInfo.errcode,
     errmsg: bodyInfo.errmsg,
   };
@@ -249,7 +271,7 @@ export function rpcdef(ctx = {}) {
 }
 
 export const handlers = {
-  [METHOD_SEND_TEXT_FULL]: (req, ctx = {}) => handleSendText(req, ctx),
+  [METHOD_SEND_TEXT_FULL]: (ctx = {}) => handleSendText(requestFromContext(ctx), ctx),
 };
 
 export const _test = {
@@ -261,6 +283,8 @@ export const _test = {
   grpcCodeFor,
   handleSendText,
   hasOwn,
+  insecureTlsDispatcher,
+  makeTimeoutSignal,
   mapHttpStatusToCode,
   mergedBindings,
   optionalUint32,
@@ -268,6 +292,7 @@ export const _test = {
   requireString,
   requireWebhook,
   resolveCallContext,
+  resolveWebhook,
   resolveTimeoutMs,
   splitMentionedMobiles,
   toBoolean,

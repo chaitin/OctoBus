@@ -1,0 +1,80 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["baseUrl"],
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "description": "Hermes gateway base URL, for example http://127.0.0.1:5800."
+    },
+    "defaultPath": {
+      "type": "string",
+      "default": "/webhook",
+      "description": "Default webhook path used when SendWebhook.path is empty."
+    },
+    "healthPath": {
+      "type": "string",
+      "default": "/health",
+      "description": "Path used by HealthCheck."
+    },
+    "allowedPaths": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": ["/webhook"],
+      "description": "Exact Hermes paths this instance may call."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1000,
+      "maximum": 120000,
+      "default": 10000
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Disable TLS certificate verification for lab devices only."
+    },
+    "userAgent": {
+      "type": "string",
+      "default": "octobus-hermes-gateway/0.1.0"
+    },
+    "cliMode": {
+      "type": "string",
+      "enum": ["disabled", "local", "ssh"],
+      "default": "disabled",
+      "description": "How CLI-backed Hermes methods run. Use disabled for HTTP-only instances."
+    },
+    "cliBinary": {
+      "type": "string",
+      "default": "hermes",
+      "description": "Hermes CLI path, for example /root/.local/bin/hermes."
+    },
+    "sshTarget": {
+      "type": "string",
+      "description": "SSH target for cliMode=ssh, for example root@xy-internal-devbox-01.example."
+    },
+    "sshOptions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": ["-o", "BatchMode=yes"],
+      "description": "Additional ssh options for cliMode=ssh."
+    },
+    "maxOutputBytes": {
+      "type": "integer",
+      "minimum": 4096,
+      "maximum": 5242880,
+      "default": 1048576
+    },
+    "allowedTargets": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Optional exact allowlist for SendMessage targets. Empty means no target restriction."
+    },
+    "messageSignature": {
+      "type": "string",
+      "default": "From XY@Agent",
+      "description": "Signature appended to DingTalk messages when missing."
+    }
+  }
+}

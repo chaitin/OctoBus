@@ -7,6 +7,6 @@
     "slack-group-robot": "bin/slack-group-robot.js"
   },
   "dependencies": {
-    "@chaitin-ai/octobus-sdk": "^0.5.0"
+    "@chaitin-ai/octobus-sdk": "^0.6.0"
   }
 }
