@@ -5,6 +5,10 @@ import { runServiceMain } from "@chaitin-ai/octobus-sdk";
 import { Command } from "commander";
 
 const services = {
+  "security-engine": {
+    entryFile: "../crowdsec__security-engine/bin/security-engine.js",
+    serviceModule: "../crowdsec__security-engine/src/service.js",
+  },
   "prometheus-3-0-1": {
     entryFile: "../prometheus__prometheus_3-0-1/bin/prometheus-3-0-1.js",
     serviceModule: "../prometheus__prometheus_3-0-1/src/service.js",

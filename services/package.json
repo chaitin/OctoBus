@@ -130,7 +130,8 @@
     "reportedip": "bin/reportedip.js",
     "tencent-bh": "bin/tencent-bh.js",
     "nist-nvd-v2": "bin/nist-nvd-v2.js",
-    "siem": "bin/siem.js"
+    "siem": "bin/siem.js",
+    "security-engine": "bin/security-engine.js"
   },
   "files": [
     "bin/huawei-ccm.js",
@@ -169,6 +170,8 @@
     "bin/openobserve-v0-15-1.js",
     "bin/dsensor.js",
     "bin/alertmanager-0-27-0.js",
+    "bin/security-engine.js",
+    "crowdsec__security-engine",
     "bin/prometheus-3-0-1.js",
     "bin/dptech-eds.js",
     "bin/dptech-fw-v4-6-10.js",
