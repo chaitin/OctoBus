@@ -37,6 +37,10 @@ const services = {
     entryFile: "../dptech__umc-ads_v5-3-29/bin/dptech-umc-ads-v5-3-29.js",
     serviceModule: "../dptech__umc-ads_v5-3-29/src/service.js",
   },
+  "f5-awaf": {
+    entryFile: "../f5__awaf/bin/f5-awaf.js",
+    serviceModule: "../f5__awaf/src/service.js",
+  },
   "feishu-group-robot": {
     entryFile: "../feishu__group-robot/bin/feishu-group-robot.js",
     serviceModule: "../feishu__group-robot/src/service.js",
