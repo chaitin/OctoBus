@@ -1,0 +1,45 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "qingteng-hids-v5",
+  "displayName": "Qingteng HIDS V5",
+  "description": "OctoBus read-only package for Qingteng Shenrui CWPP/HIDS OpenAPI v5.1.5.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/qingteng_hids_v5.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "qingteng.hids.v5.QingtengHIDSService/ListHosts": {
+          "name": "list-hosts",
+          "description": "List host assets."
+        },
+        "qingteng.hids.v5.QingtengHIDSService/GetHost": {
+          "name": "get-host",
+          "description": "Get host asset details."
+        },
+        "qingteng.hids.v5.QingtengHIDSService/ListDetections": {
+          "name": "list-detections",
+          "description": "List intrusion detections."
+        },
+        "qingteng.hids.v5.QingtengHIDSService/ListResponseResults": {
+          "name": "list-response-results",
+          "description": "List response operation results."
+        },
+        "qingteng.hids.v5.QingtengHIDSService/ListBaselines": {
+          "name": "list-baselines",
+          "description": "List compliance baselines."
+        }
+      }
+    }
+  }
+}

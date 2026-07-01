@@ -133,6 +133,11 @@ jobs:
           cache-dependency-path: sdk/package-lock.json
           registry-url: https://registry.npmjs.org
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+
       - name: Validate tag
         id: release
         run: |

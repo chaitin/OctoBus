@@ -7,6 +7,9 @@ export const EXPECTED_PACKAGE_NAME = "@chaitin-ai/octobus-tentacles";
 export const EXPECTED_ROOT_BIN_NAME = "octobus-tentacles";
 export const SERVICE_DIR_RE = /^[a-z0-9][a-z0-9-]*__[a-z0-9][a-z0-9-]*(?:_[a-z0-9][a-z0-9-]*)?$/;
 export const SERVICE_NAME_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const FORBIDDEN_SERVICE_FILE_RE = /(?:^|[/\\])(?:node_modules|\.env)$|(?:\.tgz|\.tar\.gz|\.zip|\.log|\.png|\.jpe?g|\.gif|\.webp)$/i;
+const RELATIVE_IMPORT_RE = /\b(?:import|export)\s+(?:[^'"]+\s+from\s+)?["'](\.{1,2}\/[^"']+)["']/g;
+const EXPORTED_TWO_ARG_HANDLER_RE = /\[[^\]]+\]\s*:\s*(?:async\s*)?\(\s*[^,)]+\s*,\s*ctx\b/;
 
 function readJSON(filePath) {
   try {
@@ -25,6 +28,9 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--root") {
+      if (i + 1 >= argv.length || argv[i + 1] === "") {
+        throw new Error("--root must not be empty");
+      }
       opts.root = argv[++i];
       continue;
     }
@@ -33,6 +39,9 @@ function parseArgs(argv) {
       continue;
     }
     if (arg === "--service-dir") {
+      if (i + 1 >= argv.length || argv[i + 1] === "") {
+        throw new Error("--service-dir must not be empty");
+      }
       opts.serviceDir = argv[++i];
       continue;
     }
@@ -114,6 +123,19 @@ function validateExistingFile(errors, root, relativePath, label) {
   return normalized;
 }
 
+function validateExecutableFile(errors, root, relativePath, label) {
+  const normalized = validateExistingFile(errors, root, relativePath, label);
+  if (normalized == null) {
+    return null;
+  }
+  const fullPath = path.join(root, filepathFromPackagePath(normalized));
+  const stat = fs.statSync(fullPath);
+  if ((stat.mode & 0o111) === 0) {
+    errors.push(`${label} "${normalized}" must be executable`);
+  }
+  return normalized;
+}
+
 function validateExistingDirectory(errors, root, relativePath, label) {
   const normalized = validateRelativePackagePath(errors, relativePath, label);
   if (normalized == null) {
@@ -136,6 +158,25 @@ function validateExistingDirectory(errors, root, relativePath, label) {
 
 function filepathFromPackagePath(packagePath) {
   return packagePath.split("/").join(path.sep);
+}
+
+function packagePathFromFilepath(filePath) {
+  return filePath.split(path.sep).join(path.posix.sep);
+}
+
+function walkFiles(root, visitor, relativeDir = "") {
+  const current = path.join(root, relativeDir);
+  if (!fs.existsSync(current)) {
+    return;
+  }
+  for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+    const relativePath = relativeDir === "" ? entry.name : path.join(relativeDir, entry.name);
+    const fullPath = path.join(root, relativePath);
+    visitor(fullPath, relativePath, entry);
+    if (entry.isDirectory() && entry.name !== "node_modules") {
+      walkFiles(root, visitor, relativePath);
+    }
+  }
 }
 
 function validateDependency(errors, pkg, name) {
@@ -205,6 +246,16 @@ function validateRootWrapper(errors, root, serviceDir, serviceName, rootBinTarge
   }
 }
 
+function validatePackageFiles(errors, pkg, serviceDir, serviceName, rootBinTarget) {
+  const files = Array.isArray(pkg.files) ? pkg.files : [];
+  if (!files.includes(rootBinTarget)) {
+    errors.push(`package.json files must include root wrapper "${rootBinTarget}" for service "${serviceName}"`);
+  }
+  if (!files.includes(serviceDir)) {
+    errors.push(`package.json files must include service root "${serviceDir}" for service "${serviceName}"`);
+  }
+}
+
 function validateDispatcherService(errors, dispatcher, serviceDir, serviceName, rootBinTarget) {
   if (dispatcher == null) {
     return;
@@ -220,6 +271,60 @@ function validateDispatcherService(errors, dispatcher, serviceDir, serviceName, 
       errors.push(`default dispatcher must include ${serviceName} mapping snippet: ${snippet}`);
     }
   }
+}
+
+function resolveRelativeImport(importerPath, specifier) {
+  const basePath = path.resolve(path.dirname(importerPath), specifier);
+  if (path.extname(basePath) !== "") {
+    return basePath;
+  }
+  return `${basePath}.js`;
+}
+
+function validateServiceJSImports(errors, serviceRoot, serviceDir) {
+  const serviceJSPath = path.join(serviceRoot, "src", "service.js");
+  if (!fs.existsSync(serviceJSPath)) {
+    return;
+  }
+  const source = fs.readFileSync(serviceJSPath, "utf8");
+  const checkedTargets = new Set();
+  for (const match of source.matchAll(RELATIVE_IMPORT_RE)) {
+    const target = resolveRelativeImport(serviceJSPath, match[1]);
+    if (checkedTargets.has(target)) {
+      continue;
+    }
+    checkedTargets.add(target);
+    if (!target.startsWith(serviceRoot + path.sep)) {
+      errors.push(`${serviceDir}/src/service.js import "${match[1]}" must stay inside the service root`);
+      continue;
+    }
+    if (!fs.existsSync(target) || !fs.statSync(target).isFile()) {
+      const relativeTarget = packagePathFromFilepath(path.relative(serviceRoot, target));
+      errors.push(`${serviceDir}/src/service.js import target "${relativeTarget}" must exist`);
+    }
+  }
+}
+
+function validateServiceContent(errors, serviceRoot, serviceDir) {
+  walkFiles(serviceRoot, (fullPath, relativePath, entry) => {
+    const packageRelativePath = packagePathFromFilepath(relativePath);
+    if (FORBIDDEN_SERVICE_FILE_RE.test(packageRelativePath)) {
+      errors.push(`${serviceDir} must not contain forbidden package artifact "${packageRelativePath}"`);
+    }
+    if (!entry.isFile() || !packageRelativePath.startsWith("src/") || !/\.[cm]?js$/.test(packageRelativePath)) {
+      return;
+    }
+    const source = fs.readFileSync(fullPath, "utf8");
+    if (source.includes("NODE_TLS_REJECT_UNAUTHORIZED")) {
+      errors.push(`${serviceDir}/${packageRelativePath} must not modify NODE_TLS_REJECT_UNAUTHORIZED`);
+    }
+    if (source.includes("globalThis.proxy")) {
+      errors.push(`${serviceDir}/${packageRelativePath} must not depend on globalThis.proxy`);
+    }
+    if (EXPORTED_TWO_ARG_HANDLER_RE.test(source)) {
+      errors.push(`${serviceDir}/${packageRelativePath} must not export handler entries with (req, ctx) signature`);
+    }
+  });
 }
 
 function validateStringArray(errors, value, label) {
@@ -267,7 +372,7 @@ export function validateRepository(root, options = {}) {
     if (name !== "" && !SERVICE_NAME_RE.test(name)) {
       errors.push(`package.json bin key "${name}" must match ${SERVICE_NAME_RE}`);
     }
-    validateExistingFile(errors, root, target, `package.json bin ${name || "string"} target`);
+    validateExecutableFile(errors, root, target, `package.json bin ${name || "string"} target`);
   }
 
   for (const serviceDir of serviceDirs) {
@@ -296,7 +401,8 @@ export function validateRepository(root, options = {}) {
       const rootBinTarget = validateExistingFile(errors, root, binEntries.get(manifest.name), `package.json bin ${manifest.name} target`);
       if (rootBinTarget != null) {
         const serviceBinTarget = path.posix.join("bin", path.posix.basename(rootBinTarget));
-        validateExistingFile(errors, serviceRoot, serviceBinTarget, `${serviceDir} service entry`);
+        validateExecutableFile(errors, serviceRoot, serviceBinTarget, `${serviceDir} service entry`);
+        validatePackageFiles(errors, pkg, serviceDir, manifest.name, rootBinTarget);
         validateRootWrapper(errors, root, serviceDir, manifest.name, rootBinTarget);
         validateDispatcherService(errors, dispatcher, serviceDir, manifest.name, rootBinTarget);
       }
@@ -317,6 +423,8 @@ export function validateRepository(root, options = {}) {
         errors.push(`${serviceDir}/service.json proto file "${protoFile}" must end with .proto`);
       }
     }
+    validateServiceJSImports(errors, serviceRoot, serviceDir);
+    validateServiceContent(errors, serviceRoot, serviceDir);
   }
 
   return { errors };
@@ -337,5 +445,10 @@ export function main(argv = process.argv.slice(2)) {
 
 const entrypoint = fileURLToPath(import.meta.url);
 if (process.argv[1] != null && path.resolve(process.argv[1]) === entrypoint) {
-  process.exitCode = main();
+  try {
+    process.exitCode = main();
+  } catch (error) {
+    console.error(`error: ${error.message}`);
+    process.exitCode = 1;
+  }
 }

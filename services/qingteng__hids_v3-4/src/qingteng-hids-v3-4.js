@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const LOGIN_PATH = '/QingTeng_HIDS_V34.QingTeng_HIDS_V34/Login';
 export const QUERY_HOST_ASSETS_PATH = '/QingTeng_HIDS_V34.QingTeng_HIDS_V34/QueryHostAssets';
@@ -39,11 +40,13 @@ const errorWithCode = (code, message) => {
 };
 
 const upstreamError = (code, message, details = {}) => {
+  const rawBody = typeof details.rawBody === 'string' ? details.rawBody : '';
   const payload = {
     code,
     message,
     http_status: Number.isFinite(Number(details.httpStatus)) ? Number(details.httpStatus) : 0,
-    raw_body: typeof details.rawBody === 'string' ? details.rawBody : '',
+    raw_body: '',
+    raw_body_length: rawBody.length,
     reason: String(details.reason || '').trim(),
   };
   const err = new GrpcError(grpcCodeFor(code), JSON.stringify(payload));
@@ -110,8 +113,10 @@ const resolveCallContext = (ctx = {}) => ({
   bindings: mergedBindings(ctx),
   limits: ctx.limits ?? {},
   meta: ctx.meta ?? {},
-  req: ctx.req ?? ctx.request ?? {},
+  req: ctx.request ?? ctx.req ?? {},
 });
+
+const requestFromContext = (ctx = {}) => ctx?.request ?? ctx?.req ?? {};
 
 const resolveTimeoutMs = (ctx = {}) => firstDefined(
   optionalUint32(ctx.limits?.timeoutMs),
@@ -119,15 +124,18 @@ const resolveTimeoutMs = (ctx = {}) => firstDefined(
   DEFAULT_TIMEOUT_MS,
 );
 
+let insecureTlsDispatcher;
+
+const getInsecureTlsDispatcher = () => {
+  insecureTlsDispatcher ??= new Agent({ connect: { rejectUnauthorized: false } });
+  return insecureTlsDispatcher;
+};
+
 const buildTlsOptions = (bindings = {}) => {
   if (!toBoolean(bindings.skipTlsVerify) && !toBoolean(bindings.tlsInsecureSkipVerify) && !toBoolean(bindings.insecureSkipVerify)) {
     return {};
   }
-  return {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  };
+  return { dispatcher: getInsecureTlsDispatcher() };
 };
 
 const buildLogPrefix = (ctx = {}, action) => {
@@ -240,9 +248,9 @@ const fetchText = async (ctx, url, init = {}) => {
   let res;
   try {
     res = await fetch(url, {
-      timeoutMs: resolveTimeoutMs(ctx),
-      ...buildTlsOptions(ctx.bindings || {}),
       ...init,
+      signal: AbortSignal.timeout(resolveTimeoutMs(ctx)),
+      ...buildTlsOptions(ctx.bindings || {}),
     });
   } catch (err) {
     throw upstreamError('UNAVAILABLE', 'qingteng upstream request failed', {
@@ -307,7 +315,7 @@ const loginOnce = async (ctx = {}) => {
     session,
     response: {
       http_status: response.status,
-      raw_body: response.text,
+      raw_body: '',
     },
   };
 };
@@ -382,7 +390,7 @@ const runSignedRequest = async (ctx = {}, requestFactory) => {
 
   return {
     http_status: result.response.status,
-    raw_body: result.response.text,
+    raw_body: '',
   };
 };
 
@@ -448,10 +456,10 @@ export function rpcdef(ctx = {}) {
 }
 
 export const handlers = {
-  [METHOD_LOGIN_FULL]: (req, ctx = {}) => handleLogin(req, ctx),
-  [METHOD_QUERY_HOST_ASSETS_FULL]: (req, ctx = {}) => handleQueryHostAssets(req, ctx),
-  [METHOD_CREATE_HOST_ISOLATION_FULL]: (req, ctx = {}) => handleCreateHostIsolation(req, ctx),
-  [METHOD_DELETE_HOST_ISOLATION_FULL]: (req, ctx = {}) => handleDeleteHostIsolation(req, ctx),
+  [METHOD_LOGIN_FULL]: (ctx = {}) => handleLogin(requestFromContext(ctx), ctx),
+  [METHOD_QUERY_HOST_ASSETS_FULL]: (ctx = {}) => handleQueryHostAssets(requestFromContext(ctx), ctx),
+  [METHOD_CREATE_HOST_ISOLATION_FULL]: (ctx = {}) => handleCreateHostIsolation(requestFromContext(ctx), ctx),
+  [METHOD_DELETE_HOST_ISOLATION_FULL]: (ctx = {}) => handleDeleteHostIsolation(requestFromContext(ctx), ctx),
 };
 
 export const _test = {

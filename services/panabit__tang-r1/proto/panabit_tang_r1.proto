@@ -19,12 +19,12 @@ message LoginRequest {
 
 message LoginResponse {
   int32 code = 1;
-  string api_token = 2;
-  google.protobuf.Struct raw = 3;
+  string api_token = 2 [deprecated = true];
+  google.protobuf.Struct raw = 3 [deprecated = true];
 }
 
 message ListIPTableRequest {
-  string api_token = 1;
+  string api_token = 1 [deprecated = true];
   string keyword = 2;
 }
 
@@ -42,7 +42,7 @@ message IPTableItem {
 }
 
 message AddIPTableRequest {
-  string api_token = 1;
+  string api_token = 1 [deprecated = true];
   string name = 2;
 }
 
@@ -53,7 +53,7 @@ message AddIPTableResponse {
 }
 
 message BlockIPRequest {
-  string api_token = 1;
+  string api_token = 1 [deprecated = true];
   string name = 2;
   string id = 3;
   string ip = 4;
@@ -66,7 +66,7 @@ message BlockIPResponse {
 }
 
 message UnblockIPRequest {
-  string api_token = 1;
+  string api_token = 1 [deprecated = true];
   string name = 2;
   string id = 3;
   string ip = 4;

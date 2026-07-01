@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const METHOD_FORBID_PATH = '/Wangsu_LabelIP.WangsuLabelIPService/BatchForbidIP';
 export const METHOD_UNFORBID_PATH = '/Wangsu_LabelIP.WangsuLabelIPService/BatchUnforbidIP';
@@ -168,6 +169,16 @@ const buildHeaders = (bindings = {}, extra = {}) => ({
 
 const shouldSkipTls = (bindings = {}) => pickFirstBoolean([bindings.tlsInsecureSkipVerify, bindings.skipTlsVerify, bindings.tls_skip_verify]) || false;
 
+const insecureTlsDispatcher = new Agent({ connect: { rejectUnauthorized: false } });
+
+const buildTlsOptions = (bindings = {}) => (shouldSkipTls(bindings) ? { dispatcher: insecureTlsDispatcher } : {});
+
+const makeTimeoutSignal = (timeoutMs) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  return { signal: controller.signal, clear: () => clearTimeout(timeoutId) };
+};
+
 const mapHttpError = (status, body) => {
   const text = body ? String(body).slice(0, 256) : '';
   if (status === 401 || status === 403) return engineError('PERMISSION_DENIED', `upstream http ${status}: ${text}`);
@@ -216,8 +227,10 @@ const resolveCallContext = (ctx = {}) => ({
   },
   limits: ctx.limits ?? {},
   meta: ctx.meta ?? {},
-  req: ctx.req ?? ctx.request ?? {},
+  req: ctx.request ?? ctx.req ?? {},
 });
+
+const requestFromContext = (ctx = {}) => ctx.request ?? ctx.req ?? {};
 
 const executeOperation = async (ctx = {}, operation) => {
   const callCtx = resolveCallContext(ctx);
@@ -241,12 +254,13 @@ const executeOperation = async (ctx = {}, operation) => {
   const payload = buildPayload(operation, labelCode, ips, forbidMinutes);
   logAudit(meta, 'request', { operation, labelCode, forbidMinutes, ipCount: ips.length, requestId: req.request_id || req.requestId || '' });
 
+  const timeout = makeTimeoutSignal(config.timeoutMs);
   const options = {
     method: 'POST',
     headers,
     body: JSON.stringify(payload),
-    timeoutMs: config.timeoutMs,
-    ...(shouldSkipTls(bindings) ? { insecureSkipVerify: true, skipTlsVerify: true, tlsInsecureSkipVerify: true } : {}),
+    signal: timeout.signal,
+    ...buildTlsOptions(bindings),
   };
 
   let response;
@@ -255,6 +269,8 @@ const executeOperation = async (ctx = {}, operation) => {
   } catch (err) {
     logAudit(meta, 'error', { operation, reason: err?.message || 'fetch failed' });
     throw engineError('UNAVAILABLE', err?.message || 'fetch failed');
+  } finally {
+    timeout.clear();
   }
   const text = await response.text();
   if (!response.ok) {
@@ -302,7 +318,10 @@ const executeOperation = async (ctx = {}, operation) => {
   return responseBody;
 };
 
-const runOperation = (req = {}, ctx = {}, operation) => executeOperation({ ...ctx, req: { ...(ctx.req || {}), ...(req || {}) } }, operation);
+const runOperation = (req = {}, ctx = {}, operation) => {
+  const request = { ...requestFromContext(ctx), ...(req || {}) };
+  return executeOperation({ ...ctx, req: request, request }, operation);
+};
 
 export function rpcdef(ctx = {}) {
   const callCtx = resolveCallContext(ctx);
@@ -313,21 +332,24 @@ export function rpcdef(ctx = {}) {
 }
 
 export const handlers = {
-  [METHOD_FORBID_FULL]: (req, ctx = {}) => runOperation(req, ctx, OPERATION.FORBID),
-  [METHOD_UNFORBID_FULL]: (req, ctx = {}) => runOperation(req, ctx, OPERATION.UNFORBID),
+  [METHOD_FORBID_FULL]: (ctx = {}) => runOperation(requestFromContext(ctx), ctx, OPERATION.FORBID),
+  [METHOD_UNFORBID_FULL]: (ctx = {}) => runOperation(requestFromContext(ctx), ctx, OPERATION.UNFORBID),
 };
 
 export const _test = {
   buildBasicAuth,
   buildHeaders,
   buildPayload,
+  buildTlsOptions,
   computePassword,
   engineError,
   executeOperation,
   extractFailedIps,
   grpcCodeFor,
   hasOwn,
+  insecureTlsDispatcher,
   logAudit,
+  makeTimeoutSignal,
   mapHttpError,
   normalizeBaseUrl,
   pickFirstBoolean,

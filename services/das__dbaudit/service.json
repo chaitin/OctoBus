@@ -1,0 +1,41 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "dbaudit",
+  "displayName": "DBAudit",
+  "description": "OctoBus package for DBAudit OpenAPI operations.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/dbaudit.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Chaitin_DBAUDIT.DBAuditService/ListIPFilters": {
+          "name": "list-ip-filters",
+          "description": "List DBAudit IP filters."
+        },
+        "Chaitin_DBAUDIT.DBAuditService/CreateIPFilter": {
+          "name": "create-ip-filter",
+          "description": "Create a DBAudit IP filter."
+        },
+        "Chaitin_DBAUDIT.DBAuditService/GetSystemResource": {
+          "name": "get-system-resource",
+          "description": "Get current DBAudit system resource status."
+        },
+        "Chaitin_DBAUDIT.DBAuditService/QuerySystemResourceHistory": {
+          "name": "query-system-resource-history",
+          "description": "Query DBAudit system resource history."
+        }
+      }
+    }
+  }
+}

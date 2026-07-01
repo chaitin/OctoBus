@@ -42,8 +42,8 @@ message QueryBlacklistRequest {
   // ip filters by one exact source IP when provided.
   string ip = 4;
 
-  // token optionally carries the upstream UMC token. When provided, the RPC uses it directly instead of requiring a prior Login call.
-  string token = 5;
+  // Deprecated. Upstream tokens are kept in instance-local session state after Login and are not accepted from RPC requests.
+  string token = 5 [deprecated = true];
 }
 
 // AddBlacklistRequest contains the IP list that should be added into UMC blacklist strategies.
@@ -51,8 +51,8 @@ message AddBlacklistRequest {
   // ips is the non-empty IPv4/IPv6 address list to add; one RPC accepts at most 100 IPs.
   repeated string ips = 1;
 
-  // token optionally carries the upstream UMC token. When provided, the RPC uses it directly instead of requiring a prior Login call.
-  string token = 2;
+  // Deprecated. Upstream tokens are kept in instance-local session state after Login and are not accepted from RPC requests.
+  string token = 2 [deprecated = true];
 }
 
 // DeleteBlacklistRequest contains the IP list that should be removed from UMC blacklist strategies.
@@ -60,11 +60,11 @@ message DeleteBlacklistRequest {
   // ips is the non-empty IPv4/IPv6 address list to delete; one RPC accepts at most 100 IPs.
   repeated string ips = 1;
 
-  // token optionally carries the upstream UMC token. When provided, the RPC uses it directly instead of requiring a prior Login call.
-  string token = 2;
+  // Deprecated. Upstream tokens are kept in instance-local session state after Login and are not accepted from RPC requests.
+  string token = 2 [deprecated = true];
 }
 
-// UmcHttpResponse preserves the upstream UMC HTTP response.
+// UmcHttpResponse carries a sanitized upstream response summary. Login intentionally leaves raw fields empty because the upstream body contains the session token.
 message UmcHttpResponse {
   // http_status equals the exact HTTP status code returned by UMC.
   int32 http_status = 1;

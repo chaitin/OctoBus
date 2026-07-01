@@ -15,18 +15,18 @@ service TopSec_FW_V376 {
 }
 
 message SessionContext {
-  string token = 1;
-  string secret = 2;
-  string user_mark = 3;
-  string cookie = 4;
-  google.protobuf.Struct vendor_state = 10;
+  string token = 1 [deprecated = true];
+  string secret = 2 [deprecated = true];
+  string user_mark = 3 [deprecated = true];
+  string cookie = 4 [deprecated = true];
+  google.protobuf.Struct vendor_state = 10 [deprecated = true];
 }
 
 message LoginRequest {
-  google.protobuf.StringValue username = 1;
-  google.protobuf.StringValue password = 2;
-  google.protobuf.StringValue aes_key = 3;
-  google.protobuf.StringValue aes_iv = 4;
+  google.protobuf.StringValue username = 1 [deprecated = true];
+  google.protobuf.StringValue password = 2 [deprecated = true];
+  google.protobuf.StringValue aes_key = 3 [deprecated = true];
+  google.protobuf.StringValue aes_iv = 4 [deprecated = true];
   google.protobuf.BoolValue allow_http = 5;
   google.protobuf.StringValue host = 6;
 }
@@ -34,18 +34,16 @@ message LoginRequest {
 message LoginResponse {
   bool success = 1;
   string message = 2;
-  SessionContext session = 3;
-  google.protobuf.Struct raw = 4;
 }
 
 message AddBlacklistIPRequest {
-  SessionContext session = 1;
+  SessionContext session = 1 [deprecated = true];
   repeated string ip_addresses = 2;
   google.protobuf.StringValue memo = 3;
 }
 
 message DeleteBlacklistIPRequest {
-  SessionContext session = 1;
+  SessionContext session = 1 [deprecated = true];
   repeated string ip_addresses = 2;
 }
 
@@ -58,17 +56,14 @@ message BlacklistFailure {
 message BlacklistMutationResponse {
   repeated string succeeded_ips = 1;
   repeated BlacklistFailure failures = 2;
-  SessionContext session = 3;
-  google.protobuf.Struct raw = 4;
-  string message = 5;
+  string message = 3;
 }
 
 message LogoutRequest {
-  SessionContext session = 1;
+  SessionContext session = 1 [deprecated = true];
 }
 
 message LogoutResponse {
   bool success = 1;
   string message = 2;
-  google.protobuf.Struct raw = 3;
 }

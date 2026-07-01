@@ -1,0 +1,33 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "telegram-bot-api",
+  "displayName": "Telegram Bot API",
+  "description": "OctoBus package for Telegram Bot API token validation and text message notification.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/telegram_bot_api.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Telegram_Bot_API.Telegram_Bot_API/GetMe": {
+          "name": "get-me",
+          "description": "Validate the configured Telegram bot token."
+        },
+        "Telegram_Bot_API.Telegram_Bot_API/SendMessage": {
+          "name": "send-message",
+          "description": "Send a text message through Telegram Bot API."
+        }
+      }
+    }
+  }
+}

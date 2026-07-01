@@ -11,11 +11,11 @@ service HUAWEI_FW_USG6000E {
 }
 
 message UpdateAddressGroupRequest {
-  string host = 1;
+  string host = 1 [deprecated = true];
   string device_name = 2;
   string book_name = 3;
-  string user = 4;
-  string password = 5;
+  string user = 4 [deprecated = true];
+  string password = 5 [deprecated = true];
   repeated string ipv4_list = 6;
   repeated string ipv6_list = 7;
   string desc = 8;
@@ -24,11 +24,11 @@ message UpdateAddressGroupRequest {
 message UpdateAddressGroupResponse {
   bool success = 1;
   int32 http_status = 2;
-  string raw_body = 3;
+  string raw_body = 3 [deprecated = true];
   string message = 4;
   bool preview_only = 5;
   string request_method = 6;
   string request_url = 7;
-  google.protobuf.Struct request_headers = 8;
-  string request_body = 9;
+  google.protobuf.Struct request_headers = 8 [deprecated = true];
+  string request_body = 9 [deprecated = true];
 }

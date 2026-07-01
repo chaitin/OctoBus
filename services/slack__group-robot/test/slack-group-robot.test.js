@@ -17,11 +17,13 @@ const originalConsoleLog = console.log;
 
 const buildCtx = (overrides = {}) => ({
   bindings: {
-    webhook: 'https://hooks.slack.com/services/T00/B00/xxxx',
     ...(overrides.bindings || {}),
   },
   config: overrides.config || {},
-  secret: overrides.secret || {},
+  secret: {
+    webhook: 'https://hooks.slack.com/services/T00/B00/xxxx',
+    ...(overrides.secret || {}),
+  },
   limits: { timeoutMs: 2000, ...(overrides.limits || {}) },
   meta: { instance_id: 'inst', request_id: 'req', ...(overrides.meta || {}) },
   req: overrides.req || {},
@@ -43,18 +45,18 @@ test('SendTextMessage rejects missing and invalid webhook', async (t) => {
   };
 
   await assert.rejects(
-    () => rpcdef(buildCtx({ bindings: { webhook: '' }, req: { message: 'test' } }))[METHOD_SEND_TEXT_PATH](),
+    () => rpcdef(buildCtx({ secret: { webhook: '' }, req: { message: 'test' } }))[METHOD_SEND_TEXT_PATH](),
     (err) => {
       assert.ok(err instanceof GrpcError);
       assert.equal(err.code, grpcStatus.INVALID_ARGUMENT);
       assert.equal(err.legacyCode, 'INVALID_ARGUMENT');
-      assert.match(err.message, /webhook is required/);
+      assert.match(err.message, /webhook is required in instance secret/);
       return true;
     },
   );
 
   await assert.rejects(
-    () => rpcdef(buildCtx({ bindings: { webhook: 'https://example.com/not-slack' }, req: { message: 'test' } }))[METHOD_SEND_TEXT_PATH](),
+    () => rpcdef(buildCtx({ secret: { webhook: 'https://example.com/not-slack' }, req: { message: 'test' } }))[METHOD_SEND_TEXT_PATH](),
     /webhook is required/,
   );
 });
@@ -104,6 +106,10 @@ test('coercion helpers cover edge cases', () => {
   assert.equal(_test.hasOwn(null, 'x'), false);
   assert.equal(_test.hasOwn({ a: 1 }, 'a'), true);
   assert.deepEqual(_test.mergedBindings({ config: { a: 1 }, secret: { b: 2 }, bindings: { c: 3 } }), { a: 1, b: 2, c: 3 });
+  assert.deepEqual(_test.mergedBindings({ config: { webhook: 'config' }, secret: { webhook: 'secret' }, bindings: { webhook: 'binding' } }), { webhook: 'secret' });
+  assert.equal(_test.resolveWebhook({ secret: { webhook: 'secret' }, config: { webhook: 'config' }, bindings: { webhook: 'binding' } }), 'secret');
+  assert.equal(_test.resolveWebhook({ secret: {}, config: { webhook: 'config' }, bindings: { webhook: 'binding' } }), 'config');
+  assert.equal(_test.resolveWebhook({ secret: {}, config: {}, bindings: { webhook: 'binding' } }), 'binding');
   assert.deepEqual(_test.resolveCallContext({ request: { message: 'x' } }).req, { message: 'x' });
   assert.deepEqual(_test.resolveCallContext({ req: null, request: null }).req, {});
   assert.equal(_test.resolveTimeoutMs({ bindings: { timeoutMs: -1 }, limits: { timeoutMs: 0 } }), 5000);
@@ -111,6 +117,10 @@ test('coercion helpers cover edge cases', () => {
   assert.equal(_test.resolveTimeoutMs({ limits: { timeoutMs: 3000 } }), 3000);
   assert.equal(_test.resolveBindingString({ webhook_url: '', webhook: 'https://x' }, ['webhook_url', 'webhook']), 'https://x');
   assert.equal(_test.errorWithCode('NOT_A_CODE', 'unknown').code, grpcStatus.UNKNOWN);
+  assert.equal(_test.toBoolean('yes'), true);
+  assert.equal(_test.toBoolean('off'), false);
+  assert.equal(_test.toBoolean({ value: 'on' }), true);
+  assert.equal(_test.toBoolean('maybe'), false);
 });
 
 test('SendTextMessage returns OK on HTTP 200', async () => {
@@ -128,12 +138,24 @@ test('SendTextMessage returns OK on HTTP 200', async () => {
   }))[METHOD_SEND_TEXT_PATH]();
 
   assert.equal(res.http_status, 200);
-  assert.equal(res.http_body, 'ok');
+  assert.equal(res.http_body, '');
   assert.equal(capturedInit.method, 'POST');
   assert.equal(capturedInit.headers['Content-Type'], 'application/json');
-  assert.equal(capturedInit.timeoutMs, 2000);
+  assert.ok(capturedInit.signal instanceof AbortSignal);
+  assert.equal(capturedInit.timeoutMs, undefined);
   assert.deepEqual(JSON.parse(capturedInit.body), { text: 'test message' });
   assert.match(logs.join('\n'), /\\*\\*\\*/); // webhook URL is redacted in logs
+  assert.doesNotMatch(logs.join('\n'), /T00\/B00\/xxxx/);
+});
+
+test('SendTextMessage rejects unsupported TLS skip bindings', async () => {
+  await assert.rejects(
+    () => rpcdef(buildCtx({
+      req: { message: 'test message' },
+      bindings: { tlsInsecureSkipVerify: true },
+    }))[METHOD_SEND_TEXT_PATH](),
+    (err) => err instanceof GrpcError && err.code === grpcStatus.INVALID_ARGUMENT && /skipTlsVerify is not supported/.test(err.message),
+  );
 });
 
 test('HTTP non-200 responses throw with HTTP details', async () => {
@@ -145,7 +167,8 @@ test('HTTP non-200 responses throw with HTTP details', async () => {
       assert.equal(err.code, grpcStatus.UNAVAILABLE);
       assert.equal(err.legacyCode, 'UNAVAILABLE');
       assert.equal(err.httpStatus, 400);
-      assert.equal(err.httpBody, 'invalid_payload');
+      assert.equal(err.httpBody, '');
+      assert.equal(err.httpBodyLength, 'invalid_payload'.length);
       return true;
     },
   );
@@ -155,7 +178,8 @@ test('HTTP non-200 responses throw with HTTP details', async () => {
     () => rpcdef(buildCtx({ req: { message: 'test' } }))[METHOD_SEND_TEXT_PATH](),
     (err) => {
       assert.equal(err.httpStatus, 500);
-      assert.equal(err.httpBody, 'server_error');
+      assert.equal(err.httpBody, '');
+      assert.equal(err.httpBodyLength, 'server_error'.length);
       return true;
     },
   );
@@ -179,7 +203,29 @@ test('network errors map to UNAVAILABLE with status 0', async () => {
   );
 });
 
-test('SDK handler merges config and accepts legacy aliases', async () => {
+test('response read errors map to UNAVAILABLE with sanitized details', async () => {
+  globalThis.fetch = async () => ({
+    status: 200,
+    text: async () => {
+      throw new Error('read failed');
+    },
+  });
+
+  await assert.rejects(
+    () => rpcdef(buildCtx({ req: { message: 'test' } }))[METHOD_SEND_TEXT_PATH](),
+    (err) => {
+      assert.equal(err.code, grpcStatus.UNAVAILABLE);
+      assert.equal(err.legacyCode, 'UNAVAILABLE');
+      assert.equal(err.httpStatus, 200);
+      assert.equal(err.httpBody, '');
+      assert.equal(err.httpBodyLength, 0);
+      assert.match(err.message, /read failed/);
+      return true;
+    },
+  );
+});
+
+test('SDK handler uses deprecated config webhook fallback when secret is absent', async () => {
   let capturedUrl = '';
   let capturedBody = '';
 
@@ -204,6 +250,34 @@ test('SDK handler merges config and accepts legacy aliases', async () => {
   assert.match(capturedUrl, /hooks\.slack\.com\/services\/T99\/B99\/token/);
   assert.equal(JSON.parse(capturedBody).text, 'legacy field');
   assert.ok(service);
+});
+
+test('ctx.secret webhook overrides deprecated config and bindings fallbacks', async () => {
+  let capturedUrl = '';
+
+  globalThis.fetch = async (url) => {
+    capturedUrl = url;
+    return mockResponse(200, 'ok');
+  };
+
+  const res = await handlers[METHOD_SEND_TEXT_FULL]({
+    bindings: {
+      webhook: 'https://hooks.slack.com/services/T77/B77/binding-token',
+    },
+    config: {
+      webhook: 'https://hooks.slack.com/services/T88/B88/config-token',
+    },
+    secret: {
+      webhook: 'https://hooks.slack.com/services/T99/B99/secret-token',
+    },
+    request: {
+      message: 'from secret',
+      webhook: 'https://hooks.slack.com/services/T00/B00/request-token',
+    },
+  });
+
+  assert.equal(res.http_status, 200);
+  assert.equal(capturedUrl, 'https://hooks.slack.com/services/T99/B99/secret-token');
 });
 
 test('logger handles circular references', () => {

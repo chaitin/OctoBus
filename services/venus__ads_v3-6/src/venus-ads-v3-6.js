@@ -1,4 +1,5 @@
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const METHOD_BATCH_BLOCK_PATH = '/Venus_ADS_V36.VenusADSBlacklistService/BatchBlockIP';
 export const METHOD_REMOVE_IP_PATH = '/Venus_ADS_V36.VenusADSBlacklistService/RemoveBlockedIP';
@@ -168,8 +169,10 @@ const resolveCallContext = (ctx = {}) => ({
   bindings: mergedBindings(ctx),
   limits: ctx.limits ?? {},
   meta: ctx.meta ?? {},
-  req: ctx.req ?? ctx.request ?? {},
+  req: ctx.request ?? ctx.req ?? {},
 });
+
+const requestFromContext = (ctx = {}) => ctx.request ?? ctx.req ?? {};
 
 const normalizeBaseUrl = (rawUrl) => {
   const value = pickFirstString([rawUrl]);
@@ -184,6 +187,16 @@ const resolveTimeoutMs = (ctx = {}) => optionalPositiveNumber(ctx.bindings?.time
   ?? DEFAULT_TIMEOUT_MS;
 
 const resolveSessionTimeoutSeconds = (bindings = {}) => optionalInt(bindings.sessionTimeoutSeconds) ?? DEFAULT_SESSION_TIMEOUT_SECONDS;
+
+const insecureTlsDispatcher = new Agent({ connect: { rejectUnauthorized: false } });
+
+const buildTlsOptions = (env = {}) => (env.skipTlsVerify ? { dispatcher: insecureTlsDispatcher } : {});
+
+const makeTimeoutSignal = (timeoutMs) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  return { signal: controller.signal, clear: () => clearTimeout(timeoutId) };
+};
 
 const buildEnv = (ctx = {}) => {
   const callCtx = resolveCallContext(ctx);
@@ -243,17 +256,16 @@ const requestDevice = async (env, options) => {
     ...(options.headers || {}),
   };
   if (token) headers.Authorization = `Bearer ${token}`;
-  const fetchOptions = { method, headers, timeoutMs: env.timeoutMs };
+  const timeout = makeTimeoutSignal(env.timeoutMs);
+  const fetchOptions = { method, headers, signal: timeout.signal, ...buildTlsOptions(env) };
   if (body !== undefined) fetchOptions.body = typeof body === 'string' ? body : JSON.stringify(body);
-  if (env.skipTlsVerify) {
-    fetchOptions.insecureSkipVerify = true;
-    fetchOptions.tlsInsecureSkipVerify = true;
-  }
   let response;
   try {
     response = await fetch(`${env.baseUrl}${path}`, fetchOptions);
   } catch (err) {
     throw errorWithCode('UNAVAILABLE', `${action} failed: ${err?.cause?.message || err?.message || 'fetch failed'}`);
+  } finally {
+    timeout.clear();
   }
   const text = await response.text();
   if (!response.ok) throw errorWithCode(mapHttpStatus(response.status), `${action} upstream http ${response.status}: ${text}`);
@@ -394,13 +406,14 @@ export function rpcdef(ctx = {}) {
 }
 
 export const handlers = {
-  [METHOD_BATCH_BLOCK_FULL]: (req, ctx = {}) => runBatchBlock(req, ctx),
-  [METHOD_REMOVE_IP_FULL]: (req, ctx = {}) => runRemove(req, ctx),
+  [METHOD_BATCH_BLOCK_FULL]: (ctx = {}) => runBatchBlock(requestFromContext(ctx), ctx),
+  [METHOD_REMOVE_IP_FULL]: (ctx = {}) => runRemove(requestFromContext(ctx), ctx),
 };
 
 export const _test = {
   buildEnv,
   buildLogger,
+  buildTlsOptions,
   deriveStatus,
   errorWithCode,
   executeBatchBlock,
@@ -408,11 +421,13 @@ export const _test = {
   extractRequestId,
   grpcCodeFor,
   hasOwn,
+  insecureTlsDispatcher,
   isBlockSuccess,
   isPlainObject,
   isRemoveSuccess,
   login,
   logout,
+  makeTimeoutSignal,
   mapHttpStatus,
   maskToken,
   normalizeBaseUrl,

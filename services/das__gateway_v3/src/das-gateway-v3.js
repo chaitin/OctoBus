@@ -5,6 +5,7 @@ export const BLOCK_IP_PATH = '/DAS_Gateway_V3.DAS_Gateway_V3/BlockIP';
 export const UNBLOCK_IP_PATH = '/DAS_Gateway_V3.DAS_Gateway_V3/UnblockIP';
 export const METHOD_BLOCK_IP_FULL = 'DAS_Gateway_V3.DAS_Gateway_V3/BlockIP';
 export const METHOD_UNBLOCK_IP_FULL = 'DAS_Gateway_V3.DAS_Gateway_V3/UnblockIP';
+let insecureDispatcherPromise;
 
 const grpcCodeFor = (code) => ({
   FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
@@ -39,6 +40,42 @@ const stripTrailingSlash = (value) => trimString(value).replace(/\/$/, '');
 const normalizeTimeoutMs = (value) => {
   const num = Number(unwrapValue(value));
   return Number.isFinite(num) && num > 0 ? num : DEFAULT_TIMEOUT_MS;
+};
+
+const createTlsDispatcher = async (skipTlsVerify) => {
+  if (!skipTlsVerify) return undefined;
+  insecureDispatcherPromise ??= import('undici').then(({ Agent }) => new Agent({
+    connect: { rejectUnauthorized: false },
+  }));
+  return insecureDispatcherPromise;
+};
+
+const fetchWithTimeout = async (url, init = {}, options = {}) => {
+  const timeoutMs = normalizeTimeoutMs(options.timeoutMs);
+  const controller = new AbortController();
+  const parentSignal = init.signal;
+  const abortFromParent = () => controller.abort(parentSignal.reason);
+  if (parentSignal) {
+    if (parentSignal.aborted) {
+      controller.abort(parentSignal.reason);
+    } else if (typeof parentSignal.addEventListener === 'function') {
+      parentSignal.addEventListener('abort', abortFromParent, { once: true });
+    }
+  }
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const dispatcher = await createTlsDispatcher(options.skipTlsVerify);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+      ...(dispatcher ? { dispatcher } : {}),
+    });
+  } finally {
+    clearTimeout(timer);
+    if (parentSignal && typeof parentSignal.removeEventListener === 'function') {
+      parentSignal.removeEventListener('abort', abortFromParent);
+    }
+  }
 };
 
 const mergedBindings = (ctx = {}) => ({
@@ -137,9 +174,9 @@ const parseResponseText = async (res, context) => {
   }
 };
 
-const fetchDevice = async (url, init, errorContext) => {
+const fetchDevice = async (url, init, options, errorContext) => {
   try {
-    return await fetch(url, init);
+    return await fetchWithTimeout(url, init, options);
   } catch (err) {
     throw errorWithCode('UNAVAILABLE', `连接设备失败: ${err.message}`, errorContext);
   }
@@ -180,9 +217,7 @@ const blockIpForContext = (ctx) => async (request = {}) => {
       Authorization: getAuthHeader(config),
     },
     body: JSON.stringify(body),
-    timeoutMs: config.timeoutMs,
-    tlsInsecureSkipVerify: true,
-  }, { ips, operation: 'BlockIP' });
+  }, { timeoutMs: config.timeoutMs, skipTlsVerify: true }, { ips, operation: 'BlockIP' });
   const { text, json } = await parseResponseText(res, { ips, operation: 'BlockIP' });
   const isAlreadyExists = json && typeof json.msg === 'string' && json.msg.includes('已存在');
 
@@ -228,9 +263,7 @@ const unblockIpForContext = (ctx) => async (request = {}) => {
       Authorization: getAuthHeader(config),
     },
     body: '{}',
-    timeoutMs: config.timeoutMs,
-    tlsInsecureSkipVerify: true,
-  }, { ip, operation: 'UnblockIP' });
+  }, { timeoutMs: config.timeoutMs, skipTlsVerify: true }, { ip, operation: 'UnblockIP' });
   const { text, json } = await parseResponseText(res, { ip, operation: 'UnblockIP' });
   const code = json && json.code;
 
@@ -280,7 +313,9 @@ export const handlers = {
 export const _test = {
   base64Encode,
   blockIpForContext,
+  createTlsDispatcher,
   errorWithCode,
+  fetchWithTimeout,
   fetchDevice,
   getAuthHeader,
   getConfig,

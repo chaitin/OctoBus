@@ -19,6 +19,7 @@ export const DEFAULT_PER_PAGE = 20;
 export const MAX_PER_PAGE = 100;
 export const DEFAULT_KBN_VERSION = '7.17.26';
 export const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD']);
+let insecureDispatcherPromise;
 
 const grpcCodeFor = (code) => ({
   FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
@@ -87,14 +88,48 @@ const resolveTimeoutMs = (ctx = {}) => {
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;
 };
 
-const buildTlsOptions = (bindings = {}) => {
-  const enabled = Boolean(bindings.skipTlsVerify || bindings.tlsInsecureSkipVerify || bindings.insecureSkipVerify);
-  if (!enabled) return {};
-  return {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  };
+const shouldSkipTlsVerify = (bindings = {}) => Boolean(bindings.skipTlsVerify || bindings.tlsInsecureSkipVerify || bindings.insecureSkipVerify);
+
+const createTlsDispatcher = async (skipTlsVerify) => {
+  if (!skipTlsVerify) return undefined;
+  insecureDispatcherPromise ??= import('undici').then(({ Agent }) => new Agent({
+    connect: { rejectUnauthorized: false },
+  }));
+  return insecureDispatcherPromise;
+};
+
+const buildTlsOptions = async (bindings = {}) => {
+  const dispatcher = await createTlsDispatcher(shouldSkipTlsVerify(bindings));
+  return dispatcher ? { dispatcher } : {};
+};
+
+const fetchWithTimeout = async (url, init = {}, options = {}) => {
+  const rawTimeout = Number(options.timeoutMs);
+  const timeoutMs = Number.isFinite(rawTimeout) && rawTimeout > 0 ? rawTimeout : DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const parentSignal = init.signal;
+  const abortFromParent = () => controller.abort(parentSignal.reason);
+  if (parentSignal) {
+    if (parentSignal.aborted) {
+      controller.abort(parentSignal.reason);
+    } else if (typeof parentSignal.addEventListener === 'function') {
+      parentSignal.addEventListener('abort', abortFromParent, { once: true });
+    }
+  }
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const tlsOptions = await buildTlsOptions(options.bindings);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+      ...tlsOptions,
+    });
+  } finally {
+    clearTimeout(timer);
+    if (parentSignal && typeof parentSignal.removeEventListener === 'function') {
+      parentSignal.removeEventListener('abort', abortFromParent);
+    }
+  }
 };
 
 const requireEndpoint = (ctx = {}) => {
@@ -216,13 +251,11 @@ const fetchKibana = async (url, ctx = {}, options = {}) => {
   const body = method === 'GET' || method === 'HEAD' ? undefined : toTrimmedString(options.body);
   let res;
   try {
-    res = await fetch(url, {
+    res = await fetchWithTimeout(url, {
       method,
       headers: buildHeaders(bindings, options.headers, body !== undefined && body !== ''),
       ...(body !== undefined && body !== '' ? { body } : {}),
-      timeoutMs,
-      ...buildTlsOptions(bindings),
-    });
+    }, { timeoutMs, bindings });
   } catch (err) {
     return { httpStatus: 0, httpBody: err?.cause?.message || err?.message || 'fetch failed' };
   }
@@ -240,12 +273,13 @@ const fetchKibana = async (url, ctx = {}, options = {}) => {
 const returnOrThrow = async (url, ctx, options = {}) => {
   const { httpStatus, httpBody, responseHeadersJSON = '{}' } = await fetchKibana(url, ctx, options);
   if (httpStatus >= 200 && httpStatus < 300) {
-    return { http_status: httpStatus, http_body: httpBody, response_headers_json: responseHeadersJSON };
+    return { http_status: httpStatus, http_body: '', response_headers_json: responseHeadersJSON };
   }
   const code = mapHttpStatusToCode(httpStatus);
-  throw attachResponse(errorWithCode(code, `upstream http ${httpStatus}: ${httpBody}`), {
+  throw attachResponse(errorWithCode(code, `upstream http ${httpStatus}`), {
     http_status: httpStatus,
-    http_body: httpBody,
+    http_body: '',
+    http_body_length: String(httpBody ?? '').length,
     response_headers_json: responseHeadersJSON,
   });
 };
@@ -348,8 +382,10 @@ export const _test = {
   buildApiUrl,
   buildHeaders,
   buildTlsOptions,
+  createTlsDispatcher,
   encodeQueryPairs,
   errorWithCode,
+  fetchWithTimeout,
   fetchKibana,
   firstDefined,
   grpcCodeFor,
@@ -378,6 +414,7 @@ export const _test = {
   resolveTimeoutMs,
   resolveUsername,
   returnOrThrow,
+  shouldSkipTlsVerify,
   toTrimmedString,
   unwrapScalar,
 };

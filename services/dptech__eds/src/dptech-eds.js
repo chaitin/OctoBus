@@ -43,6 +43,7 @@ export const FAILURE_CATEGORY = {
   UPSTREAM_UNAVAILABLE: 'FAILURE_CATEGORY_UPSTREAM_UNAVAILABLE',
   RESPONSE_REJECTED: 'FAILURE_CATEGORY_RESPONSE_REJECTED',
 };
+let insecureDispatcherPromise;
 
 const NOT_FOUND_REGEX = /(not\s*(found|exist)|不存在)/i;
 
@@ -286,6 +287,42 @@ const normalizeTimeoutMs = (raw) => {
   return Number.isFinite(num) && num > 0 ? num : DEFAULT_TIMEOUT_MS;
 };
 
+const createTlsDispatcher = async (skipTlsVerify) => {
+  if (!skipTlsVerify) return undefined;
+  insecureDispatcherPromise ??= import('undici').then(({ Agent }) => new Agent({
+    connect: { rejectUnauthorized: false },
+  }));
+  return insecureDispatcherPromise;
+};
+
+const fetchWithTimeout = async (url, init = {}, options = {}) => {
+  const timeoutMs = normalizeTimeoutMs(options.timeoutMs);
+  const controller = new AbortController();
+  const parentSignal = init.signal;
+  const abortFromParent = () => controller.abort(parentSignal.reason);
+  if (parentSignal) {
+    if (parentSignal.aborted) {
+      controller.abort(parentSignal.reason);
+    } else if (typeof parentSignal.addEventListener === 'function') {
+      parentSignal.addEventListener('abort', abortFromParent, { once: true });
+    }
+  }
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const dispatcher = await createTlsDispatcher(options.skipTlsVerify);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+      ...(dispatcher ? { dispatcher } : {}),
+    });
+  } finally {
+    clearTimeout(timer);
+    if (parentSignal && typeof parentSignal.removeEventListener === 'function') {
+      parentSignal.removeEventListener('abort', abortFromParent);
+    }
+  }
+};
+
 const fetchDptech = async (config, request, log) => {
   const url = `${config.baseUrl}${request.path}`;
   const bodyString = request.body ? JSON.stringify(request.body) : undefined;
@@ -299,13 +336,6 @@ const fetchDptech = async (config, request, log) => {
     method: request.method,
     headers,
     body: bodyString,
-    timeoutMs: config.timeoutMs,
-    ...(config.skipTlsVerify
-      ? {
-          insecureSkipVerify: true,
-          tlsInsecureSkipVerify: true,
-        }
-      : {}),
   };
 
   log('request', {
@@ -320,7 +350,10 @@ const fetchDptech = async (config, request, log) => {
 
   let res;
   try {
-    res = await fetch(url, options);
+    res = await fetchWithTimeout(url, options, {
+      timeoutMs: config.timeoutMs,
+      skipTlsVerify: config.skipTlsVerify,
+    });
   } catch (err) {
     const reason = err?.message || 'fetch failed';
     log('failure', {
@@ -681,11 +714,13 @@ export const _test = {
   buildResult,
   classifyIpList,
   coerceString,
+  createTlsDispatcher,
   createLogger,
   detectIpVersion,
   encodeUtf8,
   errorWithCode,
   executeIpTask,
+  fetchWithTimeout,
   fetchDptech,
   firstDefined,
   handleOperation,

@@ -1,0 +1,23 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "ruijie-behavior-firewall-r2-3-2-t0",
+  "displayName": "Ruijie Behavior Firewall R2.3.2.t0",
+  "description": "OctoBus service for Ruijie behavior management and firewall API sections 4.6, 4.10, and 5.1.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/ruijie_behavior_firewall_r232t0.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Ruijie_Behavior_Firewall_R232T0.RuijieBehaviorFirewallR232T0/ListSafePolicies": { "name": "list-safe-policies", "description": "List legacy safe policies." },
+        "Ruijie_Behavior_Firewall_R232T0.RuijieBehaviorFirewallR232T0/GetDdosLogs": { "name": "get-ddos-logs", "description": "Query DOS/DDOS security protection logs." }
+      }
+    }
+  }
+}

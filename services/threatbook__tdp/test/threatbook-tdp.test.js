@@ -33,6 +33,12 @@ const setFetch = (impl) => {
   globalThis.fetch = impl;
 };
 
+const abortingFetch = (message = 'request aborted') => (_url, init) => new Promise((resolve, reject) => {
+  const abort = () => reject(new Error(message));
+  if (init.signal?.aborted) abort();
+  else init.signal?.addEventListener('abort', abort, { once: true });
+});
+
 const buildCtx = (overrides = {}) => ({
   config: {
     restBaseUrl: 'https://tdp.example.com',
@@ -51,6 +57,11 @@ const buildCtx = (overrides = {}) => ({
   meta: { instance_id: 'inst', request_id: 'req', ...(overrides.meta || {}) },
   req: overrides.req || {},
 });
+
+const callHandler = (method, request = {}, ctx = {}) => {
+  const handler = handlers[method];
+  return handler({ ...ctx, request });
+};
 
 const expectGrpcError = async (fn, legacyCode, checker = () => {}) => {
   let caught;
@@ -99,7 +110,7 @@ test('BlockDomain signs URL and sends add payload with explicit remark', async (
     });
   });
 
-  const result = await handlers[METHOD_BLOCK_DOMAIN_FULL](
+  const result = await callHandler(METHOD_BLOCK_DOMAIN_FULL,
     { ioc_list: ['bad.example', { value: 'evil.example' }], remark: { value: 'manual' } },
     buildCtx({ bindings: { skipTlsVerify: true } }),
   );
@@ -116,10 +127,12 @@ test('BlockDomain signs URL and sends add payload with explicit remark', async (
   assert.equal(url.searchParams.get('auth_timestamp'), '1700000000');
   assert.equal(url.searchParams.get('sign'), expectedSign);
   assert.equal(captured.init.method, 'POST');
-  assert.equal(captured.init.timeoutMs, 3000);
-  assert.equal(captured.init.insecureSkipVerify, true);
-  assert.equal(captured.init.tlsInsecureSkipVerify, true);
-  assert.equal(captured.init.skipTlsVerify, true);
+  assert.ok(captured.init.signal instanceof AbortSignal);
+  assert.equal(captured.init.timeoutMs, undefined);
+  assert.equal(captured.init.dispatcher, _test.insecureTlsDispatcher);
+  assert.equal(captured.init.insecureSkipVerify, undefined);
+  assert.equal(captured.init.tlsInsecureSkipVerify, undefined);
+  assert.equal(captured.init.skipTlsVerify, undefined);
   assert.equal(captured.init.headers['Content-Type'], 'application/json;charset=UTF-8');
   assert.equal(captured.init.headers['X-Product'], 'miner');
   assert.deepEqual(captured.body, {
@@ -139,7 +152,7 @@ test('UnblockDomain sends delete payload and default remark', async () => {
     return response(201, { response_code: 0, response_message: 'Success', data: { operated_count: 1 } });
   });
 
-  const result = await handlers[METHOD_UNBLOCK_DOMAIN_FULL](
+  const result = await callHandler(METHOD_UNBLOCK_DOMAIN_FULL,
     { iocList: { values: ['bad.example'] } },
     buildCtx({ config: { restBaseUrl: undefined, baseUrl: ' http://tdp.local/ ' }, secret: { api_key: undefined, apiKey: 'test_api_key' } }),
   );
@@ -163,27 +176,27 @@ test('default remark includes count for multiple domains', () => {
 
 test('validates bindings and ioc list', async () => {
   await expectGrpcError(
-    () => handlers[METHOD_BLOCK_DOMAIN_FULL]({ ioc_list: ['a.com'] }, buildCtx({ config: { restBaseUrl: '' } })),
+    () => callHandler(METHOD_BLOCK_DOMAIN_FULL, { ioc_list: ['a.com'] }, buildCtx({ config: { restBaseUrl: '' } })),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /restBaseUrl/),
   );
   await expectGrpcError(
-    () => handlers[METHOD_BLOCK_DOMAIN_FULL]({ ioc_list: ['a.com'] }, buildCtx({ secret: { api_key: '' } })),
+    () => callHandler(METHOD_BLOCK_DOMAIN_FULL, { ioc_list: ['a.com'] }, buildCtx({ secret: { api_key: '' } })),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /api_key/),
   );
   await expectGrpcError(
-    () => handlers[METHOD_BLOCK_DOMAIN_FULL]({ ioc_list: ['a.com'] }, buildCtx({ secret: { secret: '' } })),
+    () => callHandler(METHOD_BLOCK_DOMAIN_FULL, { ioc_list: ['a.com'] }, buildCtx({ secret: { secret: '' } })),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /secret/),
   );
   await expectGrpcError(
-    () => handlers[METHOD_BLOCK_DOMAIN_FULL]({}, buildCtx()),
+    () => callHandler(METHOD_BLOCK_DOMAIN_FULL, {}, buildCtx()),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /ioc_list/),
   );
   await expectGrpcError(
-    () => handlers[METHOD_BLOCK_DOMAIN_FULL]({ ioc_list: ['', ' '] }, buildCtx()),
+    () => callHandler(METHOD_BLOCK_DOMAIN_FULL, { ioc_list: ['', ' '] }, buildCtx()),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /ioc_list/),
   );
@@ -194,15 +207,15 @@ test('maps upstream transport and response failures', async () => {
     throw Object.assign(new Error('outer'), { cause: new Error('connection refused') });
   });
   await expectGrpcError(
-    () => handlers[METHOD_BLOCK_DOMAIN_FULL]({ ioc_list: ['a.com'] }, buildCtx()),
+    () => callHandler(METHOD_BLOCK_DOMAIN_FULL, { ioc_list: ['a.com'] }, buildCtx()),
     'UNAVAILABLE',
     (err) => assert.match(err.message, /connection refused/),
   );
 
-  for (const [status, legacyCode] of [[401, 'PERMISSION_DENIED'], [403, 'PERMISSION_DENIED'], [400, 'FAILED_PRECONDITION'], [500, 'UNAVAILABLE'], [302, 'UNAVAILABLE']]) {
+  for (const [status, legacyCode] of [[401, 'PERMISSION_DENIED'], [403, 'PERMISSION_DENIED'], [400, 'FAILED_PRECONDITION'], [404, 'FAILED_PRECONDITION'], [429, 'FAILED_PRECONDITION'], [500, 'UNAVAILABLE'], [302, 'UNAVAILABLE']]) {
     setFetch(async () => response(status, `status-${status}`));
     await expectGrpcError(
-      () => handlers[METHOD_BLOCK_DOMAIN_FULL]({ ioc_list: ['a.com'] }, buildCtx()),
+      () => callHandler(METHOD_BLOCK_DOMAIN_FULL, { ioc_list: ['a.com'] }, buildCtx()),
       legacyCode,
       (err) => assert.match(err.message, new RegExp(`upstream http ${status}`)),
     );
@@ -210,7 +223,7 @@ test('maps upstream transport and response failures', async () => {
 
   setFetch(async () => response(200, 'NOT_A_JSON!'));
   await expectGrpcError(
-    () => handlers[METHOD_BLOCK_DOMAIN_FULL]({ ioc_list: ['a.com'] }, buildCtx()),
+    () => callHandler(METHOD_BLOCK_DOMAIN_FULL, { ioc_list: ['a.com'] }, buildCtx()),
     'UNKNOWN',
     (err) => assert.match(err.message, /valid JSON/),
   );
@@ -222,15 +235,68 @@ test('maps upstream transport and response failures', async () => {
     },
   }));
   await expectGrpcError(
-    () => handlers[METHOD_BLOCK_DOMAIN_FULL]({ ioc_list: ['a.com'] }, buildCtx()),
+    () => callHandler(METHOD_BLOCK_DOMAIN_FULL, { ioc_list: ['a.com'] }, buildCtx()),
     'UNAVAILABLE',
     (err) => assert.match(err.message, /read failed/),
   );
+
+  setFetch(abortingFetch('timeout waiting for test_api_key'));
+  await expectGrpcError(
+    () => callHandler(METHOD_BLOCK_DOMAIN_FULL, { ioc_list: ['a.com'] }, buildCtx({ limits: { timeoutMs: 1 } })),
+    'UNAVAILABLE',
+    (err) => {
+      assert.match(err.message, /timeout/);
+      assert.doesNotMatch(err.message, /test_api_key/);
+    },
+  );
+});
+
+test('maps successful HTTP business errors', async () => {
+  setFetch(async () => response(200, { response_code: -1, response_message: 'bad test_api_key' }));
+  await expectGrpcError(
+    () => callHandler(METHOD_BLOCK_DOMAIN_FULL, { ioc_list: ['a.com'] }, buildCtx()),
+    'FAILED_PRECONDITION',
+    (err) => {
+      assert.match(err.message, /response_code=-1/);
+      assert.doesNotMatch(err.message, /test_api_key/);
+    },
+  );
+});
+
+test('request cannot override secrets and logs/errors redact API key material', async () => {
+  fixedNow();
+  const logs = [];
+  let capturedUrl;
+  console.log = (...args) => logs.push(args.map((arg) => String(arg)).join(' '));
+  setFetch(async (url) => {
+    capturedUrl = String(url);
+    const parsed = new URL(capturedUrl);
+    return response(403, `api_key=test_api_key&sign=${parsed.searchParams.get('sign')}&secret=test_secret`);
+  });
+
+  await expectGrpcError(
+    () => callHandler(METHOD_BLOCK_DOMAIN_FULL, {
+      ioc_list: ['a.com'],
+      api_key: 'request_key',
+      apiKey: 'request_key',
+      secret: 'request_secret',
+    }, buildCtx()),
+    'PERMISSION_DENIED',
+    (err) => {
+      assert.match(err.message, /upstream http 403/);
+      assert.doesNotMatch(err.message, /test_api_key|test_secret|request_key|request_secret/);
+    },
+  );
+
+  const url = new URL(capturedUrl);
+  assert.equal(url.searchParams.get('api_key'), 'test_api_key');
+  assert.ok(url.searchParams.get('sign'));
+  assert.doesNotMatch(logs.join('\n'), /test_api_key|test_secret|request_key|request_secret/);
 });
 
 test('success with empty body returns null data', async () => {
   setFetch(async () => response(204, ''));
-  const result = await handlers[METHOD_BLOCK_DOMAIN_FULL]({ ioc_list: ['a.com'] }, buildCtx());
+  const result = await callHandler(METHOD_BLOCK_DOMAIN_FULL, { ioc_list: ['a.com'] }, buildCtx());
   assert.deepEqual(result, { data: null });
 });
 
@@ -259,6 +325,7 @@ test('helper functions cover normalization, signing, values, and logging branche
   assert.equal(_test.toBoolean('yes'), true);
   assert.equal(_test.toBoolean('off'), false);
   assert.equal(_test.toBoolean('maybe'), false);
+  assert.equal(_test.sanitizeSensitiveText('api_key=key&sign=s body secret', ['secret']), 'api_key=***&sign=*** body ***');
   assert.deepEqual(_test.mergedBindings({ config: { a: 1 }, secret: { b: 2 }, bindings: { a: 3 } }), { a: 3, b: 2 });
   assert.deepEqual(_test.resolveCallContext({ request: { ioc_list: ['a'] } }).req, { ioc_list: ['a'] });
   assert.equal(_test.resolveTimeoutMs({ limits: { timeoutMs: 'bad' }, bindings: { timeoutMs: 10 } }), 2000);
@@ -294,21 +361,21 @@ test('mock upstream handles block, unblock, and failure cases', async () => {
   const server = await createMockServer();
   try {
     const ctx = buildCtx({ config: { restBaseUrl: server.url } });
-    const block = await handlers[METHOD_BLOCK_DOMAIN_FULL]({ ioc_list: ['test.com', 'test2.com'], remark: 'Test Block' }, ctx);
-    const unblock = await handlers[METHOD_UNBLOCK_DOMAIN_FULL]({ ioc_list: ['test.com'] }, ctx);
+    const block = await callHandler(METHOD_BLOCK_DOMAIN_FULL, { ioc_list: ['test.com', 'test2.com'], remark: 'Test Block' }, ctx);
+    const unblock = await callHandler(METHOD_UNBLOCK_DOMAIN_FULL, { ioc_list: ['test.com'] }, ctx);
     assert.deepEqual(block.data.structValue.fields.data.structValue.fields.operated_count, { numberValue: 2 });
     assert.deepEqual(unblock.data.structValue.fields.data.structValue.fields.operate, { stringValue: 'delete' });
     assert.equal(server.requests[0].body.operate, 'add');
     assert.equal(server.requests[1].body.operate, 'delete');
 
-    await expectGrpcError(() => handlers[METHOD_BLOCK_DOMAIN_FULL]({ ioc_list: ['400.com'] }, ctx), 'FAILED_PRECONDITION');
-    await expectGrpcError(() => handlers[METHOD_BLOCK_DOMAIN_FULL]({ ioc_list: ['500.com'] }, ctx), 'UNAVAILABLE');
-    await expectGrpcError(() => handlers[METHOD_BLOCK_DOMAIN_FULL]({ ioc_list: ['badjson.com'] }, ctx), 'UNKNOWN');
+    await expectGrpcError(() => callHandler(METHOD_BLOCK_DOMAIN_FULL, { ioc_list: ['400.com'] }, ctx), 'FAILED_PRECONDITION');
+    await expectGrpcError(() => callHandler(METHOD_BLOCK_DOMAIN_FULL, { ioc_list: ['500.com'] }, ctx), 'UNAVAILABLE');
+    await expectGrpcError(() => callHandler(METHOD_BLOCK_DOMAIN_FULL, { ioc_list: ['badjson.com'] }, ctx), 'UNKNOWN');
     await expectGrpcError(
-      () => handlers[METHOD_BLOCK_DOMAIN_FULL]({ ioc_list: ['test.com'] }, buildCtx({ config: { restBaseUrl: server.url }, secret: { api_key: 'wrong_key' } })),
+      () => callHandler(METHOD_BLOCK_DOMAIN_FULL, { ioc_list: ['test.com'] }, buildCtx({ config: { restBaseUrl: server.url }, secret: { api_key: 'wrong_key' } })),
       'PERMISSION_DENIED',
     );
-    const empty = await handlers[METHOD_BLOCK_DOMAIN_FULL]({ ioc_list: ['empty.com'] }, ctx);
+    const empty = await callHandler(METHOD_BLOCK_DOMAIN_FULL, { ioc_list: ['empty.com'] }, ctx);
     assert.deepEqual(empty, { data: null });
   } finally {
     await server.close();

@@ -6,6 +6,9 @@ It targets Alibaba Cloud SWAS OpenAPI `2020-06-01` through `@alicloud/swas-open2
 
 ## Supported Product
 
+- Service name: `alibaba-cloud-simple-application-server-firewall`
+- Service dir: `alibaba-cloud__simple-application-server-firewall`
+- Runtime mode: `long-running`
 - Vendor: Alibaba Cloud
 - Product: Simple Application Server
 - Capability: instance firewall rule management
@@ -78,7 +81,7 @@ Responses expose:
 - Alibaba Cloud `request_id`
 - created `firewall_rule_id` or `firewall_rule_ids`
 - normalized firewall rule fields from list responses
-- `raw_json` for the upstream response body
+- `raw_json` is intentionally empty; upstream raw response bodies are not returned
 
 The optional live evidence test writes redacted request IDs and masked rule IDs only. It must not include credentials or business-sensitive data.
 

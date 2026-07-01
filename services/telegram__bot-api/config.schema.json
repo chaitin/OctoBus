@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "base_url": {
+      "type": "string",
+      "default": "https://api.telegram.org",
+      "description": "Telegram Bot API base URL."
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "Alias for base_url."
+    },
+    "chat_id": {
+      "type": "string",
+      "description": "Default Telegram chat ID used by SendMessage when request.chat_id is omitted."
+    },
+    "chatId": {
+      "type": "string",
+      "description": "Alias for chat_id."
+    },
+    "parse_mode": {
+      "type": "string",
+      "description": "Default parse mode, such as HTML or MarkdownV2."
+    },
+    "parseMode": {
+      "type": "string",
+      "description": "Alias for parse_mode."
+    },
+    "disable_web_page_preview": {
+      "type": "boolean",
+      "description": "Default link preview toggle for SendMessage."
+    },
+    "disableWebPagePreview": {
+      "type": "boolean",
+      "description": "Alias for disable_web_page_preview."
+    },
+    "proxy_url": {
+      "type": "string",
+      "description": "Optional HTTP/SOCKS proxy URL, for example socks5h://127.0.0.1:10808."
+    },
+    "proxyUrl": {
+      "type": "string",
+      "description": "Alias for proxy_url."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "timeout_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Alias for timeoutMs."
+    }
+  }
+}

@@ -17,12 +17,14 @@ const originalConsoleLog = console.log;
 
 const buildCtx = (overrides = {}) => ({
   bindings: {
-    webhook: 'http://localhost:18080/open-apis/bot/v2/hook/test-token',
     headers: {},
     ...(overrides.bindings || {}),
   },
   config: overrides.config || {},
-  secret: overrides.secret || {},
+  secret: {
+    webhook: 'http://localhost:18080/open-apis/bot/v2/hook/test-token',
+    ...(overrides.secret || {}),
+  },
   limits: { timeoutMs: 10_000, ...(overrides.limits || {}) },
   meta: { instance_id: 'inst', request_id: 'req', ...(overrides.meta || {}) },
   req: overrides.req || {},
@@ -40,7 +42,7 @@ test.afterEach(() => {
 
 test('SendTextMessage requires webhook binding and message', async () => {
   await assert.rejects(
-    () => rpcdef(buildCtx({ bindings: { webhook: '' }, req: { message: 'test' } }))[METHOD_SEND_TEXT_PATH](),
+    () => rpcdef(buildCtx({ secret: { webhook: '' }, req: { message: 'test' } }))[METHOD_SEND_TEXT_PATH](),
     (err) => {
       assert.ok(err instanceof GrpcError);
       assert.equal(err.code, grpcStatus.INVALID_ARGUMENT);
@@ -50,11 +52,11 @@ test('SendTextMessage requires webhook binding and message', async () => {
     },
   );
   await assert.rejects(
-    () => rpcdef(buildCtx({ bindings: { webhook: 'invalid-url' }, req: { message: 'test' } }))[METHOD_SEND_TEXT_PATH](),
+    () => rpcdef(buildCtx({ secret: { webhook: 'invalid-url' }, req: { message: 'test' } }))[METHOD_SEND_TEXT_PATH](),
     /webhook is required/,
   );
   await assert.rejects(
-    () => rpcdef(buildCtx({ bindings: { webhook: '   ' }, req: { message: 'test' } }))[METHOD_SEND_TEXT_PATH](),
+    () => rpcdef(buildCtx({ secret: { webhook: '   ' }, req: { message: 'test' } }))[METHOD_SEND_TEXT_PATH](),
     /webhook is required/,
   );
   await assert.rejects(
@@ -80,7 +82,8 @@ test('SendTextMessage sends correct payload and returns status 200 response', as
 
   assert.equal(captured.url, 'http://localhost:18080/open-apis/bot/v2/hook/test-token');
   assert.equal(captured.init.method, 'POST');
-  assert.equal(captured.init.timeoutMs, 10_000);
+  assert.ok(captured.init.signal instanceof AbortSignal);
+  assert.equal(captured.init.timeoutMs, undefined);
   assert.equal(captured.init.headers['Content-Type'], 'application/json');
   assert.equal(captured.init.headers['User-Agent'], 'chaitin-cosmos');
   assert.equal(captured.init.headers['x-engine-instance'], 'inst');
@@ -90,20 +93,21 @@ test('SendTextMessage sends correct payload and returns status 200 response', as
     content: { text: 'test message' },
   });
   assert.equal(res.http_status, 200);
-  assert.equal(JSON.parse(res.http_body).StatusCode, 0);
+  assert.equal(res.http_body, '');
   assert.match(logs.join('\n'), /\/hook\/\*\*\*/);
+  assert.doesNotMatch(logs.join('\n'), /test-token/);
 });
 
 test('SendTextMessage accepts status 209 and 210 as success', async () => {
   globalThis.fetch = async () => mockResponse(209, { StatusCode: 0, StatusMessage: 'success with 209' });
   const res209 = await rpcdef(buildCtx({ req: { message: 'test' } }))[METHOD_SEND_TEXT_PATH]();
   assert.equal(res209.http_status, 209);
-  assert.match(res209.http_body, /success with 209/);
+  assert.equal(res209.http_body, '');
 
   globalThis.fetch = async () => mockResponse(210, { StatusCode: 0, StatusMessage: 'success with 210' });
   const res210 = await rpcdef(buildCtx({ req: { message: 'test' } }))[METHOD_SEND_TEXT_PATH]();
   assert.equal(res210.http_status, 210);
-  assert.match(res210.http_body, /success with 210/);
+  assert.equal(res210.http_body, '');
 });
 
 test('SendTextMessage rejects non-success HTTP statuses', async () => {
@@ -124,12 +128,12 @@ test('SendTextMessage rejects non-success HTTP statuses', async () => {
 test('business error and non-JSON body are preserved on successful HTTP status', async () => {
   globalThis.fetch = async () => mockResponse(200, { StatusCode: 10003, StatusMessage: 'token is invalid' });
   const businessRes = await rpcdef(buildCtx({ req: { message: 'test' } }))[METHOD_SEND_TEXT_PATH]();
-  assert.equal(JSON.parse(businessRes.http_body).StatusCode, 10003);
+  assert.equal(businessRes.http_body, '');
 
   globalThis.fetch = async () => mockResponse(200, 'OK');
   const textRes = await rpcdef(buildCtx({ req: { message: 'test' } }))[METHOD_SEND_TEXT_PATH]();
   assert.equal(textRes.http_status, 200);
-  assert.equal(textRes.http_body, 'OK');
+  assert.equal(textRes.http_body, '');
 });
 
 test('network failures map to UNAVAILABLE', async () => {
@@ -150,6 +154,28 @@ test('network failures map to UNAVAILABLE', async () => {
   );
 });
 
+test('response read failures map to UNAVAILABLE with sanitized details', async () => {
+  globalThis.fetch = async () => ({
+    status: 200,
+    text: async () => {
+      throw new Error('read failed');
+    },
+  });
+
+  await assert.rejects(
+    () => rpcdef(buildCtx({ req: { message: 'test' } }))[METHOD_SEND_TEXT_PATH](),
+    (err) => {
+      assert.equal(err.code, grpcStatus.UNAVAILABLE);
+      assert.equal(err.legacyCode, 'UNAVAILABLE');
+      assert.equal(err.httpStatus, 200);
+      assert.equal(err.httpBody, '');
+      assert.equal(err.httpBodyLength, 0);
+      assert.match(err.message, /read failed/);
+      return true;
+    },
+  );
+});
+
 test('message aliases, trimming, custom headers, and TLS flags map correctly', async () => {
   let captured;
   globalThis.fetch = async (url, init) => {
@@ -158,9 +184,12 @@ test('message aliases, trimming, custom headers, and TLS flags map correctly', a
   };
 
   await rpcdef(buildCtx({
-    bindings: {
+    secret: {
       webhook: '',
       webhook_url: 'https://open.feishu.cn/open-apis/bot/v2/hook/token',
+    },
+    bindings: {
+      webhook_url: 'https://open.feishu.cn/open-apis/bot/v2/hook/legacy-token',
       headers: { 'X-Custom': 'value' },
       skipTlsVerify: true,
     },
@@ -173,9 +202,11 @@ test('message aliases, trimming, custom headers, and TLS flags map correctly', a
   assert.equal(captured.init.headers['X-Custom'], 'value');
   assert.equal(captured.init.headers['x-engine-instance'], 'my-instance');
   assert.equal(captured.init.headers['x-request-id'], 'my-request');
-  assert.equal(captured.init.timeoutMs, 5000);
-  assert.equal(captured.init.skipTlsVerify, true);
-  assert.equal(captured.init.tlsInsecureSkipVerify, true);
+  assert.ok(captured.init.signal instanceof AbortSignal);
+  assert.equal(captured.init.timeoutMs, undefined);
+  assert.equal(captured.init.dispatcher, _test.insecureTlsDispatcher);
+  assert.equal(captured.init.skipTlsVerify, undefined);
+  assert.equal(captured.init.tlsInsecureSkipVerify, undefined);
   assert.equal(JSON.parse(captured.init.body).content.text, 'trimmed message');
 });
 
@@ -188,17 +219,21 @@ test('SDK handler merges config and uses request alias', async () => {
 
   const res = await handlers[METHOD_SEND_TEXT_FULL]({
     config: {
-      webhookUrl: 'https://open.feishu.cn/open-apis/bot/v2/hook/sdk-token',
       timeout_ms: 3100,
+    },
+    secret: {
+      webhook: 'https://open.feishu.cn/open-apis/bot/v2/hook/sdk-token',
     },
     request: {
       text: 'from sdk',
+      webhook: 'https://open.feishu.cn/open-apis/bot/v2/hook/request-token',
     },
   });
 
   assert.equal(res.http_status, 200);
   assert.equal(captured.url, 'https://open.feishu.cn/open-apis/bot/v2/hook/sdk-token');
-  assert.equal(captured.init.timeoutMs, 3100);
+  assert.ok(captured.init.signal instanceof AbortSignal);
+  assert.equal(captured.init.timeoutMs, undefined);
   assert.equal(JSON.parse(captured.init.body).content.text, 'from sdk');
   assert.ok(service);
 });
@@ -214,10 +249,14 @@ test('helper defaults and logger fallback are stable', async () => {
   assert.equal(_test.coerceString({ value: { value: 'nested' } }), 'nested');
   assert.equal(_test.hasOwn(null, 'x'), false);
   assert.equal(_test.firstDefined(undefined, null, 'x'), 'x');
-  assert.deepEqual(_test.mergedBindings({ config: { a: 1 }, secret: { b: 2 }, bindings: { c: 3 } }), { a: 1, b: 2, c: 3 });
+  assert.deepEqual(_test.mergedBindings({ config: { a: 1, webhook: 'config' }, secret: { b: 2, webhook: 'secret' }, bindings: { c: 3, webhook: 'binding' } }), { a: 1, b: 2, c: 3, webhook: 'secret' });
+  assert.equal(_test.resolveWebhook({ request: { webhook: 'request' }, secret: { webhook: 'secret' }, config: { webhook: 'config' }, bindings: { webhook: 'binding' } }), 'secret');
+  assert.equal(_test.resolveWebhook({ secret: {}, config: { webhook: 'config' }, bindings: { webhook: 'binding' } }), 'config');
+  assert.equal(_test.resolveWebhook({ secret: {}, config: {}, bindings: { webhook: 'binding' } }), 'binding');
   assert.deepEqual(_test.resolveCallContext({ req: null, request: null }).req, {});
   assert.equal(_test.resolveTimeoutMs({ bindings: { timeoutMs: -1 }, limits: { timeoutMs: 0 } }), 5000);
   assert.deepEqual(_test.buildTlsOptions({}), {});
+  assert.equal(_test.buildTlsOptions({ skipTlsVerify: true }).dispatcher, _test.insecureTlsDispatcher);
   assert.equal(_test.redactWebhook('https://open.feishu.cn/open-apis/bot/v2/hook/token'), 'https://open.feishu.cn/open-apis/bot/v2/hook/***');
   assert.deepEqual(_test.buildPayload('x'), { msg_type: 'text', content: { text: 'x' } });
   assert.equal(_test.errorWithCode('NOT_REAL', 'unknown').code, grpcStatus.UNKNOWN);

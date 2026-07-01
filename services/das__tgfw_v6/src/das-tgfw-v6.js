@@ -12,6 +12,7 @@ export const DEFAULT_TIMEOUT_MS = 1500;
 export const DEFAULT_PAGE = 1;
 export const DEFAULT_SIZE = 10;
 export const DEFAULT_LIFESPAN = 30 * 24 * 60 * 60;
+let insecureDispatcherPromise;
 
 const grpcCodeFor = (code) => ({
   FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
@@ -28,11 +29,13 @@ const errorWithCode = (code, message) => {
 };
 
 const upstreamError = (code, message, details = {}) => {
+  const rawBody = typeof details.rawBody === 'string' ? details.rawBody : '';
   const payload = {
     code,
     message,
     http_status: Number.isFinite(Number(details.httpStatus)) ? Number(details.httpStatus) : 0,
-    raw_body: typeof details.rawBody === 'string' ? details.rawBody : '',
+    raw_body: '',
+    raw_body_length: rawBody.length,
     reason: String(details.reason || '').trim(),
   };
   const err = new GrpcError(grpcCodeFor(code), JSON.stringify(payload));
@@ -88,14 +91,48 @@ const resolveTimeoutMs = (ctx) => {
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;
 };
 
-const buildTlsOptions = (bindings) => {
-  const enabled = Boolean(bindings?.skipTlsVerify || bindings?.tlsInsecureSkipVerify || bindings?.insecureSkipVerify);
-  if (!enabled) return {};
-  return {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  };
+const shouldSkipTlsVerify = (bindings) => Boolean(bindings?.skipTlsVerify || bindings?.tlsInsecureSkipVerify || bindings?.insecureSkipVerify);
+
+const createTlsDispatcher = async (skipTlsVerify) => {
+  if (!skipTlsVerify) return undefined;
+  insecureDispatcherPromise ??= import('undici').then(({ Agent }) => new Agent({
+    connect: { rejectUnauthorized: false },
+  }));
+  return insecureDispatcherPromise;
+};
+
+const buildTlsOptions = async (bindings) => {
+  const dispatcher = await createTlsDispatcher(shouldSkipTlsVerify(bindings));
+  return dispatcher ? { dispatcher } : {};
+};
+
+const fetchWithTimeout = async (url, init = {}, options = {}) => {
+  const rawTimeout = Number(options.timeoutMs);
+  const timeoutMs = Number.isFinite(rawTimeout) && rawTimeout > 0 ? rawTimeout : DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const parentSignal = init.signal;
+  const abortFromParent = () => controller.abort(parentSignal.reason);
+  if (parentSignal) {
+    if (parentSignal.aborted) {
+      controller.abort(parentSignal.reason);
+    } else if (typeof parentSignal.addEventListener === 'function') {
+      parentSignal.addEventListener('abort', abortFromParent, { once: true });
+    }
+  }
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const tlsOptions = await buildTlsOptions(options.bindings);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+      ...tlsOptions,
+    });
+  } finally {
+    clearTimeout(timer);
+    if (parentSignal && typeof parentSignal.removeEventListener === 'function') {
+      parentSignal.removeEventListener('abort', abortFromParent);
+    }
+  }
 };
 
 const requireHost = (ctx) => {
@@ -241,11 +278,7 @@ const fetchText = async (ctx, url, init = {}) => {
   const timeoutMs = resolveTimeoutMs(ctx);
   const bindings = mergedBindings(ctx);
   try {
-    const res = await fetch(url, {
-      timeoutMs,
-      ...buildTlsOptions(bindings),
-      ...init,
-    });
+    const res = await fetchWithTimeout(url, init, { timeoutMs, bindings });
     const text = await res.text();
     return { res, status: res.status, text };
   } catch (err) {
@@ -290,7 +323,6 @@ const handleQueryBlacklist = async (req, ctx) => {
   let rawJson;
 
   if (parsed.ok && parsed.json !== undefined) {
-    rawJson = toValue(parsed.json);
     msg = typeof parsed.json?.msg === 'string' ? parsed.json.msg : '';
     if (Array.isArray(parsed.json?.vals)) {
       vals = parsed.json.vals.map((item) => ({
@@ -305,8 +337,8 @@ const handleQueryBlacklist = async (req, ctx) => {
 
   return {
     http_status: status,
-    raw_body: String(text ?? ''),
-    raw_json: rawJson,
+    raw_body: '',
+    raw_json: undefined,
     vals,
     msg,
   };
@@ -341,7 +373,7 @@ const buildAddBlacklistPayload = (req) => {
 const parseBusinessResponse = (status, text, expectedSuccessMsg = 'success') => {
   const rawBody = String(text ?? '');
   if (!rawBody.trim()) {
-    return { http_status: status, raw_body: rawBody, raw_json: undefined, msg: '' };
+    return { http_status: status, raw_body: '', raw_json: undefined, msg: '' };
   }
 
   const parsed = parseJsonIfPossible(rawBody);
@@ -354,7 +386,6 @@ const parseBusinessResponse = (status, text, expectedSuccessMsg = 'success') => 
   }
 
   const msg = typeof parsed.json?.msg === 'string' ? parsed.json.msg : '';
-  const rawJson = toValue(parsed.json);
   if (msg !== expectedSuccessMsg) {
     throw upstreamError('FAILED_PRECONDITION', 'upstream business failure', {
       httpStatus: status,
@@ -365,8 +396,8 @@ const parseBusinessResponse = (status, text, expectedSuccessMsg = 'success') => 
 
   return {
     http_status: status,
-    raw_body: rawBody,
-    raw_json: rawJson,
+    raw_body: '',
+    raw_json: undefined,
     msg,
   };
 };
@@ -441,8 +472,10 @@ export const _test = {
   buildHeaders,
   buildTlsOptions,
   classifyHttpStatusToCode,
+  createTlsDispatcher,
   encodeQuery,
   errorWithCode,
+  fetchWithTimeout,
   fetchText,
   firstDefined,
   handleAddBlacklist,
@@ -461,6 +494,7 @@ export const _test = {
   requireSAddr,
   resolveCallContext,
   resolveTimeoutMs,
+  shouldSkipTlsVerify,
   toBool,
   toInteger,
   toValue,

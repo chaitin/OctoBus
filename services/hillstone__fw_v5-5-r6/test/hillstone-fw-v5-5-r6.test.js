@@ -34,6 +34,11 @@ const buildCtx = (overrides = {}) => ({
   req: overrides.req || {},
 });
 
+const callHandler = (method, request = {}, ctx = {}) => {
+  const handler = handlers[method];
+  return handler({ ...ctx, request });
+};
+
 const okResponse = (body) => ({
   ok: true,
   status: 200,
@@ -57,6 +62,11 @@ const baseCookies = {
   lang: 'zh_CN',
 };
 
+const seedSession = (ctx, session = baseCookies) => {
+  _test.setSession(ctx, 'https://device.example:8443', session);
+  return ctx;
+};
+
 const expectLegacyGrpcError = async (fn, code, checker = () => {}) => {
   let caught;
   try {
@@ -78,6 +88,7 @@ const expectLegacyGrpcError = async (fn, code, checker = () => {}) => {
 
 test.afterEach(() => {
   globalThis.fetch = originalFetch;
+  _test.clearAllSessions();
 });
 
 test('Login rejects missing host, username, and password bindings', async () => {
@@ -119,7 +130,8 @@ test('Login sends correct payload and returns http_status/http_body on success',
 
   assert.equal(captured.url, 'https://device.example:8443/rest/doc/login');
   assert.equal(captured.init.method, 'POST');
-  assert.equal(captured.init.timeoutMs, 10_000);
+  assert.equal(Object.hasOwn(captured.init, 'timeoutMs'), false);
+  assert.ok(captured.init.signal instanceof AbortSignal);
   assert.equal(captured.init.headers['Content-Type'], 'text/plain;charset=UTF-8');
   assert.deepEqual(JSON.parse(captured.init.body), {
     userName: 'api_user',
@@ -129,7 +141,7 @@ test('Login sends correct payload and returns http_status/http_body on success',
     lang: 'en_US',
   });
   assert.equal(result.http_status, 200);
-  assert.match(result.http_body, /"success":true/);
+  assert.equal(result.http_body, '');
 });
 
 test('Login reads config and secret aliases with default language and timeout fallback', async () => {
@@ -139,7 +151,7 @@ test('Login reads config and secret aliases with default language and timeout fa
     return okResponse('{"success":true}');
   };
 
-  const result = await handlers[METHOD_LOGIN_FULL]({}, {
+  const result = await callHandler(METHOD_LOGIN_FULL, {}, {
     bindings: {},
     config: { base_url: 'https://device.example:8443///', user: 'fallback-user', timeout_ms: 0 },
     secret: { password: 'fallback-pass' },
@@ -148,11 +160,13 @@ test('Login reads config and secret aliases with default language and timeout fa
   });
 
   assert.equal(captured.url, 'https://device.example:8443/rest/doc/login');
-  assert.equal(captured.init.timeoutMs, 1500);
+  assert.equal(Object.hasOwn(captured.init, 'timeoutMs'), false);
+  assert.ok(captured.init.signal instanceof AbortSignal);
   assert.equal(JSON.parse(captured.init.body).lang, 'zh_CN');
   assert.equal(JSON.parse(captured.init.body).userName, 'fallback-user');
   assert.equal(JSON.parse(captured.init.body).password, 'fallback-pass');
   assert.equal(result.http_status, 200);
+  assert.equal(result.http_body, '');
 });
 
 test('Login returns FAILED_PRECONDITION on 401 and attaches legacy response', async () => {
@@ -163,7 +177,8 @@ test('Login returns FAILED_PRECONDITION on 401 and attaches legacy response', as
     'FAILED_PRECONDITION',
     (err) => {
       assert.equal(err.response.http_status, 401);
-      assert.match(err.response.http_body, /Invalid credentials/);
+      assert.equal(err.response.http_body, '');
+      assert.ok(err.response.http_body_length > 0);
     },
   );
 });
@@ -180,34 +195,30 @@ test('Login returns UNAVAILABLE with http_status=0 on network error', async () =
     'UNAVAILABLE',
     (err) => {
       assert.equal(err.response.http_status, 0);
-      assert.match(err.response.http_body, /connection refused/);
+      assert.equal(err.response.http_body, '');
+      assert.ok(err.response.http_body_length > 0);
     },
   );
 });
 
-test('CreateAddrGroup validates cookies, token, addr_groups, and group names', async () => {
+test('CreateAddrGroup validates cached session, addr_groups, and group names', async () => {
   await expectLegacyGrpcError(
     () => rpcdef(buildCtx({ req: { addr_groups: [{ name: 'test' }] } }))[CREATE_ADDR_GROUP_PATH](),
-    'INVALID_ARGUMENT',
-    (err) => assert.match(err.message, /cookies is required/),
+    'FAILED_PRECONDITION',
+    (err) => assert.match(err.message, /call Login first/),
   );
   await expectLegacyGrpcError(
-    () => rpcdef(buildCtx({ req: { cookies: { role: 'SuperAdmin' }, addr_groups: [{ name: 'test' }] } }))[CREATE_ADDR_GROUP_PATH](),
-    'INVALID_ARGUMENT',
-    (err) => assert.match(err.message, /cookies\.token is required/),
-  );
-  await expectLegacyGrpcError(
-    () => rpcdef(buildCtx({ req: { cookies: { token: 'abc123' } } }))[CREATE_ADDR_GROUP_PATH](),
+    () => rpcdef(seedSession(buildCtx({ req: {} })))[CREATE_ADDR_GROUP_PATH](),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /addr_groups is required/),
   );
   await expectLegacyGrpcError(
-    () => rpcdef(buildCtx({ req: { cookies: { token: 'abc123' }, addr_groups: [] } }))[CREATE_ADDR_GROUP_PATH](),
+    () => rpcdef(seedSession(buildCtx({ req: { addr_groups: [] } })))[CREATE_ADDR_GROUP_PATH](),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /addr_groups is required/),
   );
   await expectLegacyGrpcError(
-    () => rpcdef(buildCtx({ req: { cookies: { token: 'abc123' }, addr_groups: [{ ip: [] }] } }))[CREATE_ADDR_GROUP_PATH](),
+    () => rpcdef(seedSession(buildCtx({ req: { addr_groups: [{ ip: [] }] } })))[CREATE_ADDR_GROUP_PATH](),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /addr_groups\[\]\.name is required/),
   );
@@ -220,9 +231,8 @@ test('CreateAddrGroup sends encoded cookies and normalized address groups', asyn
     return okResponse(JSON.stringify({ success: true, total: 1, result: [{ name: 'BLOCK_GROUP_01', ip: [] }] }));
   };
 
-  const result = await rpcdef(buildCtx({
+  const result = await rpcdef(seedSession(buildCtx({
     req: {
-      cookies: { ...baseCookies, role: 'Super Admin' },
       addr_groups: [{
         name: 'BLOCK_GROUP_01',
         ip: [
@@ -231,7 +241,7 @@ test('CreateAddrGroup sends encoded cookies and normalized address groups', asyn
         ],
       }],
     },
-  }))[CREATE_ADDR_GROUP_PATH]();
+  }), { ...baseCookies, role: 'Super Admin' }))[CREATE_ADDR_GROUP_PATH]();
 
   assert.equal(captured.url, 'https://device.example:8443/rest/doc/addrbook');
   assert.equal(captured.init.method, 'POST');
@@ -247,14 +257,14 @@ test('CreateAddrGroup sends encoded cookies and normalized address groups', asyn
     },
   ]);
   assert.equal(result.http_status, 200);
-  assert.match(result.http_body, /"success":true/);
+  assert.equal(result.http_body, '');
 });
 
 test('CreateAddrGroup returns FAILED_PRECONDITION on 401', async () => {
   globalThis.fetch = async () => responseWithStatus(401, JSON.stringify({ success: false, message: 'Unauthorized' }));
 
   await expectLegacyGrpcError(
-    () => rpcdef(buildCtx({ req: { cookies: { token: 'abc123' }, addr_groups: [{ name: 'test' }] } }))[CREATE_ADDR_GROUP_PATH](),
+    () => rpcdef(seedSession(buildCtx({ req: { addr_groups: [{ name: 'test' }] } })))[CREATE_ADDR_GROUP_PATH](),
     'FAILED_PRECONDITION',
     (err) => assert.equal(err.response.http_status, 401),
   );
@@ -267,12 +277,11 @@ test('UpdateAddrGroup sends PUT and preserves success response', async () => {
     return okResponse(JSON.stringify({ success: true, result: [], exception: {} }));
   };
 
-  const result = await rpcdef(buildCtx({
+  const result = await rpcdef(seedSession(buildCtx({
     req: {
-      cookies: { token: 'abc123' },
       addr_groups: [{ name: 'BLOCK_GROUP_01', ip: [{ ip_addr: '203.0.113.10', netmask: '32', flag: 0 }] }],
     },
-  }))[UPDATE_ADDR_GROUP_PATH]();
+  })))[UPDATE_ADDR_GROUP_PATH]();
 
   assert.equal(captured.url, 'https://device.example:8443/rest/doc/addrbook');
   assert.equal(captured.init.method, 'PUT');
@@ -283,7 +292,7 @@ test('UpdateAddrGroup returns FAILED_PRECONDITION on 500', async () => {
   globalThis.fetch = async () => responseWithStatus(500, JSON.stringify({ success: false, message: 'Internal error' }));
 
   await expectLegacyGrpcError(
-    () => rpcdef(buildCtx({ req: { cookies: { token: 'abc123' }, addr_groups: [{ name: 'test' }] } }))[UPDATE_ADDR_GROUP_PATH](),
+    () => rpcdef(seedSession(buildCtx({ req: { addr_groups: [{ name: 'test' }] } })))[UPDATE_ADDR_GROUP_PATH](),
     'FAILED_PRECONDITION',
     (err) => assert.equal(err.response.http_status, 500),
   );
@@ -291,12 +300,12 @@ test('UpdateAddrGroup returns FAILED_PRECONDITION on 500', async () => {
 
 test('QueryAddrGroup validates name and positive limit', async () => {
   await expectLegacyGrpcError(
-    () => rpcdef(buildCtx({ req: { cookies: { token: 'abc123' }, limit: 100 } }))[QUERY_ADDR_GROUP_PATH](),
+    () => rpcdef(seedSession(buildCtx({ req: { limit: 100 } })))[QUERY_ADDR_GROUP_PATH](),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /name is required/),
   );
   await expectLegacyGrpcError(
-    () => rpcdef(buildCtx({ req: { cookies: { token: 'abc123' }, name: 'test', limit: 0 } }))[QUERY_ADDR_GROUP_PATH](),
+    () => rpcdef(seedSession(buildCtx({ req: { name: 'test', limit: 0 } })))[QUERY_ADDR_GROUP_PATH](),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /limit must be positive/),
   );
@@ -312,11 +321,11 @@ test('QueryAddrGroup sends GET with legacy query JSON', async () => {
     }));
   };
 
-  const result = await handlers[METHOD_QUERY_ADDR_GROUP_FULL]({
-    cookies: { token: 'abc123' },
+  const ctx = seedSession(buildCtx());
+  const result = await callHandler(METHOD_QUERY_ADDR_GROUP_FULL, {
     name: 'BLOCK_GROUP_01',
     limit: 50,
-  }, buildCtx());
+  }, ctx);
 
   assert.equal(captured.init.method, 'GET');
   assert.match(captured.url, /\/rest\/doc\/addrbook\?query=/);
@@ -337,11 +346,12 @@ test('QueryAddrGroup returns UNAVAILABLE on network failure', async () => {
   };
 
   await expectLegacyGrpcError(
-    () => rpcdef(buildCtx({ req: { cookies: { token: 'abc123' }, name: 'test' } }))[QUERY_ADDR_GROUP_PATH](),
+    () => rpcdef(seedSession(buildCtx({ req: { name: 'test' } })))[QUERY_ADDR_GROUP_PATH](),
     'UNAVAILABLE',
     (err) => {
       assert.equal(err.response.http_status, 0);
-      assert.match(err.response.http_body, /request timeout/);
+      assert.equal(err.response.http_body, '');
+      assert.ok(err.response.http_body_length > 0);
     },
   );
 });
@@ -353,11 +363,20 @@ test('TLS flags, exported helpers, service wrapper, and method map are wired', a
     return okResponse(JSON.stringify({ success: true }));
   };
 
-  await handlers[METHOD_LOGIN_FULL]({}, buildCtx({ bindings: { skipTlsVerify: true } }));
+  await callHandler(METHOD_LOGIN_FULL, {}, buildCtx({ bindings: { skipTlsVerify: true } }));
 
-  assert.equal(captured.init.skipTlsVerify, true);
-  assert.equal(captured.init.tlsInsecureSkipVerify, true);
-  assert.equal(captured.init.insecureSkipVerify, true);
+  assert.equal(Object.hasOwn(captured.init, 'skipTlsVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'tlsInsecureSkipVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'insecureSkipVerify'), false);
+  assert.ok(captured.init.dispatcher);
+  assert.equal(Object.hasOwn(captured.init, 'skipTlsVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'tlsInsecureSkipVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'insecureSkipVerify'), false);
+  assert.ok(captured.init.dispatcher);
+  assert.equal(Object.hasOwn(captured.init, 'skipTlsVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'tlsInsecureSkipVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'insecureSkipVerify'), false);
+  assert.ok(captured.init.dispatcher);
   assert.equal(typeof service, 'object');
   assert.equal(typeof handlers[METHOD_CREATE_ADDR_GROUP_FULL], 'function');
   assert.equal(typeof handlers[METHOD_UPDATE_ADDR_GROUP_FULL], 'function');
@@ -373,7 +392,7 @@ test('TLS flags, exported helpers, service wrapper, and method map are wired', a
   assert.equal(_test.resolvePassword({}), '');
   assert.equal(_test.resolveTimeoutMs({ bindings: { timeoutMs: 25 } }), 25);
   assert.equal(_test.resolveTimeoutMs({ limits: {}, bindings: { timeout_ms: 30 } }), 30);
-  assert.deepEqual(_test.buildTlsOptions({}), {});
+  assert.deepEqual(await _test.buildTlsOptions({}), {});
   assert.deepEqual(_test.buildHeaders({ bindings: { headers: { 'X-Test': 'yes' } } }, { Cookie: 'token=abc' }), {
     'X-Test': 'yes',
     'Content-Type': 'text/plain;charset=UTF-8',
@@ -432,7 +451,7 @@ test('fallback branches handle alternate context shapes and transport defaults',
       };
     };
 
-    const createResult = await rpcdef({
+    const createCtx = seedSession({
       bindings: {
         host: 'https://device.example:8443',
         username: 'api_user',
@@ -440,27 +459,32 @@ test('fallback branches handle alternate context shapes and transport defaults',
       },
       meta: { instanceId: 'inst-alt', requestId: 'req-alt' },
       request: {
-        cookies: { token: 'abc123' },
         addr_groups: [{ name: 'Wrapped', ip: [{ ip_addr: null, netmask: null }] }],
       },
-    })[CREATE_ADDR_GROUP_PATH]();
+    });
+    const createResult = await rpcdef(createCtx)[CREATE_ADDR_GROUP_PATH]();
     assert.equal(createResult.http_status, 204);
     assert.equal(JSON.parse(captured.init.body)[0].ip[0].netmask, '32');
 
     await expectLegacyGrpcError(
-      () => handlers[METHOD_CREATE_ADDR_GROUP_FULL]({
-        cookie: { token: { value: 'abc123' } },
+      () => {
+        const ctx = seedSession({
+          bindings: {
+            host: 'https://device.example:8443',
+            username: 'api_user',
+            password: 'SuperSecret!',
+          },
+          meta: { instance_id: 'inst-alt-2' },
+        });
+        return callHandler(METHOD_CREATE_ADDR_GROUP_FULL, {
         addr_groups: [{ name: 'test' }],
-      }, {
-        bindings: {
-          host: 'https://device.example:8443',
-          username: 'api_user',
-          password: 'SuperSecret!',
-        },
-        meta: {},
-      }),
+        }, ctx);
+      },
       'UNAVAILABLE',
-      (err) => assert.equal(err.response.http_body, 'plain failure'),
+      (err) => {
+        assert.equal(err.response.http_body, '');
+        assert.ok(err.response.http_body_length > 0);
+      },
     );
 
     console.log('[HILLSTONE_FW_V55R6][manual]', (() => {
@@ -474,15 +498,16 @@ test('fallback branches handle alternate context shapes and transport defaults',
     JSON.stringify = originalStringify;
   }
 
-  await expectLegacyGrpcError(
-    () => rpcdef({
+  const updateCtx = seedSession({
       bindings: {
         host: 'https://device.example:8443',
         username: 'api_user',
         password: 'SuperSecret!',
       },
-      req: { cookies: { token: 'abc123' }, addr_groups: [] },
-    })[UPDATE_ADDR_GROUP_PATH](),
+      req: { addr_groups: [] },
+    });
+  await expectLegacyGrpcError(
+    () => rpcdef(updateCtx)[UPDATE_ADDR_GROUP_PATH](),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /addr_groups is required/),
   );

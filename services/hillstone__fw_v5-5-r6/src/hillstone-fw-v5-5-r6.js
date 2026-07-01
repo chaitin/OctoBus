@@ -15,6 +15,9 @@ export const DEFAULT_TIMEOUT_MS = 1500;
 export const DEFAULT_LANG = 'zh_CN';
 export const DEFAULT_LIMIT = 100;
 
+const SESSION_CACHE = new Map();
+let insecureDispatcherPromise;
+
 const grpcCodeFor = (code) => ({
   FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
   INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT,
@@ -58,8 +61,8 @@ const toInteger = (value, fallback = 0) => {
 
 const mergedBindings = (ctx = {}) => ({
   ...(ctx?.config ?? {}),
-  ...(ctx?.secret ?? {}),
   ...(ctx?.bindings ?? {}),
+  ...(ctx?.secret ?? {}),
 });
 
 const resolveCallContext = (ctx = {}) => ({
@@ -67,8 +70,10 @@ const resolveCallContext = (ctx = {}) => ({
   bindings: mergedBindings(ctx),
   limits: ctx.limits ?? {},
   meta: ctx.meta ?? {},
-  req: ctx.req ?? ctx.request ?? {},
+  req: ctx.request ?? ctx.req ?? {},
 });
+
+const requestFromContext = (ctx = {}) => ctx?.request ?? ctx?.req ?? {};
 
 const normalizeBaseUrl = (value) => {
   const raw = toTrimmedString(value);
@@ -99,14 +104,48 @@ const resolveTimeoutMs = (ctx) => {
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;
 };
 
-const buildTlsOptions = (bindings) => {
-  const enabled = Boolean(bindings?.skipTlsVerify || bindings?.tlsInsecureSkipVerify || bindings?.insecureSkipVerify);
-  if (!enabled) return {};
-  return {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  };
+const shouldSkipTlsVerify = (bindings) => Boolean(bindings?.skipTlsVerify || bindings?.tlsInsecureSkipVerify || bindings?.insecureSkipVerify);
+
+const createTlsDispatcher = async (skipTlsVerify) => {
+  if (!skipTlsVerify) return undefined;
+  insecureDispatcherPromise ??= import('undici').then(({ Agent }) => new Agent({
+    connect: { rejectUnauthorized: false },
+  }));
+  return insecureDispatcherPromise;
+};
+
+const buildTlsOptions = async (bindings) => {
+  const dispatcher = await createTlsDispatcher(shouldSkipTlsVerify(bindings));
+  return dispatcher ? { dispatcher } : {};
+};
+
+const fetchWithTimeout = async (url, init = {}, options = {}) => {
+  const rawTimeout = Number(options.timeoutMs);
+  const timeoutMs = Number.isFinite(rawTimeout) && rawTimeout > 0 ? rawTimeout : DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const parentSignal = init.signal;
+  const abortFromParent = () => controller.abort(parentSignal.reason);
+  if (parentSignal) {
+    if (parentSignal.aborted) {
+      controller.abort(parentSignal.reason);
+    } else if (typeof parentSignal.addEventListener === 'function') {
+      parentSignal.addEventListener('abort', abortFromParent, { once: true });
+    }
+  }
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const tlsOptions = await buildTlsOptions(options.bindings);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+      ...tlsOptions,
+    });
+  } finally {
+    clearTimeout(timer);
+    if (parentSignal && typeof parentSignal.removeEventListener === 'function') {
+      parentSignal.removeEventListener('abort', abortFromParent);
+    }
+  }
 };
 
 const buildHeaders = (ctx, extra = {}) => ({
@@ -134,6 +173,23 @@ const buildCookieHeader = (cookies) => {
   }
   return parts.join('; ');
 };
+
+const getInstanceKey = (ctx) => String(ctx?.meta?.instance_id || ctx?.meta?.instanceId || 'default');
+
+const getInstanceSessionMap = (ctx) => {
+  const key = getInstanceKey(ctx);
+  let map = SESSION_CACHE.get(key);
+  if (!map) {
+    map = new Map();
+    SESSION_CACHE.set(key, map);
+  }
+  return map;
+};
+
+const getSession = (ctx, host) => getInstanceSessionMap(ctx).get(host);
+const setSession = (ctx, host, session) => getInstanceSessionMap(ctx).set(host, session);
+const clearSession = (ctx, host) => getInstanceSessionMap(ctx).delete(host);
+const clearAllSessions = () => SESSION_CACHE.clear();
 
 const buildLoginPayload = (username, password, lang) => ({
   userName: username,
@@ -185,15 +241,10 @@ const requirePassword = (ctx) => {
   return password;
 };
 
-const requireCookies = (req) => {
-  const cookies = firstDefined(req?.cookies, req?.cookie);
-  if (!cookies || typeof cookies !== 'object') {
-    throw errorWithCode('INVALID_ARGUMENT', 'cookies is required');
-  }
-  if (!unwrapScalar(cookies.token)) {
-    throw errorWithCode('INVALID_ARGUMENT', 'cookies.token is required');
-  }
-  return cookies;
+const requireSession = (ctx, host) => {
+  const session = getSession(ctx, host);
+  if (!session) throw errorWithCode('FAILED_PRECONDITION', 'call Login first');
+  return session;
 };
 
 const logFlow = (ctx, action, details) => {
@@ -213,11 +264,7 @@ const fetchWithStatus = async (url, init, ctx) => {
   const callCtx = resolveCallContext(ctx);
   let res;
   try {
-    res = await fetch(url, {
-      timeoutMs: resolveTimeoutMs(callCtx),
-      ...buildTlsOptions(callCtx.bindings),
-      ...init,
-    });
+    res = await fetchWithTimeout(url, init, { timeoutMs: resolveTimeoutMs(callCtx), bindings: callCtx.bindings });
   } catch (err) {
     const errMsg = err?.cause?.message || err?.message || 'fetch failed';
     logFlow(callCtx, 'fetch:error', { url, error: errMsg });
@@ -230,12 +277,45 @@ const fetchWithStatus = async (url, init, ctx) => {
 };
 
 const throwForStatus = (httpStatus, httpBody) => {
+  const bodyText = String(httpBody ?? '');
   const err = errorWithCode(
     httpStatus === 0 ? 'UNAVAILABLE' : 'FAILED_PRECONDITION',
-    `upstream http ${httpStatus}: ${httpBody}`,
+    `upstream http ${httpStatus}`,
   );
-  err.response = { http_status: httpStatus, http_body: httpBody };
+  err.response = { http_status: httpStatus, http_body: '', http_body_length: bodyText.length };
   throw err;
+};
+
+const normalizeLoginResult = (parsed) => {
+  if (Array.isArray(parsed?.result)) return parsed.result[0];
+  if (parsed?.result && typeof parsed.result === 'object') return parsed.result;
+  return null;
+};
+
+const extractSessionFromLogin = (username, lang, httpStatus, httpBody) => {
+  if (httpStatus < 200 || httpStatus >= 300) return null;
+  let parsed;
+  try {
+    parsed = JSON.parse(String(httpBody ?? ''));
+  } catch {
+    return null;
+  }
+  if (parsed?.success === false) return null;
+  const result = normalizeLoginResult(parsed);
+  if (!result || typeof result !== 'object') return null;
+  const token = toTrimmedString(pickFirst(result, ['token']));
+  const role = toTrimmedString(pickFirst(result, ['role']));
+  const vsysId = toTrimmedString(pickFirst(result, ['vsysId', 'vsys_id']));
+  const fromrootvsys = toTrimmedString(pickFirst(result, ['fromrootvsys']));
+  if (!token) return null;
+  return {
+    fromrootvsys,
+    role,
+    vsysId,
+    token,
+    username,
+    lang: lang || DEFAULT_LANG,
+  };
 };
 
 const handleLogin = async (req, ctx) => {
@@ -253,14 +333,16 @@ const handleLogin = async (req, ctx) => {
     body: JSON.stringify(buildLoginPayload(username, password, lang)),
   }, callCtx);
 
-  if (httpStatus >= 200 && httpStatus < 300) return { http_status: httpStatus, http_body: httpBody };
+  const session = extractSessionFromLogin(username, lang, httpStatus, httpBody);
+  if (session) setSession(callCtx, host, session);
+  if (httpStatus >= 200 && httpStatus < 300) return { http_status: httpStatus, http_body: '' };
   throwForStatus(httpStatus, httpBody);
 };
 
 const handleCreateAddrGroup = async (req, ctx) => {
   const callCtx = resolveCallContext(ctx);
   const host = requireHost(callCtx);
-  const cookies = requireCookies(req);
+  const session = requireSession(callCtx, host);
   const addrGroups = normalizeAddrGroups(req?.addr_groups);
   if (!addrGroups) throw errorWithCode('INVALID_ARGUMENT', 'addr_groups is required and must be non-empty');
   const url = `${host}/rest/doc/addrbook`;
@@ -268,18 +350,19 @@ const handleCreateAddrGroup = async (req, ctx) => {
   logFlow(callCtx, 'CreateAddrGroup', { url, groups: addrGroups.length });
   const { httpStatus, httpBody } = await fetchWithStatus(url, {
     method: 'POST',
-    headers: buildHeaders(callCtx, { Cookie: buildCookieHeader(cookies) }),
+    headers: buildHeaders(callCtx, { Cookie: buildCookieHeader(session) }),
     body: JSON.stringify(addrGroups),
   }, callCtx);
 
-  if (httpStatus >= 200 && httpStatus < 300) return { http_status: httpStatus, http_body: httpBody };
+  if (httpStatus >= 200 && httpStatus < 300) return { http_status: httpStatus, http_body: '' };
+  if (httpStatus === 401 || httpStatus === 403) clearSession(callCtx, host);
   throwForStatus(httpStatus, httpBody);
 };
 
 const handleUpdateAddrGroup = async (req, ctx) => {
   const callCtx = resolveCallContext(ctx);
   const host = requireHost(callCtx);
-  const cookies = requireCookies(req);
+  const session = requireSession(callCtx, host);
   const addrGroups = normalizeAddrGroups(req?.addr_groups);
   if (!addrGroups) throw errorWithCode('INVALID_ARGUMENT', 'addr_groups is required and must be non-empty');
   const url = `${host}/rest/doc/addrbook`;
@@ -287,18 +370,19 @@ const handleUpdateAddrGroup = async (req, ctx) => {
   logFlow(callCtx, 'UpdateAddrGroup', { url, groups: addrGroups.length });
   const { httpStatus, httpBody } = await fetchWithStatus(url, {
     method: 'PUT',
-    headers: buildHeaders(callCtx, { Cookie: buildCookieHeader(cookies) }),
+    headers: buildHeaders(callCtx, { Cookie: buildCookieHeader(session) }),
     body: JSON.stringify(addrGroups),
   }, callCtx);
 
-  if (httpStatus >= 200 && httpStatus < 300) return { http_status: httpStatus, http_body: httpBody };
+  if (httpStatus >= 200 && httpStatus < 300) return { http_status: httpStatus, http_body: '' };
+  if (httpStatus === 401 || httpStatus === 403) clearSession(callCtx, host);
   throwForStatus(httpStatus, httpBody);
 };
 
 const handleQueryAddrGroup = async (req, ctx) => {
   const callCtx = resolveCallContext(ctx);
   const host = requireHost(callCtx);
-  const cookies = requireCookies(req);
+  const session = requireSession(callCtx, host);
   const name = toTrimmedString(req?.name);
   if (!name) throw errorWithCode('INVALID_ARGUMENT', 'name is required');
   const limit = toInteger(firstDefined(req?.limit, DEFAULT_LIMIT), DEFAULT_LIMIT);
@@ -314,10 +398,11 @@ const handleQueryAddrGroup = async (req, ctx) => {
   logFlow(callCtx, 'QueryAddrGroup', { url, name, limit });
   const { httpStatus, httpBody } = await fetchWithStatus(url, {
     method: 'GET',
-    headers: buildHeaders(callCtx, { Cookie: buildCookieHeader(cookies) }),
+    headers: buildHeaders(callCtx, { Cookie: buildCookieHeader(session) }),
   }, callCtx);
 
-  if (httpStatus >= 200 && httpStatus < 300) return { http_status: httpStatus, http_body: httpBody };
+  if (httpStatus >= 200 && httpStatus < 300) return { http_status: httpStatus, http_body: '' };
+  if (httpStatus === 401 || httpStatus === 403) clearSession(callCtx, host);
   throwForStatus(httpStatus, httpBody);
 };
 
@@ -332,10 +417,10 @@ export function rpcdef(ctx) {
 }
 
 export const handlers = {
-  [METHOD_LOGIN_FULL]: (req, ctx = {}) => handleLogin(req, { ...ctx, req }),
-  [METHOD_CREATE_ADDR_GROUP_FULL]: (req, ctx = {}) => handleCreateAddrGroup(req, { ...ctx, req }),
-  [METHOD_UPDATE_ADDR_GROUP_FULL]: (req, ctx = {}) => handleUpdateAddrGroup(req, { ...ctx, req }),
-  [METHOD_QUERY_ADDR_GROUP_FULL]: (req, ctx = {}) => handleQueryAddrGroup(req, { ...ctx, req }),
+  [METHOD_LOGIN_FULL]: (ctx = {}) => handleLogin(requestFromContext(ctx), ctx),
+  [METHOD_CREATE_ADDR_GROUP_FULL]: (ctx = {}) => handleCreateAddrGroup(requestFromContext(ctx), ctx),
+  [METHOD_UPDATE_ADDR_GROUP_FULL]: (ctx = {}) => handleUpdateAddrGroup(requestFromContext(ctx), ctx),
+  [METHOD_QUERY_ADDR_GROUP_FULL]: (ctx = {}) => handleQueryAddrGroup(requestFromContext(ctx), ctx),
 };
 
 export const _test = {
@@ -343,12 +428,23 @@ export const _test = {
   buildCookieHeader,
   buildLoginPayload,
   buildTlsOptions,
+  clearAllSessions,
+  clearSession,
+  createTlsDispatcher,
   errorWithCode,
+  extractSessionFromLogin,
+  fetchWithTimeout,
+  fetchWithStatus,
+  getInstanceKey,
+  getSession,
   normalizeAddrGroups,
+  requireSession,
   resolveHost,
   resolvePassword,
   resolveTimeoutMs,
   resolveUsername,
+  setSession,
+  shouldSkipTlsVerify,
   throwForStatus,
   toInteger,
 };

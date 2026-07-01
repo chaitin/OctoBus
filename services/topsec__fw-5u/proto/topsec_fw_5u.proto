@@ -15,57 +15,51 @@ service TopSec_FW_5U {
 }
 
 message SessionContext {
-  string host = 1;
-  string token = 2;
-  string user_mark = 3;
-  string cookie = 4;
-  bool skip_tls_verify = 5;
-  bool allow_http = 6;
-  google.protobuf.Struct vendor_state = 10;
+  string host = 1 [deprecated = true];
+  string token = 2 [deprecated = true];
+  string user_mark = 3 [deprecated = true];
+  string cookie = 4 [deprecated = true];
+  bool skip_tls_verify = 5 [deprecated = true];
+  bool allow_http = 6 [deprecated = true];
+  google.protobuf.Struct vendor_state = 10 [deprecated = true];
 }
 
 message LoginRequest {
   string host = 1;
-  string username = 2;
-  string password = 3;
+  string username = 2 [deprecated = true];
+  string password = 3 [deprecated = true];
   bool skip_tls_verify = 4;
   bool allow_http = 5;
 }
 
 message RefreshRequest {
-  SessionContext session = 1;
+  SessionContext session = 1 [deprecated = true];
 }
 
 message AddToBlacklistRequest {
-  SessionContext session = 1;
+  SessionContext session = 1 [deprecated = true];
   string ip = 2;
 }
 
 message RemoveFromBlacklistRequest {
-  SessionContext session = 1;
+  SessionContext session = 1 [deprecated = true];
   string ip = 2;
 }
 
 message LogoutRequest {
-  SessionContext session = 1;
+  SessionContext session = 1 [deprecated = true];
 }
 
 message LoginResponse {
   bool success = 1;
   string message = 2;
-  SessionContext session = 3;
-  int32 http_status = 4;
-  string raw_body = 5;
-  google.protobuf.Struct raw_json = 6;
+  int32 http_status = 3;
 }
 
 message RefreshResponse {
   bool success = 1;
   string message = 2;
-  SessionContext session = 3;
-  int32 http_status = 4;
-  string raw_body = 5;
-  google.protobuf.Struct raw_json = 6;
+  int32 http_status = 3;
 }
 
 message BlacklistOperationResponse {
@@ -73,16 +67,11 @@ message BlacklistOperationResponse {
   bool success = 2;
   bool idempotent_success = 3;
   string message = 4;
-  SessionContext session = 5;
-  int32 http_status = 6;
-  string raw_body = 7;
-  google.protobuf.Struct raw_json = 8;
+  int32 http_status = 5;
 }
 
 message LogoutResponse {
   bool success = 1;
   string message = 2;
   int32 http_status = 3;
-  string raw_body = 4;
-  google.protobuf.Struct raw_json = 5;
 }

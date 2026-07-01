@@ -15,6 +15,7 @@ export const DEFAULT_PORT = 8083;
 export const DEFAULT_TIMEOUT_MS = 300_000;
 export const DEFAULT_IP_GROUP_NAME = 'OctoBus黑名单IP组';
 export const DEFAULT_POLICY_NAME = 'OctoBus黑名单策略';
+let insecureDispatcherPromise;
 
 const grpcCodeFor = (code) => ({
   FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
@@ -146,9 +147,48 @@ const buildApiUrl = (ctx, path) => {
   return `${host}/SecureSphere/api/${apiVersion}${cleanPath}`;
 };
 
-const buildTlsOptions = (bindings = {}) => {
-  const enabled = Boolean(bindings.skipTlsVerify || bindings.tlsInsecureSkipVerify || bindings.insecureSkipVerify);
-  return enabled ? { skipTlsVerify: true, tlsInsecureSkipVerify: true, insecureSkipVerify: true } : {};
+const shouldSkipTlsVerify = (bindings = {}) => Boolean(bindings.skipTlsVerify || bindings.tlsInsecureSkipVerify || bindings.insecureSkipVerify);
+
+const createTlsDispatcher = async (skipTlsVerify) => {
+  if (!skipTlsVerify) return undefined;
+  insecureDispatcherPromise ??= import('undici').then(({ Agent }) => new Agent({
+    connect: { rejectUnauthorized: false },
+  }));
+  return insecureDispatcherPromise;
+};
+
+const buildTlsOptions = async (bindings = {}) => {
+  const dispatcher = await createTlsDispatcher(shouldSkipTlsVerify(bindings));
+  return dispatcher ? { dispatcher } : {};
+};
+
+const fetchWithTimeout = async (url, init = {}, options = {}) => {
+  const rawTimeout = Number(options.timeoutMs);
+  const timeoutMs = Number.isFinite(rawTimeout) && rawTimeout > 0 ? rawTimeout : DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const parentSignal = init.signal;
+  const abortFromParent = () => controller.abort(parentSignal.reason);
+  if (parentSignal) {
+    if (parentSignal.aborted) {
+      controller.abort(parentSignal.reason);
+    } else if (typeof parentSignal.addEventListener === 'function') {
+      parentSignal.addEventListener('abort', abortFromParent, { once: true });
+    }
+  }
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const tlsOptions = await buildTlsOptions(options.bindings);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+      ...tlsOptions,
+    });
+  } finally {
+    clearTimeout(timer);
+    if (parentSignal && typeof parentSignal.removeEventListener === 'function') {
+      parentSignal.removeEventListener('abort', abortFromParent);
+    }
+  }
 };
 
 const buildHeaders = (bindings = {}, meta = {}, extra = {}) => ({
@@ -222,15 +262,13 @@ const requestJson = async (ctx, method, path, headers, body) => {
   const init = {
     method,
     headers: buildHeaders(bindings, callCtx.meta, headers),
-    timeoutMs: resolveTimeoutMs(callCtx),
-    ...buildTlsOptions(bindings),
   };
   if (body !== undefined) init.body = typeof body === 'string' ? body : JSON.stringify(body);
 
   logFlow(callCtx, `${method}:start`, { url });
   let res;
   try {
-    res = await fetch(url, init);
+    res = await fetchWithTimeout(url, init, { timeoutMs: resolveTimeoutMs(callCtx), bindings });
   } catch (err) {
     const reason = err?.cause?.message || err?.message || 'fetch failed';
     logFlow(callCtx, `${method}:fetch_error`, { url, reason });
@@ -241,12 +279,12 @@ const requestJson = async (ctx, method, path, headers, body) => {
   const parsed = parseJsonSafe(text);
   if (!parsed.ok) {
     logFlow(callCtx, `${method}:protocol_error`, { http_status: res.status, reason: 'invalid_json' });
-    throw errorWithCode('UNKNOWN', 'response is not valid JSON', { http_status: res.status, raw_body: text });
+    throw errorWithCode('UNKNOWN', 'response is not valid JSON', { http_status: res.status, raw_body: '', raw_body_length: text.length });
   }
   if (res.status < 200 || res.status >= 300) {
     const code = mapHTTPErrorCode(res.status);
-    logFlow(callCtx, `${method}:http_error`, { http_status: res.status, raw_json: parsed.value });
-    throw errorWithCode(code, `upstream http ${res.status}`, { http_status: res.status, raw_body: text, raw_json: parsed.value });
+    logFlow(callCtx, `${method}:http_error`, { http_status: res.status });
+    throw errorWithCode(code, `upstream http ${res.status}`, { http_status: res.status, raw_body: '', raw_body_length: text.length });
   }
   return { httpStatus: res.status, rawBody: text, rawJson: parsed.value };
 };
@@ -263,7 +301,7 @@ const authenticate = async (ctx) => {
   if (!sessionId) {
     throw errorWithCode('PERMISSION_DENIED', 'failed authenticating to MX', {
       http_status: result.httpStatus,
-      raw_json: result.rawJson,
+      raw_json: undefined,
     });
   }
   return { cookie: sessionId, login: result };
@@ -325,14 +363,14 @@ const buildIPEntry = (ip, operation) => ({
 });
 
 const normalizeIPEntry = (entry) => {
-  if (typeof entry === 'string') return { ip: entry, comment: '', created_at: '', raw_json: toValue(entry) };
+  if (typeof entry === 'string') return { ip: entry, comment: '', created_at: '', raw_json: undefined };
   const ip = trimString(firstDefined(entry?.ipAddressFrom, entry?.ipAddressTo, entry?.networkAddress, entry?.ip, entry?.address));
   if (!ip) return null;
   return {
     ip,
     comment: trimString(firstDefined(entry?.comment, entry?.description, '')),
     created_at: trimString(firstDefined(entry?.created_at, entry?.createdAt, entry?.created, '')),
-    raw_json: toValue(entry),
+    raw_json: undefined,
   };
 };
 
@@ -460,8 +498,8 @@ const checkOnline = async (req = {}, ctx = {}) => {
     success: true,
     http_status: result.httpStatus,
     message: trimString(firstDefined(result.rawJson?.serverVersion, result.rawJson?.version, '')),
-    raw_body: result.rawBody,
-    raw_json: toValue(result.rawJson),
+    raw_body: '',
+    raw_json: undefined,
   };
 };
 
@@ -478,8 +516,8 @@ const blockIP = async (req = {}, ctx = {}) => {
     success: true,
     http_status: result.httpStatus,
     message: trimString(firstDefined(result.rawJson?.message, result.rawJson?.msg, '')),
-    raw_body: result.rawBody,
-    raw_json: toValue(result.rawJson),
+    raw_body: '',
+    raw_json: undefined,
   };
 };
 
@@ -491,8 +529,8 @@ const listBlockedIPs = async (req = {}, ctx = {}) => {
   return {
     items: entries.map(normalizeIPEntry).filter(Boolean),
     http_status: result.httpStatus,
-    raw_body: result.rawBody,
-    raw_json: toValue(result.rawJson),
+    raw_body: '',
+    raw_json: undefined,
   };
 };
 
@@ -506,8 +544,8 @@ const unblockIP = async (req = {}, ctx = {}) => {
     success: true,
     http_status: result.httpStatus,
     message: trimString(firstDefined(result.rawJson?.message, result.rawJson?.msg, '')),
-    raw_body: result.rawBody,
-    raw_json: toValue(result.rawJson),
+    raw_body: '',
+    raw_json: undefined,
   };
 };
 
@@ -541,12 +579,15 @@ export const _test = {
   buildApiUrl,
   buildHeaders,
   buildIPEntry,
+  buildTlsOptions,
   buildWebServiceBlockPolicy,
   checkOnline,
+  createTlsDispatcher,
   discoverWebServiceTargets,
   ensureIPGroup,
   ensureWebServiceBlockPolicy,
   errorWithCode,
+  fetchWithTimeout,
   firstDefined,
   hasOwn,
   hasSdkContextShape,
@@ -567,6 +608,7 @@ export const _test = {
   resolveCallContext,
   resolveHost,
   resolveTimeoutMs,
+  shouldSkipTlsVerify,
   splitHostAndPort,
   toBase64,
   toValue,

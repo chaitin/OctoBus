@@ -2,12 +2,16 @@
 
 OctoBus service package for ThreatBook TDP domain block and unblock APIs.
 
+## Service Name
+
+- Directory: `services/threatbook__tdp`
+- Manifest name: `threatbook-tdp`
+- Runtime entrypoint: `bin/threatbook-tdp.js`
+
 ## Import
 
-Service root: `services/threatbook__tdp`.
-
 ```bash
-octobus service import --id threatbook-tdp ./services//threatbook__tdp
+octobus service import --id threatbook-tdp ./services/threatbook__tdp
 ```
 
 ## Package Layout
@@ -19,48 +23,73 @@ octobus service import --id threatbook-tdp ./services//threatbook__tdp
 - `secret.schema.json`: API key and HMAC secret schema.
 - `test/`: Node test coverage and mock upstream.
 
-## Bindings
+## Configuration
 
-Configuration:
+Config:
 
-- `restBaseUrl`: ThreatBook TDP base URL.
-- `baseUrl`: alias for `restBaseUrl`.
-- `timeoutMs`: optional request timeout in milliseconds, default `2000`.
-- `skipTlsVerify`, `tlsInsecureSkipVerify`: optional TLS verification skip aliases.
-- `headers`: optional additional HTTP headers.
+```json
+{
+  "restBaseUrl": "https://tdp.example.com",
+  "timeoutMs": 2000
+}
+```
 
 Secrets:
 
-- `api_key`: ThreatBook TDP API key.
-- `apiKey`: alias for `api_key`.
-- `secret`: HMAC-SHA256 secret.
-- `Secret`: legacy alias for `secret`.
+```json
+{
+  "api_key": "replace-with-api-key",
+  "secret": "replace-with-hmac-secret"
+}
+```
+
+Supported config aliases are `baseUrl`, `skipTlsVerify`, `tlsInsecureSkipVerify`, and `headers`. Supported secret aliases are `apiKey` and `Secret`.
 
 ## RPC Methods
 
-- `ThreatBook_TDP.ThreatBook_TDP/BlockDomain`
-- `ThreatBook_TDP.ThreatBook_TDP/UnblockDomain`
+- `ThreatBook_TDP.ThreatBook_TDP/BlockDomain`: sends `operate: "add"` to `POST /api/v1/linkage_block/deny_list/operate`
+- `ThreatBook_TDP.ThreatBook_TDP/UnblockDomain`: sends `operate: "delete"` to `POST /api/v1/linkage_block/deny_list/operate`
+
+## Runtime Example
+
+```js
+import { handlers, METHOD_BLOCK_DOMAIN_FULL } from './threatbook__tdp/src/threatbook-tdp.js';
+
+const result = await handlers[METHOD_BLOCK_DOMAIN_FULL]({
+  config: { restBaseUrl: 'https://tdp.example.com' },
+  secret: { api_key: process.env.TDP_API_KEY, secret: process.env.TDP_SECRET },
+  request: {
+    ioc_list: ['bad.example'],
+    remark: 'case-123'
+  }
+});
+console.log(result);
+```
 
 ## Behavior
 
-- Both RPCs call `POST /api/v1/linkage_block/deny_list/operate`.
-- `BlockDomain` sends `operate: "add"`.
-- `UnblockDomain` sends `operate: "delete"`.
-- `block_direction` is always `out`.
 - Every request appends `api_key`, `auth_timestamp`, and URL-safe HMAC-SHA256 `sign` query parameters.
+- `block_direction` is always `out`.
 - Successful HTTP statuses are `200`, `201`, `204`, `209`, and `210`.
 - Success with an empty body returns `data: null`.
 - Success with JSON returns the parsed upstream JSON as `google.protobuf.Value`.
+- Successful HTTP with `response_code`, `responseCode`, or `code` not equal to `0` maps to `FAILED_PRECONDITION`.
 - HTTP `401` / `403` maps to `PERMISSION_DENIED`.
 - Other HTTP `4xx` maps to `FAILED_PRECONDITION`.
 - HTTP `5xx`, network errors, and response read errors map to `UNAVAILABLE`.
 - Invalid JSON on a successful HTTP status maps to `UNKNOWN`.
+- API key, HMAC secret, and signature material are redacted from logs and errors.
+
+## Limitations
+
+- This package only manages TDP outbound domain deny-list operations.
+- Domain syntax is checked only for non-empty strings locally; TDP performs semantic validation.
+- `remark` is optional; when omitted, a Chinese legacy default remark is generated from the first domain and count.
 
 ## Validation
 
 ```bash
 cd services
 npm run validate -- --service-dir threatbook__tdp
-npm test -- --service-dir threatbook__tdp --coverage
-npm run pack:check
+npm test -- --service-dir threatbook__tdp
 ```

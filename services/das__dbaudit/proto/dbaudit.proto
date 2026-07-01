@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package Chaitin_DBAUDIT;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Chaitin_DBAUDIT";
+
+service DBAuditService {
+  rpc ListIPFilters(ListIPFiltersRequest) returns (ListIPFiltersResponse) {}
+  rpc CreateIPFilter(CreateIPFilterRequest) returns (CreateIPFilterResponse) {}
+  rpc GetSystemResource(GetSystemResourceRequest) returns (GetSystemResourceResponse) {}
+  rpc QuerySystemResourceHistory(QuerySystemResourceHistoryRequest) returns (QuerySystemResourceHistoryResponse) {}
+}
+
+message ListIPFiltersRequest {
+  string name = 1;
+  string ip_filter_list = 2;
+  int32 current_page = 3;
+  int32 page_size = 4;
+  string instance_id = 5;
+}
+
+message IPFilter {
+  int64 id = 1;
+  string name = 2;
+  string ip_filter_list = 3;
+  string user_id = 4;
+}
+
+message ListIPFiltersResponse {
+  repeated IPFilter filters = 1;
+  int64 total_count = 2;
+  google.protobuf.Struct raw = 3;
+}
+
+message CreateIPFilterRequest {
+  string name = 1;
+  string ip_filter_list = 2;
+  string instance_id = 3;
+}
+
+message CreateIPFilterResponse {
+  int64 ip_filter_id = 1;
+  string ip_filter_name = 2;
+  string ip_filter_list = 3;
+  string user_id = 4;
+  google.protobuf.Struct raw = 5;
+}
+
+message GetSystemResourceRequest {
+  string instance_id = 1;
+}
+
+message GetSystemResourceResponse {
+  google.protobuf.Struct raw = 1;
+}
+
+message QuerySystemResourceHistoryRequest {
+  string resource_type = 1;
+  string time_preset = 2;
+  int64 start_time = 3;
+  int64 end_time = 4;
+  string interval = 5;
+  string query_scope = 6;
+  string instance_id = 7;
+}
+
+message SystemResourceRecord {
+  int64 time = 1;
+  string type = 2;
+  double avg = 3;
+  double max = 4;
+  repeated string tags = 5;
+}
+
+message QuerySystemResourceHistoryResponse {
+  repeated SystemResourceRecord records = 1;
+  google.protobuf.Struct raw = 2;
+}

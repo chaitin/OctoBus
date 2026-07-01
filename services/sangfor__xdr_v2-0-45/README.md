@@ -4,11 +4,13 @@ OctoBus service package for the seven read-only investigation capabilities reque
 
 ## Supported Version
 
+- Service name: `sangfor-xdr-v2-0-45`
+- Service dir: `sangfor__xdr_v2-0-45`
+- Runtime mode: `long-running`
 - Vendor: Sangfor (深信服)
 - Product: XDR
 - Verified version: V2.0.45
 - Authentication: Sangfor linkage code (`authCode`) or its decoded AK/SK pair
-- Runtime: long-running
 
 The package was implemented against the Sangfor XDR V2.0.45 OpenAPI documentation and verified with a real V2.0.45 device. Other XDR versions may have different request fields, enum values, response structures, or endpoint behavior and are not currently guaranteed.
 
@@ -24,6 +26,7 @@ The package was implemented against the Sangfor XDR V2.0.45 OpenAPI documentatio
 - `src/service.js`: OctoBus SDK service definition.
 - `bin/sangfor-xdr-v2-0-45.js`: service-local executable.
 - `test/sangfor-xdr-v2-0-45.test.js`: signing, mapping, transport, error, and SDK-context tests.
+- `test/mock_upstream.js`: in-process fake XDR HTTP upstream and fake fetch response helper used by tests.
 
 ## Import
 
@@ -211,7 +214,7 @@ XDR response models contain many version-dependent fields. Search responses ther
 
 - normalized `code`, `message`, `total`, `page`, and `pageSize`;
 - structured `data`;
-- the complete structured upstream response in `rawJson`.
+- `rawJson`/`raw_json` fields are intentionally empty; complete upstream raw responses are not returned by this service.
 
 `GetIncidentContext` always fetches proof. When no entity selector is set, it fetches every entity group. When one or more selectors are `true`, it fetches only those selected groups.
 
@@ -221,7 +224,7 @@ XDR response models contain many version-dependent fields. Search responses ther
 - Linkage codes and AK/SK credentials grant API access. Rotate credentials immediately if they appear in a terminal screenshot, shell history, log, issue, chat, or commit.
 - `skipTlsVerify: true` disables certificate verification and permits man-in-the-middle attacks. Use it only for a known appliance on a trusted network.
 - Search results and context responses may contain asset IPs, hostnames, MAC addresses, account names, vulnerabilities, event evidence, and other business-sensitive data.
-- `rawJson` preserves the complete upstream response. Agents and downstream systems should avoid logging or redistributing it unless required.
+- Complete upstream raw bodies are not returned. Structured result fields may still contain sensitive business data and should not be copied into external logs unless required.
 - `GetIncidentContext` can issue up to seven upstream requests: one proof request plus six entity-group requests. Select only required entity groups to reduce load and data exposure.
 - Use bounded time ranges and the minimum accepted page size for routine queries. Avoid unbounded or high-frequency polling.
 - OctoBus access logs do not store request or response bodies, but external agent logs, terminal output, screenshots, and observability systems may do so.

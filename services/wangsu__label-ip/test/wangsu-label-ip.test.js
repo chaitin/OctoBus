@@ -39,6 +39,11 @@ const buildCtx = (overrides = {}) => ({
   req: overrides.req || {},
 });
 
+const callHandler = (method, request = {}, ctx = {}) => {
+  const handler = handlers[method];
+  return handler({ ...ctx, request });
+};
+
 const responseOf = (status, body) => ({
   ok: status >= 200 && status < 300,
   status,
@@ -94,12 +99,12 @@ test('mock upstream supports forbid and unforbid flow with partial result', asyn
   const host = await mock.start();
   try {
     const ctx = buildCtx({ bindings: { baseUrl: host, skipTlsVerify: true } });
-    const forbid = await handlers[METHOD_FORBID_FULL]({ ip_list: ['1.1.1.1', 'fail.me'], forbid_time_minutes: { value: '120' }, request_id: 'rid' }, ctx);
+    const forbid = await callHandler(METHOD_FORBID_FULL, { ip_list: ['1.1.1.1', 'fail.me'], forbid_time_minutes: { value: '120' }, request_id: 'rid' }, ctx);
     assert.equal(forbid.outcome, OUTCOME.PARTIAL);
     assert.equal(forbid.forbid_time_minutes.value, '120');
     assert.deepEqual(forbid.failed_ips, ['fail.me']);
     assert.equal(forbid.audit.operation_type, OPERATION.FORBID);
-    const unforbid = await handlers[METHOD_UNFORBID_FULL]({ ip_list: ['1.1.1.1'], label_code: LABEL_CODE }, ctx);
+    const unforbid = await callHandler(METHOD_UNFORBID_FULL, { ip_list: ['1.1.1.1'], label_code: LABEL_CODE }, ctx);
     assert.equal(unforbid.outcome, OUTCOME.SUCCESS);
     assert.equal(unforbid.audit.operation_type, OPERATION.UNFORBID);
     assert.equal(mock.requests.length, 2);
@@ -115,12 +120,14 @@ test('BatchForbidIP issues POST with expected signed headers and payload', async
     return responseOf(200, JSON.stringify({ code: '0', message: 'ok', data: [] }));
   });
 
-  const res = await handlers[METHOD_FORBID_FULL]({ ip_list: ['1.1.1.1'], forbid_time_minutes: { value: '120' }, request_id: 'req-123' }, buildCtx({ bindings: { tlsInsecureSkipVerify: true } }));
+  const res = await callHandler(METHOD_FORBID_FULL, { ip_list: ['1.1.1.1'], forbid_time_minutes: { value: '120' }, request_id: 'req-123' }, buildCtx({ bindings: { tlsInsecureSkipVerify: true } }));
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, baseBindings.baseUrl);
   assert.equal(calls[0].init.method, 'POST');
-  assert.equal(calls[0].init.timeoutMs, 4000);
-  assert.equal(calls[0].init.tlsInsecureSkipVerify, true);
+  assert.ok(calls[0].init.signal instanceof AbortSignal);
+  assert.equal(calls[0].init.timeoutMs, undefined);
+  assert.equal(calls[0].init.dispatcher, _test.insecureTlsDispatcher);
+  assert.equal(calls[0].init.tlsInsecureSkipVerify, undefined);
   assert.equal(calls[0].init.headers['X-Time-Zone'], 'GMT+08:00');
   assert.equal(calls[0].init.headers.Date, DATE_HEADER);
   assert.equal(calls[0].init.headers['X-Wangsu-User'], USER);
@@ -137,7 +144,7 @@ test('BatchForbidIP issues POST with expected signed headers and payload', async
 
 test('BatchUnforbidIP honors request label_code and response aliases', async () => {
   setFetch(async () => responseOf(200, JSON.stringify({ code: '0', msg: 'done', data: { failed_ips: ['2.2.2.2'] } })));
-  const res = await handlers[METHOD_UNFORBID_FULL]({ ipList: ['2.2.2.2'], labelCode: 'OVERRIDE_TAG' }, buildCtx());
+  const res = await callHandler(METHOD_UNFORBID_FULL, { ipList: ['2.2.2.2'], labelCode: 'OVERRIDE_TAG' }, buildCtx());
   assert.equal(res.outcome, OUTCOME.PARTIAL);
   assert.equal(res.label_code, 'OVERRIDE_TAG');
   assert.equal(res.upstream_message, 'done');
@@ -172,40 +179,40 @@ test('rpcdef falls back to context request when call request is nullish', async 
 });
 
 test('validation and upstream errors map to gRPC errors', async () => {
-  await expectGrpcError(() => handlers[METHOD_FORBID_FULL]({ ip_list: ['1.1.1.1'] }, buildCtx({ bindings: { baseUrl: 'bad' } })), 'INVALID_ARGUMENT');
-  await expectGrpcError(() => handlers[METHOD_FORBID_FULL]({ ip_list: ['1.1.1.1'] }, buildCtx({ bindings: { user: '' } })), 'INVALID_ARGUMENT');
-  await expectGrpcError(() => handlers[METHOD_FORBID_FULL]({ ip_list: ['1.1.1.1'] }, buildCtx({ bindings: { apiKey: '', api_key: '' } })), 'INVALID_ARGUMENT');
-  await expectGrpcError(() => handlers[METHOD_FORBID_FULL]({ ip_list: ['1.1.1.1'] }, buildCtx({ bindings: { labelCode: '', wangsu_tag: '' } })), 'INVALID_ARGUMENT');
-  await expectGrpcError(() => handlers[METHOD_FORBID_FULL]({ ip_list: [] }, buildCtx()), 'INVALID_ARGUMENT');
-  await expectGrpcError(() => handlers[METHOD_FORBID_FULL]({ ip_list: [' '] }, buildCtx()), 'INVALID_ARGUMENT');
-  await expectGrpcError(() => handlers[METHOD_FORBID_FULL]({ ip_list: [null] }, buildCtx()), 'INVALID_ARGUMENT');
-  await expectGrpcError(() => handlers[METHOD_FORBID_FULL]({ ip_list: Array.from({ length: 10001 }, (_, idx) => `1.1.1.${idx}`) }, buildCtx()), 'INVALID_ARGUMENT');
-  await expectGrpcError(() => handlers[METHOD_FORBID_FULL]({ ip_list: ['1.1.1.1'] }, buildCtx({ bindings: { defaultForbidMinutes: undefined } })), 'INVALID_ARGUMENT');
-  await expectGrpcError(() => handlers[METHOD_FORBID_FULL]({ ip_list: ['1.1.1.1'], forbid_time_minutes: { value: '0' } }, buildCtx()), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => callHandler(METHOD_FORBID_FULL, { ip_list: ['1.1.1.1'] }, buildCtx({ bindings: { baseUrl: 'bad' } })), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => callHandler(METHOD_FORBID_FULL, { ip_list: ['1.1.1.1'] }, buildCtx({ bindings: { user: '' } })), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => callHandler(METHOD_FORBID_FULL, { ip_list: ['1.1.1.1'] }, buildCtx({ bindings: { apiKey: '', api_key: '' } })), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => callHandler(METHOD_FORBID_FULL, { ip_list: ['1.1.1.1'] }, buildCtx({ bindings: { labelCode: '', wangsu_tag: '' } })), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => callHandler(METHOD_FORBID_FULL, { ip_list: [] }, buildCtx()), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => callHandler(METHOD_FORBID_FULL, { ip_list: [' '] }, buildCtx()), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => callHandler(METHOD_FORBID_FULL, { ip_list: [null] }, buildCtx()), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => callHandler(METHOD_FORBID_FULL, { ip_list: Array.from({ length: 10001 }, (_, idx) => `1.1.1.${idx}`) }, buildCtx()), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => callHandler(METHOD_FORBID_FULL, { ip_list: ['1.1.1.1'] }, buildCtx({ bindings: { defaultForbidMinutes: undefined } })), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => callHandler(METHOD_FORBID_FULL, { ip_list: ['1.1.1.1'], forbid_time_minutes: { value: '0' } }, buildCtx()), 'INVALID_ARGUMENT');
 
   setFetch(async () => responseOf(401, 'unauthorized'));
-  await expectGrpcError(() => handlers[METHOD_FORBID_FULL]({ ip_list: ['1.1.1.1'], forbid_time_minutes: { value: '60' } }, buildCtx()), 'PERMISSION_DENIED');
+  await expectGrpcError(() => callHandler(METHOD_FORBID_FULL, { ip_list: ['1.1.1.1'], forbid_time_minutes: { value: '60' } }, buildCtx()), 'PERMISSION_DENIED');
 
   setFetch(async () => responseOf(404, 'missing'));
-  await expectGrpcError(() => handlers[METHOD_FORBID_FULL]({ ip_list: ['1.1.1.1'], forbid_time_minutes: { value: '60' } }, buildCtx()), 'FAILED_PRECONDITION');
+  await expectGrpcError(() => callHandler(METHOD_FORBID_FULL, { ip_list: ['1.1.1.1'], forbid_time_minutes: { value: '60' } }, buildCtx()), 'FAILED_PRECONDITION');
 
   setFetch(async () => responseOf(500, 'broken'));
-  await expectGrpcError(() => handlers[METHOD_FORBID_FULL]({ ip_list: ['1.1.1.1'], forbid_time_minutes: { value: '60' } }, buildCtx()), 'UNAVAILABLE');
+  await expectGrpcError(() => callHandler(METHOD_FORBID_FULL, { ip_list: ['1.1.1.1'], forbid_time_minutes: { value: '60' } }, buildCtx()), 'UNAVAILABLE');
 
   setFetch(async () => responseOf(200, ''));
-  await expectGrpcError(() => handlers[METHOD_FORBID_FULL]({ ip_list: ['1.1.1.1'], forbid_time_minutes: { value: '60' } }, buildCtx()), 'UNKNOWN');
+  await expectGrpcError(() => callHandler(METHOD_FORBID_FULL, { ip_list: ['1.1.1.1'], forbid_time_minutes: { value: '60' } }, buildCtx()), 'UNKNOWN');
 
   setFetch(async () => responseOf(200, 'not json'));
-  await expectGrpcError(() => handlers[METHOD_FORBID_FULL]({ ip_list: ['1.1.1.1'], forbid_time_minutes: { value: '60' } }, buildCtx()), 'UNKNOWN');
+  await expectGrpcError(() => callHandler(METHOD_FORBID_FULL, { ip_list: ['1.1.1.1'], forbid_time_minutes: { value: '60' } }, buildCtx()), 'UNKNOWN');
 
   setFetch(async () => responseOf(200, JSON.stringify({ code: '8001', message: 'business error' })));
-  await expectGrpcError(() => handlers[METHOD_FORBID_FULL]({ ip_list: ['1.1.1.1'], forbid_time_minutes: { value: '60' } }, buildCtx()), 'FAILED_PRECONDITION', (err) => assert.match(err.message, /8001/));
+  await expectGrpcError(() => callHandler(METHOD_FORBID_FULL, { ip_list: ['1.1.1.1'], forbid_time_minutes: { value: '60' } }, buildCtx()), 'FAILED_PRECONDITION', (err) => assert.match(err.message, /8001/));
 
   setFetch(async () => { throw new Error('network down'); });
-  await expectGrpcError(() => handlers[METHOD_FORBID_FULL]({ ip_list: ['1.1.1.1'], forbid_time_minutes: { value: '60' } }, buildCtx()), 'UNAVAILABLE', (err) => assert.match(err.message, /network down/));
+  await expectGrpcError(() => callHandler(METHOD_FORBID_FULL, { ip_list: ['1.1.1.1'], forbid_time_minutes: { value: '60' } }, buildCtx()), 'UNAVAILABLE', (err) => assert.match(err.message, /network down/));
 
   setFetch(async () => { throw 'boom'; });
-  await expectGrpcError(() => handlers[METHOD_FORBID_FULL]({ ip_list: ['1.1.1.1'], forbid_time_minutes: { value: '60' } }, buildCtx()), 'UNAVAILABLE', (err) => assert.match(err.message, /fetch failed/));
+  await expectGrpcError(() => callHandler(METHOD_FORBID_FULL, { ip_list: ['1.1.1.1'], forbid_time_minutes: { value: '60' } }, buildCtx()), 'UNAVAILABLE', (err) => assert.match(err.message, /fetch failed/));
 });
 
 test('mock upstream covers rejection paths', async () => {

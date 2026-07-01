@@ -22,6 +22,7 @@ export const METHOD_REMOVE_ADDR_GROUP_MEMBER_FULL = 'Fortinet_FW.Fortinet_FW/Rem
 export const METHOD_DELETE_ADDR_GROUP_FULL = 'Fortinet_FW.Fortinet_FW/DeleteAddrGroup';
 export const METHOD_ATTACH_SUB_GROUP_FULL = 'Fortinet_FW.Fortinet_FW/AttachSubGroupToPolicyAddrGroup';
 export const METHOD_DETACH_SUB_GROUP_FULL = 'Fortinet_FW.Fortinet_FW/DetachSubGroupFromPolicyAddrGroup';
+let insecureDispatcherPromise;
 
 const grpcCodeFor = (code) => ({
   FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
@@ -68,9 +69,9 @@ const normalizeBaseUrl = (value) => {
 };
 
 const mergedBindings = (ctx = {}) => ({
+  ...(ctx?.bindings ?? {}),
   ...(ctx?.config ?? {}),
   ...(ctx?.secret ?? {}),
-  ...(ctx?.bindings ?? {}),
 });
 
 const resolveCallContext = (ctx = {}) => ({
@@ -114,14 +115,48 @@ const resolveTimeoutMs = (ctx) => {
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;
 };
 
-const buildTlsOptions = (bindings) => {
-  const enabled = Boolean(bindings?.skipTlsVerify || bindings?.tlsInsecureSkipVerify || bindings?.insecureSkipVerify);
-  if (!enabled) return {};
-  return {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  };
+const shouldSkipTlsVerify = (bindings) => Boolean(bindings?.skipTlsVerify || bindings?.tlsInsecureSkipVerify || bindings?.insecureSkipVerify);
+
+const createTlsDispatcher = async (skipTlsVerify) => {
+  if (!skipTlsVerify) return undefined;
+  insecureDispatcherPromise ??= import('undici').then(({ Agent }) => new Agent({
+    connect: { rejectUnauthorized: false },
+  }));
+  return insecureDispatcherPromise;
+};
+
+const buildTlsOptions = async (bindings) => {
+  const dispatcher = await createTlsDispatcher(shouldSkipTlsVerify(bindings));
+  return dispatcher ? { dispatcher } : {};
+};
+
+const fetchWithTimeout = async (url, init = {}, options = {}) => {
+  const rawTimeout = Number(options.timeoutMs);
+  const timeoutMs = Number.isFinite(rawTimeout) && rawTimeout > 0 ? rawTimeout : DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const parentSignal = init.signal;
+  const abortFromParent = () => controller.abort(parentSignal.reason);
+  if (parentSignal) {
+    if (parentSignal.aborted) {
+      controller.abort(parentSignal.reason);
+    } else if (typeof parentSignal.addEventListener === 'function') {
+      parentSignal.addEventListener('abort', abortFromParent, { once: true });
+    }
+  }
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const tlsOptions = await buildTlsOptions(options.bindings);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+      ...tlsOptions,
+    });
+  } finally {
+    clearTimeout(timer);
+    if (parentSignal && typeof parentSignal.removeEventListener === 'function') {
+      parentSignal.removeEventListener('abort', abortFromParent);
+    }
+  }
 };
 
 const buildHeaders = (bindings, meta, extra = {}) => ({
@@ -173,13 +208,14 @@ const parseJsonBody = (text) => {
 };
 
 const throwForHttpStatus = (status, text) => {
+  const summary = `upstream http ${status}; body_length=${String(text || '').length}`;
   if (status === 401 || status === 403) {
-    throw errorWithCode('PERMISSION_DENIED', `upstream http ${status}: ${text}`);
+    throw errorWithCode('PERMISSION_DENIED', summary);
   }
   if (status >= 400 && status < 500) {
-    throw errorWithCode('FAILED_PRECONDITION', `upstream http ${status}: ${text}`);
+    throw errorWithCode('FAILED_PRECONDITION', summary);
   }
-  throw errorWithCode('UNAVAILABLE', `upstream http ${status}: ${text}`);
+  throw errorWithCode('UNAVAILABLE', summary);
 };
 
 const fetchFortinetJson = async (ctx, url, init = {}) => {
@@ -188,12 +224,10 @@ const fetchFortinetJson = async (ctx, url, init = {}) => {
   const { allowedStatuses: _, ...requestInit } = init;
   let res;
   try {
-    res = await fetch(url, {
-      timeoutMs: resolveTimeoutMs(callCtx),
-      ...buildTlsOptions(callCtx.bindings || {}),
+    res = await fetchWithTimeout(url, {
       ...requestInit,
       headers: buildHeaders(callCtx.bindings || {}, callCtx.meta || {}, requestInit.headers || {}),
-    });
+    }, { timeoutMs: resolveTimeoutMs(callCtx), bindings: callCtx.bindings || {} });
   } catch (err) {
     throw errorWithCode('UNAVAILABLE', err?.cause?.message || err?.message || 'fetch failed');
   }
@@ -262,14 +296,18 @@ const toValue = (value) => {
   return { stringValue: String(value) };
 };
 
-const toFortinetResponse = (json, text) => ({
-  status: stringifyCell(json?.status),
-  http_status: toInteger(firstDefined(json?.http_status, json?.httpStatus), 0),
-  error: toInteger(json?.error, 0),
-  revision: stringifyCell(json?.revision),
-  results: toValue(json?.results ?? null),
-  raw_json: text,
-});
+const toFortinetResponse = (json, text) => {
+  const response = {
+    status: stringifyCell(json?.status),
+    http_status: toInteger(firstDefined(json?.http_status, json?.httpStatus), 0),
+    error: toInteger(json?.error, 0),
+    revision: stringifyCell(json?.revision),
+    results: toValue(json?.results ?? null),
+    raw_json: '',
+  };
+  Object.defineProperty(response, 'parsed_json', { value: json, enumerable: false });
+  return response;
+};
 
 const assertSuccess = (json, fallbackMessage) => {
   const status = stringifyCell(json?.status).trim().toLowerCase();
@@ -437,7 +475,7 @@ const handleAttachSubGroupToPolicyAddrGroup = async (req, ctx) => {
   const policyBookName = requireString(req?.policy_book_name ?? req?.policyBookName, 'policy_book_name');
   const subGroupName = requireString(req?.sub_group_name ?? req?.subGroupName, 'sub_group_name');
   const current = await handleGetAddrGroup({ group_name: policyBookName }, ctx);
-  const members = extractMembers(parseJsonBody(current.raw_json));
+  const members = extractMembers(current.parsed_json);
   if (!members.some((item) => item.name === subGroupName)) members.push({ name: subGroupName });
   return updatePolicyGroupMembers(policyBookName, members, ctx, 'attach subgroup to policy addr group');
 };
@@ -447,7 +485,7 @@ const handleDetachSubGroupFromPolicyAddrGroup = async (req, ctx) => {
   const policyBookName = requireString(req?.policy_book_name ?? req?.policyBookName, 'policy_book_name');
   const subGroupName = requireString(req?.sub_group_name ?? req?.subGroupName, 'sub_group_name');
   const current = await handleGetAddrGroup({ group_name: policyBookName }, ctx);
-  const members = extractMembers(parseJsonBody(current.raw_json)).filter((item) => item.name !== subGroupName);
+  const members = extractMembers(current.parsed_json).filter((item) => item.name !== subGroupName);
   return updatePolicyGroupMembers(policyBookName, members, ctx, 'detach subgroup from policy addr group');
 };
 
@@ -491,9 +529,11 @@ rpcdef.__test__ = {
   assertSuccess,
   buildHeaders,
   buildTlsOptions,
+  createTlsDispatcher,
   defaultSubnet,
   errorWithCode,
   extractMembers,
+  fetchWithTimeout,
   fetchFortinetJson,
   firstDefined,
   handleAddAddrGroupMember,
@@ -526,6 +566,7 @@ rpcdef.__test__ = {
   resolveTimeoutMs,
   resolveToken,
   resolveVdom,
+  shouldSkipTlsVerify,
   stringifyCell,
   stringifyJson,
   throwForHttpStatus,

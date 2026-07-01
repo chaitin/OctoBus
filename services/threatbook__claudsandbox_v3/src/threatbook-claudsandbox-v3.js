@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const METHOD_UPLOAD_FILE_PATH = '/ThreatBook_ClaudSandbox_V3.ThreatBook_ClaudSandbox_V3/UploadFile';
 export const METHOD_UPLOAD_FILE_FULL = 'ThreatBook_ClaudSandbox_V3.ThreatBook_ClaudSandbox_V3/UploadFile';
@@ -45,6 +46,16 @@ const toTrimmedString = (value) => {
   return String(raw).trim();
 };
 
+const redactSensitive = (value, sensitiveValues = []) => {
+  let out = String(value ?? '');
+  for (const sensitive of sensitiveValues || []) {
+    const raw = toTrimmedString(sensitive);
+    if (!raw) continue;
+    out = out.split(raw).join('<redacted>');
+  }
+  return out;
+};
+
 const normalizeBaseUrl = (value) => {
   const raw = toTrimmedString(value);
   if (!/^https?:\/\//i.test(raw)) return '';
@@ -84,14 +95,18 @@ const resolveTimeoutMs = (ctx = {}) => {
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;
 };
 
+const insecureTlsDispatcher = new Agent({ connect: { rejectUnauthorized: false } });
+
 const buildTlsOptions = (bindings = {}) => {
   const enabled = Boolean(bindings.skipTlsVerify || bindings.tlsInsecureSkipVerify || bindings.insecureSkipVerify);
   if (!enabled) return {};
-  return {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  };
+  return { dispatcher: insecureTlsDispatcher };
+};
+
+const makeTimeoutSignal = (timeoutMs) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  return { signal: controller.signal, clear: () => clearTimeout(timeoutId) };
 };
 
 const requireDomain = (ctx = {}) => {
@@ -148,16 +163,18 @@ const toValue = (value) => {
 };
 
 const throwStructuredError = (code, message, options = {}) => {
+  const rawBody = String(options.rawBody ?? '');
+  const sensitiveValues = options.sensitiveValues || [];
   const payload = {
     code,
-    message,
+    message: redactSensitive(message, sensitiveValues),
     http_status: Number(options.httpStatus ?? 0),
-    raw_body: String(options.rawBody ?? ''),
+    raw_body: '',
+    raw_body_length: rawBody.length,
   };
-  if (options.reason) payload.reason = String(options.reason);
-  if (options.rawJson !== undefined) payload.raw_json = options.rawJson;
+  if (options.reason) payload.reason = redactSensitive(options.reason, sensitiveValues);
   if (options.responseCode !== undefined) payload.response_code = options.responseCode;
-  if (options.verboseMsg !== undefined) payload.verbose_msg = options.verboseMsg;
+  if (options.verboseMsg !== undefined) payload.verbose_msg = redactSensitive(options.verboseMsg, sensitiveValues);
   throw errorWithCode(code, JSON.stringify(payload));
 };
 
@@ -171,12 +188,14 @@ const mapHttpStatusToGrpcCode = (status) => {
 
 const fetchUpstream = async (url, init, ctx = {}) => {
   const bindings = ctx.bindings || {};
+  const sensitiveValues = [resolveApiKey(bindings)].filter(Boolean);
   const timeoutMs = resolveTimeoutMs(ctx);
+  const timeout = makeTimeoutSignal(timeoutMs);
   let res;
   try {
     res = await fetch(url, {
       ...init,
-      timeoutMs,
+      signal: timeout.signal,
       ...buildTlsOptions(bindings),
     });
   } catch (err) {
@@ -184,7 +203,10 @@ const fetchUpstream = async (url, init, ctx = {}) => {
       httpStatus: 0,
       rawBody: '',
       reason: err?.cause?.message || err?.message || 'fetch failed',
+      sensitiveValues,
     });
+  } finally {
+    timeout.clear();
   }
 
   const httpStatus = Number(res?.status || 0);
@@ -196,9 +218,12 @@ const fetchUpstream = async (url, init, ctx = {}) => {
       httpStatus,
       rawBody: '',
       reason: err?.message || 'response read failed',
+      sensitiveValues,
     });
   }
-  return { httpStatus, rawBody: String(rawBody ?? '') };
+  const result = { httpStatus, rawBody: String(rawBody ?? '') };
+  if (sensitiveValues.length) result.sensitiveValues = sensitiveValues;
+  return result;
 };
 
 const assertThreatBookSuccess = ({ httpStatus, rawBody }, parsed) => {
@@ -208,6 +233,7 @@ const assertThreatBookSuccess = ({ httpStatus, rawBody }, parsed) => {
       rawBody,
       rawJson: parsed.ok ? parsed.value : undefined,
       reason: `upstream http ${httpStatus}`,
+      sensitiveValues: parsed.sensitiveValues,
     });
   }
 
@@ -216,6 +242,7 @@ const assertThreatBookSuccess = ({ httpStatus, rawBody }, parsed) => {
       httpStatus,
       rawBody,
       reason: 'response is not valid JSON',
+      sensitiveValues: parsed.sensitiveValues,
     });
   }
 
@@ -228,6 +255,7 @@ const assertThreatBookSuccess = ({ httpStatus, rawBody }, parsed) => {
       rawBody,
       rawJson: parsed.value,
       reason: 'response_code missing',
+      sensitiveValues: parsed.sensitiveValues,
     });
   }
 
@@ -240,6 +268,7 @@ const assertThreatBookSuccess = ({ httpStatus, rawBody }, parsed) => {
       responseCode,
       verboseMsg,
       reason: 'response_code != 0',
+      sensitiveValues: parsed.sensitiveValues,
     });
   }
 
@@ -249,6 +278,7 @@ const assertThreatBookSuccess = ({ httpStatus, rawBody }, parsed) => {
 const parseThreatBookJSON = (result) => {
   const trimmed = result.rawBody.trim();
   const parsed = trimmed ? tryParseJson(trimmed) : { ok: false };
+  parsed.sensitiveValues = result.sensitiveValues || [];
   return assertThreatBookSuccess(result, parsed);
 };
 
@@ -325,8 +355,8 @@ const mapUploadResponse = (result) => {
   const json = parseThreatBookJSON(result);
   return {
     http_status: result.httpStatus,
-    raw_body: result.rawBody,
-    raw_json: toValue(json),
+    raw_body: '',
+    raw_json: undefined,
     sha256: toTrimmedString(json.data?.sha256),
     permalink: toTrimmedString(json.data?.permalink),
   };
@@ -354,8 +384,8 @@ const mapFileReportResponse = (result) => {
   const json = parseThreatBookJSON(result);
   return {
     http_status: result.httpStatus,
-    raw_body: result.rawBody,
-    raw_json: toValue(json),
+    raw_body: '',
+    raw_json: undefined,
     summary: mapSummary(json.data?.summary ?? {}),
     permalink: toTrimmedString(json.data?.permalink),
     data: toValue(json.data ?? {}),
@@ -378,8 +408,8 @@ const mapMultiEnginesReportResponse = (result) => {
   const json = parseThreatBookJSON(result);
   return {
     http_status: result.httpStatus,
-    raw_body: result.rawBody,
-    raw_json: toValue(json),
+    raw_body: '',
+    raw_json: undefined,
     multiengines: mapMultiEngines(json.data?.multiengines ?? {}),
     data: toValue(json.data ?? {}),
   };
@@ -474,7 +504,9 @@ export const _test = {
   handleGetMultiEnginesReport,
   handleUploadFile,
   hasOwn,
+  insecureTlsDispatcher,
   isValidBase64,
+  makeTimeoutSignal,
   mapFileReportResponse,
   mapHttpStatusToGrpcCode,
   mapMultiEngines,
@@ -487,6 +519,7 @@ export const _test = {
   normalizeRunTime,
   parseThreatBookJSON,
   readFileFromRequest,
+  redactSensitive,
   requireApiKey,
   requireDomain,
   requireResource,

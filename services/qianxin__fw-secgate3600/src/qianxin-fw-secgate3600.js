@@ -1,4 +1,5 @@
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const LOGIN_PATH = '/QIANXIN_FW_SecGate3600.QIANXIN_FW_SecGate3600/Login';
 export const UPDATE_PATH = '/QIANXIN_FW_SecGate3600.QIANXIN_FW_SecGate3600/UpdateAddressGroup';
@@ -53,9 +54,9 @@ const requireString = (value, fieldName) => {
 };
 
 const mergedBindings = (ctx = {}) => ({
+  ...(ctx?.bindings ?? {}),
   ...(ctx?.config ?? {}),
   ...(ctx?.secret ?? {}),
-  ...(ctx?.bindings ?? {}),
 });
 
 const resolveCallContext = (ctx = {}) => ({
@@ -63,8 +64,10 @@ const resolveCallContext = (ctx = {}) => ({
   bindings: mergedBindings(ctx),
   limits: ctx.limits ?? {},
   meta: ctx.meta ?? {},
-  req: ctx.req ?? ctx.request ?? {},
+  req: ctx.request ?? ctx.req ?? {},
 });
+
+const requestFromContext = (ctx = {}) => ctx.request ?? ctx.req ?? {};
 
 const parseAuthority = (authority) => {
   if (!authority) return null;
@@ -132,13 +135,16 @@ const toBoolean = (value) => {
   return false;
 };
 
+let insecureTlsDispatcher;
+
+const getInsecureTlsDispatcher = () => {
+  insecureTlsDispatcher ??= new Agent({ connect: { rejectUnauthorized: false } });
+  return insecureTlsDispatcher;
+};
+
 const buildTlsOptions = (bindings) => {
   if (!toBoolean(bindings?.skipTlsVerify) && !toBoolean(bindings?.tlsInsecureSkipVerify) && !toBoolean(bindings?.insecureSkipVerify)) return {};
-  return {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  };
+  return { dispatcher: getInsecureTlsDispatcher() };
 };
 
 const buildHeaders = (ctx, extra = {}) => ({
@@ -166,6 +172,18 @@ const requireSession = (ctx, host) => {
   const session = getSession(ctx, host);
   if (!session?.cookie || !session?.token) throw errorWithCode('FAILED_PRECONDITION', 'call Login first');
   return session;
+};
+
+const pickCredential = (ctx, fieldNames, fieldLabel) => {
+  const secret = ctx?.secret || {};
+  const config = ctx?.config || {};
+  const bindings = ctx?.bindings || {};
+  for (const field of fieldNames) {
+    const value = firstDefined(secret[field], config[field], bindings[field]);
+    const text = toTrimmedString(value);
+    if (text) return text;
+  }
+  throw errorWithCode('INVALID_ARGUMENT', `${fieldLabel} is required`);
 };
 
 const toInt64 = (value, fallback = 0) => {
@@ -196,9 +214,9 @@ const toValue = (val) => {
 const fetchUpstream = async (ctx, url, init = {}) => {
   try {
     const response = await fetch(url, {
-      timeoutMs: resolveTimeoutMs(ctx),
-      ...buildTlsOptions(ctx?.bindings || {}),
       ...init,
+      signal: AbortSignal.timeout(resolveTimeoutMs(ctx)),
+      ...buildTlsOptions(ctx?.bindings || {}),
       headers: buildHeaders(ctx, init.headers || {}),
     });
     const text = await response.text();
@@ -285,13 +303,13 @@ const extractHeaders = (res) => {
 };
 
 const resolveLoginUsername = (req, ctx) =>
-  requireString(firstDefined(req?.username, ctx?.bindings?.user, ctx?.bindings?.username), 'username');
+  pickCredential(ctx, ['user', 'username'], 'username');
 
 const resolveLoginPassword = (req, ctx) =>
-  requireString(firstDefined(req?.password, ctx?.bindings?.password), 'password');
+  pickCredential(ctx, ['password'], 'password');
 
 const resolveLogoutUsername = (req, ctx, session) =>
-  requireString(firstDefined(req?.username, session?.username, ctx?.bindings?.user, ctx?.bindings?.username), 'username');
+  requireString(firstDefined(session?.username, ctx?.secret?.user, ctx?.secret?.username, ctx?.config?.user, ctx?.config?.username, ctx?.bindings?.user, ctx?.bindings?.username), 'username');
 
 const normalizeAddressItem = (item, fieldName) => {
   const source = item || {};
@@ -351,13 +369,13 @@ const toLoginResponse = (status, text, res, json) => {
     success: json?.success === true,
     result: {
       error_code: toTrimmedString(resultObject.error_code),
-      token: toTrimmedString(resultObject.token),
-      raw: toValue(resultObject),
+      token: '',
+      raw: undefined,
     },
     http_status: Number(status),
-    raw_body: String(text ?? ''),
-    raw_json: toValue(json),
-    headers: extractHeaders(res),
+    raw_body: '',
+    raw_json: undefined,
+    headers: [],
   };
 };
 
@@ -371,17 +389,17 @@ const toUpdateResponse = (status, text, res, json) => {
     },
     body: toValue(json?.body),
     http_status: Number(status),
-    raw_body: String(text ?? ''),
-    raw_json: toValue(json),
-    headers: extractHeaders(res),
+    raw_body: '',
+    raw_json: undefined,
+    headers: [],
   };
 };
 
 const toLogoutResponse = (status, text, res, json) => ({
-  raw_json: json === undefined ? undefined : toValue(json),
+  raw_json: undefined,
   http_status: Number(status),
-  raw_body: String(text ?? ''),
-  headers: extractHeaders(res),
+  raw_body: '',
+  headers: [],
 });
 
 const handleLogin = async (req, ctx) => {
@@ -398,11 +416,12 @@ const handleLogin = async (req, ctx) => {
   const json = requireJsonBody(upstream.text);
   validateLoginJson(json);
   const response = toLoginResponse(upstream.status, upstream.text, upstream.res, json);
-  if (response.success && response.result.error_code === 'success' && response.result.token) {
-    const cookie = mergeCookieHeader(getSetCookies(upstream.res), response.result.token);
+  const token = toTrimmedString(json?.result?.token);
+  if (response.success && response.result.error_code === 'success' && token) {
+    const cookie = mergeCookieHeader(getSetCookies(upstream.res), token);
     if (cookie) {
       setSession(callCtx, host, {
-        token: response.result.token,
+        token,
         cookie,
         username,
         login_at_ms: Date.now(),
@@ -464,9 +483,9 @@ export function rpcdef(ctx) {
 }
 
 export const handlers = {
-  [METHOD_LOGIN_FULL]: (req, ctx = {}) => handleLogin(req, ctx),
-  [METHOD_UPDATE_FULL]: (req, ctx = {}) => handleUpdateAddressGroup(req, ctx),
-  [METHOD_LOGOUT_FULL]: (req, ctx = {}) => handleLogout(req, ctx),
+  [METHOD_LOGIN_FULL]: (ctx = {}) => handleLogin(requestFromContext(ctx), ctx),
+  [METHOD_UPDATE_FULL]: (ctx = {}) => handleUpdateAddressGroup(requestFromContext(ctx), ctx),
+  [METHOD_LOGOUT_FULL]: (ctx = {}) => handleLogout(requestFromContext(ctx), ctx),
 };
 
 export const _test = {

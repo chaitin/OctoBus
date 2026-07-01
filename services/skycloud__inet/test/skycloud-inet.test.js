@@ -22,18 +22,25 @@ const originalConsoleLog = console.log;
 const buildCtx = (overrides = {}) => ({
   bindings: {
     host: 'https://inet.example.com',
-    username: 'user',
-    password: 'secret',
     defaultDirection: 'BOTH',
     headers: { 'x-flow': 'skycloud' },
     ...(overrides.bindings || {}),
   },
   config: overrides.config || {},
-  secret: overrides.secret || {},
+  secret: {
+    username: 'user',
+    password: 'secret',
+    ...(overrides.secret || {}),
+  },
   limits: { timeoutMs: 5000, ...(overrides.limits || {}) },
   meta: { instance_id: 'inst', request_id: 'req', ...(overrides.meta || {}) },
   req: overrides.req || {},
 });
+
+const callHandler = (method, request = {}, ctx = {}) => {
+  const handler = handlers[method];
+  return handler({ ...ctx, request });
+};
 
 const response = (status, body) => ({
   ok: status >= 200 && status < 300,
@@ -89,27 +96,27 @@ test('service exports handlers and rpcdef paths', () => {
 
 test('rejects missing required connection and request fields', async () => {
   await expectGrpcError(
-    () => handlers[METHOD_BATCH_BLOCK_FULL]({ environment_name: '', ip_directives: ['203.0.113.1'] }, buildCtx()),
+    () => callHandler(METHOD_BATCH_BLOCK_FULL, { environment_name: '', ip_directives: ['203.0.113.1'] }, buildCtx()),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /environment_name/),
   );
   await expectGrpcError(
-    () => handlers[METHOD_BATCH_BLOCK_FULL]({ environment_name: 'prod', ip_directives: ['203.0.113.1'] }, buildCtx({ bindings: { host: '', restBaseUrl: '', baseUrl: '' } })),
+    () => callHandler(METHOD_BATCH_BLOCK_FULL, { environment_name: 'prod', ip_directives: ['203.0.113.1'] }, buildCtx({ bindings: { host: '', restBaseUrl: '', baseUrl: '' } })),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /https URL/),
   );
   await expectGrpcError(
-    () => handlers[METHOD_BATCH_BLOCK_FULL]({ environment_name: 'prod', ip_directives: ['203.0.113.1'] }, buildCtx({ bindings: { username: '', user: '' } })),
+    () => callHandler(METHOD_BATCH_BLOCK_FULL, { environment_name: 'prod', ip_directives: ['203.0.113.1'] }, buildCtx({ secret: { username: '', user: '' } })),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /username/),
   );
   await expectGrpcError(
-    () => handlers[METHOD_BATCH_BLOCK_FULL]({ environment_name: 'prod', ip_directives: ['203.0.113.1'] }, buildCtx({ bindings: { password: '' } })),
+    () => callHandler(METHOD_BATCH_BLOCK_FULL, { environment_name: 'prod', ip_directives: ['203.0.113.1'] }, buildCtx({ secret: { password: '' } })),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /password/),
   );
   await expectGrpcError(
-    () => handlers[METHOD_BATCH_BLOCK_FULL]({ environment_name: 'prod', ip_directives: [] }, buildCtx()),
+    () => callHandler(METHOD_BATCH_BLOCK_FULL, { environment_name: 'prod', ip_directives: [] }, buildCtx()),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /ip_directives/),
   );
@@ -119,7 +126,7 @@ test('invalid IPs short-circuit without network calls', async () => {
   setFetch(async () => {
     throw new Error('should not fetch');
   });
-  const result = await handlers[METHOD_BATCH_BLOCK_FULL](
+  const result = await callHandler(METHOD_BATCH_BLOCK_FULL,
     { environment_name: 'prod', ip_directives: ['bad-ip', { description: 'missing ip' }, { ip: '999.0.0.1' }, 42] },
     buildCtx(),
   );
@@ -141,7 +148,7 @@ test('batches block requests and annotates work orders', async () => {
     return response(200, { code: 200, data: { id: calls.length === 3 ? 'wo-1' : 'wo-2' } });
   });
 
-  const result = await handlers[METHOD_BATCH_BLOCK_FULL](
+  const result = await callHandler(METHOD_BATCH_BLOCK_FULL,
     {
       environmentName: 'prod',
       ipDirectives: { values: ips },
@@ -153,8 +160,10 @@ test('batches block requests and annotates work orders', async () => {
 
   assert.equal(calls.length, 4);
   assert.equal(calls[0].url, 'https://inet.example.com/api/sky-platform/auth/user/login');
-  assert.equal(calls[0].init.timeoutMs, 5000);
-  assert.equal(calls[0].init.skipTlsVerify, true);
+  assert.ok(calls[0].init.signal instanceof AbortSignal);
+  assert.equal('timeoutMs' in calls[0].init, false);
+  assert.ok(calls[0].init.dispatcher);
+  assert.equal('skipTlsVerify' in calls[0].init, false);
   assert.equal(calls[0].init.headers['x-engine-instance'], 'inst');
   assert.equal(calls[0].init.headers['x-flow'], 'skycloud');
   assert.equal(calls[2].body.type, 'BLOCKER');
@@ -169,7 +178,7 @@ test('batches block requests and annotates work orders', async () => {
   assert.equal(result.results[349].batch_token, 'batch-1');
 });
 
-test('unblock RPC uses UN_BLOCKER type and request connection overrides bindings', async () => {
+test('unblock RPC uses UN_BLOCKER type and ignores request connection credentials', async () => {
   const calls = [];
   setFetch(async (url, init) => {
     calls.push({ url: String(url), body: JSON.parse(init.body), headers: init.headers });
@@ -178,15 +187,15 @@ test('unblock RPC uses UN_BLOCKER type and request connection overrides bindings
     return response(200, { code: 200, data: 'wo-9' });
   });
 
-  const result = await rpcdef(buildCtx({ bindings: { host: 'https://wrong.example.com' } }))[METHOD_BATCH_UNBLOCK_PATH]({
+  const result = await rpcdef(buildCtx({ bindings: { host: 'https://configured.example.com' }, secret: { username: 'secret-user', password: 'secret-password' } }))[METHOD_BATCH_UNBLOCK_PATH]({
     environment_name: 'prod',
     ip_directives: [{ ip: '2001:db8::1', remark: 'ipv6' }],
     connection: { host: 'https://override.example.com/', username: 'request-user', password: 'request-password' },
     ticket_template: { name: 'Manual unblock', description: 'restore', direction: 'EGRESS' },
   });
 
-  assert.equal(calls[0].url, 'https://override.example.com/api/sky-platform/auth/user/login');
-  assert.deepEqual(calls[0].body, { username: 'request-user', password: 'request-password' });
+  assert.equal(calls[0].url, 'https://configured.example.com/api/sky-platform/auth/user/login');
+  assert.deepEqual(calls[0].body, { username: 'secret-user', password: 'secret-password' });
   assert.equal(calls[2].body.type, 'UN_BLOCKER');
   assert.equal(calls[2].body.direction, 'EGRESS');
   assert.equal(calls[2].body.name, 'Manual unblock');
@@ -198,36 +207,36 @@ test('transport protocol business and network errors map correctly', async () =>
   for (const [status, legacyCode] of [[401, 'UNAUTHENTICATED'], [403, 'PERMISSION_DENIED'], [404, 'FAILED_PRECONDITION'], [500, 'UNAVAILABLE']]) {
     setFetch(async () => response(status, { code: status, message: 'bad'.repeat(100) }));
     await expectGrpcError(
-      () => handlers[METHOD_BATCH_BLOCK_FULL]({ environment_name: 'prod', ip_directives: ['203.0.113.1'] }, buildCtx()),
+      () => callHandler(METHOD_BATCH_BLOCK_FULL, { environment_name: 'prod', ip_directives: ['203.0.113.1'] }, buildCtx()),
       legacyCode,
       (err) => assert.match(err.message, new RegExp(`login.*${status}`)),
     );
   }
 
   setFetch(async () => response(200, ''));
-  await expectGrpcError(() => handlers[METHOD_BATCH_BLOCK_FULL]({ environment_name: 'prod', ip_directives: ['203.0.113.1'] }, buildCtx()), 'UNKNOWN', (err) => {
+  await expectGrpcError(() => callHandler(METHOD_BATCH_BLOCK_FULL, { environment_name: 'prod', ip_directives: ['203.0.113.1'] }, buildCtx()), 'UNKNOWN', (err) => {
     assert.match(err.message, /empty/);
   });
 
   setFetch(async () => response(200, 'not-json'));
-  await expectGrpcError(() => handlers[METHOD_BATCH_BLOCK_FULL]({ environment_name: 'prod', ip_directives: ['203.0.113.1'] }, buildCtx()), 'UNKNOWN', (err) => {
+  await expectGrpcError(() => callHandler(METHOD_BATCH_BLOCK_FULL, { environment_name: 'prod', ip_directives: ['203.0.113.1'] }, buildCtx()), 'UNKNOWN', (err) => {
     assert.match(err.message, /not valid JSON/);
   });
 
   setFetch(async () => response(200, { code: 401, data: null, message: 'denied' }));
-  await expectGrpcError(() => handlers[METHOD_BATCH_BLOCK_FULL]({ environment_name: 'prod', ip_directives: ['203.0.113.1'] }, buildCtx()), 'FAILED_PRECONDITION', (err) => {
+  await expectGrpcError(() => callHandler(METHOD_BATCH_BLOCK_FULL, { environment_name: 'prod', ip_directives: ['203.0.113.1'] }, buildCtx()), 'FAILED_PRECONDITION', (err) => {
     assert.match(err.message, /login failed: denied/);
   });
 
   setFetch(async () => response(200, { code: 200, data: { value: '' } }));
-  await expectGrpcError(() => handlers[METHOD_BATCH_BLOCK_FULL]({ environment_name: 'prod', ip_directives: ['203.0.113.1'] }, buildCtx()), 'UNAUTHENTICATED', (err) => {
+  await expectGrpcError(() => callHandler(METHOD_BATCH_BLOCK_FULL, { environment_name: 'prod', ip_directives: ['203.0.113.1'] }, buildCtx()), 'UNAUTHENTICATED', (err) => {
     assert.match(err.message, /access token missing/);
   });
 
   setFetch(async () => {
     throw new Error('');
   });
-  await expectGrpcError(() => handlers[METHOD_BATCH_BLOCK_FULL]({ environment_name: 'prod', ip_directives: ['203.0.113.1'] }, buildCtx()), 'UNAVAILABLE', (err) => {
+  await expectGrpcError(() => callHandler(METHOD_BATCH_BLOCK_FULL, { environment_name: 'prod', ip_directives: ['203.0.113.1'] }, buildCtx()), 'UNAVAILABLE', (err) => {
     assert.match(err.message, /fetch failed/);
   });
 });
@@ -237,7 +246,7 @@ test('environment and work order protocol errors map correctly', async () => {
     if (String(url).includes('/auth/')) return response(200, { code: 200, data: { accessTokenValue: 'token-1' } });
     return response(200, { code: 200, data: [] });
   });
-  await expectGrpcError(() => handlers[METHOD_BATCH_BLOCK_FULL]({ environment_name: 'prod', ip_directives: ['203.0.113.1'] }, buildCtx()), 'FAILED_PRECONDITION', (err) => {
+  await expectGrpcError(() => callHandler(METHOD_BATCH_BLOCK_FULL, { environment_name: 'prod', ip_directives: ['203.0.113.1'] }, buildCtx()), 'FAILED_PRECONDITION', (err) => {
     assert.match(err.message, /environment prod not found/);
   });
 
@@ -246,7 +255,7 @@ test('environment and work order protocol errors map correctly', async () => {
     if (String(url).includes('/environment/')) return response(200, { code: 200, data: [{ name: 'prod' }] });
     return response(200, { code: 200, data: { id: 'wo-1' } });
   });
-  await expectGrpcError(() => handlers[METHOD_BATCH_BLOCK_FULL]({ environment_name: 'prod', ip_directives: ['203.0.113.1'] }, buildCtx()), 'FAILED_PRECONDITION', (err) => {
+  await expectGrpcError(() => callHandler(METHOD_BATCH_BLOCK_FULL, { environment_name: 'prod', ip_directives: ['203.0.113.1'] }, buildCtx()), 'FAILED_PRECONDITION', (err) => {
     assert.match(err.message, /missing id/);
   });
 
@@ -255,7 +264,7 @@ test('environment and work order protocol errors map correctly', async () => {
     if (String(url).includes('/environment/')) return response(200, { code: 200, data: [{ id: 'env-1', name: 'prod' }] });
     return response(200, { code: 500, data: null, message: 'forced work order failure' });
   });
-  await expectGrpcError(() => handlers[METHOD_BATCH_BLOCK_FULL]({ environment_name: 'prod', ip_directives: ['203.0.113.1'] }, buildCtx()), 'FAILED_PRECONDITION', (err) => {
+  await expectGrpcError(() => callHandler(METHOD_BATCH_BLOCK_FULL, { environment_name: 'prod', ip_directives: ['203.0.113.1'] }, buildCtx()), 'FAILED_PRECONDITION', (err) => {
     assert.match(err.message, /work order failed/);
   });
 
@@ -264,7 +273,7 @@ test('environment and work order protocol errors map correctly', async () => {
     if (String(url).includes('/environment/')) return response(200, { code: 200, data: [{ id: 'env-1', name: 'prod' }] });
     return response(200, { code: 200, data: {} });
   });
-  await expectGrpcError(() => handlers[METHOD_BATCH_BLOCK_FULL]({ environment_name: 'prod', ip_directives: ['203.0.113.1'] }, buildCtx()), 'FAILED_PRECONDITION', (err) => {
+  await expectGrpcError(() => callHandler(METHOD_BATCH_BLOCK_FULL, { environment_name: 'prod', ip_directives: ['203.0.113.1'] }, buildCtx()), 'FAILED_PRECONDITION', (err) => {
     assert.match(err.message, /missing id/);
   });
 });
@@ -293,7 +302,7 @@ test('helper functions cover parsing normalization and defaults', () => {
   assert.equal(_test.optionalUint32('0'), undefined);
   assert.equal(_test.resolveTimeoutMs({ limits: { timeoutMs: -1 }, bindings: { timeoutMs: '25' } }), 25);
   assert.equal(_test.resolveTimeoutMs({ limits: { timeoutMs: '11' }, bindings: { timeoutMs: '25' } }), 11);
-  assert.deepEqual(_test.buildTlsOptions({ insecureSkipVerify: 'on' }), { skipTlsVerify: true, tlsInsecureSkipVerify: true, insecureSkipVerify: true });
+  assert.ok(_test.buildTlsOptions({ insecureSkipVerify: 'on' }).dispatcher);
   assert.deepEqual(_test.buildTlsOptions({}), {});
   assert.equal(_test.isIPv4('203.0.113.1'), true);
   assert.equal(_test.isIPv4('203.0.113.999'), false);
@@ -330,7 +339,7 @@ test('resolve context merges config secret and bindings with request alias', () 
   assert.deepEqual(ctx.bindings, {
     host: 'https://config.example.com',
     defaultDirection: 'INGRESS',
-    username: 'binding-user',
+    username: 'secret-user',
     password: 'secret-password',
   });
   assert.deepEqual(ctx.req, { environment_name: 'prod' });
@@ -346,12 +355,12 @@ test('helper functions cover alias branches and direct upstream helpers', async 
     'x-request-id': 'req2',
     accept: 'application/json',
   });
-  assert.equal(_test.requireHost({ req: { base_url: 'https://req.example.com/' }, bindings: {} }), 'https://req.example.com');
-  assert.equal(_test.requireHost({ req: { baseUrl: 'http://req.example.com' }, bindings: { allowHttpHost: true } }), 'http://req.example.com');
+  assert.throws(() => _test.requireHost({ req: { base_url: 'https://req.example.com/' }, bindings: {} }), /host\/restBaseUrl/);
+  assert.throws(() => _test.requireHost({ req: { baseUrl: 'http://req.example.com' }, bindings: { allowHttpHost: true } }), /host\/restBaseUrl/);
   assert.equal(_test.requireHost({ req: {}, bindings: { baseUrl: 'http://binding.example.com', allowHttpUrl: true } }), 'http://binding.example.com');
-  assert.equal(_test.requireUsername({ req: { user: 'request-user' }, bindings: {} }), 'request-user');
+  assert.throws(() => _test.requireUsername({ req: { user: 'request-user' }, bindings: {} }), /username/);
   assert.equal(_test.requireUsername({ req: {}, bindings: { user: 'binding-user' } }), 'binding-user');
-  assert.equal(_test.requirePassword({ req: { connection: { password: 'request-password' } }, bindings: { password: 'binding-password' } }), 'request-password');
+  assert.equal(_test.requirePassword({ req: { connection: { password: 'request-password' } }, bindings: { password: 'binding-password' } }), 'binding-password');
   assert.equal(_test.requireEnvironmentName({ req: { environmentName: 'camel-prod' } }), 'camel-prod');
 
   const normalized = _test.normalizeIpDirectives({
@@ -418,9 +427,8 @@ test('rpcdef falls back to context request when call request is omitted', async 
       bindings: {
         host: server.url,
         allowHttpBaseUrl: true,
-        username: 'user',
-        password: 'secret',
       },
+      secret: { username: 'user', password: 'secret' },
       req: { environment_name: 'prod', ip_directives: [{ ip: '192.0.2.11' }] },
     }))[METHOD_BATCH_BLOCK_PATH];
 
@@ -457,12 +465,11 @@ test('mock upstream handles full lifecycle', async () => {
       bindings: {
         host: server.url,
         allowHttpBaseUrl: true,
-        username: 'user',
-        password: 'secret',
       },
+      secret: { username: 'user', password: 'secret' },
     });
 
-    const result = await handlers[METHOD_BATCH_BLOCK_FULL](
+    const result = await callHandler(METHOD_BATCH_BLOCK_FULL,
       { environment_name: 'prod', ip_directives: [{ ip: '192.0.2.10' }] },
       ctx,
     );

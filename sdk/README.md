@@ -43,7 +43,7 @@ Or create a package manually with `service.json`, `package.json bin`, proto file
     "calculator": "bin/calculator.js"
   },
   "dependencies": {
-    "@chaitin-ai/octobus-sdk": "^0.5.0"
+    "@chaitin-ai/octobus-sdk": "^0.6.0"
   }
 }
 ```

@@ -4,6 +4,7 @@
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
 const DEFAULT_TIMEOUT_MS = 1500;
+let insecureDispatcherPromise;
 const MAX_TIME_INTERVAL = 86400;
 const DEFAULT_TIME_INTERVAL = 86400;
 const DEFAULT_LOG_SIZE = 100;
@@ -114,10 +115,47 @@ const extractOriginalValues = (candidate) => {
 
 const firstDefined = (...vals) => vals.find((v) => v !== undefined && v !== null);
 
+const createTlsDispatcher = async (skipTlsVerify) => {
+  if (!skipTlsVerify) return undefined;
+  insecureDispatcherPromise ??= import('undici').then(({ Agent }) => new Agent({
+    connect: { rejectUnauthorized: false },
+  }));
+  return insecureDispatcherPromise;
+};
+
+const fetchWithTimeout = async (url, init = {}, options = {}) => {
+  const timeout = Number(options.timeoutMs);
+  const timeoutMs = Number.isFinite(timeout) && timeout > 0 ? timeout : DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const parentSignal = init.signal;
+  const abortFromParent = () => controller.abort(parentSignal.reason);
+  if (parentSignal) {
+    if (parentSignal.aborted) {
+      controller.abort(parentSignal.reason);
+    } else if (typeof parentSignal.addEventListener === 'function') {
+      parentSignal.addEventListener('abort', abortFromParent, { once: true });
+    }
+  }
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const dispatcher = await createTlsDispatcher(options.skipTlsVerify);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+      ...(dispatcher ? { dispatcher } : {}),
+    });
+  } finally {
+    clearTimeout(timer);
+    if (parentSignal && typeof parentSignal.removeEventListener === 'function') {
+      parentSignal.removeEventListener('abort', abortFromParent);
+    }
+  }
+};
+
 const mergedBindings = (ctx = {}) => ({
   ...(ctx?.config ?? {}),
-  ...(ctx?.secret ?? {}),
   ...(ctx?.bindings ?? {}),
+  ...(ctx?.secret ?? {}),
 });
 
 const parseHeaders = (value) => {
@@ -357,14 +395,18 @@ export function rpcdef(ctx) {
   const baseHeaders = parseHeaders(bindings.headers);
   const meta = ctx.meta || {};
   const skipTlsVerify = Boolean(bindings.tlsInsecureSkipVerify || bindings.skipTlsVerify || bindings.skip_tls_verify || bindings.tls_insecure_skip_verify);
+  const resolvedApiToken = String(firstDefined(bindings.api_token, bindings.apiToken) || '').trim();
+
+  const requireApiToken = () => {
+    if (!resolvedApiToken) {
+      throw errorWithCode('INVALID_ARGUMENT', 'api_token is required');
+    }
+    return resolvedApiToken;
+  };
 
   const requestWithDefaults = (req = {}) => {
-    const token = firstDefined(req?.api_token, req?.apiToken, bindings.api_token, bindings.apiToken);
-    if (token === undefined || token === null) return req ?? {};
-    return {
-      api_token: token,
-      ...(req ?? {}),
-    };
+    const { api_token: _apiTokenSnake, apiToken: _apiTokenCamel, ...rest } = req ?? {};
+    return rest;
   };
 
   const logFlow = (action, details) => {
@@ -388,20 +430,9 @@ export function rpcdef(ctx) {
     'x-request-id': meta.request_id || meta.requestId || 'unknown',
   });
 
-  const tlsOptions = () => (skipTlsVerify
-    ? {
-        insecureSkipVerify: true,
-        tlsInsecureSkipVerify: true,
-      }
-    : {});
-
   const fetchSafeline = async (url, init) => {
     try {
-      return await fetch(url, {
-        ...init,
-        timeoutMs,
-        ...tlsOptions(),
-      });
+      return await fetchWithTimeout(url, init, { timeoutMs, skipTlsVerify });
     } catch (e) {
       const reason = e?.cause?.message || e?.message || 'fetch failed';
       throw errorWithCode('UNAVAILABLE', reason);
@@ -439,10 +470,7 @@ export function rpcdef(ctx) {
 
   // req 已经在 JS 引擎中按 bindings.defaults/force 做了合并，这里保持读取 req 即可。
   const callAggregate = async (req) => {
-    const token = String(firstDefined(req?.api_token, req?.apiToken) || '').trim();
-    if (!token) {
-      throw errorWithCode('INVALID_ARGUMENT', 'api_token is required');
-    }
+    const token = requireApiToken();
 
     const rawInterval = firstDefined(req?.time_interval, req?.timeInterval);
     const intervalCandidate = rawInterval && typeof rawInterval === 'object' && !('value' in rawInterval) && Object.keys(rawInterval).length === 0 ? undefined : rawInterval;
@@ -486,10 +514,7 @@ export function rpcdef(ctx) {
 
   // 其余方法同样读取 req 中字段即可，bindings.force/defaults 将在引擎层合并。
   const callCreateIpGroup = async (req) => {
-    const token = String(firstDefined(req?.api_token, req?.apiToken) || '').trim();
-    if (!token) {
-      throw errorWithCode('INVALID_ARGUMENT', 'api_token is required');
-    }
+    const token = requireApiToken();
     const name = String(firstDefined(req?.name, req?.Name) || '').trim();
     if (!name) {
       throw errorWithCode('INVALID_ARGUMENT', 'name is required');
@@ -519,10 +544,7 @@ export function rpcdef(ctx) {
   };
 
   const callUpdateIpGroup = async (req) => {
-    const token = String(firstDefined(req?.api_token, req?.apiToken) || '').trim();
-    if (!token) {
-      throw errorWithCode('INVALID_ARGUMENT', 'api_token is required');
-    }
+    const token = requireApiToken();
     const baseUrl = normalizeBaseUrl(restBaseUrl);
     if (!baseUrl) {
       throw errorWithCode('INVALID_ARGUMENT', 'restBaseUrl/baseUrl is required (http/https)');
@@ -543,10 +565,7 @@ export function rpcdef(ctx) {
   };
 
   const callListIpGroups = async (req) => {
-    const token = String(firstDefined(req?.api_token, req?.apiToken) || '').trim();
-    if (!token) {
-      throw errorWithCode('INVALID_ARGUMENT', 'api_token is required');
-    }
+    const token = requireApiToken();
     const baseUrl = normalizeBaseUrl(restBaseUrl);
     if (!baseUrl) {
       throw errorWithCode('INVALID_ARGUMENT', 'restBaseUrl/baseUrl is required (http/https)');
@@ -648,10 +667,7 @@ export function rpcdef(ctx) {
   };
 
   const callDeleteIpGroup = async (req) => {
-    const token = String(firstDefined(req?.api_token, req?.apiToken) || '').trim();
-    if (!token) {
-      throw errorWithCode('INVALID_ARGUMENT', 'api_token is required');
-    }
+    const token = requireApiToken();
     const baseUrl = normalizeBaseUrl(restBaseUrl);
     if (!baseUrl) {
       throw errorWithCode('INVALID_ARGUMENT', 'restBaseUrl/baseUrl is required (http/https)');
@@ -702,10 +718,7 @@ export function rpcdef(ctx) {
 
 
   const callAddIpGroupItems = async (req) => {
-    const token = String(firstDefined(req?.api_token, req?.apiToken) || '').trim();
-    if (!token) {
-      throw errorWithCode('INVALID_ARGUMENT', 'api_token is required');
-    }
+    const token = requireApiToken();
     const baseUrl = normalizeBaseUrl(restBaseUrl);
     if (!baseUrl) {
       throw errorWithCode('INVALID_ARGUMENT', 'restBaseUrl/baseUrl is required (http/https)');
@@ -775,10 +788,7 @@ export function rpcdef(ctx) {
   };
 
   const callUpdateDetectorState = async (req) => {
-    const token = String(firstDefined(req?.api_token, req?.apiToken) || '').trim();
-    if (!token) {
-      throw errorWithCode('INVALID_ARGUMENT', 'api_token is required');
-    }
+    const token = requireApiToken();
     const baseUrl = normalizeBaseUrl(restBaseUrl);
     if (!baseUrl) {
       throw errorWithCode('INVALID_ARGUMENT', 'restBaseUrl/baseUrl is required (http/https)');
@@ -815,10 +825,7 @@ export function rpcdef(ctx) {
   };
 
   const callDeleteIpGroupItems = async (req) => {
-    const token = String(firstDefined(req?.api_token, req?.apiToken) || '').trim();
-    if (!token) {
-      throw errorWithCode('INVALID_ARGUMENT', 'api_token is required');
-    }
+    const token = requireApiToken();
     const baseUrl = normalizeBaseUrl(restBaseUrl);
     if (!baseUrl) {
       throw errorWithCode('INVALID_ARGUMENT', 'restBaseUrl/baseUrl is required (http/https)');
@@ -874,10 +881,7 @@ export function rpcdef(ctx) {
   };
 
   const callGetDetectorState = async (req) => {
-    const token = String(firstDefined(req?.api_token, req?.apiToken) || '').trim();
-    if (!token) {
-      throw errorWithCode('INVALID_ARGUMENT', 'api_token is required');
-    }
+    const token = requireApiToken();
     const baseUrl = normalizeBaseUrl(restBaseUrl);
     if (!baseUrl) {
       throw errorWithCode('INVALID_ARGUMENT', 'restBaseUrl/baseUrl is required (http/https)');
@@ -927,7 +931,6 @@ export function rpcdef(ctx) {
     // 按名称查找现有组
     try {
       const listRes = await callListIpGroups({
-        api_token: req?.api_token || req?.apiToken,
         name: [groupName]
       });
       // listRes.data 结构与 callListIpGroups 返回一致（data.items）
@@ -945,7 +948,6 @@ export function rpcdef(ctx) {
 
     // 未找到则创建
     const createPayload = {
-      api_token: req?.api_token || req?.apiToken,
       name: groupName,
       comment: String(firstDefined(req?.comment, req?.Comment) || ''),
       original: []
@@ -959,10 +961,7 @@ export function rpcdef(ctx) {
   };
 
   const callBlockIp = async (req) => {
-    const token = String(firstDefined(req?.api_token, req?.apiToken) || '').trim();
-    if (!token) {
-      throw errorWithCode('INVALID_ARGUMENT', 'api_token is required');
-    }
+    const token = requireApiToken();
     const targets = requireTargets(req, ['targets', 'Targets']);
     const baseUrl = normalizeBaseUrl(restBaseUrl);
     if (!baseUrl) {
@@ -983,10 +982,7 @@ export function rpcdef(ctx) {
   };
 
   const callUnblockIp = async (req) => {
-    const token = String(firstDefined(req?.api_token, req?.apiToken) || '').trim();
-    if (!token) {
-      throw errorWithCode('INVALID_ARGUMENT', 'api_token is required');
-    }
+    const token = requireApiToken();
     const targets = requireTargets(req, ['targets', 'Targets']);
     const baseUrl = normalizeBaseUrl(restBaseUrl);
     if (!baseUrl) {
@@ -1096,9 +1092,11 @@ export const handlers = {
 };
 
 export const _test = {
+  createTlsDispatcher,
   errorWithCode,
   extractIntList,
   extractOriginalValues,
+  fetchWithTimeout,
   mergedBindings,
   normalizeList,
   parseHeaders,

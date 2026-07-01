@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const METHOD_LOGIN_PATH = '/TopSec_FW_2U.TopSec_FW_2U/Login';
 export const METHOD_ACTIVATE_PATH = '/TopSec_FW_2U.TopSec_FW_2U/ActivatePermission';
@@ -25,6 +26,7 @@ export const DEFAULT_TIMEOUT_MS = 5000;
 
 const grpcCodeFor = (code) => ({
   INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT,
+  UNAUTHENTICATED: grpcStatus.UNAUTHENTICATED,
   UNAVAILABLE: grpcStatus.UNAVAILABLE,
   UNKNOWN: grpcStatus.UNKNOWN,
 })[code] ?? grpcStatus.UNKNOWN;
@@ -54,16 +56,18 @@ const readString = (value) => {
 const firstDefined = (...values) => values.find((value) => value !== undefined && value !== null);
 
 const mergedBindings = (ctx = {}) => ({
+  ...(ctx.bindings ?? {}),
   ...(ctx.config ?? {}),
   ...(ctx.secret ?? {}),
-  ...(ctx.bindings ?? {}),
 });
 
 const resolveCallContext = (ctx = {}) => ({
   ...ctx,
   bindings: mergedBindings(ctx),
+  config: ctx.config ?? {},
+  secret: ctx.secret ?? {},
   limits: ctx.limits ?? {},
-  meta: ctx.meta ?? {},
+  meta: ctx.meta ?? ctx.metadata ?? {},
   req: ctx.req ?? ctx.request ?? {},
 });
 
@@ -98,17 +102,21 @@ const requireNonEmpty = (value, name) => {
   return text;
 };
 
+const requireSecretNonEmpty = (value, name) => {
+  const text = readString(value).trim();
+  if (!text) throw errorWithCode('UNAUTHENTICATED', `${name} is required`);
+  return text;
+};
+
 const resolveLoginUsername = (req = {}, ctx = {}) => requireNonEmpty(firstDefined(
-  req.username,
-  req.user,
-  req.name,
+  ctx.secret?.username,
   ctx.bindings?.username,
   ctx.bindings?.user,
   ctx.bindings?.name,
 ), 'username');
 
-const resolveLoginPassword = (req = {}, ctx = {}) => requireNonEmpty(firstDefined(
-  req.password,
+const resolveLoginPassword = (req = {}, ctx = {}) => requireSecretNonEmpty(firstDefined(
+  ctx.secret?.password,
   ctx.bindings?.password,
 ), 'password');
 
@@ -157,18 +165,6 @@ const readIpList = (req = {}) => {
   });
 };
 
-const readSession = (req = {}) => {
-  const session = req.session;
-  if (!session || typeof session !== 'object') {
-    throw errorWithCode('INVALID_ARGUMENT', 'session is required');
-  }
-  const token = requireNonEmpty(session.token, 'session.token');
-  const userMark = requireNonEmpty(firstDefined(session.user_mark, session.userMark), 'session.user_mark');
-  const cookie = requireNonEmpty(session.cookie, 'session.cookie');
-  const secret = readString(session.secret).trim();
-  return { token, userMark, cookie, secret };
-};
-
 const optionalUint32 = (value) => {
   const raw = unwrapScalar(value);
   if (raw === undefined || raw === null) return undefined;
@@ -197,16 +193,20 @@ const toBoolean = (value) => {
   return false;
 };
 
+const insecureTlsDispatcher = new Agent({ connect: { rejectUnauthorized: false } });
+
 const buildTlsOptions = (ctx = {}) => {
   const bindings = ctx.bindings || {};
   if (toBoolean(bindings.skipTlsVerify) || toBoolean(bindings.tlsInsecureSkipVerify) || toBoolean(bindings.insecureSkipVerify)) {
-    return {
-      skipTlsVerify: true,
-      tlsInsecureSkipVerify: true,
-      insecureSkipVerify: true,
-    };
+    return { dispatcher: insecureTlsDispatcher };
   }
   return {};
+};
+
+const makeTimeoutSignal = (timeoutMs) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  return { signal: controller.signal, clear: () => clearTimeout(timeoutId) };
 };
 
 const utf8Encode = (input) => Buffer.from(String(input || ''), 'utf8');
@@ -310,10 +310,12 @@ const buildSessionFromLogin = (payload, headers, rotatedToken) => {
 
 const buildRefreshedSession = (session, payload, rotatedToken) => {
   const token = rotatedToken || readString(firstDefined(payload?.token, payload?.data?.token)).trim() || session.token;
-  const userMark = readString(firstDefined(payload?.data?.authid, payload?.data?.user_mark, payload?.data?.userMark)).trim() || session.userMark;
+  const userMark = readString(firstDefined(payload?.data?.authid, payload?.data?.user_mark, payload?.data?.userMark)).trim() || session.user_mark || session.userMark;
   const secret = readString(firstDefined(payload?.secret, payload?.data?.secret)).trim() || session.secret;
   return { token, user_mark: userMark, cookie: session.cookie, secret };
 };
+
+const sessionUserMark = (session = {}) => readString(firstDefined(session.user_mark, session.userMark)).trim();
 
 const encodeForm = (pairs) => pairs.map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`).join('&');
 
@@ -357,16 +359,19 @@ const readResponseBodyText = async (response) => {
 };
 
 const fetchText = async (ctx, url, init = {}) => {
+  const timeout = makeTimeoutSignal(readTimeoutMs(ctx));
   let response;
   try {
     response = await fetch(url, {
       ...init,
-      timeoutMs: readTimeoutMs(ctx),
+      signal: timeout.signal,
       ...buildTlsOptions(ctx),
     });
   } catch (error) {
     const reason = error?.cause?.message || error?.message || 'fetch failed';
     throw errorWithCode('UNAVAILABLE', reason);
+  } finally {
+    timeout.clear();
   }
   return {
     statusCode: Number(response?.status) || 0,
@@ -405,10 +410,19 @@ const buildDeleteBody = (ips, token) => {
 
 const buildBaseResponse = (statusCode, rawBody) => ({
   status_code: statusCode,
-  raw_body: rawBody,
+  success: statusCode >= 200 && statusCode <= 299,
+  message: statusCode >= 200 && statusCode <= 299 ? 'success' : `upstream http ${statusCode}`,
 });
 
-const callLogin = async (req = {}, ctx = {}) => {
+const sessionCache = new Map();
+
+const cacheIdentity = (ctx = {}, host = '', username = '') => {
+  const serviceId = readString(firstDefined(ctx.serviceId, ctx.service_id, ctx.meta?.service_id, ctx.meta?.serviceId)).trim() || 'topsec__fw-2u';
+  const instanceId = readString(firstDefined(ctx.instanceId, ctx.instance_id, ctx.meta?.instance_id, ctx.meta?.instanceId, ctx.workdir)).trim() || 'default';
+  return JSON.stringify([serviceId, instanceId, host, username]);
+};
+
+const performLogin = async (req = {}, ctx = {}) => {
   const callCtx = resolveCallContext({ ...ctx, req });
   const host = resolveHost(req, callCtx);
   const username = resolveLoginUsername(req, callCtx);
@@ -419,82 +433,100 @@ const callLogin = async (req = {}, ctx = {}) => {
     body: buildLoginForm(username, password),
   });
   const decoded = decodeTopSecPayload(response.rawBody);
-  return {
-    ...buildBaseResponse(response.statusCode, response.rawBody),
-    session: buildSessionFromLogin(decoded.parsed, response.headers, decoded.rotatedToken),
-  };
+  const session = buildSessionFromLogin(decoded.parsed, response.headers, decoded.rotatedToken);
+  if (!session) throw errorWithCode('UNAUTHENTICATED', 'login response did not contain a usable session');
+  const key = cacheIdentity(callCtx, host, username);
+  sessionCache.set(key, session);
+  return { host, username, key, session, statusCode: response.statusCode };
+};
+
+const getSession = async (req = {}, ctx = {}) => {
+  const callCtx = resolveCallContext({ ...ctx, req });
+  const host = resolveHost(req, callCtx);
+  const username = resolveLoginUsername(req, callCtx);
+  const key = cacheIdentity(callCtx, host, username);
+  const cached = sessionCache.get(key);
+  if (cached) return { host, username, key, session: cached };
+  return performLogin(req, callCtx);
+};
+
+const updateCachedSession = (key, session) => {
+  if (key && session) sessionCache.set(key, session);
+  return session;
+};
+
+const callLogin = async (req = {}, ctx = {}) => {
+  const login = await performLogin(req, ctx);
+  return buildBaseResponse(login.statusCode);
 };
 
 const callActivate = async (req = {}, ctx = {}) => {
   const callCtx = resolveCallContext({ ...ctx, req });
-  const host = resolveHost(req, callCtx);
-  const session = readSession(req);
-  const response = await fetchText(callCtx, buildUrl(host, ACTIVATE_HTTP_PATH, { userMark: session.userMark }), {
+  const { host, session } = await getSession(req, callCtx);
+  const userMark = sessionUserMark(session);
+  const response = await fetchText(callCtx, buildUrl(host, ACTIVATE_HTTP_PATH, { userMark }), {
     method: 'POST',
     headers: addTraceHeaders({
       'content-type': 'application/x-www-form-urlencoded',
       Cookie: session.cookie,
-      Referer: refererForUserMark(host, session.userMark),
+      Referer: refererForUserMark(host, userMark),
     }, callCtx.meta),
     body: buildActivateBody(),
   });
-  return buildBaseResponse(response.statusCode, response.rawBody);
+  return buildBaseResponse(response.statusCode);
 };
 
 const callAdd = async (req = {}, ctx = {}) => {
   const callCtx = resolveCallContext({ ...ctx, req });
-  const host = resolveHost(req, callCtx);
-  const session = readSession(req);
   const ips = readIpList(req);
-  const response = await fetchText(callCtx, buildUrl(host, ADD_HTTP_PATH, { userMark: session.userMark }), {
+  const { host, session, key } = await getSession(req, callCtx);
+  const userMark = sessionUserMark(session);
+  const response = await fetchText(callCtx, buildUrl(host, ADD_HTTP_PATH, { userMark }), {
     method: 'POST',
     headers: addTraceHeaders({
       'content-type': 'application/x-www-form-urlencoded',
       Cookie: session.cookie,
-      Referer: refererForUserMark(host, session.userMark),
+      Referer: refererForUserMark(host, userMark),
     }, callCtx.meta),
     body: buildAddBody(ips, session.token),
   });
   const decoded = decodeTopSecPayload(response.rawBody);
-  return {
-    ...buildBaseResponse(response.statusCode, response.rawBody),
-    session: buildRefreshedSession(session, decoded.parsed, decoded.rotatedToken),
-  };
+  updateCachedSession(key, buildRefreshedSession(session, decoded.parsed, decoded.rotatedToken));
+  return buildBaseResponse(response.statusCode);
 };
 
 const callDelete = async (req = {}, ctx = {}) => {
   const callCtx = resolveCallContext({ ...ctx, req });
-  const host = resolveHost(req, callCtx);
-  const session = readSession(req);
   const ips = readIpList(req);
-  const response = await fetchText(callCtx, buildUrl(host, DELETE_HTTP_PATH, { userMark: session.userMark }), {
+  const { host, session, key } = await getSession(req, callCtx);
+  const userMark = sessionUserMark(session);
+  const response = await fetchText(callCtx, buildUrl(host, DELETE_HTTP_PATH, { userMark }), {
     method: 'POST',
     headers: addTraceHeaders({
       'content-type': 'application/x-www-form-urlencoded',
       Cookie: session.cookie,
-      Referer: refererForUserMark(host, session.userMark),
+      Referer: refererForUserMark(host, userMark),
     }, callCtx.meta),
     body: buildDeleteBody(ips, session.token),
   });
   const decoded = decodeTopSecPayload(response.rawBody);
-  return {
-    ...buildBaseResponse(response.statusCode, response.rawBody),
-    session: buildRefreshedSession(session, decoded.parsed, decoded.rotatedToken),
-  };
+  updateCachedSession(key, buildRefreshedSession(session, decoded.parsed, decoded.rotatedToken));
+  return buildBaseResponse(response.statusCode);
 };
 
 const callLogout = async (req = {}, ctx = {}) => {
   const callCtx = resolveCallContext({ ...ctx, req });
-  const host = resolveHost(req, callCtx);
-  const session = readSession(req);
-  const response = await fetchText(callCtx, buildUrl(host, LOGOUT_HTTP_PATH, { userMark: session.userMark, token: session.token }), {
+  const { host, session, key } = await getSession(req, callCtx);
+  const userMark = sessionUserMark(session);
+  const response = await fetchText(callCtx, buildUrl(host, LOGOUT_HTTP_PATH, { userMark, token: session.token }), {
     method: 'GET',
     headers: addTraceHeaders({
       Cookie: session.cookie,
-      Referer: refererForUserMark(host, session.userMark),
+      Referer: refererForUserMark(host, userMark),
     }, callCtx.meta),
   });
-  return buildBaseResponse(response.statusCode, response.rawBody);
+  sessionCache.delete(key);
+  return buildBaseResponse(response.statusCode);
 };
 
 export function rpcdef(ctx = {}) {
@@ -509,11 +541,11 @@ export function rpcdef(ctx = {}) {
 }
 
 export const handlers = {
-  [METHOD_LOGIN_FULL]: (req, ctx = {}) => callLogin(req, ctx),
-  [METHOD_ACTIVATE_FULL]: (req, ctx = {}) => callActivate(req, ctx),
-  [METHOD_ADD_FULL]: (req, ctx = {}) => callAdd(req, ctx),
-  [METHOD_DELETE_FULL]: (req, ctx = {}) => callDelete(req, ctx),
-  [METHOD_LOGOUT_FULL]: (req, ctx = {}) => callLogout(req, ctx),
+  [METHOD_LOGIN_FULL]: (ctx = {}) => callLogin(ctx.request ?? ctx.req ?? {}, ctx),
+  [METHOD_ACTIVATE_FULL]: (ctx = {}) => callActivate(ctx.request ?? ctx.req ?? {}, ctx),
+  [METHOD_ADD_FULL]: (ctx = {}) => callAdd(ctx.request ?? ctx.req ?? {}, ctx),
+  [METHOD_DELETE_FULL]: (ctx = {}) => callDelete(ctx.request ?? ctx.req ?? {}, ctx),
+  [METHOD_LOGOUT_FULL]: (ctx = {}) => callLogout(ctx.request ?? ctx.req ?? {}, ctx),
 };
 
 export const _test = {
@@ -529,6 +561,7 @@ export const _test = {
   buildSessionFromLogin,
   buildTlsOptions,
   buildUrl,
+  cacheIdentity,
   decodeTopSecPayload,
   encryptPassword,
   errorWithCode,
@@ -537,16 +570,20 @@ export const _test = {
   gatherCookies,
   grpcCodeFor,
   hasOwn,
+  insecureTlsDispatcher,
   isIPv4,
   isIPv6,
+  makeTimeoutSignal,
   normalizeCookie,
   normalizeHost,
+  pickFirstToken,
   readIpList,
   readResponseBodyText,
-  readSession,
   readString,
   readTimeoutMs,
   refererForUserMark,
+  sessionCache,
+  sessionUserMark,
   resolveCallContext,
   resolveHost,
   resolveLoginPassword,

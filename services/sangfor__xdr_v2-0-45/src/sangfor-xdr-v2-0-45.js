@@ -89,7 +89,7 @@ const searchResponse = (json) => {
     page: Number(data?.page ?? 0),
     page_size: Number(data?.pageSize ?? 0),
     data,
-    raw_json: json,
+    raw_json: undefined,
   };
 };
 
@@ -105,7 +105,7 @@ const contextResponse = (json) => ({
   code: json?.code == null ? "" : String(json.code),
   message: typeof json?.message === "string" ? json.message : "",
   data: contextData(json),
-  raw_json: json,
+  raw_json: undefined,
 });
 
 const incidentMappings = [

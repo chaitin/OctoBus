@@ -1,9 +1,13 @@
 # Elastic Kibana 7.17.26 OctoBus Service
 
+- Service name: `elastic-kibana-7-17-26`
+- Service dir: `elastic__kibana_7-17-26`
+- Runtime mode: `long-running`
+
 Import it into OctoBus with:
 
 ```bash
-octobus service import elastic-kibana-7-17-26 ./services//elastic__kibana_7-17-26
+octobus service import elastic-kibana-7-17-26 ./services/elastic__kibana_7-17-26
 ```
 
 ## Package Files
@@ -57,6 +61,8 @@ Alternatively, use `secret.apiKey` for Kibana API key authentication.
 - `FindSavedObjects` calls `GET /api/saved_objects/_find`.
 - `ListDashboards` calls `GET /api/saved_objects/_find?type=dashboard`.
 - `FindRules` calls `GET /api/alerting/rules/_find`.
+- Read RPCs: `CheckStatus`, `FindSavedObjects`, `ListDashboards`, and `FindRules`.
+- Write-capable RPC: `CallKibanaAPI` when `method` is `POST`, `PUT`, `PATCH`, or `DELETE`.
 - If `spaceId` or request `space_id` is set, requests use `/s/{spaceId}/api/...`.
 - `CallKibanaAPI.path` must be a relative Kibana path beginning with `/`; full URLs are rejected so the instance endpoint and credentials remain centrally configured.
 - `CallKibanaAPI.body` is passed through as-is for non-GET/HEAD requests; `Content-Type: application/json` is added when a body is present unless explicitly overridden.
@@ -65,6 +71,13 @@ Alternatively, use `secret.apiKey` for Kibana API key authentication.
 - HTTP 401/403 maps to `PERMISSION_DENIED`.
 - Other HTTP 4xx responses map to `FAILED_PRECONDITION`.
 - HTTP 5xx, network, and response read failures map to `UNAVAILABLE`.
+- Timeout uses AbortController and `skipTlsVerify` uses a per-request dispatcher; global TLS verification is not changed.
+- Errors return HTTP status and body length only. They do not return the Basic password, API key, Authorization header, or complete upstream raw body.
+
+## Known Limits
+
+- `CallKibanaAPI` is intentionally broad and write-capable; grant it only to trusted capsets.
+- Binary multipart uploads and streaming downloads are outside this RPC shape.
 
 ## Generic API Examples
 
@@ -91,11 +104,24 @@ Call a write API:
 }
 ```
 
+`CallKibanaAPI` is intentionally constrained to relative Kibana paths and an allow-list of HTTP methods, but it is still a privileged generic API surface. Put write calls in a separate capset from read-only discovery methods and test them against a non-production space first.
+
+## OctoBus Example
+
+```bash
+octobus instance create kibana-test --service elastic-kibana-7-17-26 \
+  --config-json '{"endpoint":"http://kibana.example.com:5601","spaceId":"default","timeoutMs":1500}' \
+  --secret-json '{"username":"elastic","password":"replace-with-password"}'
+octobus capset create kibana-read --name "Kibana Read"
+octobus capset add-instance kibana-read kibana-test
+```
+
 ## Local Checks
 
 ```bash
 cd services
 npm run validate -- --service-dir elastic__kibana_7-17-26
+npm test -- --service-dir elastic__kibana_7-17-26
 npm test -- --service-dir elastic__kibana_7-17-26 --coverage
 npm run pack:check
 ```

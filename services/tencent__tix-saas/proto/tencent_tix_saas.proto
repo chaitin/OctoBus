@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package Tencent_TIX_SaaS;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Tencent_TIX_SaaS";
+
+service Tencent_TIX_SaaS {
+  rpc QueryIOC(TixLookupRequest) returns (TixResponse) {}
+  rpc GetIPIngressInfo(TixLookupRequest) returns (TixResponse) {}
+  rpc GetFileInfo(FileInfoRequest) returns (TixResponse) {}
+}
+
+message TixLookupRequest {
+  string key = 1;
+  string type = 2;
+  string lang = 3;
+  int32 option = 4;
+}
+
+message FileInfoRequest {
+  string key = 1;
+  string type = 2;
+  string lang = 3;
+  int32 option = 4;
+}
+
+message TixResponse {
+  int32 http_status = 1;
+  int32 return_code = 2;
+  string return_msg = 3;
+  string raw_body = 4;
+  google.protobuf.Value raw_json = 5;
+  bool no_data = 6;
+}

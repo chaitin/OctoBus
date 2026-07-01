@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const LOGIN_PATH = '/Panabit_TANG_R1.Panabit_TANG_R1/Login';
 export const LIST_IPTABLE_PATH = '/Panabit_TANG_R1.Panabit_TANG_R1/ListIPTable';
@@ -18,6 +19,8 @@ export const DEFAULT_TIMEOUT_MS = 1500;
 export const LOGIN_URI = '/api/panabit.cgi/API';
 export const API_URI = '/api/panabit.cgi';
 export const IPTABLE_ROUTE = 'object@iptable';
+
+const sessionCache = new Map();
 
 const grpcCodeFor = (code) => ({
   FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
@@ -57,8 +60,8 @@ const normalizeBaseUrl = (url) => {
 
 const mergedBindings = (ctx = {}) => ({
   ...(ctx?.config ?? {}),
-  ...(ctx?.secret ?? {}),
   ...(ctx?.bindings ?? {}),
+  ...(ctx?.secret ?? {}),
 });
 
 const resolveCallContext = (ctx = {}) => ({
@@ -66,8 +69,10 @@ const resolveCallContext = (ctx = {}) => ({
   bindings: mergedBindings(ctx),
   limits: ctx.limits ?? {},
   meta: ctx.meta ?? {},
-  req: ctx.req ?? ctx.request ?? {},
+  req: ctx.request ?? ctx.req ?? {},
 });
+
+const requestFromContext = (ctx = {}) => ctx?.request ?? ctx?.req ?? {};
 
 const resolveBaseUrl = (bindings) => normalizeBaseUrl(firstDefined(
   bindings?.restBaseUrl,
@@ -95,17 +100,25 @@ const toBoolean = (value) => {
   return false;
 };
 
+let insecureTlsDispatcher;
+
+const getInsecureTlsDispatcher = () => {
+  insecureTlsDispatcher ??= new Agent({ connect: { rejectUnauthorized: false } });
+  return insecureTlsDispatcher;
+};
+
 const buildTlsOptions = (bindings) => {
   if (!toBoolean(bindings?.tlsInsecureSkipVerify) && !toBoolean(bindings?.skipTlsVerify) && !toBoolean(bindings?.insecureSkipVerify)) return {};
-  return {
-    insecureSkipVerify: true,
-    tlsInsecureSkipVerify: true,
-    skipTlsVerify: true,
-  };
+  return { dispatcher: getInsecureTlsDispatcher() };
 };
 
 const getInstanceId = (ctx) => String(ctx?.meta?.instance_id || ctx?.meta?.instanceId || 'unknown');
 const getRequestId = (ctx) => String(ctx?.meta?.request_id || ctx?.meta?.requestId || 'unknown');
+const buildSessionKey = (ctx, baseUrl) => `${getInstanceId(ctx)}::${baseUrl}`;
+const setSession = (ctx, baseUrl, session) => sessionCache.set(buildSessionKey(ctx, baseUrl), session);
+const getSession = (ctx, baseUrl) => sessionCache.get(buildSessionKey(ctx, baseUrl));
+const clearSession = (ctx, baseUrl) => sessionCache.delete(buildSessionKey(ctx, baseUrl));
+const clearSessionCache = () => sessionCache.clear();
 
 const buildHeaders = (ctx, extraHeaders = {}) => ({
   ...(ctx?.bindings?.headers || {}),
@@ -199,13 +212,14 @@ const buildQueryString = (params) =>
     .join('&');
 
 const handleHttpError = (status, text) => {
+  const summary = `upstream http ${status}; body_length=${String(text || '').length}`;
   if (status === 401 || status === 403) {
-    throw errorWithCode('PERMISSION_DENIED', `upstream http ${status}: ${text}`);
+    throw errorWithCode('PERMISSION_DENIED', summary);
   }
   if (status >= 400 && status < 500) {
-    throw errorWithCode('FAILED_PRECONDITION', `upstream http ${status}: ${text}`);
+    throw errorWithCode('FAILED_PRECONDITION', summary);
   }
-  throw errorWithCode('UNAVAILABLE', `upstream http ${status}: ${text}`);
+  throw errorWithCode('UNAVAILABLE', summary);
 };
 
 const parseJsonResponse = (text) => {
@@ -227,9 +241,9 @@ const fetchText = async (ctx, url, init = {}) => {
   let res;
   try {
     res = await fetch(url, {
-      timeoutMs: resolveTimeoutMs(ctx),
-      ...buildTlsOptions(ctx.bindings),
       ...init,
+      signal: AbortSignal.timeout(resolveTimeoutMs(ctx)),
+      ...buildTlsOptions(ctx.bindings),
     });
   } catch (err) {
     throw errorWithCode('UNAVAILABLE', err?.cause?.message || err?.message || 'fetch failed');
@@ -240,9 +254,10 @@ const fetchText = async (ctx, url, init = {}) => {
   return { status: Number(res.status) || 0, text, res };
 };
 
-const requireToken = (req) => {
-  const token = String(firstDefined(req?.api_token, req?.apiToken) || '').trim();
-  if (!token) throw errorWithCode('INVALID_ARGUMENT', 'api_token is required');
+const requireToken = (ctx) => {
+  const baseUrl = requireBaseUrl(ctx);
+  const token = String(getSession(ctx, baseUrl)?.apiToken || '').trim();
+  if (!token) throw errorWithCode('FAILED_PRECONDITION', 'call Login first');
   return token;
 };
 
@@ -290,21 +305,24 @@ const handleLogin = async (_req, ctx) => {
   });
   const json = parseJsonResponse(text);
   if (!json) throw errorWithCode('UNKNOWN', 'empty response from device');
+  if (json.code === 0 && typeof json.data === 'string' && json.data.trim()) {
+    setSession(callCtx, baseUrl, { apiToken: json.data.trim() });
+  } else {
+    clearSession(callCtx, baseUrl);
+  }
   return {
     code: typeof json.code === 'number' ? json.code : -1,
-    api_token: typeof json.data === 'string' ? json.data : '',
-    raw: toStruct(json),
+    api_token: '',
   };
 };
 
 const handleListIPTable = async (req, ctx) => {
   const callCtx = resolveCallContext(ctx);
-  const token = requireToken(req);
   const keyword = String(firstDefined(req?.keyword, '') || '').trim();
   const formFields = {
     api_route: IPTABLE_ROUTE,
     api_action: 'list_iptable',
-    api_token: token,
+    api_token: requireToken(callCtx),
   };
   if (keyword) formFields.keyword = keyword;
   const json = await panabitPost(callCtx, formFields);
@@ -322,13 +340,12 @@ const handleListIPTable = async (req, ctx) => {
 
 const handleAddIPTable = async (req, ctx) => {
   const callCtx = resolveCallContext(ctx);
-  const token = requireToken(req);
   const name = requireText(req, ['name', 'Name'], 'name');
   const json = await panabitPost(callCtx, {
     api_route: IPTABLE_ROUTE,
     api_action: 'add_iptable',
     name,
-    api_token: token,
+    api_token: requireToken(callCtx),
   });
   if (!json) return { code: 0, msg: '', raw: toStruct({}) };
   return responseFromJson(json);
@@ -336,7 +353,6 @@ const handleAddIPTable = async (req, ctx) => {
 
 const handleBlockIP = async (req, ctx) => {
   const callCtx = resolveCallContext(ctx);
-  const token = requireToken(req);
   const name = requireText(req, ['name', 'Name'], 'name');
   const id = requireText(req, ['id', 'Id'], 'id');
   const ip = requireIP(req);
@@ -346,7 +362,7 @@ const handleBlockIP = async (req, ctx) => {
     name,
     id,
     ip,
-    api_token: token,
+    api_token: requireToken(callCtx),
   });
   if (!json) return { code: 0, msg: '', raw: toStruct({}) };
   return responseFromJson(json);
@@ -354,7 +370,6 @@ const handleBlockIP = async (req, ctx) => {
 
 const handleUnblockIP = async (req, ctx) => {
   const callCtx = resolveCallContext(ctx);
-  const token = requireToken(req);
   const name = requireText(req, ['name', 'Name'], 'name');
   const id = requireText(req, ['id', 'Id'], 'id');
   const ip = requireIP(req);
@@ -364,7 +379,7 @@ const handleUnblockIP = async (req, ctx) => {
     name,
     id,
     ip,
-    api_token: token,
+    api_token: requireToken(callCtx),
   });
   if (!json) return { code: 0, msg: '', raw: toStruct({}) };
   return responseFromJson(json);
@@ -382,22 +397,26 @@ export function rpcdef(ctx) {
 }
 
 export const handlers = {
-  [METHOD_LOGIN_FULL]: (req, ctx = {}) => handleLogin(req, ctx),
-  [METHOD_LIST_IPTABLE_FULL]: (req, ctx = {}) => handleListIPTable(req, ctx),
-  [METHOD_ADD_IPTABLE_FULL]: (req, ctx = {}) => handleAddIPTable(req, ctx),
-  [METHOD_BLOCK_IP_FULL]: (req, ctx = {}) => handleBlockIP(req, ctx),
-  [METHOD_UNBLOCK_IP_FULL]: (req, ctx = {}) => handleUnblockIP(req, ctx),
+  [METHOD_LOGIN_FULL]: (ctx = {}) => handleLogin(requestFromContext(ctx), ctx),
+  [METHOD_LIST_IPTABLE_FULL]: (ctx = {}) => handleListIPTable(requestFromContext(ctx), ctx),
+  [METHOD_ADD_IPTABLE_FULL]: (ctx = {}) => handleAddIPTable(requestFromContext(ctx), ctx),
+  [METHOD_BLOCK_IP_FULL]: (ctx = {}) => handleBlockIP(requestFromContext(ctx), ctx),
+  [METHOD_UNBLOCK_IP_FULL]: (ctx = {}) => handleUnblockIP(requestFromContext(ctx), ctx),
 };
 
 export const _test = {
   buildHeaders,
   buildMultipartBody,
   buildQueryString,
+  buildSessionKey,
   buildTlsOptions,
+  clearSession,
+  clearSessionCache,
   errorWithCode,
   fetchText,
   getInstanceId,
   getRequestId,
+  getSession,
   handleHttpError,
   isValidIP,
   isValidIPv4,
@@ -409,6 +428,7 @@ export const _test = {
   resolveCallContext,
   resolveTimeoutMs,
   responseFromJson,
+  setSession,
   toBoolean,
   toStruct,
   toValue,

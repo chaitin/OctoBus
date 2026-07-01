@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export type BootstrapRuntimeMode = "on-demand" | "long-running";
 
@@ -38,6 +39,7 @@ interface BootstrapNames {
 }
 
 const SDK_PACKAGE_NAME = "@chaitin-ai/octobus-sdk";
+let cachedSdkDependencyVersion: string | undefined;
 
 export function generateBootstrapPackageFiles(options: GenerateBootstrapPackageOptions): BootstrapPackageFile[] {
   validateBootstrapOptions(options);
@@ -237,7 +239,7 @@ function handlerSource(names: BootstrapNames): string {
     "      const request = ctx.request ?? {};",
     "      const config = ctx.config ?? {};",
     "      const secret = ctx.secret ?? {};",
-    `      const businessRequestId = ctx.getMetadata("x-business-request-id") ?? "";`,
+    `      const businessRequestId = ctx.getMetadata("x-octobus-ext-business-request-id") ?? "";`,
     "",
     "      return {",
     "        text: String(request.text ?? \"\"),",
@@ -265,7 +267,7 @@ function readme(names: BootstrapNames): string {
     "```bash",
     "npm install",
     "npx octobus-sdk validate --strict",
-    `node ${names.entryPath} dev --port 50051 --config-json '{}'`,
+    `node ${names.entryPath} --runtime dev --port 50051 --config-json '{}' --secret-json '{}'`,
     "```",
     "",
   ].join("\n");
@@ -292,7 +294,32 @@ function assertInside(root: string, target: string, relativePath: string): void 
 }
 
 function sdkDependencyVersion(): string {
-  return "*";
+  if (cachedSdkDependencyVersion !== undefined) {
+    return cachedSdkDependencyVersion;
+  }
+
+  const packageJsonPath = findNearestPackageJson(path.dirname(fileURLToPath(import.meta.url)));
+  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8")) as { version?: unknown };
+  if (typeof packageJson.version !== "string" || packageJson.version.trim() === "") {
+    throw new Error(`SDK package version is missing in ${packageJsonPath}`);
+  }
+  cachedSdkDependencyVersion = `^${packageJson.version.trim()}`;
+  return cachedSdkDependencyVersion;
+}
+
+function findNearestPackageJson(startDir: string): string {
+  let current = startDir;
+  for (;;) {
+    const candidate = path.join(current, "package.json");
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      throw new Error(`cannot find SDK package.json from ${startDir}`);
+    }
+    current = parent;
+  }
 }
 
 function installBundledDependencies(outDir: string, env: NodeJS.ProcessEnv | undefined): void {
