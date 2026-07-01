@@ -197,8 +197,6 @@
     "bin/octobus-tentacles.js"
   ],
   "scripts": {
-    "registry:generate": "node scripts/generate-service-registry.mjs",
-    "registry:check": "node scripts/generate-service-registry.mjs --check",
     "validate": "node scripts/validate-service-package.mjs",
     "test": "node scripts/run-tests.mjs",
     "coverage:all": "node scripts/run-coverage-all.mjs",
