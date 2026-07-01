@@ -246,15 +246,20 @@ const parseCookieHeader = (headers) => {
   return cookies.join("; ");
 };
 
+const redactedBodySummary = (text = "") => String(text)
+  .replace(/(authorization|token|cookie|password)\s*[:=]\s*["']?[^"'\s;&<>]+/gi, "$1=<redacted>")
+  .slice(0, 200);
+
 const readJson = async (res) => {
   const text = await res.text();
   if (!res.ok) {
-    if (res.status === 401) throw errorWithCode("UNAUTHENTICATED", `upstream http ${res.status}: ${text}`);
-    if (res.status === 403) throw errorWithCode("PERMISSION_DENIED", `upstream http ${res.status}: ${text}`);
+    const summary = redactedBodySummary(text);
+    if (res.status === 401) throw errorWithCode("UNAUTHENTICATED", `upstream http ${res.status}: ${summary}`);
+    if (res.status === 403) throw errorWithCode("PERMISSION_DENIED", `upstream http ${res.status}: ${summary}`);
     if (res.status >= 400 && res.status < 500) {
-      throw errorWithCode("FAILED_PRECONDITION", `upstream http ${res.status}: ${text}`);
+      throw errorWithCode("FAILED_PRECONDITION", `upstream http ${res.status}: ${summary}`);
     }
-    throw errorWithCode("UNAVAILABLE", `upstream http ${res.status}: ${text}`);
+    throw errorWithCode("UNAVAILABLE", `upstream http ${res.status}: ${summary}`);
   }
   if (!text.trim()) return {};
   try {
@@ -280,6 +285,7 @@ const requestWithNode = (url, init = {}, options = {}) => new Promise((resolve, 
   }, (res) => {
     const chunks = [];
     res.on("data", (chunk) => chunks.push(chunk));
+    res.on("error", reject);
     res.on("end", () => {
       const body = Buffer.concat(chunks).toString("utf8");
       resolve({
@@ -348,9 +354,7 @@ export function rpcdef(ctx) {
       }
       return await fetch(url, {
         ...init,
-        timeoutMs,
-        insecureSkipVerify: insecureSkipTlsVerify,
-        tlsInsecureSkipVerify: insecureSkipTlsVerify,
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (error) {
       throw errorWithCode("UNAVAILABLE", error?.cause?.message || error?.message || "fetch failed");

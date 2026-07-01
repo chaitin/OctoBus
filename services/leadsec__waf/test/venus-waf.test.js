@@ -84,7 +84,42 @@ test("HealthCheck logs in with SHA-256 password and stores authorization", async
 
   const handler = await loadHandler(healthPath);
   assert.deepEqual(await handler(), { ok: true, code: 0, message: "success" });
-  assert.equal(calls[0].init.insecureSkipVerify, false);
+  assert.equal("insecureSkipVerify" in calls[0].init, false);
+});
+
+test("default fetch path uses AbortSignal timeout instead of non-standard timeout options", async () => {
+  const calls = [];
+  global.fetch = async (url, init) => {
+    calls.push({ url, init });
+    return jsonResponse({ code: 0, msg: "success", data: { authorization: "token-1" } });
+  };
+
+  const handler = await loadHandler(healthPath, {}, { config: { timeoutMs: 1234 } });
+  await handler();
+
+  assert.ok(calls[0].init.signal instanceof AbortSignal);
+  assert.equal("timeoutMs" in calls[0].init, false);
+  assert.equal("insecureSkipVerify" in calls[0].init, false);
+  assert.equal("tlsInsecureSkipVerify" in calls[0].init, false);
+});
+
+test("upstream HTTP error messages redact and truncate response bodies", async () => {
+  global.fetch = async () => ({
+    ok: false,
+    status: 502,
+    headers: { get: () => "text/html" },
+    text: async () => `<html>${"x".repeat(500)} token=secret authorization=abc</html>`,
+  });
+
+  await assert.rejects(
+    (await loadHandler(healthPath))(),
+    (error) => {
+      assert.match(error.message, /upstream http 502/);
+      assert.ok(error.message.length < 320);
+      assert.doesNotMatch(error.message, /secret|abc/);
+      return true;
+    },
+  );
 });
 
 test("ListBlacklists maps data.blacklist and global priority", async () => {
