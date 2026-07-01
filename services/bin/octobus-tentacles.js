@@ -144,6 +144,10 @@ const services = {
     entryFile: "../hillstone__fw_v5-5-r6/bin/hillstone-fw-v5-5-r6.js",
     serviceModule: "../hillstone__fw_v5-5-r6/src/service.js",
   },
+  "huawei-dns": {
+    entryFile: "../huawei__dns/bin/huawei-dns.js",
+    serviceModule: "../huawei__dns/src/service.js",
+  },
   "huorong-endpoint-security-management-system-v2-0-19-3": {
     entryFile: "../huorong__endpoint-security-management-system_v2-0-19-3/bin/huorong-endpoint-security-management-system-v2-0-19-3.js",
     serviceModule: "../huorong__endpoint-security-management-system_v2-0-19-3/src/service.js",

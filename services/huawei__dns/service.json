@@ -1,0 +1,41 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "huawei-dns",
+  "displayName": "Huawei DNS",
+  "description": "OctoBus package for Huawei Cloud DNS (Domain Name Service) zone and record set management APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/huawei_dns.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Huawei_DNS.Huawei_DNS/ListZones": {
+          "name": "list-zones",
+          "description": "List all DNS zones in the account."
+        },
+        "Huawei_DNS.Huawei_DNS/ListRecordSets": {
+          "name": "list-record-sets",
+          "description": "List DNS record sets in a zone."
+        },
+        "Huawei_DNS.Huawei_DNS/CreateRecordSet": {
+          "name": "create-record-set",
+          "description": "Create a DNS record set in a zone."
+        },
+        "Huawei_DNS.Huawei_DNS/DeleteRecordSet": {
+          "name": "delete-record-set",
+          "description": "Delete a DNS record set from a zone."
+        }
+      }
+    }
+  }
+}

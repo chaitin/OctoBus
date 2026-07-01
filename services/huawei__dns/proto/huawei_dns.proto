@@ -1,0 +1,90 @@
+syntax = "proto3";
+
+package Huawei_DNS;
+
+import "google/protobuf/wrappers.proto";
+
+option go_package = "miner/grpc-service/Huawei_DNS";
+
+service Huawei_DNS {
+  rpc ListZones(ListZonesRequest) returns (ListZonesResponse) {}
+  rpc ListRecordSets(ListRecordSetsRequest) returns (ListRecordSetsResponse) {}
+  rpc CreateRecordSet(CreateRecordSetRequest) returns (CreateRecordSetResponse) {}
+  rpc DeleteRecordSet(DeleteRecordSetRequest) returns (DeleteRecordSetResponse) {}
+}
+
+message ListZonesRequest {
+  google.protobuf.Int64Value limit = 1;
+  google.protobuf.Int64Value offset = 2;
+}
+
+message ListZonesResponse {
+  int32 code = 1;
+  string message = 2;
+  repeated ZoneItem data = 3;
+  int32 total = 4;
+}
+
+message ZoneItem {
+  string id = 1;
+  string name = 2;
+  string zone_type = 3;
+  string status = 4;
+  int32 ttl = 5;
+  string create_time = 6;
+}
+
+message ListRecordSetsRequest {
+  string zone_id = 1;
+  google.protobuf.StringValue name = 2;
+  google.protobuf.StringValue type = 3;
+  google.protobuf.Int64Value limit = 4;
+  google.protobuf.Int64Value offset = 5;
+}
+
+message ListRecordSetsResponse {
+  int32 code = 1;
+  string message = 2;
+  repeated RecordSetItem data = 3;
+  int32 total = 4;
+}
+
+message RecordSetItem {
+  string id = 1;
+  string name = 2;
+  string type = 3;
+  string value = 4;
+  int32 ttl = 5;
+  string status = 6;
+  string zone_id = 7;
+  string zone_name = 8;
+  string create_time = 9;
+}
+
+message CreateRecordSetRequest {
+  string zone_id = 1;
+  string name = 2;
+  string type = 3;
+  string value = 4;
+  google.protobuf.Int32Value ttl = 5;
+  google.protobuf.StringValue description = 6;
+}
+
+message CreateRecordSetResponse {
+  int32 code = 1;
+  string message = 2;
+  string id = 3;
+  string name = 4;
+  string type = 5;
+  string value = 6;
+}
+
+message DeleteRecordSetRequest {
+  string zone_id = 1;
+  string recordset_id = 2;
+}
+
+message DeleteRecordSetResponse {
+  int32 code = 1;
+  string message = 2;
+}

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 10000,
+      "description": "HTTP timeout in milliseconds."
+    }
+  }
+}
