@@ -237,22 +237,27 @@ const callTencent = async (ctx, req, action, body) => {
   const dispatcher = await getTlsDispatcher(config.skipTlsVerify === true);
   const { payload, headers } = signRequest({ endpoint, action, region, body, credential, timestamp: Math.floor(Date.now() / 1000) });
 
-  const response = await fetchWithTimeout(endpoint, { method: "POST", headers, body: payload }, { timeoutMs, dispatcher });
+  try {
+    const response = await fetchWithTimeout(endpoint, { method: "POST", headers, body: payload }, { timeoutMs, dispatcher });
 
-  if (!response.ok) {
-    const text = await response.text();
-    const apiResponse = (() => { try { return JSON.parse(text); } catch { return null; } })();
-    if (apiResponse && (apiResponse.Response || apiResponse.response)) {
-      const errObj = (apiResponse.Response || apiResponse.response).Error || (apiResponse.Response || apiResponse.response).error;
-      if (errObj) throw mapTencentError(errObj);
+    if (!response.ok) {
+      const text = await response.text();
+      const apiResponse = (() => { try { return JSON.parse(text); } catch { return null; } })();
+      if (apiResponse && (apiResponse.Response || apiResponse.response)) {
+        const errObj = (apiResponse.Response || apiResponse.response).Error || (apiResponse.Response || apiResponse.response).error;
+        if (errObj) throw mapTencentError(errObj);
+      }
+      throw httpStatusError(response, text);
     }
-    throw httpStatusError(response, text);
-  }
 
-  const { json: parsed } = await readResponseJson(response);
-  const apiResponse = (parsed && (parsed.Response || parsed.response || parsed)) || {};
-  if (apiResponse.Error || apiResponse.error) throw mapTencentError(apiResponse.Error || apiResponse.error);
-  return apiResponse;
+    const { json: parsed } = await readResponseJson(response);
+    const apiResponse = (parsed && (parsed.Response || parsed.response || parsed)) || {};
+    if (apiResponse.Error || apiResponse.error) throw mapTencentError(apiResponse.Error || apiResponse.error);
+    return apiResponse;
+  } catch (err) {
+    if (err.legacyCode || err.code) throw err;
+    throw serviceError("UNAVAILABLE", err.message || "Tencent Cloud API request failed");
+  }
 };
 
 const mapFirewallRule = (rule = {}) => ({

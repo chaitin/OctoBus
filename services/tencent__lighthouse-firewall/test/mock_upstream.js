@@ -21,7 +21,11 @@ const MOCK_RESPONSES = {
 const server = http.createServer(async (req, res) => {
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);
-  const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : {};
+  let body = {};
+  if (chunks.length) {
+    try { body = JSON.parse(Buffer.concat(chunks).toString("utf8")) || {}; }
+    catch { /* ignore malformed request body */ }
+  }
   const action = req.headers["x-tc-action"] || "Unknown";
 
   if (body.InstanceId === "fail-unauthorized") {
