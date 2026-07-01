@@ -1,130 +1,42 @@
 # CloudWalker OctoBus Service
 
-<div align="center">
-
-![CloudWalker](./octobuslogo.jpg)
-
-**长亭科技 CloudWalker 集群和漏洞查询服务**
-
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Test Status](https://img.shields.io/badge/tests-passing-green.svg)](CLOUDWALKER_FINAL_TEST_REPORT.md)
-[![API Coverage](https://img.shields.io/badge/API%20coverage-100%25-brightgreen.svg)](test/)
-[![Node Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](package.json)
-
-</div>
-
----
-
-## 📖 目录
-
-- [简介](#简介)
-- [功能特性](#功能特性)
-- [快速开始](#快速开始)
-- [配置说明](#配置说明)
-- [API 接口](#api-接口)
-- [使用示例](#使用示例)
-- [认证机制](#认证机制)
-- [数据结构](#数据结构)
-- [测试验证](#测试验证)
-- [性能表现](#性能表现)
-- [部署指南](#部署指南)
-- [最佳实践](#最佳实践)
-- [常见问题](#常见问题)
-- [更新日志](#更新日志)
-- [贡献指南](#贡献指南)
-- [许可证](#许可证)
-
----
-
-## 简介
-
-**CloudWalker OctoBus Service** 是一个专门为长亭科技 CloudWalker 平台设计的 OctoBus 服务包，提供集群管理和漏洞查询的只读 API 接口。通过该服务，用户可以方便地查询 CloudWalker 平台中的集群信息、漏洞事件等安全数据。
-
-### 支持版本
-
-- **目标产品**: 长亭科技 CloudWalker
-- **支持版本**: VM-S10-26.06.002
-
-### 认证方式
-
-- **Token + Browser Session Cookie 组合认证**
-- Token 为必需项，Cookie 在 demo 环境中为必需，在支持 token-only 认证的环境中可省略
-
-### 风险边界
-
-- **read-only**: 本服务所有 6 个 RPC 方法均为只读操作，不会对 CloudWalker 平台产生任何修改
-
-### 推荐 Capset
-
-- **推荐名称**: `chaitin-cloudwalker-readonly`
-- **分组理由**: 当前所有方法均为只读查询，属于同一运维场景（集群与漏洞状态巡检），适合归入单一 readonly capset
-- **包含方法**: ListClusters, GetClusterInfo, ListClusterVulnEvents, GetClusterVulnEvent, ListMicroserviceVulnEvents, GetMicroserviceVulnEvent
-
-### 核心价值
-
-- 🔍 **集群资产查询**: 实时获取 CloudWalker 管理的所有 Kubernetes 集群信息
-- 🛡️ **漏洞事件追踪**: 查询集群和微服务层面的安全漏洞事件
-- 📊 **风险评估**: 获取漏洞风险等级、特征等详细信息
-- 🔗 **标准化接口**: 基于 gRPC 的标准化 API，易于集成到各种系统
-- ⚡ **高性能**: 平均响应时间 <100ms，满足实时查询需求
-- 🔒 **安全认证**: 支持 Token + Session Cookie 组合认证机制
-
----
-
-## 功能特性
-
-### ✅ 已实现功能
-
-| 功能模块 | 接口 | 描述 | 状态 |
-|---------|------|------|------|
-| 集群管理 | `ListClusters` | 获取集群列表（支持分页） | ✅ |
-| 集群管理 | `GetClusterInfo` | 获取指定集群的详细信息 | ✅ |
-| 漏洞查询 | `ListClusterVulnEvents` | 查询集群漏洞事件列表 | ✅ |
-| 漏洞查询 | `GetClusterVulnEvent` | 获取集群漏洞事件详情 | ✅ |
-| 微服务安全 | `ListMicroserviceVulnEvents` | 查询微服务漏洞事件列表 | ✅ |
-| 微服务安全 | `GetMicroserviceVulnEvent` | 获取微服务漏洞事件详情 | ✅ |
-
-### 🎯 核心特性
-
-1. **只读安全**: 所有接口均为只读操作，不会对 CloudWalker 平台产生任何修改
-2. **字段映射**: 自动将 CloudWalker API 的 snake_case 字段转换为 camelCase
-3. **数据扩展**: 提供比原始 API 更丰富的字段集（如 moduleStatus、characteristic 等）
-4. **错误处理**: 完善的错误处理机制，支持 401/404/500 等状态码的友好提示
-5. **分页支持**: 所有列表接口支持分页查询（pageSize + pageToken）
-6. **类型安全**: 使用 protobuf 定义，确保类型安全和接口一致性
-7. **查询增强**: 三个 list 接口支持强类型筛选参数（如 `risk`、`state`、`characteristic`、`serviceName`）
-8. **Fallback 兼容**: 对 `clusterName / cnvd / cnnvd` 等上游不稳定参数，支持自动降级为“列表拉取 + 本地过滤 + 详情补全”
-
----
-
-## 快速开始
-
-### 前置要求
-
-- **Node.js**: >= 18.0.0 (支持 ES Modules)
-- **OctoBus SDK**: >= 0.5.0
-- **CloudWalker 认证**: Token 和 Browser Session Cookie
-
-### 安装步骤
-
-#### 1. 导入服务到 OctoBus
+长亭科技牧云（CloudWalker）集群与漏洞只读查询适配器。
 
 ```bash
-# 在 OctoBus 项目根目录执行
-octobus service import --id cloudwalker ./services/chaitin__cloudwalker
+octobus service import cloudwalker ./services/chaitin__cloudwalker
 ```
 
-#### 2. 配置认证信息
+## Package Files
 
-创建服务实例配置：
+- `service.json` — OctoBus 服务清单，声明运行模式与 proto 入口。
+- `proto/cloudwalker.proto` — gRPC API 定义，6 个 unary 方法。
+- `config.schema.json` — 非密配置：`baseUrl`、`referer`。
+- `secret.schema.json` — 密钥配置：`token`（必填）、`cookie`（可选）。
+- `src/cloudwalker.js` — 上游 REST API 请求映射、响应归一化、错误分类。
+- `src/service.js` — OctoBus SDK `defineService` 封装。
+- `bin/cloudwalker.js` — 服务本地可执行入口。
+- `test/cloudwalker.test.js` — node:test 覆盖：请求映射、响应归一化、错误分类、SDK handler。
+- `test/cloudwalker-client.test.js` — 扩展客户端测试：HTML 响应检测、fallback 逻辑、零值保留。
+- `test/mock_upstream.js` — 本地 mock 上游，覆盖成功 / 认证失败 / 5xx / 超时。
 
-```bash
-octobus instance create --service-dir chaitin__cloudwalker --name cloudwalker-demo
-```
+## 支持版本
 
-#### 3. 设置配置和密钥
+- **目标产品**: 长亭科技牧云 CloudWalker
+- **适配版本**: VM-S10-26.06.002
 
-**配置文件** (`config.json`):
+## 认证方式
+
+Token + Browser Session Cookie 组合认证：
+
+| 字段 | 必填 | 说明 |
+|------|------|------|
+| `token` | 是 | API Token，通过牧云控制台「个人中心 → API Token」生成 |
+| `cookie` | 视环境 | 浏览器 Session Cookie；Demo 环境需要，正式环境可能仅需 token |
+
+认证头同时发送三种格式以兼容不同牧云版本：`Authorization: Bearer <token>`、`token: <token>`、`x-auth-token: <token>`。
+
+## Configuration
+
 ```json
 {
   "baseUrl": "https://cnapp.demo.chaitin.cn",
@@ -132,768 +44,112 @@ octobus instance create --service-dir chaitin__cloudwalker --name cloudwalker-de
 }
 ```
 
-**密钥文件** (`secret.json`):
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `baseUrl` | string | 是 | 牧云 API 基础 URL |
+| `referer` | string | 否 | 浏览器 Referer 头，部分环境需要 |
+
+Secret：
+
 ```json
 {
-  "token": "你的-CloudWalker-API-Token",
-  "cookie": "你的-Browser-Session-Cookie"
+  "token": "TMCpan#2VB44wwF...",
+  "cookie": "_c_WBKFRo=...; veinmind=..."
 }
 ```
 
-> ⚠️ **重要提示**: CloudWalker demo 环境需要完整的 Token + Cookie 认证，仅有 Token 无法访问 API。
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `token` | string | 是 | API Token |
+| `cookie` | string | 否 | 浏览器 Session Cookie（含 httpOnly 的 veinmind） |
 
-#### 4. 启动服务
+Handler 优先使用 `ctx.config` / `ctx.secret`，其次回退到环境变量 `CLOUDWALKER_BASE_URL`、`CLOUDWALKER_TOKEN`、`CLOUDWALKER_COOKIE`、`CLOUDWALKER_REFERER`。
+
+## RPC Methods
+
+| 方法 | 上游 API | 说明 |
+|------|----------|------|
+| `CloudWalker.CloudWalker/ListClusters` | `GET /cluster/cluster_list` | 查询集群列表，支持 name / status 过滤与分页 |
+| `CloudWalker.CloudWalker/GetClusterInfo` | `GET /cluster/cluster_info` | 按集群 ID 获取详情 |
+| `CloudWalker.CloudWalker/ListClusterVulnEvents` | `GET /cluster_vuln/vuln_event_list` | 查询集群漏洞事件列表，支持 CVE / CNVD / risk / state 等过滤 |
+| `CloudWalker.CloudWalker/GetClusterVulnEvent` | `GET /cluster_vuln/vuln_event_info` | 按事件 ID 获取集群漏洞详情 |
+| `CloudWalker.CloudWalker/ListMicroserviceVulnEvents` | `GET /cluster_microservice/vuln_event_list` | 查询微服务漏洞事件列表，支持 serviceName / clusterName 等过滤 |
+| `CloudWalker.CloudWalker/GetMicroserviceVulnEvent` | `GET /cluster_microservice/vuln_event_info` | 按事件 ID 获取微服务漏洞详情 |
+
+## Behavior Notes
+
+- **Proto3 零值参数跳过**：gRPC 反序列化后 int32 字段（如 `status`、`order`）默认值为 0，`appendScalarQuery` 主动跳过值为 0 的数字参数，避免发送 `status=0` 导致上游 "Validation Failed"。
+- **Fallback 过滤**：`clusterName`、`cnvd`、`cnnvd` 等参数在 Demo 上游不稳定，客户端先尝试直接查询，失败后自动降级为全量扫描 + 客户端过滤。
+- **HTML 响应检测**：Session 过期时上游返回 200 + HTML 页面而非 JSON，客户端识别 `<!doctype html>` 并触发 fallback 或抛出 `UNAVAILABLE` 错误。
+- **snake_case → camelCase**：上游 API 返回 snake_case 字段，客户端自动转换为 camelCase 以匹配 proto JSON 格式。
+- **非 JSON 内容守卫**：响应 Content-Type 非 JSON 时直接拒绝，防止将 HTML 误解析为业务数据。
+
+### 错误映射
+
+| 上游 HTTP 状态 | gRPC 状态码 |
+|----------------|-------------|
+| 400 | `INVALID_ARGUMENT` |
+| 401 | `UNAUTHENTICATED` |
+| 403 | `PERMISSION_DENIED` |
+| 404 | `NOT_FOUND` |
+| 409 | `ALREADY_EXISTS` |
+| 412 | `FAILED_PRECONDITION` |
+| 429 | `RESOURCE_EXHAUSTED` |
+| 504 | `DEADLINE_EXCEEDED` |
+| 其他 5xx / 网络错误 | `UNAVAILABLE` |
+
+## Risk Boundary
+
+- **风险等级**: `read-only`
+- **写操作**: 本版本无写操作，所有 6 个方法均为只读查询。
+- 本适配器不修改牧云平台任何数据。
+
+## Suggested Capset
+
+- `prod` — 生产环境只读查询
 
 ```bash
-octobus instance start cloudwalker-demo
+octobus capset create prod
+octobus capset add-instance prod --service cloudwalker --instance cloudwalker-demo
 ```
 
----
+## Known Limitations
 
-## 配置说明
+- 第一版仅覆盖 6 个只读查询能力，不支持漏洞处置、集群纳管等写操作。
+- Demo 环境的 `clusterName`、`cnvd`、`cnnvd` 过滤参数不稳定，需通过 fallback 机制兜底。
+- Cookie 中的 `veinmind` 为 httpOnly，需通过浏览器 CDP 获取，无法从 `document.cookie` 读取。
+- `ListClustersRequest.status` 为 int32 类型，proto3 默认值为 0，不支持通过 0 值筛选集群状态；需传正整数（如 1=运行中、2=异常）。
 
-### 配置参数
-
-| 参数名 | 类型 | 必需 | 描述 | 默认值 |
-|--------|------|------|------|--------|
-| `baseUrl` | string | ✅ | CloudWalker API 基础 URL | - |
-| `referer` | string | ❌ | Browser referer header | - |
-
-### 密钥参数
-
-| 参数名 | 类型 | 必需 | 描述 | 示例 |
-|--------|------|------|------|------|
-| `token` | string | ✅ | CloudWalker API Token | `TMCpan#xxx...` |
-| `cookie` | string | ✅ | Browser Session Cookie | `_c_WBKFRo=...; veinmind=...` |
-
-### 认证信息获取
-
-#### 获取 Token
-
-1. 登录 CloudWalker 平台: https://cnapp.demo.chaitin.cn
-2. 进入 **个人中心** → **API Token**
-3. 点击 **"创建新 Token"** 或使用现有 Token
-4. 复制生成的 Token 值
-
-#### 获取 Cookie
-
-1. 登录 CloudWalker 平台
-2. 打开浏览器开发者工具 (F12)
-3. 进入 **Application** → **Cookies**
-4. 找到以下关键 Cookie 值：
-   - `_c_WBKFRo`: 认证 Cookie
-   - `veinmind`: Session ID
-   - 其他辅助 Cookie (可选)
-5. 复制完整的 Cookie 字符串
-
-**示例 Cookie 格式**:
-```javascript
-<COOKIE>
-```
-
----
-
-## API 接口
-
-### 1. ListClusters - 获取集群列表
-
-**接口路径**: `CloudWalker.CloudWalker/ListClusters`
-
-**请求参数**:
-```json
-{
-  "pageSize": 20,
-  "pageToken": "cursor-1",
-  "name": "信创集群",
-  "status": 1
-}
-```
-
-**筛选参数说明**:
-
-| 参数名 | 类型 | 映射到上游 | 说明 | 真实环境状态 |
-|--------|------|-----------|------|-------------|
-| `pageSize` | int | `page_size` | 分页大小 | ✅ |
-| `pageToken` | string | `offset` | 分页游标 | ✅ |
-| `name` | string | `name` | 按集群名称筛选 | ✅ |
-| `status` | int | `status` | 按状态筛选 | ⚠️ demo 上游偶发异常 |
-
-**响应数据**:
-```json
-{
-  "clusters": [
-    {
-      "clusterId": "3",
-      "clusterName": "信创集群",
-      "status": "2",
-      "apiVersion": "v1.21.4+k3s-46ae9f1e",
-      "masterIps": ["192.168.17.32", "192.168.20.80"],
-      "clusterType": 1,
-      "reachable": 2,
-      "integrationStatus": 3,
-      "moduleStatus": [
-        {"moduleType": 1, "status": 1, "version": "v1.0.7"}
-      ]
-    }
-  ],
-  "nextPageToken": ""
-}
-```
-
-**字段说明**:
-
-| 字段名 | 类型 | 描述 |
-|--------|------|------|
-| `clusterId` | string | 集群唯一标识 |
-| `clusterName` | string | 集群名称 |
-| `status` | string | 集群状态（1=运行中，2=其他） |
-| `apiVersion` | string | Kubernetes API 版本 |
-| `masterIps` | array | Master 节点 IP 列表 |
-| `clusterType` | int | 集群类型（1=Kubernetes） |
-| `reachable` | int | 可达性状态 |
-| `integrationStatus` | int | 集成状态 |
-| `moduleStatus` | array | 模块状态列表 |
-
----
-
-### 2. GetClusterInfo - 获取集群详情
-
-**接口路径**: `CloudWalker.CloudWalker/GetClusterInfo`
-
-**请求参数**:
-```json
-{
-  "clusterId": "3"  // 集群ID（必需）
-}
-```
-
-**响应数据**: 返回单个集群的详细信息（结构同 ListClusters 中的 cluster 对象）
-
----
-
-### 3. ListClusterVulnEvents - 查询集群漏洞事件
-
-**接口路径**: `CloudWalker.CloudWalker/ListClusterVulnEvents`
-
-**请求参数**:
-```json
-{
-  "clusterId": "3",
-  "pageSize": 10,
-  "pageToken": "cursor",
-  "cve": "CVE-2023-25173",
-  "name": "containerd 安全漏洞",
-  "cnvd": "CNVD-2022-06547",
-  "cnnvd": "CNNVD-202302-1367",
-  "nodeName": "icbc-master1",
-  "clusterName": "K3S集群-内部测试",
-  "orderBy": "risk",
-  "risk": [4, 5],
-  "state": [1],
-  "characteristic": ["EXP"],
-  "order": 2
-}
-```
-
-**筛选参数说明**:
-
-| 参数名 | 类型 | 映射到上游 | 说明 | 真实环境状态 |
-|--------|------|-----------|------|-------------|
-| `clusterId` | string | `cluster_id` | 集群 ID | ✅ |
-| `pageSize` | int | `page_size` | 分页大小 | ✅ |
-| `pageToken` | string | `offset` | 分页游标 | ✅ |
-| `cve` | string | `cve` | CVE 编号筛选 | ✅ |
-| `name` | string | `name` | 漏洞名称筛选 | ✅ |
-| `cnvd` | string | `cnvd` | CNVD 编号筛选 | ✅ fallback |
-| `cnnvd` | string | `cnnvd` | CNNVD 编号筛选 | ✅ fallback |
-| `nodeName` | string | `node_name` | 节点名筛选 | ✅ |
-| `clusterName` | string | `cluster_name` | 集群名筛选 | ✅ fallback |
-| `orderBy` | string | `order_by` | 排序字段 | ✅ |
-| `risk` | repeated int | `risk` | 风险等级数组 | ✅ |
-| `state` | repeated int | `state` | 处理状态数组 | ✅ |
-| `characteristic` | repeated string | `characteristic` | 特征数组 | ✅ |
-| `order` | int | `order` | 排序方向 | ✅ |
-
-> **Fallback 说明**：当 `clusterName / cnvd / cnnvd` 在上游 demo 环境中直接查询返回 HTML/302/空结果时，service 会自动退化为“先拉基础列表，再本地过滤，并在需要时调用详情接口补全字段”。
-
-**响应数据**:
-```json
-{
-  "vulnEvents": [
-    {
-      "eventId": "30",
-      "clusterId": "8",
-      "title": "containerd 安全漏洞",
-      "cve": "CVE-2023-25173",
-      "level": "4",
-      "risk": 4,
-      "nodeName": "icbc-master1",
-      "clusterName": "K3S集群-内部测试",
-      "description": "漏洞描述...",
-      "solution": "解决方案...",
-      "characteristic": ["other"],
-      "manageStatus": 1,
-      "nodeExist": true
-    }
-  ],
-  "nextPageToken": ""
-}
-```
-
----
-
-### 4. GetClusterVulnEvent - 获取漏洞事件详情
-
-**接口路径**: `CloudWalker.CloudWalker/GetClusterVulnEvent`
-
-**请求参数**:
-```json
-{
-  "eventId": "30"  // 漏洞事件ID（必需）
-}
-```
-
-**响应数据**: 返回漏洞事件的完整详细信息，包括：
-- 漏洞描述 (`description`)
-- 解决方案 (`solution`)
-- 风险等级 (`risk`, `originalRisk`, `customRisk`)
-- 漏洞特征 (`characteristic`)
-- 发现时间 (`firstDiscoveryTime`, `lastDiscoveryTime`)
-
----
-
-### 5. ListMicroserviceVulnEvents - 查询微服务漏洞
-
-**接口路径**: `CloudWalker.CloudWalker/ListMicroserviceVulnEvents`
-
-**请求参数**:
-```json
-{
-  "pageSize": 10,
-  "pageToken": "cursor",
-  "serviceName": "cloudwalker-cloudwalker-proxy",
-  "serviceType": "ClusterIP",
-  "clusterName": "K3S集群-内部测试",
-  "name": "InfluxDB JWT Token伪造认证绕过漏洞",
-  "cve": "CVE-2019-20933",
-  "cnvd": "CNVD-2022-06547",
-  "cnnvd": "CNNVD-202011-1660",
-  "orderBy": "risk",
-  "characteristic": ["EXP"],
-  "risk": [4, 5],
-  "state": [1],
-  "order": 2
-}
-```
-
-**筛选参数说明**:
-
-| 参数名 | 类型 | 映射到上游 | 说明 | 真实环境状态 |
-|--------|------|-----------|------|-------------|
-| `pageSize` | int | `page_size` | 分页大小 | ✅ |
-| `pageToken` | string | `offset` | 分页游标 | ✅ |
-| `serviceName` | string | `service_name` | 微服务名称筛选 | ✅ |
-| `serviceType` | string | `service_type` | 微服务类型筛选 | ✅ |
-| `clusterName` | string | `cluster_name` | 集群名筛选 | ✅ fallback |
-| `name` | string | `name` | 漏洞名称筛选 | ✅ |
-| `cve` | string | `cve` | CVE 编号筛选 | ✅ |
-| `cnvd` | string | `cnvd` | CNVD 编号筛选 | ✅ fallback |
-| `cnnvd` | string | `cnnvd` | CNNVD 编号筛选 | ✅ fallback |
-| `orderBy` | string | `order_by` | 排序字段 | ✅ |
-| `characteristic` | repeated string | `characteristic` | 特征数组 | ✅ |
-| `risk` | repeated int | `risk` | 风险等级数组 | ✅ |
-| `state` | repeated int | `state` | 处理状态数组 | ✅ |
-| `order` | int | `order` | 排序方向 | ✅ |
-
-**响应数据**: 类似 ListClusterVulnEvents，但包含微服务相关字段：
-```json
-{
-  "vulnEvents": [
-    {
-      "eventId": "3",
-      "microserviceId": "5411d90c-b540-4282-a0d4-8edf05f4b861",
-      "microserviceName": "vmsingle-victoria-metrics-k8s-stack",
-      "serviceType": "ClusterIP",
-      "title": "InfluxDB JWT Token伪造认证绕过漏洞",
-      "cve": "CVE-2019-20933",
-      "cnvd": "CNVD-2022-06547",
-      "cnnvd": "CNNVD-202011-1660",
-      "level": "5"
-    }
-  ]
-}
-```
-
-> **Fallback 说明**：当 `clusterName / cnvd / cnnvd` 在上游 demo 环境中直接查询返回 HTML/302/空结果时，service 会自动退化为“先拉基础列表，再本地过滤，并在需要时调用详情接口补全字段”。
-
----
-
-### 6. GetMicroserviceVulnEvent - 获取微服务漏洞详情
-
-**接口路径**: `CloudWalker.CloudWalker/GetMicroserviceVulnEvent`
-
-**请求参数**:
-```json
-{
-  "eventId": "3"
-}
-```
-
----
-
-## 使用示例
-
-### Node.js SDK 使用示例
-
-```javascript
-import { createClient } from '@chaitin-ai/octobus-sdk';
-
-// 创建客户端实例
-const client = createClient({
-  baseUrl: 'https://cnapp.demo.chaitin.cn',
-  token: process.env.CLOUDWALKER_TOKEN,
-  cookie: process.env.CLOUDWALKER_COOKIE,
-  referer: 'https://cnapp.demo.chaitin.cn/profile/apitoken'
-});
-
-// 查询集群列表
-const clusters = await client.listClusters({ pageSize: 20 });
-console.log(`找到 ${clusters.clusters.length} 个集群`);
-
-// 获取第一个集群的详情
-const clusterInfo = await client.getClusterInfo({ 
-  clusterId: clusters.clusters[0].clusterId 
-});
-console.log(`集群名称: ${clusterInfo.clusterName}`);
-
-// 查询该集群的漏洞事件
-const vulnEvents = await client.listClusterVulnEvents({
-  clusterId: clusterInfo.clusterId,
-  pageSize: 10
-});
-console.log(`发现 ${vulnEvents.vulnEvents.length} 个漏洞事件`);
-
-// 获取漏洞详情
-const vulnDetail = await client.getClusterVulnEvent({
-  eventId: vulnEvents.vulnEvents[0].eventId
-});
-console.log(`漏洞: ${vulnDetail.title} (${vulnDetail.cve})`);
-console.log(`风险等级: ${vulnDetail.level}`);
-```
-
-### CLI 命令示例
+## Local Checks
 
 ```bash
-# 查询集群列表
-octobus exec cloudwalker-demo list-clusters --pageSize 20
-
-# 获取集群详情
-octobus exec cloudwalker-demo get-cluster-info --clusterId 3
-
-# 查询漏洞事件
-octobus exec cloudwalker-demo list-cluster-vuln-events --clusterId 3 --pageSize 10
-
-# 获取漏洞详情
-octobus exec cloudwalker-demo get-cluster-vuln-event --eventId 30
-
-# 查询微服务漏洞
-octobus exec cloudwalker-demo list-microservice-vuln-events --pageSize 5
+cd services
+npm run validate -- --service-dir chaitin__cloudwalker
+npm test -- --service-dir chaitin__cloudwalker
+npm run pack:check
 ```
 
----
-
-## 认证机制
-
-### 认证方式说明
-
-CloudWalker demo 环境使用 **Token + Browser Session Cookie** 组合认证机制：
-
-#### 🔐 三层认证 Headers
-
-```
-Authorization: Bearer <token>
-token: <token>
-x-auth-token: <token>
-x-requested-with: XMLHttpRequest
-cookie: <browser-session-cookie>
-referer: https://cnapp.demo.chaitin.cn/profile/apitoken
-```
-
-#### ⚠️ 重要提示
-
-- ❌ **仅有 Token**: 无法访问 API，会返回 HTML 登录页面
-- ✅ **Token + Cookie**: 可以正常访问 API，返回 JSON 数据
-
-#### 为什么需要 Cookie？
-
-CloudWalker demo 环境基于浏览器会话认证：
-1. Token 用于 API 层面的认证标识
-2. Cookie 用于浏览器会话维持
-3. 两者结合才能通过 CloudWalker 的完整认证流程
-
-#### 测试验证
-
-详细认证测试过程见：[真实接口测试报告](./test/REAL_API_TEST_GUIDE.md)
-
----
-
-## 数据结构
-
-### Cluster 集群对象
-
-| 字段名 | 类型 | 描述 | 来源 |
-|--------|------|------|------|
-| `clusterId` | string | 集群唯一标识 | id |
-| `clusterName` | string | 集群名称 | name |
-| `status` | string | 集群状态 | status |
-| `apiVersion` | string | K8s API版本 | api_version |
-| `masterIps` | array | Master节点IP | master_ips |
-| `moduleStatus` | array | 模块状态 | module_status |
-| `clusterType` | int | 集群类型 | cluster_type |
-| `reachable` | int | 可达性 | reachable |
-| `integrationStatus` | int | 集成状态 | integration_status |
-
-### VulnEvent 漏洞事件对象
-
-| 字段名 | 类型 | 描述 | 来源 |
-|--------|------|------|------|
-| `eventId` | string | 事件ID | id |
-| `title` | string | 漏洞标题 | name |
-| `cve` | string | CVE编号 | cve |
-| `level` | string | 风险等级 | risk (字符串化) |
-| `risk` | int | 风险数值 | risk |
-| `description` | string | 漏洞描述 | description |
-| `solution` | string | 解决方案 | solution |
-| `nodeName` | string | 节点名称 | node_name |
-| `clusterName` | string | 集群名称 | cluster_name |
-| `characteristic` | array | 漏洞特征 | characteristic |
-| `manageStatus` | int | 处理状态 | manage_status |
-
-### 字段映射规则
-
-服务自动将 CloudWalker API 的 **snake_case** 字段转换为 **camelCase**：
-
-```
-cluster_id       → clusterId
-cluster_name     → clusterName
-api_version      → apiVersion
-master_ips       → masterIps
-module_status    → moduleStatus
-vuln_events      → vulnEvents
-manage_status    → manageStatus
-service_uid      → serviceUid
-service_name     → serviceName
-```
-
----
-
-## 测试验证
-
-### 📊 测试结果统计
-
-| 测试类型 | 通过率 | 详情 |
-|---------|--------|------|
-| 单元测试 | 10/10 (100%) | [查看报告](./test/) |
-| 真实接口测试 | 6/6 (100%) | [查看报告](./CLOUDWALKER_FINAL_TEST_REPORT.md) |
-| 平均响应时间 | 86.5ms | 性能优秀 ⭐⭐⭐⭐⭐ |
-
-### ✅ 已验证的接口
-
-| 接口 | 测试状态 | 响应时间 | 数据量 |
-|------|---------|---------|--------|
-| ListClusters | ✅ 通过 | 174ms | 4个集群 |
-| GetClusterInfo | ✅ 通过 | 85ms | 集群详情 |
-| ListClusterVulnEvents | ✅ 通过 | 73ms | 5个漏洞 |
-| GetClusterVulnEvent | ✅ 通过 | 61ms | 漏洞详情 |
-| ListMicroserviceVulnEvents | ✅ 通过 | 66ms | 3个微服务漏洞 |
-| GetMicroserviceVulnEvent | ✅ 通过 | 67ms | 微服务漏洞详情 |
-
-### 🧪 运行测试
-
-#### 单元测试
+## OctoBus Runtime Validation
 
 ```bash
-cd services/chaitin__cloudwalker
-npm test
+# 导入服务
+octobus service import cloudwalker ./services/chaitin__cloudwalker
+
+# 创建实例
+octobus instance create cloudwalker-demo \
+  --service cloudwalker \
+  --config-json '{"baseUrl":"https://cnapp.demo.chaitin.cn","referer":"https://cnapp.demo.chaitin.cn/profile/apitoken"}' \
+  --secret-json '{"token":"<TOKEN>","cookie":"<COOKIE>"}'
+
+# 创建 capset 并绑定实例
+octobus capset create prod
+octobus capset add-instance prod --service cloudwalker --instance cloudwalker-demo
+
+# 验证方法注册
+octobus catalog prod --all --json
+
+# 调用测试
+curl -X POST http://127.0.0.1:9000/capsets/prod/connect/cloudwalker-demo/CloudWalker.CloudWalker/ListClusters \
+  -H 'Content-Type: application/json' \
+  -d '{"pageSize": 5}'
 ```
-
-#### 真实接口测试
-
-```bash
-# 设置认证信息
-export CLOUDWALKER_BASE_URL="https://cnapp.demo.chaitin.cn"
-export CLOUDWALKER_TOKEN="你的-token"
-export CLOUDWALKER_COOKIE="你的-cookie"
-
-# 运行测试
-node test/real-api-test.js
-```
-
-详细测试指南：[测试使用说明](./test/REAL_API_TEST_GUIDE.md)
-
----
-
-## 性能表现
-
-### 📈 性能数据
-
-基于真实接口测试（2026-06-29）：
-
-- **平均响应时间**: 86.5ms
-- **最快响应**: 61ms (GetClusterVulnEvent)
-- **最慢响应**: 174ms (ListClusters)
-- **并发能力**: 支持并发请求，无阻塞
-- **数据量**: 单次查询最多返回 20+ 条记录
-
-### ⚡ 性能优化建议
-
-1. **批量查询**: 使用合理的 pageSize，避免单次查询过多数据
-2. **缓存策略**: 对集群列表等相对静态数据使用缓存
-3. **异步处理**: 对大量漏洞事件查询使用异步分页处理
-4. **连接池**: 复用 HTTP 连接，减少连接建立开销
-
----
-
-## 部署指南
-
-### 环境要求
-
-- **Node.js**: >= 18.0.0
-- **OctoBus Runtime**: 最新稳定版本
-- **网络**: 可访问 CloudWalker API 端点
-
-### 生产环境部署
-
-#### 1. 配置文件准备
-
-```bash
-# 创建配置目录
-mkdir -p /etc/octobus/services/cloudwalker
-
-# 配置文件
-cat > /etc/octobus/services/cloudwalker/config.json <<EOF
-{
-  "baseUrl": "https://your-cloudwalker-instance.com",
-  "referer": "https://your-cloudwalker-instance.com/profile/apitoken"
-}
-EOF
-
-# 密钥文件（注意权限）
-cat > /etc/octobus/services/cloudwalker/secret.json <<EOF
-{
-  "token": "生产环境-token",
-  "cookie": "生产环境-cookie"
-}
-EOF
-chmod 600 /etc/octobus/services/cloudwalker/secret.json
-```
-
-#### 2. 服务启动
-
-```bash
-octobus instance create \
-  --service-dir chaitin__cloudwalker \
-  --name cloudwalker-prod \
-  --config /etc/octobus/services/cloudwalker/config.json \
-  --secret /etc/octobus/services/cloudwalker/secret.json
-
-octobus instance start cloudwalker-prod
-```
-
-#### 3. 健康检查
-
-```bash
-octobus exec cloudwalker-prod list-clusters --pageSize 1
-```
-
----
-
-## 最佳实践
-
-### 🔒 安全建议
-
-1. **密钥管理**: 
-   - 使用环境变量或密钥管理系统存储 token 和 cookie
-   - 不要在代码中硬编码认证信息
-   - 定期轮换 Token
-
-2. **权限控制**:
-   - 建议使用 `chaitin-cloudwalker-readonly` capset
-   - 只授予必要的查询权限，不授予写入权限
-
-3. **日志审计**:
-   - 记录所有 API 调用日志
-   - 监控异常请求频率
-   - 定期审计访问记录
-
-### 📊 使用建议
-
-1. **分页查询**: 
-   - 列表查询使用 pageSize=20 获得最佳性能
-   - 使用 pageToken 实现增量查询
-
-2. **数据缓存**:
-   - 集群列表数据变化较慢，可缓存 5-10 分钟
-   - 漏洞事件变化频繁，建议缓存 1-2 分钟
-
-3. **错误处理**:
-   - 检查 HTTP 状态码和 gRPC 错误码
-   - 对 401 错误重新获取认证信息
-   - 对 5xx 错误实现重试机制
-
----
-
-## 常见问题
-
-### Q1: 为什么 API 调用返回 HTML 页面？
-
-**A**: 这是因为认证不完整。CloudWalker demo 环境需要 **Token + Cookie** 组合认证：
-
-```bash
-# 检查配置
-cat config.json  # baseUrl 和 referer
-cat secret.json  # token 和 cookie
-
-# 确保两者都已配置
-```
-
-详细说明：[认证机制](#认证机制)
-
-### Q2: 如何获取 CloudWalker Cookie？
-
-**A**: 参考 [认证信息获取](#认证信息获取) 部分，从浏览器开发者工具复制完整 Cookie 字符串。
-
-### Q3: 字段名称为什么是 camelCase？
-
-**A**: 服务自动将 CloudWalker API 的 snake_case 字段转换为 camelCase，以符合 JavaScript/TypeScript 的命名规范。详见 [字段映射规则](#字段映射规则)。
-
-### Q4: 如何处理分页查询？
-
-**A**: 使用 pageSize 和 pageToken 参数：
-
-```javascript
-// 第一页
-const page1 = await client.listClusters({ pageSize: 20 });
-
-// 下一页
-if (page1.nextPageToken) {
-  const page2 = await client.listClusters({
-    pageSize: 20,
-    pageToken: page1.nextPageToken
-  });
-}
-```
-
-### Q5: 漏洞等级 level 和 risk 有什么区别？
-
-**A**: 
-- `level`: 字符串类型，用于显示
-- `risk`: 数值类型，用于计算和排序
-- 两者值相同，只是类型不同
-
-### Q6: 如何测试服务是否正常？
-
-**A**: 运行真实接口测试：
-
-```bash
-cd services/chaitin__cloudwalker
-CLOUDWALKER_TOKEN="xxx" CLOUDWALKER_COOKIE="xxx" node test/real-api-test.js
-```
-
----
-
-## 更新日志
-
-### v1.0.0 (2026-06-29)
-
-#### 新增功能
-- ✅ 完成 6 个核心 API 接口实现
-- ✅ 支持 Token + Cookie 组合认证
-- ✅ 自动字段映射（snake_case → camelCase）
-- ✅ 完善的错误处理机制
-
-#### 测试验证
-- ✅ 单元测试 10/10 通过
-- ✅ 真实接口测试 6/6 通过
-- ✅ 性能验证（平均响应时间 86.5ms）
-
-#### 文档完善
-- ✅ 完整的 README 文档
-- ✅ 测试报告和使用指南
-- ✅ 认证机制详细说明
-
----
-
-## 贡献指南
-
-欢迎贡献代码、报告问题或提出建议！
-
-### 开发流程
-
-1. Fork 本仓库
-2. 创建功能分支 (`git checkout -b feature/amazing-feature`)
-3. 提交更改 (`git commit -m 'Add amazing feature'`)
-4. 推送到分支 (`git push origin feature/amazing-feature`)
-5. 创建 Pull Request
-
-### 代码规范
-
-- 使用 ES Modules (Node.js >= 18)
-- 遵循 ESLint 规范
-- 编写单元测试
-- 更新相关文档
-
-### 测试要求
-
-所有 PR 必须通过：
-- 单元测试（`npm test`）
-- 代码风格检查
-- 文档完整性检查
-
----
-
-## 许可证
-
-Apache License 2.0
-
-详见 [LICENSE](../../LICENSE) 文件。
-
----
-
-## 已知限制 (Known Limitations)
-
-1. **Demo 环境 Cookie 依赖**: CloudWalker demo 环境需要 Token + Cookie 组合认证，仅有 Token 会返回 HTML 登录页面；非 demo 环境可能仅需要 Token
-2. **Fallback 行为**: `clusterName / cnvd / cnnvd` 参数在 demo 上游直筛不稳定，service 已实现自动降级（列表拉取 + 本地过滤 + 详情补全），但 fallback 模式下存在额外 API 调用开销
-3. **ListClusters.status 筛选**: 上游 demo 环境中 `status` 参数偶发异常，不建议在生产环境中依赖此筛选
-4. **cnvd 筛选**: 代码已兼容 cnvd fallback，但当前 cluster 样本未拿到稳定的非空命中值
-5. **分页模式**: CloudWalker 上游使用 offset 分页而非 page 编号，大量数据翻页时 offset 值可能不稳定
-6. **无写入能力**: 当前版本为纯只读，不支持漏洞状态变更、集群操作等写操作
-7. **Cookie 有效期**: Browser Session Cookie 有时效性，长期运行需要定期刷新
-
----
-
-## 相关链接
-
-- **长亭科技官网**: https://www.chaitin.cn
-- **CloudWalker 产品**: https://www.chaitin.cn/product/cloudwalker
-- **OctoBus 项目**: https://github.com/chaitin/OctoBus
-- **API 文档**: [proto/cloudwalker.proto](proto/cloudwalker.proto)
-- **测试报告**: [CLOUDWALKER_FINAL_TEST_REPORT.md](CLOUDWALKER_FINAL_TEST_REPORT.md)
-
----
-
-## 联系方式
-
-- **问题反馈**: GitHub Issues
-- **功能建议**: GitHub Discussions
-- **安全漏洞**: security@chaitin.cn
-
----
-
-<div align="center">
-
-**Made with ❤️ by Chaitin AI Team**
-
-⭐ 如果这个项目对你有帮助，请给一个 Star！
-
-</div>
