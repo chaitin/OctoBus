@@ -1,0 +1,81 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "volcengine-waf",
+  "displayName": "Volcengine WAF",
+  "description": "OctoBus package for Volcengine Web Application Firewall read-only query APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/volcengine_waf.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Volcengine_WAF.Volcengine_WAF/ListDomain": {
+          "name": "list-domain",
+          "description": "Query Volcengine WAF protected domains."
+        },
+        "Volcengine_WAF.Volcengine_WAF/ListLoadBalancer": {
+          "name": "list-load-balancer",
+          "description": "Query Volcengine WAF load balancer access resources."
+        },
+        "Volcengine_WAF.Volcengine_WAF/QueryProtectionOverviewLb": {
+          "name": "query-protection-overview-lb",
+          "description": "Query Volcengine WAF protection overview metrics."
+        },
+        "Volcengine_WAF.Volcengine_WAF/QueryAttackAnalysisWithRuleAggLb": {
+          "name": "query-attack-analysis-with-rule-agg-lb",
+          "description": "Query Volcengine WAF attack analysis grouped by protection rule."
+        },
+        "Volcengine_WAF.Volcengine_WAF/QueryAttackSecurityEvent": {
+          "name": "query-attack-security-event",
+          "description": "Query Volcengine WAF attack security events."
+        },
+        "Volcengine_WAF.Volcengine_WAF/QueryFlowOverviewLb": {
+          "name": "query-flow-overview-lb",
+          "description": "Query Volcengine WAF traffic overview metrics."
+        },
+        "Volcengine_WAF.Volcengine_WAF/ListCustomPage": {
+          "name": "list-custom-page",
+          "description": "Query Volcengine WAF custom response pages."
+        },
+        "Volcengine_WAF.Volcengine_WAF/GetTLSConfig": {
+          "name": "get-tls-config",
+          "description": "Query Volcengine WAF log configuration."
+        },
+        "Volcengine_WAF.Volcengine_WAF/GetVulnerabilityConfig": {
+          "name": "get-vulnerability-config",
+          "description": "Query Volcengine WAF vulnerability protection configuration."
+        },
+        "Volcengine_WAF.Volcengine_WAF/ListVulnerabilityRule": {
+          "name": "list-vulnerability-rule",
+          "description": "Query Volcengine WAF vulnerability protection rules."
+        },
+        "Volcengine_WAF.Volcengine_WAF/ListCustomBotConfig": {
+          "name": "list-custom-bot-config",
+          "description": "Query Volcengine WAF custom bot protection configuration."
+        },
+        "Volcengine_WAF.Volcengine_WAF/ListWafServiceCertificate": {
+          "name": "list-waf-service-certificate",
+          "description": "Query Volcengine WAF service certificates."
+        },
+        "Volcengine_WAF.Volcengine_WAF/ListBlockRule": {
+          "name": "list-block-rule",
+          "description": "Query Volcengine WAF block rules."
+        },
+        "Volcengine_WAF.Volcengine_WAF/ListAllowRule": {
+          "name": "list-allow-rule",
+          "description": "Query Volcengine WAF allow rules."
+        }
+      }
+    }
+  }
+}

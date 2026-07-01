@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package Volcengine_WAF;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Volcengine_WAF";
+
+service Volcengine_WAF {
+  rpc ListDomain(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListLoadBalancer(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc QueryAttackAnalysisWithRuleAggLb(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc QueryAttackSecurityEvent(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc QueryFlowOverviewLb(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc QueryProtectionOverviewLb(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListCustomPage(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListVulnerabilityRule(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetVulnerabilityConfig(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListCustomBotConfig(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetTLSConfig(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListWafServiceCertificate(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListBlockRule(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc ListAllowRule(VolcengineRequest) returns (VolcengineResponse) {}
+}
+
+message VolcengineRequest {
+  google.protobuf.Struct payload = 1;
+}
+
+message VolcengineResponse {
+  google.protobuf.Value response = 1;
+}
