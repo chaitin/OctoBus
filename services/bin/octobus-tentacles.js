@@ -360,6 +360,10 @@ const services = {
     entryFile: "../leadsec__tam/bin/leadsec-tam.js",
     serviceModule: "../leadsec__tam/src/service.js",
   },
+  "venus-maf": {
+    entryFile: "../venus__maf/bin/venus-maf.js",
+    serviceModule: "../venus__maf/src/service.js",
+  },
   "volcengine-cloud-firewall": {
     entryFile: "../volcengine__cloud-firewall/bin/volcengine-cloud-firewall.js",
     serviceModule: "../volcengine__cloud-firewall/src/service.js",

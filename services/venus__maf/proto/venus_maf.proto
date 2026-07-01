@@ -1,0 +1,89 @@
+syntax = "proto3";
+
+package Venus_MAF;
+
+option go_package = "miner/grpc-service/Venus_MAF";
+
+service Venus_MAF {
+  rpc HealthCheck(HealthCheckRequest) returns (OperationResponse) {}
+  rpc CreateSite(CreateSiteRequest) returns (OperationResponse) {}
+  rpc DeleteSite(DeleteSiteRequest) returns (OperationResponse) {}
+  rpc ListSites(ListSitesRequest) returns (ListSitesResponse) {}
+  rpc UploadCustomSensitiveWords(UploadCustomSensitiveWordsRequest) returns (UploadCustomSensitiveWordsResponse) {}
+}
+
+message HealthCheckRequest {}
+
+message OperationResponse {
+  bool ok = 1;
+  int32 code = 2;
+  string message = 3;
+}
+
+message UpstreamServer {
+  string ip = 1;
+  int32 port = 2;
+  int32 weight = 3;
+}
+
+message UpstreamConfig {
+  string http_type = 1;
+  string load_balance_algo = 2;
+  repeated UpstreamServer server_addr = 3;
+}
+
+message CreateSiteRequest {
+  string name = 1;
+  string description = 2;
+  int32 enable = 3;
+  string http_type = 4;
+  string ip = 5;
+  int32 port = 6;
+  repeated string server_name = 7;
+  int32 net_mode = 8;
+  int32 safe_mode = 9;
+  UpstreamConfig upstream = 10;
+}
+
+message DeleteSiteRequest {
+  int32 id = 1;
+  string name = 2;
+}
+
+message ListSitesRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string name = 3;
+}
+
+message Site {
+  int32 id = 1;
+  string name = 2;
+  string ip = 3;
+  int32 port = 4;
+  string http_type = 5;
+  int32 enable = 6;
+  repeated string server_name = 7;
+}
+
+message ListSitesResponse {
+  repeated Site sites = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+  int32 code = 5;
+  string message = 6;
+}
+
+message UploadCustomSensitiveWordsRequest {
+  string filename = 1;
+  string content = 2;
+}
+
+message UploadCustomSensitiveWordsResponse {
+  bool ok = 1;
+  int32 code = 2;
+  string message = 3;
+  string file_name = 4;
+  string origin_file_name = 5;
+}

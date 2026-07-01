@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "baseUrl"
+  ],
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "title": "MAF base URL",
+      "description": "Device URL. UI paths such as /monitor are accepted; the service uses the origin and appends apiPrefix."
+    },
+    "apiPrefix": {
+      "type": "string",
+      "title": "API prefix",
+      "default": "/api/v3"
+    },
+    "authToken": {
+      "type": "string",
+      "title": "auth-token header",
+      "default": "CMCC_NFV"
+    },
+    "deviceType": {
+      "type": "string",
+      "title": "Device-Type header",
+      "default": "api"
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "title": "Request timeout in milliseconds",
+      "default": 10000,
+      "minimum": 1000
+    },
+    "insecureSkipTlsVerify": {
+      "type": "boolean",
+      "title": "Skip TLS certificate verification",
+      "default": false
+    }
+  },
+  "additionalProperties": false
+}
