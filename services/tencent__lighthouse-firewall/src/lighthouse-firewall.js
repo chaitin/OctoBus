@@ -1,6 +1,13 @@
 import crypto from "node:crypto";
-import https from "node:https";
-import { GrpcError, grpcStatus } from "@chaitin-ai/octobus-sdk";
+import {
+  assertOkResponse,
+  createTlsDispatcher,
+  fetchWithTimeout,
+  httpStatusError,
+  normalizeTimeoutMs,
+  readResponseJson,
+  serviceError,
+} from "@chaitin-ai/octobus-sdk";
 
 const SERVICE_NAME = "tencent__lighthouse-firewall";
 const API_SERVICE = "lighthouse";
@@ -23,28 +30,12 @@ const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key
 const firstDefined = (...values) => values.find((value) => value !== undefined && value !== null);
 const toTrimmedString = (value) => (value === undefined || value === null ? "" : String(value).trim());
 
-const grpcCodeFor = (code) => ({
-  FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
-  INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT,
-  PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED,
-  UNAVAILABLE: grpcStatus.UNAVAILABLE,
-  UNKNOWN: grpcStatus.UNKNOWN,
-})[code] ?? grpcStatus.UNKNOWN;
-
-const errorWithCode = (code, message, details) => {
-  const err = new GrpcError(grpcCodeFor(code), `${code}: ${message}`);
-  err.legacyCode = code;
-  if (details !== undefined) err.details = details;
-  return err;
-};
-
 const parseOptionalNumber = (value) => {
   if (value === undefined || value === null) return undefined;
   const num = Number(value);
   if (!Number.isInteger(num) || num < 0) return undefined;
   return num;
 };
-
 
 const normalizeArgs = (req = {}, ctx = {}) => {
   if (req && typeof req === "object" && hasOwn(req, "request")) {
@@ -61,7 +52,7 @@ const getSecret = (ctx = {}) => ctx.secret || ctx.secrets || {};
 
 const resolveRegion = (req, ctx) => {
   const region = toTrimmedString(firstDefined(req.region, getConfig(ctx).region));
-  if (!region) throw errorWithCode("FAILED_PRECONDITION", "region is required");
+  if (!region) throw serviceError("FAILED_PRECONDITION", "region is required");
   return region;
 };
 
@@ -71,8 +62,8 @@ const resolveCredential = (req, ctx) => {
   const secretId = toTrimmedString(firstDefined(credential.secret_id, credential.secretId, req.secret_id, req.secretId, secret.secretId, secret.secret_id));
   const secretKey = toTrimmedString(firstDefined(credential.secret_key, credential.secretKey, req.secret_key, req.secretKey, secret.secretKey, secret.secret_key));
   const token = toTrimmedString(firstDefined(credential.token, req.token, secret.token));
-  if (!secretId) throw errorWithCode("FAILED_PRECONDITION", "secretId is required");
-  if (!secretKey) throw errorWithCode("FAILED_PRECONDITION", "secretKey is required");
+  if (!secretId) throw serviceError("FAILED_PRECONDITION", "secretId is required");
+  if (!secretKey) throw serviceError("FAILED_PRECONDITION", "secretKey is required");
   return { secretId, secretKey, token };
 };
 
@@ -82,30 +73,30 @@ const readField = (req, key) => firstDefined(req[key], req[camelize(key)]);
 
 const requireString = (req, key) => {
   const value = toTrimmedString(readField(req, key));
-  if (!value) throw errorWithCode("INVALID_ARGUMENT", `${key} is required`);
+  if (!value) throw serviceError("INVALID_ARGUMENT", `${key} is required`);
   return value;
 };
 
 const requireArray = (req, key) => {
   const value = readField(req, key);
   if (!Array.isArray(value) || value.length === 0) {
-    throw errorWithCode("INVALID_ARGUMENT", `${key} must be a non-empty array`);
+    throw serviceError("INVALID_ARGUMENT", `${key} must be a non-empty array`);
   }
   return value;
 };
 
 const normalizeRuleInput = (rule, index = 0) => {
   if (!rule || typeof rule !== "object") {
-    throw errorWithCode("INVALID_ARGUMENT", `rules[${index}] must be an object`);
+    throw serviceError("INVALID_ARGUMENT", `rules[${index}] must be an object`);
   }
   const protocol = toTrimmedString(firstDefined(rule.protocol, rule.Protocol));
   const port = toTrimmedString(firstDefined(rule.port, rule.Port));
   const cidrBlock = toTrimmedString(firstDefined(rule.cidr_block, rule.cidrBlock, rule.CidrBlock));
   const action = toTrimmedString(firstDefined(rule.action, rule.Action));
-  if (!protocol) throw errorWithCode("INVALID_ARGUMENT", `rules[${index}].protocol is required`);
-  if (!port) throw errorWithCode("INVALID_ARGUMENT", `rules[${index}].port is required`);
-  if (!cidrBlock) throw errorWithCode("INVALID_ARGUMENT", `rules[${index}].cidr_block is required`);
-  if (!action) throw errorWithCode("INVALID_ARGUMENT", `rules[${index}].action is required`);
+  if (!protocol) throw serviceError("INVALID_ARGUMENT", `rules[${index}].protocol is required`);
+  if (!port) throw serviceError("INVALID_ARGUMENT", `rules[${index}].port is required`);
+  if (!cidrBlock) throw serviceError("INVALID_ARGUMENT", `rules[${index}].cidr_block is required`);
+  if (!action) throw serviceError("INVALID_ARGUMENT", `rules[${index}].action is required`);
   const output = {
     Protocol: protocol,
     Port: port,
@@ -128,7 +119,7 @@ const toProtoRuleInput = (rule) => ({
 const buildBlockRules = (req, action) => {
   const sourceIps = requireArray(req, "source_ips").map((ip, index) => {
     const value = toTrimmedString(ip);
-    if (!value) throw errorWithCode("INVALID_ARGUMENT", `source_ips[${index}] must be non-empty`);
+    if (!value) throw serviceError("INVALID_ARGUMENT", `source_ips[${index}] must be non-empty`);
     return value;
   });
   const protocol = toTrimmedString(readField(req, "protocol")) || DEFAULT_PROTOCOL;
@@ -160,7 +151,7 @@ const normalizeWriteRequest = (req) => ({
 const normalizeModifyRequest = (req) => ({
   InstanceId: requireString(req, "instance_id"),
   FirewallRules: requireArray(req, "rules").map((pair, index) => {
-    if (!pair || typeof pair !== "object") throw errorWithCode("INVALID_ARGUMENT", `rules[${index}] must be an object`);
+    if (!pair || typeof pair !== "object") throw serviceError("INVALID_ARGUMENT", `rules[${index}] must be an object`);
     return {
       FirewallRule: normalizeRuleInput(pair.firewall_rule || pair.firewallRule || pair.FirewallRule, index),
       NewFirewallRule: normalizeRuleInput(pair.new_firewall_rule || pair.newFirewallRule || pair.NewFirewallRule, index),
@@ -172,7 +163,7 @@ const normalizeApplyTemplateRequest = (req) => ({
   TemplateId: requireString(req, "template_id"),
   InstanceIds: requireArray(req, "instance_ids").map((id, index) => {
     const value = toTrimmedString(id);
-    if (!value) throw errorWithCode("INVALID_ARGUMENT", `instance_ids[${index}] must be non-empty`);
+    if (!value) throw serviceError("INVALID_ARGUMENT", `instance_ids[${index}] must be non-empty`);
     return value;
   }),
 });
@@ -215,18 +206,26 @@ const mapTencentError = (err) => {
   const code = String(err?.Code || err?.code || "");
   const message = String(err?.Message || err?.message || code || "Tencent Cloud API error");
   if (code.startsWith("AuthFailure") || code.startsWith("UnauthorizedOperation")) {
-    return errorWithCode("PERMISSION_DENIED", message, { tencent_code: code });
+    return serviceError("PERMISSION_DENIED", message, { tencent_code: code });
   }
   if (code.startsWith("InvalidParameter") || code.startsWith("MissingParameter") || code.startsWith("UnsupportedOperation")) {
-    return errorWithCode("INVALID_ARGUMENT", message, { tencent_code: code });
+    return serviceError("INVALID_ARGUMENT", message, { tencent_code: code });
   }
   if (code.startsWith("ResourceNotFound") || code.startsWith("FailedOperation")) {
-    return errorWithCode("FAILED_PRECONDITION", message, { tencent_code: code });
+    return serviceError("FAILED_PRECONDITION", message, { tencent_code: code });
   }
   if (code.startsWith("InternalError") || code.startsWith("RequestLimitExceeded")) {
-    return errorWithCode("UNAVAILABLE", message, { tencent_code: code });
+    return serviceError("UNAVAILABLE", message, { tencent_code: code });
   }
-  return errorWithCode("UNKNOWN", message, { tencent_code: code });
+  return serviceError("UNKNOWN", message, { tencent_code: code });
+};
+
+let tlsDispatcherPromise;
+
+const getTlsDispatcher = async (skipTlsVerify) => {
+  if (!skipTlsVerify) return undefined;
+  tlsDispatcherPromise ??= createTlsDispatcher(true);
+  return tlsDispatcherPromise;
 };
 
 const callTencent = async (ctx, req, action, body) => {
@@ -234,40 +233,26 @@ const callTencent = async (ctx, req, action, body) => {
   const endpoint = toTrimmedString(config.endpoint) || DEFAULT_ENDPOINT;
   const region = resolveRegion(req, ctx);
   const credential = resolveCredential(req, ctx);
-  const timeoutMs = Number(config.timeoutMs || DEFAULT_TIMEOUT_MS);
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs > 0 ? timeoutMs : DEFAULT_TIMEOUT_MS);
-  const agent = endpoint.startsWith("https:") && config.skipTlsVerify === true ? new https.Agent({ rejectUnauthorized: false }) : undefined;
+  const timeoutMs = normalizeTimeoutMs(config.timeoutMs, DEFAULT_TIMEOUT_MS);
+  const dispatcher = await getTlsDispatcher(config.skipTlsVerify === true);
   const { payload, headers } = signRequest({ endpoint, action, region, body, credential, timestamp: Math.floor(Date.now() / 1000) });
-  try {
-    const response = await fetch(endpoint, { method: "POST", headers, body: payload, signal: controller.signal, agent });
+
+  const response = await fetchWithTimeout(endpoint, { method: "POST", headers, body: payload }, { timeoutMs, dispatcher });
+
+  if (!response.ok) {
     const text = await response.text();
-    let parsed;
-    try {
-      parsed = text ? JSON.parse(text) : {};
-    } catch {
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) throw errorWithCode("PERMISSION_DENIED", `Tencent Cloud HTTP ${response.status}`);
-        if (response.status >= 500) throw errorWithCode("UNAVAILABLE", `Tencent Cloud HTTP ${response.status}`);
-        throw errorWithCode("FAILED_PRECONDITION", `Tencent Cloud HTTP ${response.status}`);
-      }
-      throw errorWithCode("UNKNOWN", "Tencent Cloud returned non-JSON response");
+    const apiResponse = (() => { try { return JSON.parse(text); } catch { return null; } })();
+    if (apiResponse && (apiResponse.Response || apiResponse.response)) {
+      const errObj = (apiResponse.Response || apiResponse.response).Error || (apiResponse.Response || apiResponse.response).error;
+      if (errObj) throw mapTencentError(errObj);
     }
-    if (!response.ok) {
-      if (response.status === 401 || response.status === 403) throw errorWithCode("PERMISSION_DENIED", `Tencent Cloud HTTP ${response.status}`);
-      if (response.status >= 500) throw errorWithCode("UNAVAILABLE", `Tencent Cloud HTTP ${response.status}`);
-      throw errorWithCode("FAILED_PRECONDITION", `Tencent Cloud HTTP ${response.status}`);
-    }
-    const apiResponse = parsed.Response || parsed.response || parsed;
-    if (apiResponse.Error || apiResponse.error) throw mapTencentError(apiResponse.Error || apiResponse.error);
-    return apiResponse;
-  } catch (err) {
-    if (err.name === "AbortError") throw errorWithCode("UNAVAILABLE", "Tencent Cloud API request timed out");
-    if (err.code) throw err;
-    throw errorWithCode("UNAVAILABLE", err.message || "Tencent Cloud API request failed");
-  } finally {
-    clearTimeout(timer);
+    throw httpStatusError(response, text);
   }
+
+  const { json: parsed } = await readResponseJson(response);
+  const apiResponse = (parsed && (parsed.Response || parsed.response || parsed)) || {};
+  if (apiResponse.Error || apiResponse.error) throw mapTencentError(apiResponse.Error || apiResponse.error);
+  return apiResponse;
 };
 
 const mapFirewallRule = (rule = {}) => ({
