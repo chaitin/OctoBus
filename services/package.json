@@ -67,6 +67,7 @@
     "volcengine-cloud-firewall": "bin/volcengine-cloud-firewall.js",
     "wangsu-label-ip": "bin/wangsu-label-ip.js",
     "wd-k01": "bin/wd-k01.js",
+    "threatbook-hfish": "bin/threatbook-hfish.js",
     "opencti": "bin/opencti.js"
   },
   "files": [
@@ -131,6 +132,7 @@
     "bin/venus-ads-v3-6.js",
     "bin/volcengine-cloud-firewall.js",
     "bin/wd-k01.js",
+    "bin/threatbook-hfish.js",
     "bin/opencti.js",
     "bin/wangsu-label-ip.js",
     "alibaba-cloud__simple-application-server-firewall",
@@ -193,6 +195,7 @@
     "venus__ads_v3-6",
     "volcengine__cloud-firewall",
     "wd__k01",
+    "threatbook__hfish",
     "filigran__opencti",
     "fofa__network-space-mapper",
     "wangsu__label-ip",

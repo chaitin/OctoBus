@@ -253,6 +253,10 @@ const services = {
     entryFile: "../wd__k01/bin/wd-k01.js",
     serviceModule: "../wd__k01/src/service.js",
   },
+  "threatbook-hfish": {
+    entryFile: "../threatbook__hfish/bin/threatbook-hfish.js",
+    serviceModule: "../threatbook__hfish/src/service.js",
+  },
   "opencti": {
     entryFile: "../filigran__opencti/bin/opencti.js",
     serviceModule: "../filigran__opencti/src/service.js",
