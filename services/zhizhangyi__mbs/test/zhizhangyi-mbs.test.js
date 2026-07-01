@@ -52,7 +52,7 @@ test('GetUsers preserves falsy state and is_mdm filters', async () => {
     return { ok: true, status: 200, text: async () => '{"code":0,"data":{"total":0,"userInfos":[]}}' };
   };
 
-  await rpcdef(buildCtx({ condition: { state: 0, is_mdm: 0 } }))[GET_USERS]();
+  await rpcdef(buildCtx({ condition: { dept_id: '1', state: 0, is_mdm: 0 } }))[GET_USERS]();
 
   assert.equal(captured.url, 'https://mbs.example/uusafe/mos/thirdaccess/rest/opt/v1/getUsers');
   assert.deepEqual(JSON.parse(captured.init.body).condition, {
@@ -61,6 +61,43 @@ test('GetUsers preserves falsy state and is_mdm filters', async () => {
     state: 0,
     isMdm: 0,
   });
+});
+
+test('GetUsers requires dept_id before calling upstream', async () => {
+  let called = false;
+  globalThis.fetch = async () => {
+    called = true;
+    return { ok: true, status: 200, text: async () => '{"code":0}' };
+  };
+
+  await assert.rejects(
+    () => rpcdef(buildCtx({ condition: { state: 1 } }))[GET_USERS](),
+    (err) => {
+      assert.ok(err instanceof GrpcError);
+      assert.equal(err.code, grpcStatus.INVALID_ARGUMENT);
+      assert.equal(err.legacyCode, 'INVALID_ARGUMENT');
+      assert.match(err.message, /dept_id required/);
+      return true;
+    },
+  );
+
+  assert.equal(called, false);
+});
+
+test('HTTP errors expose only a bounded upstream body summary', async () => {
+  const body = 'x'.repeat(260);
+  globalThis.fetch = async () => ({ ok: false, status: 500, text: async () => body });
+
+  await assert.rejects(
+    () => rpcdef(buildCtx({ condition: { dept_id: '1' } }))[GET_USERS](),
+    (err) => {
+      assert.ok(err instanceof GrpcError);
+      assert.equal(err.code, grpcStatus.UNAVAILABLE);
+      assert.match(err.message, /http 500: x{200}\.\.\./);
+      assert.equal(err.message.includes('x'.repeat(220)), false);
+      return true;
+    },
+  );
 });
 
 test('AddUser forwards caller-provided 3DES-encrypted password value', async () => {

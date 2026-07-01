@@ -17,7 +17,7 @@ const num = (v) => (v === undefined || v === null || v === '') ? undefined : Num
 const gc = (c) => ({ INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT, FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION, PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED, UNAVAILABLE: grpcStatus.UNAVAILABLE, DEADLINE_EXCEEDED: grpcStatus.DEADLINE_EXCEEDED })[c] ?? grpcStatus.UNKNOWN;
 const er = (c, m) => { const e = new GrpcError(gc(c), c + ': ' + m); e.legacyCode = c; return e; };
 const doFetch = async (url, init, to, st) => { const tls = st ? { insecureSkipVerify: true, tlsInsecureSkipVerify: true } : {}; try { return await fetch(url, { ...init, timeoutMs: to, ...tls }); } catch (e) { throw er('UNAVAILABLE', e?.cause?.message || e?.message || 'fetch failed'); } };
-const rdJson = async (res) => { const t = await res.text(); if (!res.ok) throw er(res.status === 401 || res.status === 403 ? 'PERMISSION_DENIED' : res.status >= 400 && res.status < 500 ? 'FAILED_PRECONDITION' : 'UNAVAILABLE', 'http ' + res.status + ': ' + t); if (!t.trim()) return {}; try { return JSON.parse(t); } catch { throw er('UNKNOWN', 'not JSON'); } };
+const rdJson = async (res) => { const t = await res.text(); if (!res.ok) { const safe = t.length > 200 ? t.slice(0, 200) + '...' : t; throw er(res.status === 401 || res.status === 403 ? 'PERMISSION_DENIED' : res.status >= 400 && res.status < 500 ? 'FAILED_PRECONDITION' : 'UNAVAILABLE', 'http ' + res.status + ': ' + safe); } if (!t.trim()) return {}; try { return JSON.parse(t); } catch { throw er('UNKNOWN', 'not JSON'); } };
 const check = (j) => { if (j.code !== undefined && j.code !== 0) throw er('FAILED_PRECONDITION', 'MBS code=' + j.code + ': ' + (j.msg || '')); };
 const buildCond = (cond) => { const c = {}; const kw = first(cond?.key_word, cond?.keyWord); if (kw !== undefined) c.keyWord = kw; if (cond?.status !== undefined && cond?.status !== null) c.status = cond.status; const im = first(cond?.is_mdm, cond?.isMdm); if (im !== undefined) c.isMdm = im; const did = first(cond?.dept_id, cond?.deptId); if (did !== undefined) c.deptId = did; return c; };
 const toValue = (value) => {
@@ -73,7 +73,8 @@ export function rpcdef(ctx) {
     const apk = first(req?.appkey) || ak;
     const idx = first(req?.index) ?? 0; const sz = first(req?.size) ?? 10;
     const odc = first(req?.order_code, req?.orderCode) ?? 0; const odt = first(req?.order_type, req?.orderType) ?? 1;
-    const did = first(req?.condition?.dept_id, req?.condition?.deptId) || '1';
+    const did = first(req?.condition?.dept_id, req?.condition?.deptId);
+    if (!did) throw er('INVALID_ARGUMENT', 'dept_id required');
     const kw = first(req?.condition?.key_word, req?.condition?.keyWord) || '';
     const st = first(req?.condition?.state) ?? ''; const md = first(req?.condition?.is_mdm, req?.condition?.isMdm) ?? '';
     const sg = first(req?.sign) || signCalc(sk, apk, oc, idx, sz, odc, odt, kw, st, md, did);
