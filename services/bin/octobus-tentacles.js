@@ -152,6 +152,10 @@ const services = {
     entryFile: "../huorong__endpoint-security-management-system_v2-0-19-3/bin/huorong-endpoint-security-management-system-v2-0-19-3.js",
     serviceModule: "../huorong__endpoint-security-management-system_v2-0-19-3/src/service.js",
   },
+  "huawei-waf": {
+    entryFile: "../huawei__waf/bin/huawei-waf.js",
+    serviceModule: "../huawei__waf/src/service.js",
+  },
   "huawei-fw-usg6000e": {
     entryFile: "../huawei__fw-usg6000e/bin/huawei-fw-usg6000e.js",
     serviceModule: "../huawei__fw-usg6000e/src/service.js",
