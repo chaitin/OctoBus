@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import {
+  GrpcError,
   assertOkResponse,
   createTlsDispatcher,
   fetchWithTimeout,
@@ -255,7 +256,7 @@ const callTencent = async (ctx, req, action, body) => {
     if (apiResponse.Error || apiResponse.error) throw mapTencentError(apiResponse.Error || apiResponse.error);
     return apiResponse;
   } catch (err) {
-    if (err.legacyCode || err.code) throw err;
+    if (err instanceof GrpcError) throw err;
     throw serviceError("UNAVAILABLE", err.message || "Tencent Cloud API request failed");
   }
 };
