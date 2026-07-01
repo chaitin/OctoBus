@@ -1,0 +1,33 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "leadsec-tam",
+  "displayName": "leadsec-TAM",
+  "description": "Leadsec TAM anti-DDoS IP blacklist and whitelist management.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/leadsec_tam.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Leadsec_TAM.LeadsecTAMService/AddBlacklist": {
+          "name": "add-blacklist",
+          "description": "Add IP addresses to the Leadsec TAM static blacklist."
+        },
+        "Leadsec_TAM.LeadsecTAMService/AddWhitelist": {
+          "name": "add-whitelist",
+          "description": "Add IP addresses to the Leadsec TAM static whitelist."
+        }
+      }
+    }
+  }
+}

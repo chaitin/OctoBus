@@ -1,0 +1,12 @@
+{
+  "name": "leadsec-tam",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "leadsec-tam": "bin/leadsec-tam.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.5.0"
+  }
+}

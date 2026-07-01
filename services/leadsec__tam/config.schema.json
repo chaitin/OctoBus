@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "description": "Leadsec TAM base URL, for example https://10.11.9.107:2018."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1000,
+      "default": 8000
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Set true for self-signed certificates in test environments."
+    },
+    "language": {
+      "type": "string",
+      "default": "zh-cn"
+    },
+    "remark": {
+      "type": "string",
+      "default": "OctoBus"
+    }
+  },
+  "required": [
+    "baseUrl"
+  ]
+}

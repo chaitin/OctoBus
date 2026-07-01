@@ -348,6 +348,10 @@ const services = {
     entryFile: "../venus__ads_v3-6/bin/venus-ads-v3-6.js",
     serviceModule: "../venus__ads_v3-6/src/service.js",
   },
+  "leadsec-tam": {
+    entryFile: "../leadsec__tam/bin/leadsec-tam.js",
+    serviceModule: "../leadsec__tam/src/service.js",
+  },
   "volcengine-cloud-firewall": {
     entryFile: "../volcengine__cloud-firewall/bin/volcengine-cloud-firewall.js",
     serviceModule: "../volcengine__cloud-firewall/src/service.js",

@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package Leadsec_TAM;
+
+option go_package = "miner/grpc-service/Leadsec_TAM";
+
+service LeadsecTAMService {
+  rpc AddBlacklist(AddIPListRequest) returns (AddIPListResponse) {}
+  rpc AddWhitelist(AddIPListRequest) returns (AddIPListResponse) {}
+}
+
+message AddIPListRequest {
+  repeated string ip_list = 1;
+  string remark = 2;
+  string request_id = 3;
+}
+
+enum OperationStatus {
+  OPERATION_STATUS_UNSPECIFIED = 0;
+  OPERATION_STATUS_SUCCESS = 1;
+  OPERATION_STATUS_FAILED = 2;
+}
+
+message AddIPListResponse {
+  OperationStatus status = 1;
+  int32 requested_ip_count = 2;
+  int32 verified_ip_count = 3;
+  string upstream_result = 4;
+  string upstream_message = 5;
+  repeated string verified_ips = 6;
+  string request_id = 7;
+  string raw_add_response = 8;
+  string raw_verify_response = 9;
+}
