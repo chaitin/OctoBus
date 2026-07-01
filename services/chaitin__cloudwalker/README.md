@@ -68,4 +68,3 @@ OctoBus live validation on 2026-06-28:
 - Evidence:
   - `evidence/live-validation-2026-06-28.txt`
   - `evidence/upstream-probe-2026-06-29.txt`
-  - `evidence/cloudwalker-platform-overview-2026-06-28.png`
