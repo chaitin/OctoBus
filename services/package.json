@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "bin": {
+    "huawei-ccm": "bin/huawei-ccm.js",
     "jumpserver-bastionhost-v4-10-16": "bin/jumpserver-bastionhost-v4-10-16.js",
     "cisa-kev": "bin/cisa-kev.js",
     "shodan-internetdb": "bin/shodan-internetdb.js",
@@ -103,6 +104,8 @@
     "ctyun-accessone": "bin/ctyun-accessone.js"
   },
   "files": [
+    "bin/huawei-ccm.js",
+    "huawei__ccm",
     "bin/jumpserver-bastionhost-v4-10-16.js",
     "jumpserver__bastionhost_v4-10-16",
     "bin/cisa-kev.js",

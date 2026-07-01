@@ -5,6 +5,10 @@ import { runServiceMain } from "@chaitin-ai/octobus-sdk";
 import { Command } from "commander";
 
 const services = {
+  "huawei-ccm": {
+    entryFile: "../huawei__ccm/bin/huawei-ccm.js",
+    serviceModule: "../huawei__ccm/src/service.js",
+  },
   "jumpserver-bastionhost-v4-10-16": {
     entryFile: "../jumpserver__bastionhost_v4-10-16/bin/jumpserver-bastionhost-v4-10-16.js",
     serviceModule: "../jumpserver__bastionhost_v4-10-16/src/service.js",
