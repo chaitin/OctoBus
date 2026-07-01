@@ -69,7 +69,11 @@
     "volcengine-cloud-firewall": "bin/volcengine-cloud-firewall.js",
     "wangsu-label-ip": "bin/wangsu-label-ip.js",
     "wd-k01": "bin/wd-k01.js",
-    "opencti": "bin/opencti.js"
+    "tencent-bh": "bin/tencent-bh.js",
+    "alibaba-sas": "bin/alibaba-sas.js",
+    "misp": "bin/misp.js",
+    "opencti": "bin/opencti.js",
+    "anyi-cloud-native-security": "bin/anyi-cloud-native-security.js"
   },
   "files": [
     "bin/aliyun-waf3.js",
@@ -137,6 +141,7 @@
     "bin/wd-k01.js",
     "bin/opencti.js",
     "bin/wangsu-label-ip.js",
+    "bin/anyi-cloud-native-security.js",
     "alibaba-cloud__simple-application-server-firewall",
     "chaitin__cloudatlas",
     "chaitin__dsensor_ds-s_h_40-25.07.001",
@@ -201,6 +206,7 @@
     "filigran__opencti",
     "fofa__network-space-mapper",
     "wangsu__label-ip",
+    "anyi__cloud-native-security",
     "scripts",
     "aliyun__waf3",
     "bin/octobus-tentacles.js"

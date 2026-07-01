@@ -265,6 +265,10 @@ const services = {
     entryFile: "../filigran__opencti/bin/opencti.js",
     serviceModule: "../filigran__opencti/src/service.js",
   },
+  "anyi-cloud-native-security": {
+    entryFile: "../anyi__cloud-native-security/bin/anyi-cloud-native-security.js",
+    serviceModule: "../anyi__cloud-native-security/src/service.js",
+  },
 };
 
 const serviceNames = Object.keys(services);
