@@ -48,7 +48,6 @@
     "tencent-qyweixin-group-robot": "bin/tencent-qyweixin-group-robot.js",
     "tencent-tix-saas": "bin/tencent-tix-saas.js",
     "tencent-tsec-v2-5-1": "bin/tencent-tsec-v2-5-1.js",
-    "tencent-weixin-personal": "bin/tencent-weixin-personal.js",
     "telegram-bot-api": "bin/telegram-bot-api.js",
     "threatbook-cloudapi-v3": "bin/threatbook-cloudapi-v3.js",
     "threatbook-claudsandbox-v3": "bin/threatbook-claudsandbox-v3.js",
@@ -64,6 +63,9 @@
     "volcengine-cloud-firewall": "bin/volcengine-cloud-firewall.js",
     "wangsu-label-ip": "bin/wangsu-label-ip.js",
     "wd-k01": "bin/wd-k01.js",
+    "tencent-bh": "bin/tencent-bh.js",
+    "alibaba-sas": "bin/alibaba-sas.js",
+    "misp": "bin/misp.js",
     "opencti": "bin/opencti.js"
   },
   "files": [
@@ -110,7 +112,6 @@
     "bin/tencent-qyweixin-group-robot.js",
     "bin/tencent-tix-saas.js",
     "bin/tencent-tsec-v2-5-1.js",
-    "bin/tencent-weixin-personal.js",
     "bin/telegram-bot-api.js",
     "bin/threatbook-cloudapi-v3.js",
     "bin/threatbook-claudsandbox-v3.js",
@@ -125,6 +126,9 @@
     "bin/venus-ads-v3-6.js",
     "bin/volcengine-cloud-firewall.js",
     "bin/wd-k01.js",
+    "bin/tencent-bh.js",
+    "bin/alibaba-sas.js",
+    "bin/misp.js",
     "bin/opencti.js",
     "bin/wangsu-label-ip.js",
     "alibaba-cloud__simple-application-server-firewall",
@@ -170,7 +174,6 @@
     "tencent__qyweixin-group-robot",
     "tencent__tix-saas",
     "tencent__tsec_v2-5-1",
-    "tencent__weixin-personal",
     "telegram__bot-api",
     "threatbook__cloudapi_v3",
     "threatbook__claudsandbox_v3",
@@ -185,6 +188,9 @@
     "venus__ads_v3-6",
     "volcengine__cloud-firewall",
     "wd__k01",
+    "tencent__bh",
+    "alibaba__sas",
+    "misp__misp",
     "filigran__opencti",
     "wangsu__label-ip",
     "scripts",
@@ -201,21 +207,12 @@
     "@alicloud/swas-open20200601": "^4.0.0",
     "@chaitin-ai/octobus-sdk": "^0.6.0",
     "commander": "^12.1.0",
-    "qrcode-terminal": "^0.12.0",
     "undici": "^7.16.0"
   },
   "bundledDependencies": [
     "@alicloud/swas-open20200601",
     "@chaitin-ai/octobus-sdk",
     "commander",
-    "qrcode-terminal",
-    "undici"
-  ],
-  "bundleDependencies": [
-    "@alicloud/swas-open20200601",
-    "@chaitin-ai/octobus-sdk",
-    "commander",
-    "qrcode-terminal",
     "undici"
   ]
 }

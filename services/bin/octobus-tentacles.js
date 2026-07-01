@@ -177,10 +177,6 @@ const services = {
     entryFile: "../tencent__tsec_v2-5-1/bin/tencent-tsec-v2-5-1.js",
     serviceModule: "../tencent__tsec_v2-5-1/src/service.js",
   },
-  "tencent-weixin-personal": {
-    entryFile: "../tencent__weixin-personal/bin/tencent-weixin-personal.js",
-    serviceModule: "../tencent__weixin-personal/src/service.js",
-  },
   "telegram-bot-api": {
     entryFile: "../telegram__bot-api/bin/telegram-bot-api.js",
     serviceModule: "../telegram__bot-api/src/service.js",
@@ -240,6 +236,18 @@ const services = {
   "wd-k01": {
     entryFile: "../wd__k01/bin/wd-k01.js",
     serviceModule: "../wd__k01/src/service.js",
+  },
+  "tencent-bh": {
+    entryFile: "../tencent__bh/bin/tencent-bh.js",
+    serviceModule: "../tencent__bh/src/service.js",
+  },
+  "alibaba-sas": {
+    entryFile: "../alibaba__sas/bin/alibaba-sas.js",
+    serviceModule: "../alibaba__sas/src/service.js",
+  },
+  "misp": {
+    entryFile: "../misp__misp/bin/misp.js",
+    serviceModule: "../misp__misp/src/service.js",
   },
   "opencti": {
     entryFile: "../filigran__opencti/bin/opencti.js",
