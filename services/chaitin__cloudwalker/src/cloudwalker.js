@@ -408,10 +408,12 @@ export class CloudWalkerClient {
       response = await this.fetchImpl(url, {
         method: 'GET',
         headers,
+        signal: AbortSignal.timeout(30000),
       });
     } catch (networkError) {
+      const isTimeout = networkError.name === 'TimeoutError' || networkError.name === 'AbortError';
       throw new CloudWalkerError(networkError.message || 'CloudWalker upstream unreachable', {
-        code: grpcStatus.UNAVAILABLE,
+        code: isTimeout ? grpcStatus.DEADLINE_EXCEEDED : grpcStatus.UNAVAILABLE,
         details: networkError.message || 'Network error',
         httpStatus: undefined,
       });
@@ -706,16 +708,16 @@ const resolveCallContext = (ctx = {}) => ({
 });
 
 const resolveBaseUrl = (bindings) =>
-  bindings.baseUrl || bindings.base_url || bindings.host || 'http://127.0.0.1:18080';
+  bindings.baseUrl ?? bindings.base_url ?? bindings.host ?? 'http://127.0.0.1:18080';
 
 const resolveToken = (bindings) =>
-  bindings.token || bindings.accessToken || bindings.access_token || '';
+  bindings.token ?? bindings.accessToken ?? bindings.access_token ?? '';
 
 const resolveCookie = (bindings) =>
-  bindings.cookie || '';
+  bindings.cookie ?? '';
 
 const resolveReferer = (bindings) =>
-  bindings.referer || '';
+  bindings.referer ?? '';
 
 const buildClientOptions = (ctx = {}) => {
   const callCtx = resolveCallContext(ctx);

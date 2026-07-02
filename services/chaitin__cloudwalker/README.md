@@ -119,6 +119,7 @@ octobus capset add-instance prod --service cloudwalker --instance cloudwalker-de
 - Demo 环境的 `clusterName`、`cnvd`、`cnnvd` 过滤参数不稳定，需通过 fallback 机制兜底。
 - Cookie 中的 `veinmind` 为 httpOnly，需通过浏览器 CDP 获取，无法从 `document.cookie` 读取。
 - `ListClustersRequest.status` 为 int32 类型，proto3 默认值为 0，不支持通过 0 值筛选集群状态；需传正整数（如 1=运行中、2=异常）。
+- Fallback 模式下（`clusterName`/`cnvd`/`cnnvd` 触发客户端过滤），`collectFilteredItems` 在命中 `pageSize` 数量后提前中断当前页扫描，返回的 `nextPageToken` 为上游最后一页的全局 token，可能跳过当前页剩余未扫描项。建议一次性拉取较大 `pageSize` 以减少分页遗漏风险。
 
 ## Local Checks
 
