@@ -9,6 +9,7 @@ import {
   queryDevices,
   queryCollectors,
 } from "../src/tophant-xsiem.js";
+import { service } from "../src/service.js";
 import { GrpcError, grpcStatus } from "@chaitin-ai/octobus-sdk";
 
 async function waitPort(port, ms = 5000) {
@@ -107,6 +108,17 @@ test("tophant__xsiem — QueryAlerts rejects missing size", async () => {
   }
   deepStrictEqual(err instanceof GrpcError, true);
   deepStrictEqual(err.code, grpcStatus.INVALID_ARGUMENT);
+});
+
+test("tophant__xsiem — service handlers read request/config/secret from ctx", async () => {
+  const method = "tophant.xsiem.XsiemService/QueryAlerts";
+  const r = await service.handlers[method]({
+    config,
+    secret,
+    request: { page: 1, size: 10, severity: "highRisk" },
+  });
+  deepStrictEqual(r.data.length, 1);
+  deepStrictEqual(r.data[0].severity, "highRisk");
 });
 
 test("cleanup", () => {
