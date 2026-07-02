@@ -408,6 +408,7 @@ export class CloudWalkerClient {
       response = await this.fetchImpl(url, {
         method: 'GET',
         headers,
+        redirect: 'manual',
         signal: AbortSignal.timeout(30000),
       });
     } catch (networkError) {
@@ -416,6 +417,16 @@ export class CloudWalkerClient {
         code: isTimeout ? grpcStatus.DEADLINE_EXCEEDED : grpcStatus.UNAVAILABLE,
         details: networkError.message || 'Network error',
         httpStatus: undefined,
+      });
+    }
+
+    // Detect session-expired redirects (302 to /login) before they are silently followed
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('location') || '';
+      throw new CloudWalkerError('CloudWalker session expired or unauthorized redirect', {
+        code: grpcStatus.UNAUTHENTICATED,
+        details: `Upstream returned ${response.status} redirect to ${location || '(unknown)'}`,
+        httpStatus: response.status,
       });
     }
 
