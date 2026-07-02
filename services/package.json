@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "bin": {
+    "cisa-kev": "bin/cisa-kev.js",
     "shodan-internetdb": "bin/shodan-internetdb.js",
     "alienvault-otx": "bin/alienvault-otx.js",
     "octobus-tentacles": "bin/octobus-tentacles.js",
@@ -95,6 +96,8 @@
     "api7-enterprise-v3-10-2": "bin/api7-enterprise-v3-10-2.js"
   },
   "files": [
+    "bin/cisa-kev.js",
+    "cisa__kev",
     "shodan__internetdb",
     "bin/shodan-internetdb.js",
     "alienvault__otx",

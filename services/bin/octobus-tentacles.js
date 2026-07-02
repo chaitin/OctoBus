@@ -5,6 +5,10 @@ import { runServiceMain } from "@chaitin-ai/octobus-sdk";
 import { Command } from "commander";
 
 const services = {
+  "cisa-kev": {
+    entryFile: "../cisa__kev/bin/cisa-kev.js",
+    serviceModule: "../cisa__kev/src/service.js",
+  },
   "shodan-internetdb": {
     entryFile: "../shodan__internetdb/bin/shodan-internetdb.js",
     serviceModule: "../shodan__internetdb/src/service.js",

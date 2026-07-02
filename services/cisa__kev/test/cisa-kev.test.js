@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { test } from "node:test";
 import { deepStrictEqual } from "node:assert";
 import { checkCve } from "../src/cisa-kev.js";
+import { service } from "../src/service.js";
 import { GrpcError, grpcStatus } from "@chaitin-ai/octobus-sdk";
 
 async function waitPort(port, ms = 5000) {
@@ -36,22 +37,22 @@ test("setup mock upstream", async () => {
   await waitPort(MOCK_PORT);
 });
 
-test("cisa__kev — Check returns inKev=true for known CVE", () => {
-  const r = checkCve(baseConfig, "CVE-2021-44228");
+test("cisa__kev — Check returns inKev=true for known CVE", async () => {
+  const r = await checkCve(baseConfig, "CVE-2021-44228");
   deepStrictEqual(r.inKev, true);
   deepStrictEqual(r.entry.vendorProject, "Apache");
   deepStrictEqual(r.entry.knownRansomwareCampaignUse, "Known");
 });
 
-test("cisa__kev — Check returns inKev=false for unknown CVE", () => {
-  const r = checkCve(baseConfig, "CVE-9999-99999");
+test("cisa__kev — Check returns inKev=false for unknown CVE", async () => {
+  const r = await checkCve(baseConfig, "CVE-9999-99999");
   deepStrictEqual(r.inKev, false);
 });
 
-test("cisa__kev — Check rejects empty cveId", () => {
+test("cisa__kev — Check rejects empty cveId", async () => {
   let err;
   try {
-    checkCve(baseConfig, "");
+    await checkCve(baseConfig, "");
   } catch (e) {
     err = e;
   }
@@ -59,8 +60,8 @@ test("cisa__kev — Check rejects empty cveId", () => {
   deepStrictEqual(err.code, grpcStatus.INVALID_ARGUMENT);
 });
 
-test("cisa__kev — falls back when primary is unavailable", () => {
-  const r = checkCve({
+test("cisa__kev — falls back when primary is unavailable", async () => {
+  const r = await checkCve({
     ...baseConfig,
     kevPrimaryUrl: `http://127.0.0.1:${MOCK_PORT}/down`,
     kevFallbackUrl: `http://127.0.0.1:${MOCK_PORT}/fallback.json`,
@@ -69,10 +70,10 @@ test("cisa__kev — falls back when primary is unavailable", () => {
   deepStrictEqual(r.entry.vendorProject, "VMware");
 });
 
-test("cisa__kev — fails when both sources return unusable content", () => {
+test("cisa__kev — fails when both sources return unusable content", async () => {
   let err;
   try {
-    checkCve({
+    await checkCve({
       ...baseConfig,
       kevPrimaryUrl: `http://127.0.0.1:${MOCK_PORT}/html`,
       kevFallbackUrl: `http://127.0.0.1:${MOCK_PORT}/down`,
@@ -82,6 +83,16 @@ test("cisa__kev — fails when both sources return unusable content", () => {
   }
   deepStrictEqual(err instanceof GrpcError, true);
   deepStrictEqual(err.code, grpcStatus.UNAVAILABLE);
+});
+
+test("cisa__kev — service handlers read request/config from ctx", async () => {
+  const method = "cisa.kev.KevService/Check";
+  const r = await service.handlers[method]({
+    config: baseConfig,
+    request: { cveId: "CVE-2021-44228" },
+  });
+  deepStrictEqual(r.inKev, true);
+  deepStrictEqual(r.entry.vendorProject, "Apache");
 });
 
 test("cleanup", () => {
