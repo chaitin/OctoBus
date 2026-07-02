@@ -323,14 +323,14 @@ XSIEM 自身通过系统管理 → 操作日志提供完整的审计追踪。
 
 ## 验证截图
 
-目录 `验证截图/` 提供了基于真实 XSIEM 接口调用的验证结果截图，便于 reviewer 快速对照功能点：
+真实 XSIEM 接口验证截图已移至仓库 `docs/tophant-xsiem-验证截图/`，便于 reviewer 快速对照功能点：
 
-- `1查询告警.png`：`QueryAlerts`
-- `3告警聚合统计.png`：`AlertAggCount`
-- `4聚合详情接口.png`：`AlertAggDetail`
-- `5更新告警状态.png`：`BatchUpdateAlertStatus`
-- `6查询设备.png`：`QueryDevices`
-- `7查询采集器.png`：`QueryCollectors`
+- [1查询告警.png](../../docs/tophant-xsiem-验证截图/1查询告警.png)：`QueryAlerts`
+- [3告警聚合统计.png](../../docs/tophant-xsiem-验证截图/3告警聚合统计.png)：`AlertAggCount`
+- [4聚合详情接口.png](../../docs/tophant-xsiem-验证截图/4聚合详情接口.png)：`AlertAggDetail`
+- [5更新告警状态.png](../../docs/tophant-xsiem-验证截图/5更新告警状态.png)：`BatchUpdateAlertStatus`
+- [6查询设备.png](../../docs/tophant-xsiem-验证截图/6查询设备.png)：`QueryDevices`
+- [7查询采集器.png](../../docs/tophant-xsiem-验证截图/7查询采集器.png)：`QueryCollectors`
 
 ## 文件结构
 
@@ -346,12 +346,5 @@ tophant__xsiem/
 ├── bin/tophant-xsiem.js
 ├── test/mock_upstream.js
 ├── test/tophant-xsiem.test.js
-├── 验证截图/
-│   ├── 1查询告警.png
-│   ├── 3告警聚合统计.png
-│   ├── 4聚合详情接口.png
-│   ├── 5更新告警状态.png
-│   ├── 6查询设备.png
-│   └── 7查询采集器.png
 └── README.md
 ```
