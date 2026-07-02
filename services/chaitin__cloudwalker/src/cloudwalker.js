@@ -674,3 +674,113 @@ export class CloudWalkerClient {
 
 export const createClient = (options) => new CloudWalkerClient(options);
 export { CloudWalkerError, grpcStatus, toCamelCase, collectFilteredItems };
+
+// --- SDK handler conventions ---
+
+const METHOD_LIST_CLUSTERS_PATH = '/Chaitin_CloudWalker.Chaitin_CloudWalker/ListClusters';
+const METHOD_GET_CLUSTER_INFO_PATH = '/Chaitin_CloudWalker.Chaitin_CloudWalker/GetClusterInfo';
+const METHOD_LIST_CLUSTER_VULN_EVENTS_PATH = '/Chaitin_CloudWalker.Chaitin_CloudWalker/ListClusterVulnEvents';
+const METHOD_GET_CLUSTER_VULN_EVENT_PATH = '/Chaitin_CloudWalker.Chaitin_CloudWalker/GetClusterVulnEvent';
+const METHOD_LIST_MICROSERVICE_VULN_EVENTS_PATH = '/Chaitin_CloudWalker.Chaitin_CloudWalker/ListMicroserviceVulnEvents';
+const METHOD_GET_MICROSERVICE_VULN_EVENT_PATH = '/Chaitin_CloudWalker.Chaitin_CloudWalker/GetMicroserviceVulnEvent';
+
+const METHOD_LIST_CLUSTERS_FULL = 'Chaitin_CloudWalker.Chaitin_CloudWalker/ListClusters';
+const METHOD_GET_CLUSTER_INFO_FULL = 'Chaitin_CloudWalker.Chaitin_CloudWalker/GetClusterInfo';
+const METHOD_LIST_CLUSTER_VULN_EVENTS_FULL = 'Chaitin_CloudWalker.Chaitin_CloudWalker/ListClusterVulnEvents';
+const METHOD_GET_CLUSTER_VULN_EVENT_FULL = 'Chaitin_CloudWalker.Chaitin_CloudWalker/GetClusterVulnEvent';
+const METHOD_LIST_MICROSERVICE_VULN_EVENTS_FULL = 'Chaitin_CloudWalker.Chaitin_CloudWalker/ListMicroserviceVulnEvents';
+const METHOD_GET_MICROSERVICE_VULN_EVENT_FULL = 'Chaitin_CloudWalker.Chaitin_CloudWalker/GetMicroserviceVulnEvent';
+
+const mergedBindings = (ctx = {}) => ({
+  ...(ctx.config ?? {}),
+  ...(ctx.secret ?? {}),
+  ...(ctx.bindings ?? {}),
+});
+
+const resolveCallContext = (ctx = {}) => ({
+  ...ctx,
+  bindings: mergedBindings(ctx),
+  limits: ctx.limits ?? {},
+  meta: ctx.meta ?? {},
+  req: ctx.request ?? ctx.req ?? {},
+});
+
+const resolveBaseUrl = (bindings) =>
+  bindings.baseUrl || bindings.base_url || bindings.host || 'http://127.0.0.1:18080';
+
+const resolveToken = (bindings) =>
+  bindings.token || bindings.accessToken || bindings.access_token || '';
+
+const resolveCookie = (bindings) =>
+  bindings.cookie || '';
+
+const resolveReferer = (bindings) =>
+  bindings.referer || '';
+
+const buildClientOptions = (ctx = {}) => {
+  const callCtx = resolveCallContext(ctx);
+  const bindings = callCtx.bindings;
+  return {
+    baseUrl: resolveBaseUrl(bindings),
+    token: resolveToken(bindings),
+    cookie: resolveCookie(bindings),
+    referer: resolveReferer(bindings),
+  };
+};
+
+const handleListClusters = async (req, callCtx) => {
+  const client = createClient(buildClientOptions(callCtx));
+  return client.listClusters(req);
+};
+
+const handleGetClusterInfo = async (req, callCtx) => {
+  const client = createClient(buildClientOptions(callCtx));
+  return client.getClusterInfo(req);
+};
+
+const handleListClusterVulnEvents = async (req, callCtx) => {
+  const client = createClient(buildClientOptions(callCtx));
+  return client.listClusterVulnEvents(req);
+};
+
+const handleGetClusterVulnEvent = async (req, callCtx) => {
+  const client = createClient(buildClientOptions(callCtx));
+  return client.getClusterVulnEvent(req);
+};
+
+const handleListMicroserviceVulnEvents = async (req, callCtx) => {
+  const client = createClient(buildClientOptions(callCtx));
+  return client.listMicroserviceVulnEvents(req);
+};
+
+const handleGetMicroserviceVulnEvent = async (req, callCtx) => {
+  const client = createClient(buildClientOptions(callCtx));
+  return client.getMicroserviceVulnEvent(req);
+};
+
+const registerHandlers = (ctx = {}) => {
+  const callCtx = resolveCallContext(ctx);
+  return {
+    [METHOD_LIST_CLUSTERS_PATH]: (req = callCtx.req) => handleListClusters(req ?? {}, callCtx),
+    [METHOD_GET_CLUSTER_INFO_PATH]: (req = callCtx.req) => handleGetClusterInfo(req ?? {}, callCtx),
+    [METHOD_LIST_CLUSTER_VULN_EVENTS_PATH]: (req = callCtx.req) => handleListClusterVulnEvents(req ?? {}, callCtx),
+    [METHOD_GET_CLUSTER_VULN_EVENT_PATH]: (req = callCtx.req) => handleGetClusterVulnEvent(req ?? {}, callCtx),
+    [METHOD_LIST_MICROSERVICE_VULN_EVENTS_PATH]: (req = callCtx.req) => handleListMicroserviceVulnEvents(req ?? {}, callCtx),
+    [METHOD_GET_MICROSERVICE_VULN_EVENT_PATH]: (req = callCtx.req) => handleGetMicroserviceVulnEvent(req ?? {}, callCtx),
+  };
+};
+
+export function rpcdef(ctx = {}) {
+  return registerHandlers(ctx);
+}
+
+const callSdkHandler = (ctx, path) => registerHandlers(ctx)[path](ctx?.request ?? ctx?.req ?? {});
+
+export const handlers = {
+  [METHOD_LIST_CLUSTERS_FULL]: (ctx) => callSdkHandler(ctx, METHOD_LIST_CLUSTERS_PATH),
+  [METHOD_GET_CLUSTER_INFO_FULL]: (ctx) => callSdkHandler(ctx, METHOD_GET_CLUSTER_INFO_PATH),
+  [METHOD_LIST_CLUSTER_VULN_EVENTS_FULL]: (ctx) => callSdkHandler(ctx, METHOD_LIST_CLUSTER_VULN_EVENTS_PATH),
+  [METHOD_GET_CLUSTER_VULN_EVENT_FULL]: (ctx) => callSdkHandler(ctx, METHOD_GET_CLUSTER_VULN_EVENT_PATH),
+  [METHOD_LIST_MICROSERVICE_VULN_EVENTS_FULL]: (ctx) => callSdkHandler(ctx, METHOD_LIST_MICROSERVICE_VULN_EVENTS_PATH),
+  [METHOD_GET_MICROSERVICE_VULN_EVENT_FULL]: (ctx) => callSdkHandler(ctx, METHOD_GET_MICROSERVICE_VULN_EVENT_PATH),
+};

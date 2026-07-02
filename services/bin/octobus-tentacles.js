@@ -72,6 +72,10 @@ const services = {
     entryFile: "../ctyun__accessone/bin/ctyun-accessone.js",
     serviceModule: "../ctyun__accessone/src/service.js",
   },
+  "cloudwalker": {
+    entryFile: "../chaitin__cloudwalker/bin/cloudwalker.js",
+    serviceModule: "../chaitin__cloudwalker/src/service.js",
+  },
   "das-gateway-v3": {
     entryFile: "../das__gateway_v3/bin/das-gateway-v3.js",
     serviceModule: "../das__gateway_v3/src/service.js",

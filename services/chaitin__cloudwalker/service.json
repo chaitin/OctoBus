@@ -15,12 +15,12 @@
   "sdk": {
     "cli": {
       "commands": {
-        "CloudWalker.CloudWalker/ListClusters": { "name": "list-clusters", "description": "List CloudWalker clusters." },
-        "CloudWalker.CloudWalker/GetClusterInfo": { "name": "get-cluster-info", "description": "Get a CloudWalker cluster." },
-        "CloudWalker.CloudWalker/ListClusterVulnEvents": { "name": "list-cluster-vuln-events", "description": "List vulnerability events for a cluster." },
-        "CloudWalker.CloudWalker/GetClusterVulnEvent": { "name": "get-cluster-vuln-event", "description": "Get a cluster vulnerability event." },
-        "CloudWalker.CloudWalker/ListMicroserviceVulnEvents": { "name": "list-microservice-vuln-events", "description": "List vulnerability events for microservices." },
-        "CloudWalker.CloudWalker/GetMicroserviceVulnEvent": { "name": "get-microservice-vuln-event", "description": "Get a microservice vulnerability event." }
+        "Chaitin_CloudWalker.Chaitin_CloudWalker/ListClusters": { "name": "list-clusters", "description": "List CloudWalker clusters." },
+        "Chaitin_CloudWalker.Chaitin_CloudWalker/GetClusterInfo": { "name": "get-cluster-info", "description": "Get a CloudWalker cluster." },
+        "Chaitin_CloudWalker.Chaitin_CloudWalker/ListClusterVulnEvents": { "name": "list-cluster-vuln-events", "description": "List vulnerability events for a cluster." },
+        "Chaitin_CloudWalker.Chaitin_CloudWalker/GetClusterVulnEvent": { "name": "get-cluster-vuln-event", "description": "Get a cluster vulnerability event." },
+        "Chaitin_CloudWalker.Chaitin_CloudWalker/ListMicroserviceVulnEvents": { "name": "list-microservice-vuln-events", "description": "List vulnerability events for microservices." },
+        "Chaitin_CloudWalker.Chaitin_CloudWalker/GetMicroserviceVulnEvent": { "name": "get-microservice-vuln-event", "description": "Get a microservice vulnerability event." }
       }
     }
   }

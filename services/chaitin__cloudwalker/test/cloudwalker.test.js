@@ -3,8 +3,7 @@ import { after, before, describe, it } from 'node:test';
 import http from 'node:http';
 import { URL } from 'node:url';
 
-import { createClient } from '../src/cloudwalker.js';
-import { handlers } from '../src/service.js';
+import { createClient, handlers } from '../src/cloudwalker.js';
 
 const requests = [];
 
@@ -268,7 +267,7 @@ describe('cloudwalker client', () => {
 
 describe('cloudwalker handlers', () => {
   it('builds the client from context config, secrets and bindings', async () => {
-    const response = await handlers['CloudWalker.CloudWalker/ListClusters'](
+    const response = await handlers['Chaitin_CloudWalker.Chaitin_CloudWalker/ListClusters'](
       {
         config: {
           baseUrl,
@@ -290,7 +289,7 @@ describe('cloudwalker handlers', () => {
   });
 
   it('accepts cluster vuln detail requests without clusterId', async () => {
-    const response = await handlers['CloudWalker.CloudWalker/GetClusterVulnEvent'](
+    const response = await handlers['Chaitin_CloudWalker.Chaitin_CloudWalker/GetClusterVulnEvent'](
       {
         config: { baseUrl },
         secret: { token: 'handler-token' },

@@ -69,12 +69,12 @@ Handler 优先使用 `ctx.config` / `ctx.secret`，其次回退到环境变量 `
 
 | 方法 | 上游 API | 说明 |
 |------|----------|------|
-| `CloudWalker.CloudWalker/ListClusters` | `GET /cluster/cluster_list` | 查询集群列表，支持 name / status 过滤与分页 |
-| `CloudWalker.CloudWalker/GetClusterInfo` | `GET /cluster/cluster_info` | 按集群 ID 获取详情 |
-| `CloudWalker.CloudWalker/ListClusterVulnEvents` | `GET /cluster_vuln/vuln_event_list` | 查询集群漏洞事件列表，支持 CVE / CNVD / risk / state 等过滤 |
-| `CloudWalker.CloudWalker/GetClusterVulnEvent` | `GET /cluster_vuln/vuln_event_info` | 按事件 ID 获取集群漏洞详情 |
-| `CloudWalker.CloudWalker/ListMicroserviceVulnEvents` | `GET /cluster_microservice/vuln_event_list` | 查询微服务漏洞事件列表，支持 serviceName / clusterName 等过滤 |
-| `CloudWalker.CloudWalker/GetMicroserviceVulnEvent` | `GET /cluster_microservice/vuln_event_info` | 按事件 ID 获取微服务漏洞详情 |
+| `Chaitin_CloudWalker.Chaitin_CloudWalker/ListClusters` | `GET /cluster/cluster_list` | 查询集群列表，支持 name / status 过滤与分页 |
+| `Chaitin_CloudWalker.Chaitin_CloudWalker/GetClusterInfo` | `GET /cluster/cluster_info` | 按集群 ID 获取详情 |
+| `Chaitin_CloudWalker.Chaitin_CloudWalker/ListClusterVulnEvents` | `GET /cluster_vuln/vuln_event_list` | 查询集群漏洞事件列表，支持 CVE / CNVD / risk / state 等过滤 |
+| `Chaitin_CloudWalker.Chaitin_CloudWalker/GetClusterVulnEvent` | `GET /cluster_vuln/vuln_event_info` | 按事件 ID 获取集群漏洞详情 |
+| `Chaitin_CloudWalker.Chaitin_CloudWalker/ListMicroserviceVulnEvents` | `GET /cluster_microservice/vuln_event_list` | 查询微服务漏洞事件列表，支持 serviceName / clusterName 等过滤 |
+| `Chaitin_CloudWalker.Chaitin_CloudWalker/GetMicroserviceVulnEvent` | `GET /cluster_microservice/vuln_event_info` | 按事件 ID 获取微服务漏洞详情 |
 
 ## Behavior Notes
 
@@ -153,3 +153,5 @@ curl -X POST http://127.0.0.1:9000/capsets/prod/connect/cloudwalker-demo/CloudWa
   -H 'Content-Type: application/json' \
   -d '{"pageSize": 5}'
 ```
+
+**注意**：方法路径格式为 `Chaitin_CloudWalker.Chaitin_CloudWalker/<Method>`，与 proto `package Chaitin_CloudWalker` 保持一致。
