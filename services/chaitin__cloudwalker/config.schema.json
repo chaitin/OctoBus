@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "description": "CloudWalker API base URL."
+    },
+    "referer": {
+      "type": "string",
+      "description": "Browser referer header used by CloudWalker session-based authentication flows."
+    }
+  },
+  "required": ["baseUrl"]
+}

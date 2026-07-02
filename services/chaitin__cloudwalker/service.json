@@ -1,0 +1,27 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "cloudwalker",
+  "displayName": "CloudWalker",
+  "description": "OctoBus package for CloudWalker cluster and vulnerability read APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/cloudwalker.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "CloudWalker.CloudWalker/ListClusters": { "name": "list-clusters", "description": "List CloudWalker clusters." },
+        "CloudWalker.CloudWalker/GetClusterInfo": { "name": "get-cluster-info", "description": "Get a CloudWalker cluster." },
+        "CloudWalker.CloudWalker/ListClusterVulnEvents": { "name": "list-cluster-vuln-events", "description": "List vulnerability events for a cluster." },
+        "CloudWalker.CloudWalker/GetClusterVulnEvent": { "name": "get-cluster-vuln-event", "description": "Get a cluster vulnerability event." },
+        "CloudWalker.CloudWalker/ListMicroserviceVulnEvents": { "name": "list-microservice-vuln-events", "description": "List vulnerability events for microservices." },
+        "CloudWalker.CloudWalker/GetMicroserviceVulnEvent": { "name": "get-microservice-vuln-event", "description": "Get a microservice vulnerability event." }
+      }
+    }
+  }
+}
