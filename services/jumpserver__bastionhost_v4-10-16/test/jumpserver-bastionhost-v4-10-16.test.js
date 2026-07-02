@@ -82,6 +82,22 @@ test('ListUsers maps user roles and supports username/password login', async () 
   }
 });
 
+test('authorization secret overrides token and is sent as full header value', async () => {
+  const mock = await createMockServer();
+  try {
+    const result = await handlers[METHOD_LIST_ASSETS_FULL](
+      { limit: 5 },
+      ctx(mock.endpoint, { secret: { token: '', authorization: 'Token custom-auth' } }),
+    );
+    assert.equal(result.total, 1);
+    assert.equal(mock.requests.length, 1);
+    assert.equal(mock.requests.at(-1).path, '/api/v1/assets/assets');
+    assert.equal(mock.requests.at(-1).headers.authorization, 'Token custom-auth');
+  } finally {
+    await mock.close();
+  }
+});
+
 test('ListOnlineSessions maps array response', async () => {
   const mock = await createMockServer();
   try {

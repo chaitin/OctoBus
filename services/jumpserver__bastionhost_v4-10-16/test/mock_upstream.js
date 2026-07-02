@@ -26,7 +26,7 @@ export const createMockServer = async () => {
         return;
       }
 
-      if (!['Bearer test-token', 'Bearer login-token'].includes(String(req.headers.authorization || ''))) {
+      if (!['Bearer test-token', 'Bearer login-token', 'Token custom-auth'].includes(String(req.headers.authorization || ''))) {
         json(res, 401, { detail: 'Authentication credentials were not provided.' });
         return;
       }
