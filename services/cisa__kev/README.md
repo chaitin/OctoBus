@@ -85,6 +85,10 @@ Content-Type: application/json
 {"inKev": false}
 ```
 
+## 验证截图
+
+真实接口验证截图见：[cisa-kev-验证截图.png](../../docs/cisa-kev-验证截图.png)。
+
 ## 风险说明
 
 - KEV 目录约 2MB，内存缓存 1 小时（可配置 `kevCacheTtlMs`）
