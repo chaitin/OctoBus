@@ -94,7 +94,8 @@
     "zhizhangyi-mbs": "bin/zhizhangyi-mbs.js",
     "qianxin-caasm": "bin/qianxin-caasm.js",
     "anyi-cloud-native-security": "bin/anyi-cloud-native-security.js",
-    "api7-enterprise-v3-10-2": "bin/api7-enterprise-v3-10-2.js"
+    "api7-enterprise-v3-10-2": "bin/api7-enterprise-v3-10-2.js",
+    "sangfor-af-v8-0-35r1": "bin/sangfor-af-v8-0-35r1.js"
   },
   "files": [
     "bin/cisa-kev.js",
@@ -278,7 +279,9 @@
     "bin/nsfocus-waf-v6-0-7.js",
     "nsfocus__waf_v6-0-7",
     "bin/zhizhangyi-mbs.js",
-    "zhizhangyi__mbs"
+    "zhizhangyi__mbs",
+    "bin/sangfor-af-v8-0-35r1.js",
+    "sangfor__af_v8-0-35r1"
   ],
   "scripts": {
     "validate": "node scripts/validate-service-package.mjs",

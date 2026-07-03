@@ -1,0 +1,13 @@
+{
+  "name": "sangfor-af-v8-0-35r1",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "sangfor-af-v8-0-35r1": "bin/sangfor-af-v8-0-35r1.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.6.0",
+    "undici": "^7.16.0"
+  }
+}

@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package Sangfor_AF_V8035R1;
+
+option go_package = "miner/grpc-service/Sangfor_AF_V8035R1";
+
+service Sangfor_AF_V8035R1 {
+  rpc ListWhiteBlackListEntries(ListWhiteBlackListEntriesRequest) returns (ListWhiteBlackListEntriesResponse) {}
+  rpc GetWhiteBlackListEntry(GetWhiteBlackListEntryRequest) returns (GetWhiteBlackListEntryResponse) {}
+  rpc CreateWhiteBlackListEntry(CreateWhiteBlackListEntryRequest) returns (CreateWhiteBlackListEntryResponse) {}
+  rpc DeleteWhiteBlackListEntry(DeleteWhiteBlackListEntryRequest) returns (DeleteWhiteBlackListEntryResponse) {}
+}
+
+enum WhiteBlackListType {
+  WHITE_BLACK_LIST_TYPE_UNSPECIFIED = 0;
+  BLACK = 1;
+  WHITE = 2;
+}
+
+message WhiteBlackListEntry {
+  string url = 1;
+  WhiteBlackListType type = 2;
+  bool enable = 3;
+  int32 domain = 4;
+  bool is_default = 5;
+  string description = 6;
+  string create_time = 7;
+}
+
+message ListWhiteBlackListEntriesRequest {
+  WhiteBlackListType type = 1;
+  int32 start = 2;
+  int32 length = 3;
+  string search = 4;
+  string url = 5;
+  string description = 6;
+  string sort_by = 7;
+  string order = 8;
+}
+
+message ListWhiteBlackListEntriesResponse {
+  int32 total_items = 1;
+  int32 total_pages = 2;
+  int32 page_number = 3;
+  int32 page_size = 4;
+  int32 items_offset = 5;
+  int32 item_length = 6;
+  repeated WhiteBlackListEntry items = 7;
+}
+
+message GetWhiteBlackListEntryRequest {
+  string url = 1;
+  WhiteBlackListType type = 2;
+}
+
+message GetWhiteBlackListEntryResponse {
+  WhiteBlackListEntry entry = 1;
+}
+
+message CreateWhiteBlackListEntryRequest {
+  string url = 1;
+  WhiteBlackListType type = 2;
+  optional bool enable = 3;
+  string description = 4;
+}
+
+message CreateWhiteBlackListEntryResponse {
+  WhiteBlackListEntry entry = 1;
+}
+
+message DeleteWhiteBlackListEntryRequest {
+  string url = 1;
+  WhiteBlackListType type = 2;
+}
+
+message DeleteWhiteBlackListEntryResponse {
+  WhiteBlackListEntry entry = 1;
+}

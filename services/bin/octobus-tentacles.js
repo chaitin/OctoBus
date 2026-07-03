@@ -228,6 +228,10 @@ const services = {
     entryFile: "../ruijie__behavior_firewall_r2-3-2-t0/bin/ruijie-behavior-firewall-r2-3-2-t0.js",
     serviceModule: "../ruijie__behavior_firewall_r2-3-2-t0/src/service.js",
   },
+  "sangfor-af-v8-0-35r1": {
+    entryFile: "../sangfor__af_v8-0-35r1/bin/sangfor-af-v8-0-35r1.js",
+    serviceModule: "../sangfor__af_v8-0-35r1/src/service.js",
+  },
   "sangfor-fw-v8-0-45": {
     entryFile: "../sangfor__fw_v8-0-45/bin/sangfor-fw-v8-0-45.js",
     serviceModule: "../sangfor__fw_v8-0-45/src/service.js",

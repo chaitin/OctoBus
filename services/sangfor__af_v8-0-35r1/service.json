@@ -1,0 +1,41 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "sangfor-af-v8-0-35r1",
+  "displayName": "Sangfor AF 8.0.35R1",
+  "description": "OctoBus package for Sangfor AF 8.0.35R1 black/white list query, create, and delete APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/sangfor_af_v8_0_35r1.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Sangfor_AF_V8035R1.Sangfor_AF_V8035R1/ListWhiteBlackListEntries": {
+          "name": "list-white-black-list-entries",
+          "description": "List Sangfor AF blacklist or whitelist entries."
+        },
+        "Sangfor_AF_V8035R1.Sangfor_AF_V8035R1/GetWhiteBlackListEntry": {
+          "name": "get-white-black-list-entry",
+          "description": "Get one Sangfor AF blacklist or whitelist entry."
+        },
+        "Sangfor_AF_V8035R1.Sangfor_AF_V8035R1/CreateWhiteBlackListEntry": {
+          "name": "create-white-black-list-entry",
+          "description": "Create one Sangfor AF blacklist or whitelist entry."
+        },
+        "Sangfor_AF_V8035R1.Sangfor_AF_V8035R1/DeleteWhiteBlackListEntry": {
+          "name": "delete-white-black-list-entry",
+          "description": "Delete one Sangfor AF blacklist or whitelist entry."
+        }
+      }
+    }
+  }
+}
