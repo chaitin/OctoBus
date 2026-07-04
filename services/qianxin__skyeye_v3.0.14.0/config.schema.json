@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "skyeye_domain": {
+      "type": "string",
+      "description": "QianXin SkyEye API base URL, for example https://10.0.0.1:443."
+    },
+    "domain": {
+      "type": "string",
+      "description": "Alias for skyeye_domain."
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "Alias for skyeye_domain."
+    },
+    "skyeye_user_name": {
+      "type": "string",
+      "description": "SkyEye platform username for authentication. Defaults to skyeye_staff_name if not set."
+    },
+    "user_name": {
+      "type": "string",
+      "description": "Alias for skyeye_user_name."
+    },
+    "skyeye_staff_name": {
+      "type": "string",
+      "description": "Staff name for alarm list queries."
+    },
+    "staff_name": {
+      "type": "string",
+      "description": "Alias for skyeye_staff_name."
+    },
+    "client_id_random": {
+      "type": "string",
+      "default": "",
+      "description": "Built-in random string for client_id derivation in authentication."
+    },
+    "client_secret_random": {
+      "type": "string",
+      "default": "",
+      "description": "Built-in random string for client_secret derivation in authentication."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 10000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for private deployments."
+    },
+    "tlsInsecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Legacy alias for skipTlsVerify."
+    },
+    "insecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Alias for skipTlsVerify."
+    }
+  }
+}

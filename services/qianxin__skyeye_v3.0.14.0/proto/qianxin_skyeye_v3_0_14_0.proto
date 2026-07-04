@@ -1,0 +1,105 @@
+syntax = "proto3";
+
+package QianXin_SkyEye_V3_0_14_0;
+
+option go_package = "miner/grpc-service/QianXin_SkyEye_V3_0_14_0";
+
+service QianXin_SkyEye_V3_0_14_0 {
+  rpc QueryAlarmList(QueryAlarmListRequest) returns (QueryAlarmListResponse) {}
+  rpc QueryAlarmPacket(QueryAlarmPacketRequest) returns (QueryAlarmPacketResponse) {}
+  rpc DownloadAlarmPcap(DownloadAlarmPcapRequest) returns (DownloadAlarmPcapResponse) {}
+  rpc QueryNetworkLog(QueryNetworkLogRequest) returns (QueryNetworkLogResponse) {}
+}
+
+message QueryAlarmListRequest {
+  string start_time = 1;
+  string end_time = 2;
+  optional string threat_type = 3;
+  optional int32 hazard_level = 4;
+  optional string host_state = 5;
+  optional string status = 6;
+  optional string data_source = 7;
+  optional string alarm_sip = 8;
+  optional string attack_sip = 9;
+  optional string attack_stage = 10;
+  optional string asset_group = 11;
+  optional string attack_dimension = 12;
+  optional string alarm_id = 13;
+  optional string focus_label = 14;
+  optional int32 is_alarm_black_ip = 15;
+  optional string black_ip = 16;
+  optional int32 is_white = 17;
+  optional string threat_name = 18;
+  optional int32 is_accurate = 19;
+  optional int32 offset = 20;
+  optional int32 limit = 21;
+  optional string order_by = 22;
+}
+
+message QueryAlarmListResponse {
+  int32 response_code = 1;
+  string verbose_msg = 2;
+  string data = 3;
+}
+
+message QueryAlarmPacketRequest {
+  string alarm_sip = 1;
+  string attack_sip = 2;
+  string start_time = 3;
+  string end_time = 4;
+  string alarm_id = 5;
+  optional string skyeye_type = 6;
+  optional string ioc = 7;
+  optional string branch_id = 8;
+  optional string host_state = 9;
+}
+
+message QueryAlarmPacketResponse {
+  int32 response_code = 1;
+  string verbose_msg = 2;
+  string data = 3;
+}
+
+message DownloadAlarmPcapRequest {
+  string alarm_sip = 1;
+  string attack_sip = 2;
+  string start_time = 3;
+  string end_time = 4;
+  optional string skyeye_type = 5;
+  optional string ioc = 6;
+  optional string type = 7;
+  optional string branch_id = 8;
+}
+
+message DownloadAlarmPcapResponse {
+  int32 response_code = 1;
+  string verbose_msg = 2;
+  string data = 3;
+}
+
+message QueryNetworkLogRequest {
+  string start_time = 1;
+  string end_time = 2;
+  string index = 3;
+  string category = 4;
+  string mode = 5;
+  string offset = 6;
+  string limit = 7;
+  optional string branch_id = 8;
+  optional string keyword = 9;
+  optional string asset_group_ids = 10;
+  optional string stime = 11;
+  optional string etime = 12;
+  optional string interval = 13;
+  optional string page = 14;
+  optional string size = 15;
+  optional string key_fields = 16;
+  optional string graph_conf = 17;
+  optional string curBranch = 18;
+}
+
+message QueryNetworkLogResponse {
+  int32 response_code = 1;
+  string verbose_msg = 2;
+  string data = 3;
+}

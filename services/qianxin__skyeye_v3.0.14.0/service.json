@@ -1,0 +1,37 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "qianxin-skyeye-v3.0.14.0",
+  "displayName": "QianXin SkyEye V3.0.14.0",
+  "description": "OctoBus package for QianXin SkyEye (TianYan) V3.0.14.0 alarm queries, payload retrieval, pcap download, and network log search.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/qianxin_skyeye_v3_0_14_0.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "QianXin_SkyEye_V3_0_14_0.QianXin_SkyEye_V3_0_14_0/QueryAlarmList": {
+          "name": "query-alarm-list",
+          "description": "Query QianXin SkyEye alarm list."
+        },
+        "QianXin_SkyEye_V3_0_14_0.QianXin_SkyEye_V3_0_14_0/QueryAlarmPacket": {
+          "name": "query-alarm-packet",
+          "description": "Query QianXin SkyEye alarm payload content."
+        },
+        "QianXin_SkyEye_V3_0_14_0.QianXin_SkyEye_V3_0_14_0/DownloadAlarmPcap": {
+          "name": "download-alarm-pcap",
+          "description": "Download QianXin SkyEye alarm pcap."
+        },
+        "QianXin_SkyEye_V3_0_14_0.QianXin_SkyEye_V3_0_14_0/QueryNetworkLog": {
+          "name": "query-network-log",
+          "description": "Query QianXin SkyEye network log."
+        }
+      }
+    }
+  }
+}
