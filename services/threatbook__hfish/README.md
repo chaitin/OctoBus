@@ -54,6 +54,44 @@ Requests may still pass `api_key` or `apiKey`; configured secret values take pre
 - `page` defaults to 1, `limit` defaults to 20.
 - HFish API response codes: `0` = success, `1003` = authentication failure (maps to `PERMISSION_DENIED`).
 
+## Verification Screenshots
+
+### HFish Setup & Instance
+
+![HFish setup and instance dashboard](https://raw.githubusercontent.com/boy331/OctoBus/docs/hfish-screenshots-hosting/docs/hfish-screenshots/00-setup-and-instance.png)
+
+HFish honeypot management console showing deployed instance and service status.
+
+### npm test Passing
+
+![npm test hfish results](https://raw.githubusercontent.com/boy331/OctoBus/docs/hfish-screenshots-hosting/docs/hfish-screenshots/01-npm-test-hfish.png)
+
+All unit tests passing for the `threatbook__hfish` service package.
+
+### Reflection & CapSet Instance
+
+![Reflection capset instance verification](https://raw.githubusercontent.com/boy331/OctoBus/docs/hfish-screenshots-hosting/docs/hfish-screenshots/02-reflection-capset-instance.png)
+
+OctoBus reflection API returning the CapSet instance for HFish service validation.
+
+### Four RPCs via OctoBus
+
+![Four RPCs invoked through OctoBus](https://raw.githubusercontent.com/boy331/OctoBus/docs/hfish-screenshots-hosting/docs/hfish-screenshots/03-four-rpcs-via-octobus.png)
+
+All four RPC methods (`ListAttackIPs`, `ListAttackDetails`, `ListAttackAccounts`, `GetSystemInfo`) successfully invoked through OctoBus.
+
+### Direct API vs OctoBus jsonName Mapping
+
+![Direct API call vs OctoBus jsonName mapping](https://raw.githubusercontent.com/boy331/OctoBus/docs/hfish-screenshots-hosting/docs/hfish-screenshots/04-direct-vs-octobus-jsonname.png)
+
+Side-by-side comparison: direct HFish API call vs. OctoBus RPC with `jsonName` field mapping, confirming consistent response structure.
+
+### Access Log (NDJSON)
+
+![Access log NDJSON output](https://raw.githubusercontent.com/boy331/OctoBus/docs/hfish-screenshots-hosting/docs/hfish-screenshots/05-access-log-ndjson.png)
+
+OctoBus access log showing NDJSON-formatted request/response entries for HFish RPC calls.
+
 ## Behavior Notes
 
 - HTTP 401/403 maps to `PERMISSION_DENIED`.
