@@ -39,6 +39,7 @@ const grpcCodeFor = (code) => ({
   PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED,
   UNAUTHENTICATED: grpcStatus.UNAUTHENTICATED,
   UNAVAILABLE: grpcStatus.UNAVAILABLE,
+  DEADLINE_EXCEEDED: grpcStatus.DEADLINE_EXCEEDED,
 })[code] ?? grpcStatus.UNKNOWN;
 
 const errorWithCode = (code, message) => {
@@ -156,8 +157,11 @@ const buildHeaders = (token, extraHeaders = {}) => ({
 let insecureDispatcherPromise;
 
 const fetchDiss = async (url, init, timeoutMs, skipTlsVerify) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
-    const opts = { ...init, timeoutMs };
+    const opts = { ...init, signal: controller.signal };
     if (skipTlsVerify) {
       const { Agent } = await import('undici');
       insecureDispatcherPromise ??= Promise.resolve(new Agent({
@@ -165,8 +169,12 @@ const fetchDiss = async (url, init, timeoutMs, skipTlsVerify) => {
       }));
       opts.dispatcher = await insecureDispatcherPromise;
     }
-    return await fetch(url, opts);
+    const res = await fetch(url, opts);
+    clearTimeout(timeoutId);
+    return res;
   } catch (e) {
+    clearTimeout(timeoutId);
+    if (e.name === 'AbortError') throw errorWithCode('DEADLINE_EXCEEDED', `request timeout after ${timeoutMs}ms`);
     const reason = e?.cause?.message || e?.message || 'fetch failed';
     throw errorWithCode('UNAVAILABLE', reason);
   }

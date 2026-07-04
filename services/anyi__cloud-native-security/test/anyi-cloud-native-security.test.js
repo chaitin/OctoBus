@@ -603,6 +603,15 @@ test('network error with cause maps to UNAVAILABLE', async () => {
   );
 });
 
+test('AbortError maps to DEADLINE_EXCEEDED', async () => {
+  const err = new DOMException('The operation was aborted', 'AbortError');
+  globalThis.fetch = async () => { throw err; };
+  await assert.rejects(
+    () => rpcdef(buildCtx({ req: {} }))[METHOD_PATHS.ListWarnings](),
+    (err) => err instanceof GrpcError && err.legacyCode === 'DEADLINE_EXCEEDED',
+  );
+});
+
 // --- handlers export ---
 
 test('handlers object has all 10 methods', () => {
@@ -676,7 +685,7 @@ test('skipTlsVerify false by default uses native fetch', async () => {
 
 // --- timeout from bindings ---
 
-test('timeoutMs from bindings overrides default', async () => {
+test('timeoutMs from bindings sets up AbortController signal', async () => {
   let capturedOpts;
   globalThis.fetch = async (url, opts) => {
     capturedOpts = opts;
@@ -684,7 +693,7 @@ test('timeoutMs from bindings overrides default', async () => {
   };
 
   await rpcdef(buildCtx({ bindings: { timeoutMs: 5000 }, req: {} }))[METHOD_PATHS.ListWarnings]();
-  assert.equal(capturedOpts.timeoutMs, 5000);
+  assert.ok(capturedOpts.signal instanceof AbortSignal);
 });
 
 // --- token from secret ---
