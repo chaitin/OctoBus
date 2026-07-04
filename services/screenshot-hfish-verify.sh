@@ -1,11 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
-REPO_ROOT="${REPO_ROOT:-/Users/luoliang/Documents/OctoBus}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="${REPO_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 SERVICES_ROOT="${SERVICES_ROOT:-$REPO_ROOT/services}"
 SERVICE_DIR="${SERVICE_DIR:-$SERVICES_ROOT/threatbook__hfish}"
-OCTOBUS_BIN="${OCTOBUS_BIN:-$REPO_ROOT/bin/octobus}"
-OUTPUT_DIR="${OUTPUT_DIR:-/Users/luoliang/Documents/api接口文档/hfish}"
+OCTOBUS_BIN="${OCTOBUS_BIN:-$(command -v octobus || true)}"
+OUTPUT_DIR="${OUTPUT_DIR:-$REPO_ROOT/.octobus-proof/hfish}"
 OCTOBUS_ADDR="${OCTOBUS_ADDR:-127.0.0.1:19102}"
 OCTOBUS_DATA_DIR="${OCTOBUS_DATA_DIR:-/tmp/obh2}"
 AUTO_DAEMON="${AUTO_DAEMON:-1}"
@@ -256,10 +257,12 @@ take_screenshot "03-four-rpcs-via-octobus.png"
 
 echo -e "\n${G}4) 直连 HFish vs 经 OctoBus：字段命名差异${N}"
 echo -e "${C}[直连 HFish REST，snake_case]${N}"
-curl -sS "${DIRECT_CURL_TLS_ARGS[@]}" -X POST \
-  "$HFISH_ENDPOINT/api/v1/attack/detail?api_key=$HFISH_API_KEY&page=1&limit=1" \
-  -H 'Content-Type: application/json' \
-  -d '{}' | jq '{response_code, verbose_msg, data: {total_num: .data.total_num, page_no: .data.page_no, page_size: .data.page_size}}'
+cat <<EOF | curl -sS "${DIRECT_CURL_TLS_ARGS[@]}" --config - | jq '{response_code, verbose_msg, data: {total_num: .data.total_num, page_no: .data.page_no, page_size: .data.page_size}}'
+url = "$HFISH_ENDPOINT/api/v1/attack/detail?api_key=$HFISH_API_KEY&page=1&limit=1"
+request = "POST"
+header = "Content-Type: application/json"
+data = "{}"
+EOF
 echo
 echo -e "${C}[经 OctoBus gRPC，protobuf JSON lowerCamelCase]${N}"
 grpcurl -plaintext "${GRPC_HEADERS[@]}" -d '{"page":1,"limit":1}' "$OCTOBUS_ADDR" ThreatBook_HFISH.ThreatBook_HFISH/ListAttackDetails | jq '{responseCode, verboseMsg, data: {totalNum: .data.totalNum, pageNo: .data.pageNo, pageSize: .data.pageSize}}'
