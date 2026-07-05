@@ -379,13 +379,26 @@ const service = defineService({
         return result.success;
       };
 
+      /**
+       * Insert a block after a reference block.
+       * Returns { success, blockId } — blockId is the new block's real ID if available.
+       */
       const insertBlockAfter = async (refBlockId, text) => {
         const safeText = shellEscape(text);
         const result = await runDws(
           `doc block insert --node ${nodeId} --ref-block ${refBlockId} --type orderedList --text ${safeText} --fix-jsonml`,
           { dwsPath: config.dwsPath, timeout: config.dwsTimeout }
         );
-        return result.success;
+        // Try to extract the new blockId from the dws response
+        let newBlockId = '';
+        if (result.data) {
+          const d = result.data?.data || result.data?.result || result.data;
+          newBlockId = d?.blockId || d?.id || d?.block?.id || d?.block?.blockId || '';
+          if (!newBlockId && Array.isArray(d?.blocks)) {
+            newBlockId = d.blocks[0]?.blockId || d.blocks[0]?.id || '';
+          }
+        }
+        return { success: result.success, blockId: newBlockId };
       };
 
       // ── 1. 分批获取所有块 ──
@@ -433,12 +446,7 @@ const service = defineService({
       }
 
       // ── 4. 逐周查找 userName ──
-      const CATEGORY_KEYWORDS = {
-        'Communication': 'Communication',
-        'Documentation': 'Documentation',
-        'Bidding': 'Bidding',
-        'POC & Others': 'POC & Others',
-      };
+      const CATEGORY_NAMES = ['沟通交流', '文档材料', '投标谈判', 'POC及其他'];
 
       for (const week of weeksToSearch) {
         // 确定本周标题的范围（到下一个周标题或文档末尾）
@@ -476,10 +484,10 @@ const service = defineService({
             // 遇到"本周计划"则停止
             if (text.startsWith('本周计划')) break;
 
-            // 检查是否是分类标题
+            // 匹配分类标题：文本包含"沟通交流""文档材料""投标谈判""POC"
             let foundCat = false;
-            for (const [catName, keyword] of Object.entries(CATEGORY_KEYWORDS)) {
-              if (text.includes(keyword)) {
+            for (const catName of CATEGORY_NAMES) {
+              if (text.includes(catName)) {
                 categories[catName] = { headerBlockId: b.blockId, entryBlockIds: [] };
                 currentCat = catName;
                 foundCat = true;
@@ -496,39 +504,58 @@ const service = defineService({
 
         if (Object.keys(categories).length === 0) { continue; }
 
-        // ── 6. 按分类分组 entries ──
+        // ── 6. 去重：收集已存在的条目文本 ──
+        const existingTexts = new Set();
+        for (const [catName, catInfo] of Object.entries(categories)) {
+          for (const bid of catInfo.entryBlockIds) {
+            const block = allBlocks.find(b => b.blockId === bid);
+            if (block) existingTexts.add(block.content.trim());
+          }
+        }
+
+        // ── 7. 按分类分组 entries ──
         const grouped = {};
         for (const entry of entries) {
-          let cat = 'Communication';
-          for (const catName of Object.keys(CATEGORY_KEYWORDS)) {
+          let cat = '沟通交流';
+          for (const catName of CATEGORY_NAMES) {
             if (entry.category && entry.category.includes(catName)) {
               cat = catName;
               break;
             }
           }
           if (!grouped[cat]) grouped[cat] = [];
-          grouped[cat].push(entry.summary);
+          // 去重检测
+          if (!existingTexts.has(entry.summary)) {
+            grouped[cat].push(entry.summary);
+          }
         }
 
-        // ── 7. 更新每个分类 ──
+        // ── 8. 只在"没有分类块"时才创建新的（否则追加到已有块内部）──
         let syncedCount = 0;
 
         for (const [catName, summaries] of Object.entries(grouped)) {
-          if (!categories[catName]) { continue; }
+          if (summaries.length === 0) continue;
+
           const catInfo = categories[catName];
+          let insertAfterBlockId;
 
-          // 更新分类标题计数
-          const newHeader = `【${catName}*${summaries.length}】`;
+          if (!catInfo) {
+            // 该分类在文档中不存在 → 在 userName 后面新建一个分类块
+            const catHeaderText = `【${catName}】`;
+            const res = await insertBlockAfter(userNameIdx >= 0 ? allBlocks[userNameIdx].blockId : week.blockId, catHeaderText);
+            insertAfterBlockId = res.blockId || '';
+          } else {
+            // 已有分类块 → 在最后一条条目后追加；没有条目则在分类标题后追加
+            const entryIds = catInfo.entryBlockIds.filter(id => id && id !== 'newly-inserted');
+            insertAfterBlockId = entryIds.length > 0 ? entryIds[entryIds.length - 1] : catInfo.headerBlockId;
+          }
 
-          // 插入条目
+          // 插入新条目
           for (const summary of summaries) {
-            const refId = catInfo.entryBlockIds.length > 0
-              ? catInfo.entryBlockIds[catInfo.entryBlockIds.length - 1]
-              : catInfo.headerBlockId;
-            const ok = await insertBlockAfter(refId, summary);
-            if (ok) {
+            const res = await insertBlockAfter(insertAfterBlockId, summary);
+            if (res.success) {
               syncedCount++;
-              catInfo.entryBlockIds.push('newly-inserted'); // track for subsequent inserts
+              if (res.blockId) insertAfterBlockId = res.blockId; // 用真实 blockId 串链
             }
           }
         }

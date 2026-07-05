@@ -156,33 +156,32 @@ const service = defineService({
 
       // 5. 构造 fields
       const fields = {};
-      const kf = kanban.fields || {};
       // 日期字段（两个日期列）
-      fields[kf.date_start || '5wlytmi'] = date || '';
-      fields[kf.date_end || '5sxy4yq'] = date || '';
+      fields['5wlytmi'] = date || '';
+      fields['5sxy4yq'] = date || '';
       // 任务类型
-      fields[kf.task_type || 'wiisqll'] = taskTypeOption;
+      fields['wiisqll'] = taskTypeOption;
       // 任务描述
-      fields[kf.description || 'q3aj1jn'] = summary || '';
-      // Owner — 从 user-config 读取，无配置时不设置默认值
-      const ownerUser = owner || '';
-      if (ownerUser) fields[kf.owner || 'kkcfjj6'] = [{ userId: ownerUser }];
-      // 销售 — 从 user-config 读取，无配置时不设置默认值
-      const salesUser = salesman || '';
-      if (salesUser) fields[kf.salesman || '6olqudb'] = [{ userId: salesUser }];
+      fields['q3aj1jn'] = summary || '';
+      // 销售（kkcfjj6 = 销售字段）
+      const salesUser = salesman || 'naiting.zang';
+      fields['kkcfjj6'] = [{ userId: salesUser }];
+      // Owner/执行人（6olqudb = Owner字段）
+      const ownerUser = owner || 'jianhua.wang';
+      fields['6olqudb'] = [{ userId: ownerUser }];
       // 周报摘要/说明
-      fields[kf.weekly_summary || 'x2ysb28'] = description || summary || '';
+      fields['x2ysb28'] = description || summary || '';
       // 客户分类
       if (customerOption) {
-        fields[kf.customer_tier || 'dacnewp'] = customerOption;
+        fields['dacnewp'] = customerOption;
       }
       // 二级部门
       if (department2) {
-        fields[kf.sub_department || 'cgrfhw7'] = department2;
+        fields['cgrfhw7'] = department2;
       }
       // 状态（固定：已完成）
       if (kanban.status_done) {
-        fields[kf.status || 'v5j63kh'] = kanban.status_done;
+        fields['v5j63kh'] = kanban.status_done;
       }
 
       // 6. 调用 CreateRecord
