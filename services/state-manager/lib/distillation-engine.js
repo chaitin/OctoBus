@@ -4,7 +4,7 @@
  * Core value: makes memory more than just "store and retrieve" —
  * it continuously compresses and refines.
  * Three levels of distillation:
- *   1. action_log → session_summary (weekly summary, ~10:1 compression)
+ *   1. action_log → session_summary (periodic summary, ~10:1 compression)
  *   2. session_summary → monthly_summary (monthly rollup, ~10:1 compression)
  *   3. user_correction pattern extraction (multiple corrections for same key → upgrade to permanent preference)
  *
@@ -16,13 +16,13 @@ export class DistillationEngine {
   /**
    * @param {import('./memory-engine.js').MemoryEngine} memoryEngine
    * @param {object} opts
-   * @param {number} opts.weeklyWindowDays - action_log weekly summary window (default 7 days)
+   * @param {number} opts.summaryWindowDays - action_log periodic summary window (default 7 days)
    * @param {number} opts.monthlyWindowDays - session_summary monthly rollup window (default 30 days)
    * @param {number} opts.correctionThreshold - Number of corrections for same key to trigger upgrade (default 3)
    */
   constructor(memoryEngine, opts = {}) {
     this.engine = memoryEngine;
-    this.weeklyWindowDays = opts.weeklyWindowDays || 7;
+    this.summaryWindowDays = opts.summaryWindowDays || 7;
     this.monthlyWindowDays = opts.monthlyWindowDays || 30;
     this.correctionThreshold = opts.correctionThreshold || 3;
 
@@ -52,7 +52,7 @@ export class DistillationEngine {
     };
 
     try {
-      // 1. action_log weekly summary
+      // 1. action_log periodic summary
       summary.actionLog = await this._distillActionLogs();
 
       // 2. session_summary monthly rollup
@@ -75,7 +75,7 @@ export class DistillationEngine {
     return { ...this._stats };
   }
 
-  // ─── 1. Action Log Weekly Summary ───
+  // ─── 1. Action Log Periodic Summary ───
 
   /**
    * Compress action_log entries within 7 days into 1 session_summary
@@ -83,7 +83,7 @@ export class DistillationEngine {
    */
   async _distillActionLogs() {
     const now = new Date();
-    const windowMs = this.weeklyWindowDays * 86400 * 1000;
+    const windowMs = this.summaryWindowDays * 86400 * 1000;
     const cutoff = new Date(now.getTime() - windowMs);
 
     // Collect action_log entries within the window
@@ -209,7 +209,7 @@ export class DistillationEngine {
     const frequency = {
       avgPerDay: Math.round(avgPerDay * 10) / 10,
       activeDays: dailyArr.length,
-      totalDays: this.weeklyWindowDays,
+      totalDays: this.summaryWindowDays,
     };
 
     // Pattern detection

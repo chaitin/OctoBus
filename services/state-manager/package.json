@@ -1,15 +1,14 @@
 {
   "name": "octobus-state-manager",
   "displayName": "State Manager",
-  "version": "0.2.0",
-  "description": "Agent State Manager — Memory Engine + Distillation + Task State Machine + Event Log",
+  "version": "3.0.0",
+  "description": "Agent Memory & Distillation Engine — typed memory with auto-compression, task tracking, event logging",
   "private": true,
   "type": "module",
   "bin": {
     "state-manager": "bin/state-service.js"
   },
   "dependencies": {
-    "@chaitin-ai/octobus-sdk": "^0.5.0",
-    "js-yaml": "^4.1.0"
+    "@chaitin-ai/octobus-sdk": "^0.5.0"
   }
 }

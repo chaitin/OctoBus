@@ -22,7 +22,7 @@ const TYPE_REGISTRY = {
     defaultConfidence: 1.0,
     maxEntries: 200,
     evictPolicy: 'lru',
-    description: 'Query result cache (CRM IDs, project details, etc. — expensive query results)',
+    description: 'Query result cache (expensive API call results, external ID lookups, etc.)',
     label: 'Entity Cache',
   },
   action_log: {
@@ -31,7 +31,7 @@ const TYPE_REGISTRY = {
     defaultConfidence: 1.0,
     maxEntries: 1000,
     evictPolicy: 'oldest',
-    description: 'Action log (todo creation, kanban writes, etc. — write operation records for idempotent dedup)',
+    description: 'Action log (write operation records for idempotent dedup and audit trail)',
     label: 'Action Log',
   },
   user_correction: {

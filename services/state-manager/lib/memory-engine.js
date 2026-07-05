@@ -76,18 +76,13 @@ export class MemoryEngine {
   }
 
   /**
-   * 从 user-config 加载 tenant 和 userId
+   * Set tenant and userId from environment or config
+   * @param {string} tenant
+   * @param {string} userId
    */
-  async loadIdentity(userConfigPath) {
-    try {
-      const { readFile } = await import('node:fs/promises');
-      const raw = await readFile(userConfigPath, 'utf-8');
-      const config = JSON.parse(raw);
-      this.tenant = config.company_english || config.companyName || 'default';
-      this.userId = config.identity?.user_id || 'shared';
-    } catch {
-      // 配置文件不存在时用默认值
-    }
+  setIdentity(tenant, userId) {
+    this.tenant = tenant || 'default';
+    this.userId = userId || 'default';
   }
 
   // ─── Remember ───

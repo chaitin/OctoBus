@@ -1,292 +1,69 @@
 syntax = "proto3";
 package state.manager.v1;
 
-// Agent State Manager
-// OctoBus service package: state-manager -> Agent State Manager
-// Provides: project config, weekly buffer, meeting tracking, user config, memory engine, distillation engine, task state machine, event log, general storage
+// Agent State Manager — Generic Memory & State Service
+// OctoBus service package: state-manager
+//
+// Provides generic building blocks for AI agent state management:
+// - Memory Engine: Typed key-value storage with TTL, dedup, and prefix queries
+// - Distillation Engine: Automatic memory compression to prevent unbounded growth
+// - Task State Machine: Structured task lifecycle (pending→running→done/failed)
+// - Event Log: Append-only event recording with time-range queries
+// - KV Store: Simple key-value persistence
+//
+// Business-specific logic (project matching, weekly reports, meeting tracking,
+// CRM integration, etc.) should be implemented at the agent/skill layer using
+// the generic primitives provided here.
 service StateManagerService {
-  // ====== Project Config ======
-  // Get project config by key
-  rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
-  // List all projects
-  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
-  // Match project by keywords
-  rpc MatchProject(MatchProjectRequest) returns (MatchProjectResponse);
-
-  // ====== Weekly Pending Buffer (migrated to memory engine, internally delegates to Remember/Recall/Forget) ======
-  // Add a pending weekly summary item -> Remember(type=commitment, key=weekly_item:...)
-  rpc AddPendingItem(AddPendingItemRequest) returns (AddPendingItemResponse);
-  // Get all pending sync items -> Recall(prefix=weekly_item:, type=commitment)
-  rpc GetPendingItems(GetPendingItemsRequest) returns (GetPendingItemsResponse);
-  // Clear pending buffer -> Forget(prefix=weekly_item:, type=commitment)
-  rpc ClearPending(ClearPendingRequest) returns (ClearPendingResponse);
-
-  // ====== Meeting Tracking (migrated to memory engine, internally delegates to Remember/Recall/Forget) ======
-  // Register a meeting -> Remember(type=commitment, key=meeting:{eventId})
-  rpc RegisterMeeting(RegisterMeetingRequest) returns (RegisterMeetingResponse);
-  // Get pending meetings -> Recall(prefix=meeting:, type=commitment) + filtering
-  rpc GetPendingMeetings(GetPendingMeetingsRequest) returns (GetPendingMeetingsResponse);
-  // Update meeting state -> Recall + Remember update
-  rpc UpdateMeetingState(UpdateMeetingStateRequest) returns (UpdateMeetingStateResponse);
-
-  // ====== User Config ======
-  // Read user personal config (identity/kanban/CRM/defaults)
-  rpc GetUserConfig(GetUserConfigRequest) returns (GetUserConfigResponse);
-
   // ====== Agent Memory ======
-  // Write a memory entry
+  // Write a memory entry (upsert with dedup and TTL)
   rpc Remember(RememberRequest) returns (RememberResponse);
   // Read memory (exact match or prefix match)
   rpc Recall(RecallRequest) returns (RecallResponse);
-  // Delete memory
+  // Delete memory (exact or batch prefix delete)
   rpc Forget(ForgetRequest) returns (ForgetResponse);
   // Get memory engine runtime statistics
   rpc GetMemoryStats(GetMemoryStatsRequest) returns (GetMemoryStatsResponse);
 
   // ====== Distillation Engine ======
-  // Manually trigger a full distillation pass
+  // Trigger a distillation pass (compress old/low-priority memories)
   rpc Distill(DistillRequest) returns (DistillResponse);
   // Get distillation statistics
   rpc GetDistillStats(GetDistillStatsRequest) returns (GetDistillStatsResponse);
 
   // ====== Task State Machine ======
-  // Create a task
+  // Create a task with optional steps
   rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
-  // Update task state
+  // Update task state (enforces valid transitions)
   rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse);
-  // Add/update a step
+  // Add or update a step within a task
   rpc UpdateStep(UpdateStepRequest) returns (UpdateStepResponse);
-  // Get a single task
+  // Get a single task by ID
   rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
-  // List tasks (with filtering)
+  // List tasks with filtering
   rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
   // Get task statistics
   rpc GetTaskStats(GetTaskStatsRequest) returns (GetTaskStatsResponse);
 
   // ====== Event Log ======
-  // Log an event
+  // Append an event record
   rpc LogEvent(LogEventRequest) returns (LogEventResponse);
-  // Query events
+  // Query events with time-range and type filters
   rpc QueryEvents(QueryEventsRequest) returns (QueryEventsResponse);
   // Get event log statistics
   rpc GetEventStats(GetEventStatsRequest) returns (GetEventStatsResponse);
 
-  // ====== General KV ======
+  // ====== General KV Store ======
+  // Read a key-value pair
   rpc GetState(GetStateRequest) returns (GetStateResponse);
+  // Write a key-value pair (upsert)
   rpc SetState(SetStateRequest) returns (SetStateResponse);
-}
-
-// ====== Project Config ======
-
-message GetProjectRequest {
-  string key = 1;  // Project key (e.g. yidong_ai_plus)
-}
-
-message ProjectConfig {
-  string key = 1;
-  string name = 2;
-  string node_id = 3;
-  string customer = 4;
-  repeated string keywords = 5;
-  string detail_folder = 6;
-  string background = 7;      // Customer background (pinned info)
-}
-
-message GetProjectResponse {
-  bool success = 1;
-  ProjectConfig project = 2;
-  string error = 3;
-}
-
-message ListProjectsRequest {}
-
-message ListProjectsResponse {
-  bool success = 1;
-  repeated ProjectConfig projects = 2;
-  string error = 3;
-}
-
-message MatchProjectRequest {
-  string text = 1;  // Text to match (e.g. calendar title or note content)
-}
-
-message MatchProjectResponse {
-  bool success = 1;
-  ProjectConfig project = 2;  // Matched project (may be empty)
-  float confidence = 3;       // Match confidence 0-1
-  string error = 4;
-}
-
-// ====== Weekly Pending Buffer ======
-
-message AddPendingItemRequest {
-  string summary = 1;     // One-line summary (max 30 chars)
-  string category = 2;    // Category: Communication / Documentation / Bidding / POC & Others
-  string date = 3;        // Date YYYY-MM-DD
-}
-
-message AddPendingItemResponse {
-  bool success = 1;
-  int32 pending_count = 2;  // Current pending total
-  string error = 3;
-}
-
-message GetPendingItemsRequest {}
-
-message PendingItem {
-  string summary = 1;
-  string category = 2;
-  string date = 3;
-}
-
-message GetPendingItemsResponse {
-  bool success = 1;
-  repeated PendingItem items = 2;
-  string error = 3;
-}
-
-message ClearPendingRequest {}
-
-message ClearPendingResponse {
-  bool success = 1;
-  int32 cleared_count = 2;  // Number of entries cleared
-  string error = 3;
-}
-
-// ====== Meeting Tracking ======
-
-message RegisterMeetingRequest {
-  string event_id = 1;     // Calendar event ID
-  string summary = 2;      // Meeting title
-  string start_time = 3;   // ISO time
-  string end_time = 4;     // ISO time
-  repeated string attendees = 5;
-}
-
-message RegisterMeetingResponse {
-  bool success = 1;
-  bool is_new = 2;         // Whether newly registered (false = already exists)
-  string error = 3;
-}
-
-message GetPendingMeetingsRequest {
-  int32 grace_hours = 1;   // Hours past end time to be considered pending (default 24)
-}
-
-message MeetingInfo {
-  string event_id = 1;
-  string summary = 2;
-  string start_time = 3;
-  string end_time = 4;
-  repeated string attendees = 5;
-  string state = 6;        // registered / notes_submitted / doc_created / reminded
-}
-
-message GetPendingMeetingsResponse {
-  bool success = 1;
-  repeated MeetingInfo meetings = 2;
-  string error = 3;
-}
-
-message UpdateMeetingStateRequest {
-  string event_id = 1;
-  string new_state = 2;    // notes_submitted / doc_created / reminded
-}
-
-message UpdateMeetingStateResponse {
-  bool success = 1;
-  string error = 2;
-}
-
-// ====== User Config ======
-
-message GetUserConfigRequest {}
-
-message KanbanFieldConfig {
-  string start_date = 1;        // field ID for Start Date
-  string end_date = 2;          // field ID for Due Date
-  string task_type = 3;         // field ID for Task Type
-  string task_desc = 4;         // field ID for Task Description
-  string sales = 5;             // field ID for Sales
-  string owner = 6;             // field ID for Owner
-  string notes = 7;             // field ID for Description
-  string customer_l1 = 8;       // field ID for Customer Tier
-  string customer_l2 = 9;       // field ID for Sub-department
-  string status = 10;           // field ID for Status
-  string presale = 11;          // field ID for Pre-sales
-  string crm_link = 12;         // field ID for CRM Project Link
-}
-
-message KanbanOptionConfig {
-  string id = 1;
-  string name = 2;
-}
-
-message KanbanTaskTypeConfig {
-  repeated KanbanOptionConfig communication = 1;   // Communication
-  repeated KanbanOptionConfig documentation = 2;   // Documentation
-  repeated KanbanOptionConfig bidding = 3;          // Bidding
-  repeated KanbanOptionConfig poc = 4;              // POC & Others
-}
-
-message KanbanStatusConfig {
-  repeated KanbanOptionConfig completed = 1;        // Done
-  repeated KanbanOptionConfig in_progress = 2;      // In Progress
-}
-
-message KanbanCustomerConfig {
-  repeated KanbanOptionConfig customers = 1;
-}
-
-message KanbanConfig {
-  string base_id = 1;
-  string table_id = 2;
-  string instance = 3;                             // OctoBus instance name (e.g. "aitable-instance")
-  KanbanFieldConfig fields = 4;
-  KanbanTaskTypeConfig task_types = 5;
-  KanbanStatusConfig statuses = 6;
-  KanbanCustomerConfig customers = 7;
-}
-
-message IdentityConfig {
-  string user_id = 1;              // Login name (e.g. "user01")
-  string display_name = 2;         // Display name (e.g. "Alice")
-  string role = 3;                 // Role (e.g. "Pre-sales")
-  string crm_user_id = 4;          // CRM system user ID (look up via ListUsers on first use)
-  string default_sales_user_id = 5;// Default sales userId (e.g. "sales01")
-  string default_sales_name = 6;   // Default sales name (e.g. "Bob")
-  string team = 7;                 // Team name (e.g. "Enterprise Pre-sales")
-}
-
-message OctoBusInstanceConfig {
-  string aitable = 1;     // e.g. "aitable-instance"
-  string doc = 2;         // e.g. "doc-instance"
-  string calendar = 3;    // e.g. "calendar-instance"
-  string todo = 4;        // e.g. "todo-instance"
-  string message = 5;     // e.g. "message-instance"
-  string crm = 6;         // e.g. "crm-instance"
-  string state = 7;       // e.g. "state-instance"
-}
-
-message UserConfig {
-  IdentityConfig identity = 1;
-  KanbanConfig kanban = 2;
-  OctoBusInstanceConfig instances = 3;
-  string knowledge_file = 4;       // Product knowledge file path (e.g. "/opt/knowledge/company-products.md")
-  string company_name = 5;         // Company name (e.g. "Acme Corp")
-  string company_english = 6;      // Company English name (e.g. "Acme")
-}
-
-message GetUserConfigResponse {
-  bool success = 1;
-  UserConfig config = 2;
-  string error = 3;
 }
 
 // ====== Agent Memory ======
 
 message RememberRequest {
-  string key = 1;                // Memory key (e.g. "crm_user:self")
+  string key = 1;                // Memory key (e.g. "customer:acme_corp")
   string value = 2;              // JSON string
   string type = 3;               // entity_cache | action_log | user_correction | commitment | session_summary
   int32 ttl_seconds = 4;         // 0=use type default, -1=never expire
@@ -445,7 +222,7 @@ message TaskInfo {
 }
 
 message CreateTaskRequest {
-  string task_id = 1;         // Optional, auto-generated
+  string task_id = 1;         // Optional, auto-generated if empty
   string name = 2;
   string description = 3;
   string assignee = 4;

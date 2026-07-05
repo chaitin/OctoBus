@@ -3,18 +3,18 @@
   "properties": {
     "dataDir": {
       "type": "string",
-      "description": "Data directory path, can be overridden via DATA_DIR env var",
+      "description": "Data directory path for persistent storage, can be overridden via DATA_DIR env var",
       "default": "./data"
     },
-    "projectsConfigPath": {
+    "tenant": {
       "type": "string",
-      "description": "Project config file path, can be overridden via PROJECTS_CONFIG env var",
-      "default": "./config/projects.yaml"
+      "description": "Tenant identifier for multi-tenant key namespacing, can be overridden via TENANT env var",
+      "default": "default"
     },
-    "userConfigPath": {
+    "userId": {
       "type": "string",
-      "description": "User personal config file path (identity/kanban/CRM/instance mapping), can be overridden via USER_CONFIG env var. New users only need to edit this one file during deployment.",
-      "default": "./config/user-config.json"
+      "description": "User identifier for memory isolation, can be overridden via USER_ID env var",
+      "default": "default"
     }
   }
 }
