@@ -1,0 +1,40 @@
+syntax = "proto3";
+package dingtalk.message.v1;
+
+service MessageService {
+  rpc SendDing(SendDingRequest) returns (SendDingResponse);
+  rpc SendGroupMessage(SendGroupMessageRequest) returns (SendGroupMessageResponse);
+  rpc SendMail(SendMailRequest) returns (SendMailResponse);
+}
+
+message SendDingRequest {
+  string user_id = 1;       // 接收者 userId
+  string content = 2;       // 消息内容
+}
+
+message SendDingResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+message SendGroupMessageRequest {
+  string group_id = 1;      // 群 ID（可选，与 chat_id 二选一）
+  string chat_id = 2;       // 会话 ID（可选）
+  string content = 3;
+}
+
+message SendGroupMessageResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+message SendMailRequest {
+  string to = 1;            // 收件人邮箱
+  string subject = 2;
+  string body = 3;
+}
+
+message SendMailResponse {
+  bool success = 1;
+  string error = 2;
+}

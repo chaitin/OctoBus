@@ -1,0 +1,14 @@
+{
+  "name": "@office-agent/dingtalk-message",
+  "displayName": "DingTalk Message",
+  "version": "0.1.0",
+  "description": "DingTalk Message — group chat messaging, robot push, notification delivery",
+  "type": "module",
+  "main": "bin/service.js",
+  "scripts": {
+    "start": "node bin/service.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.1.0"
+  }
+}

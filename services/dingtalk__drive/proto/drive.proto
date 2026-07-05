@@ -1,0 +1,155 @@
+syntax = "proto3";
+
+package dingtalk.drive.v1;
+
+service DriveService {
+  // 上传文件到云盘
+  rpc UploadFile(UploadFileRequest) returns (UploadFileResponse);
+  // 从云盘下载文件
+  rpc DownloadFile(DownloadFileRequest) returns (DownloadFileResponse);
+  // 列出文件/文件夹
+  rpc ListFiles(ListFilesRequest) returns (ListFilesResponse);
+  // 列出可用空间
+  rpc ListSpaces(ListSpacesRequest) returns (ListSpacesResponse);
+  // 获取文件元信息
+  rpc GetFileInfo(GetFileInfoRequest) returns (GetFileInfoResponse);
+  // 创建文件夹
+  rpc CreateFolder(CreateFolderRequest) returns (CreateFolderResponse);
+  // 删除文件
+  rpc DeleteFile(DeleteFileRequest) returns (DeleteFileResponse);
+  // 上传文件到文档空间（可作为附件插入文档）
+  rpc UploadToDocSpace(UploadToDocSpaceRequest) returns (UploadToDocSpaceResponse);
+}
+
+// ====== 上传文件到云盘 ======
+
+message UploadFileRequest {
+  string file_path = 1;       // 本地文件路径（容器内路径）
+  string file_name = 2;       // 可选，覆盖文件名
+  string space_id = 3;        // 目标空间 ID
+  string folder_id = 4;       // 目标文件夹 dentryUuid（可选）
+  string mime_type = 5;       // MIME 类型（可选，自动检测）
+}
+
+message UploadFileResponse {
+  bool success = 1;
+  string dentry_id = 2;       // 上传后的文件 ID
+  string file_url = 3;        // 文件访问 URL
+  string error = 4;
+}
+
+// ====== 下载文件 ======
+
+message DownloadFileRequest {
+  string dentry_id = 1;       // 文件 ID
+  string output_path = 2;     // 保存路径（容器内）
+}
+
+message DownloadFileResponse {
+  bool success = 1;
+  string local_path = 2;      // 下载后的本地路径
+  int64 file_size = 3;        // 文件大小（字节）
+  string error = 4;
+}
+
+// ====== 列出文件 ======
+
+message ListFilesRequest {
+  string space_id = 1;
+  string folder_id = 2;       // 可选，不传则列出根目录
+  int32 max_results = 3;      // 默认 20
+  string next_token = 4;      // 分页 token
+}
+
+message ListFilesResponse {
+  bool success = 1;
+  repeated FileEntry files = 2;
+  string next_token = 3;
+  string error = 4;
+}
+
+message FileEntry {
+  string dentry_id = 1;
+  string name = 2;
+  string type = 3;            // file / folder
+  int64 size = 4;
+  string updated_at = 5;
+  string url = 6;
+}
+
+// ====== 列出空间 ======
+
+message ListSpacesRequest {
+  string space_type = 1;      // org / personal（可选）
+}
+
+message ListSpacesResponse {
+  bool success = 1;
+  repeated SpaceEntry spaces = 2;
+  string error = 3;
+}
+
+message SpaceEntry {
+  string space_id = 1;
+  string name = 2;
+  string type = 3;            // org / personal
+}
+
+// ====== 获取文件信息 ======
+
+message GetFileInfoRequest {
+  string dentry_id = 1;
+}
+
+message GetFileInfoResponse {
+  bool success = 1;
+  string name = 2;
+  string type = 3;
+  int64 size = 4;
+  string url = 5;
+  string space_id = 6;
+  string created_at = 7;
+  string updated_at = 8;
+  string error = 9;
+}
+
+// ====== 创建文件夹 ======
+
+message CreateFolderRequest {
+  string name = 1;
+  string space_id = 2;
+  string parent_folder_id = 3; // 父文件夹 ID（可选）
+}
+
+message CreateFolderResponse {
+  bool success = 1;
+  string dentry_id = 2;
+  string error = 3;
+}
+
+// ====== 删除文件 ======
+
+message DeleteFileRequest {
+  string dentry_id = 1;
+}
+
+message DeleteFileResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+// ====== 上传到文档空间 ======
+
+message UploadToDocSpaceRequest {
+  string file_path = 1;       // 本地文件路径
+  string folder_node_id = 2;  // 文档空间文件夹节点 ID
+  string workspace_id = 3;    // 知识库 ID（可选）
+  bool convert = 4;           // 是否转换为在线文档
+}
+
+message UploadToDocSpaceResponse {
+  bool success = 1;
+  string node_id = 2;         // 上传后的文档节点 ID
+  string doc_url = 3;         // 文档 URL
+  string error = 4;
+}

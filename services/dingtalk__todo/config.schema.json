@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "dwsPath": {
+      "type": "string",
+      "description": "dws CLI path",
+      "default": "dws"
+    }
+  }
+}

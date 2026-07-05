@@ -1,0 +1,28 @@
+{
+  "_README": "Kanban config template — replace with your own AITable base/table ID and field option IDs",
+  "base_id": "YOUR_AITABLE_BASE_ID",
+  "table_id": "YOUR_AITABLE_TABLE_ID",
+  "fields": {
+    "date_start": "5wlytmi",
+    "date_end": "5sxy4yq",
+    "task_type": "wiisqll",
+    "description": "q3aj1jn",
+    "owner": "kkcfjj6",
+    "salesman": "6olqudb",
+    "weekly_summary": "x2ysb28",
+    "customer_tier": "dacnewp",
+    "sub_department": "cgrfhw7",
+    "status": "v5j63kh"
+  },
+  "task_types": {
+    "communication": { "id": "OPTION_ID", "name": "Communication" },
+    "documentation": { "id": "OPTION_ID", "name": "Documentation" },
+    "bidding": { "id": "OPTION_ID", "name": "Bidding" },
+    "poc": { "id": "OPTION_ID", "name": "POC" }
+  },
+  "customers": {
+    "customer_a": { "id": "OPTION_ID", "name": "Customer A Name" },
+    "customer_b": { "id": "OPTION_ID", "name": "Customer B Name" }
+  },
+  "status_done": { "id": "OPTION_ID", "name": "Done" }
+}

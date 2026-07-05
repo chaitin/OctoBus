@@ -1,0 +1,30 @@
+{
+  "type": "object",
+  "properties": {
+    "dwsPath": {
+      "type": "string",
+      "description": "dws CLI 可执行文件路径",
+      "default": "dws"
+    },
+    "stateDataDir": {
+      "type": "string",
+      "description": "state-manager 统一数据目录（doc_memory.json 等持久化文件存放于此），可通过 STATE_DATA_DIR 环境变量覆盖",
+      "default": "./data"
+    },
+    "backupDir": {
+      "type": "string",
+      "description": "文档备份目录，可通过 BACKUP_DIR 环境变量覆盖",
+      "default": "./backups"
+    },
+    "maxDocSize": {
+      "type": "integer",
+      "description": "全文更新的最大文档字符数，超过此值需使用块编辑",
+      "default": 10000
+    },
+    "dwsTimeout": {
+      "type": "integer",
+      "description": "dws 命令超时时间（毫秒）",
+      "default": 60000
+    }
+  }
+}

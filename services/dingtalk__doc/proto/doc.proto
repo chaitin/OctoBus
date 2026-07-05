@@ -1,0 +1,225 @@
+syntax = "proto3";
+package dingtalk.doc.v1;
+
+// 钉钉文档操作服务
+// 封装 dws CLI 的文档读写、块编辑、备份等操作
+service DocService {
+  // 读取文档全文
+  rpc ReadDoc(ReadDocRequest) returns (ReadDocResponse);
+  // 全文覆盖更新（<10000字的文档）
+  rpc UpdateDoc(UpdateDocRequest) returns (UpdateDocResponse);
+  // 创建新文档
+  rpc CreateDoc(CreateDocRequest) returns (CreateDocResponse);
+  // 倒序插入简报（内部自动处理记忆+安全校验+备份）
+  // 这是一个复合方法，Agent 只需调用一次
+  rpc InsertBrief(InsertBriefRequest) returns (InsertBriefResponse);
+  // 块级操作（用于周记录等大文档编辑）
+  rpc ListBlocks(ListBlocksRequest) returns (ListBlocksResponse);
+  rpc UpdateBlock(UpdateBlockRequest) returns (UpdateBlockResponse);
+  rpc InsertBlockAfter(InsertBlockAfterRequest) returns (InsertBlockAfterResponse);
+  // 文档搜索
+  rpc SearchDocs(SearchDocsRequest) returns (SearchDocsResponse);
+  // 获取上次交流上下文（从记忆读取）
+  rpc GetLastContext(GetLastContextRequest) returns (GetLastContextResponse);
+  // 周会记录同步（块级编辑，移植自 Python weekly_sync）
+  rpc SyncWeekly(SyncWeeklyRequest) returns (SyncWeeklyResponse);
+  // 移动文档到指定文件夹（封装 dws doc move，用于整理归档）
+  rpc MoveDoc(MoveDocRequest) returns (MoveDocResponse);
+  // 创建文件夹（封装 dws doc folder create）
+  rpc CreateFolder(CreateFolderRequest) returns (CreateFolderResponse);
+  // 列出文件夹下的文档节点（封装 dws doc list，用于整理归档时查找散落文档）
+  rpc ListDocs(ListDocsRequest) returns (ListDocsResponse);
+}
+
+// ====== ReadDoc ======
+message ReadDocRequest {
+  string node_id = 1;  // 钉钉文档 nodeId
+}
+
+message ReadDocResponse {
+  bool success = 1;
+  string content = 2;   // 文档 Markdown 内容
+  string error = 3;
+}
+
+// ====== UpdateDoc ======
+message UpdateDocRequest {
+  string node_id = 1;
+  string content = 2;   // 新的完整内容
+}
+
+message UpdateDocResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+// ====== CreateDoc ======
+message CreateDocRequest {
+  string title = 1;          // 文档标题
+  string content = 2;        // 初始内容
+  string parent_folder = 3;  // 父文件夹 nodeId（可选）
+}
+
+message CreateDocResponse {
+  bool success = 1;
+  string node_id = 2;        // 新文档的 nodeId
+  string url = 3;            // 文档访问链接
+  string error = 4;
+}
+
+// ====== InsertBrief ======
+message InsertBriefRequest {
+  string node_id = 1;      // 目标文档 nodeId
+  string brief_content = 2; // 简报 Markdown 内容
+  string title = 3;         // 简报标题（用于记忆）
+}
+
+message InsertBriefResponse {
+  bool success = 1;
+  string backup_path = 2;   // 备份文件路径
+  string error = 3;
+}
+
+// ====== ListBlocks ======
+message ListBlocksRequest {
+  string node_id = 1;
+  int32 start_index = 2;    // 起始索引（0-based）
+  int32 end_index = 3;      // 结束索引（不含）
+}
+
+message BlockInfo {
+  string block_id = 1;
+  int32 index = 2;
+  string block_type = 3;    // heading, paragraph, list, etc.
+  string content = 4;       // 块的文本内容
+  int32 level = 5;          // heading level (1-6)
+}
+
+message ListBlocksResponse {
+  bool success = 1;
+  repeated BlockInfo blocks = 2;
+  string error = 3;
+}
+
+// ====== UpdateBlock ======
+message UpdateBlockRequest {
+  string node_id = 1;
+  string block_id = 2;
+  string content = 3;       // 新的块内容
+}
+
+message UpdateBlockResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+// ====== InsertBlockAfter ======
+message InsertBlockAfterRequest {
+  string node_id = 1;
+  string after_block_id = 2; // 在此块之后插入
+  string block_type = 3;     // heading / paragraph / list
+  string content = 4;
+  int32 level = 5;           // heading level（仅 heading 有效）
+}
+
+message InsertBlockAfterResponse {
+  bool success = 1;
+  string new_block_id = 2;
+  string error = 3;
+}
+
+// ====== SearchDocs ======
+message SearchDocsRequest {
+  string keyword = 1;
+  int32 max_results = 2;     // 默认 10
+}
+
+message DocSearchResult {
+  string node_id = 1;
+  string title = 2;
+  string url = 3;
+  string snippet = 4;        // 匹配片段
+}
+
+message SearchDocsResponse {
+  bool success = 1;
+  repeated DocSearchResult results = 2;
+  string error = 3;
+}
+
+// ====== GetLastContext ======
+message GetLastContextRequest {
+  string node_id = 1;        // 文档 nodeId
+  int32 max_length = 2;      // 最大返回字符数（默认 800）
+}
+
+message GetLastContextResponse {
+  bool success = 1;
+  string context = 2;        // 上次交流的简报内容
+  string last_title = 3;     // 上次简报标题
+  string error = 4;
+}
+
+// ====== SyncWeekly ======
+message SyncWeeklyRequest {
+  string node_id = 1;              // 周会记录文档 nodeId
+  string user_name = 2;            // Target user name (e.g. "Alice")
+  repeated WeeklyEntry entries = 3; // 待同步条目
+}
+
+message WeeklyEntry {
+  string summary = 1;              // 一句话摘要
+  string category = 2;             // 沟通交流/文档材料/投标谈判/POC及其他
+  string date = 3;                 // YYYY-MM-DD
+}
+
+message SyncWeeklyResponse {
+  bool success = 1;
+  string week_id = 2;              // 实际写入的周日期
+  int32 synced_count = 3;          // 成功写入的条目数
+  bool saved_for_later = 4;        // true = 未找到目标段落，条目已留存
+  string error = 5;
+}
+
+// ====== MoveDoc ======
+message MoveDocRequest {
+  string node_id = 1;            // 要移动的文档 nodeId
+  string target_folder_id = 2;   // 目标父文件夹 nodeId
+}
+
+message MoveDocResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+// ====== CreateFolder ======
+message CreateFolderRequest {
+  string name = 1;               // 文件夹名称（必填）
+  string parent_folder_id = 2;   // 父文件夹 nodeId（可选，空=根目录）
+}
+
+message CreateFolderResponse {
+  bool success = 1;
+  string folder_id = 2;          // 新建文件夹的 nodeId
+  string error = 3;
+}
+
+// ====== ListDocs ======
+message ListDocsRequest {
+  string folder_id = 1;          // 父文件夹 nodeId（空=根目录）
+  int32 page_size = 2;           // 每页数量（默认 50）
+}
+
+message DocNodeInfo {
+  string node_id = 1;
+  string title = 2;
+  string type = 3;               // doc / folder
+  string url = 4;
+}
+
+message ListDocsResponse {
+  bool success = 1;
+  repeated DocNodeInfo docs = 2;
+  string next_page_token = 3;    // 分页 token（空=无下一页）
+  string error = 4;
+}

@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "properties": {
+    "dwsPath": {
+      "type": "string",
+      "description": "dws CLI path",
+      "default": "dws"
+    },
+    "kanbanConfigPath": {
+      "type": "string",
+      "description": "看板配置文件路径（kanban.json），用于字段映射",
+      "default": "./config/kanban.json"
+    }
+  }
+}

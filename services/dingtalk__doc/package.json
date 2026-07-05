@@ -1,0 +1,14 @@
+{
+  "name": "@office-agent/dingtalk-doc",
+  "displayName": "DingTalk Doc",
+  "version": "0.1.0",
+  "description": "DingTalk Doc — document read/write, folder management, knowledge base operations",
+  "type": "module",
+  "main": "bin/doc-service.js",
+  "scripts": {
+    "start": "node bin/doc-service.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.1.0"
+  }
+}
