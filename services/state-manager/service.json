@@ -1,0 +1,12 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "state-manager",
+  "displayName": "Agent State Manager",
+  "description": "Persistent memory, cognitive distillation, task tracking, and audit logging for stateless AI agents — Memory Engine, Distillation Engine, Task State Machine, and Event Log.",
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/state.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json"
+}

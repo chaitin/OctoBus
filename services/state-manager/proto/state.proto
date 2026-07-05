@@ -1,0 +1,582 @@
+syntax = "proto3";
+package state.manager.v1;
+
+// Agent State Manager
+// OctoBus service package: state-manager -> Agent State Manager
+// Provides: project config, weekly buffer, meeting tracking, user config, memory engine, distillation engine, task state machine, event log, general storage
+service StateManagerService {
+  // ====== Project Config ======
+  // Get project config by key
+  rpc GetProject(GetProjectRequest) returns (GetProjectResponse);
+  // List all projects
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
+  // Match project by keywords
+  rpc MatchProject(MatchProjectRequest) returns (MatchProjectResponse);
+
+  // ====== Weekly Pending Buffer (migrated to memory engine, internally delegates to Remember/Recall/Forget) ======
+  // Add a pending weekly summary item -> Remember(type=commitment, key=weekly_item:...)
+  rpc AddPendingItem(AddPendingItemRequest) returns (AddPendingItemResponse);
+  // Get all pending sync items -> Recall(prefix=weekly_item:, type=commitment)
+  rpc GetPendingItems(GetPendingItemsRequest) returns (GetPendingItemsResponse);
+  // Clear pending buffer -> Forget(prefix=weekly_item:, type=commitment)
+  rpc ClearPending(ClearPendingRequest) returns (ClearPendingResponse);
+
+  // ====== Meeting Tracking (migrated to memory engine, internally delegates to Remember/Recall/Forget) ======
+  // Register a meeting -> Remember(type=commitment, key=meeting:{eventId})
+  rpc RegisterMeeting(RegisterMeetingRequest) returns (RegisterMeetingResponse);
+  // Get pending meetings -> Recall(prefix=meeting:, type=commitment) + filtering
+  rpc GetPendingMeetings(GetPendingMeetingsRequest) returns (GetPendingMeetingsResponse);
+  // Update meeting state -> Recall + Remember update
+  rpc UpdateMeetingState(UpdateMeetingStateRequest) returns (UpdateMeetingStateResponse);
+
+  // ====== User Config ======
+  // Read user personal config (identity/kanban/CRM/defaults)
+  rpc GetUserConfig(GetUserConfigRequest) returns (GetUserConfigResponse);
+
+  // ====== Agent Memory ======
+  // Write a memory entry
+  rpc Remember(RememberRequest) returns (RememberResponse);
+  // Read memory (exact match or prefix match)
+  rpc Recall(RecallRequest) returns (RecallResponse);
+  // Delete memory
+  rpc Forget(ForgetRequest) returns (ForgetResponse);
+  // Get memory engine runtime statistics
+  rpc GetMemoryStats(GetMemoryStatsRequest) returns (GetMemoryStatsResponse);
+
+  // ====== Distillation Engine ======
+  // Manually trigger a full distillation pass
+  rpc Distill(DistillRequest) returns (DistillResponse);
+  // Get distillation statistics
+  rpc GetDistillStats(GetDistillStatsRequest) returns (GetDistillStatsResponse);
+
+  // ====== Task State Machine ======
+  // Create a task
+  rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
+  // Update task state
+  rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse);
+  // Add/update a step
+  rpc UpdateStep(UpdateStepRequest) returns (UpdateStepResponse);
+  // Get a single task
+  rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
+  // List tasks (with filtering)
+  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+  // Get task statistics
+  rpc GetTaskStats(GetTaskStatsRequest) returns (GetTaskStatsResponse);
+
+  // ====== Event Log ======
+  // Log an event
+  rpc LogEvent(LogEventRequest) returns (LogEventResponse);
+  // Query events
+  rpc QueryEvents(QueryEventsRequest) returns (QueryEventsResponse);
+  // Get event log statistics
+  rpc GetEventStats(GetEventStatsRequest) returns (GetEventStatsResponse);
+
+  // ====== General KV ======
+  rpc GetState(GetStateRequest) returns (GetStateResponse);
+  rpc SetState(SetStateRequest) returns (SetStateResponse);
+}
+
+// ====== Project Config ======
+
+message GetProjectRequest {
+  string key = 1;  // Project key (e.g. yidong_ai_plus)
+}
+
+message ProjectConfig {
+  string key = 1;
+  string name = 2;
+  string node_id = 3;
+  string customer = 4;
+  repeated string keywords = 5;
+  string detail_folder = 6;
+  string background = 7;      // Customer background (pinned info)
+}
+
+message GetProjectResponse {
+  bool success = 1;
+  ProjectConfig project = 2;
+  string error = 3;
+}
+
+message ListProjectsRequest {}
+
+message ListProjectsResponse {
+  bool success = 1;
+  repeated ProjectConfig projects = 2;
+  string error = 3;
+}
+
+message MatchProjectRequest {
+  string text = 1;  // Text to match (e.g. calendar title or note content)
+}
+
+message MatchProjectResponse {
+  bool success = 1;
+  ProjectConfig project = 2;  // Matched project (may be empty)
+  float confidence = 3;       // Match confidence 0-1
+  string error = 4;
+}
+
+// ====== Weekly Pending Buffer ======
+
+message AddPendingItemRequest {
+  string summary = 1;     // One-line summary (max 30 chars)
+  string category = 2;    // Category: Communication / Documentation / Bidding / POC & Others
+  string date = 3;        // Date YYYY-MM-DD
+}
+
+message AddPendingItemResponse {
+  bool success = 1;
+  int32 pending_count = 2;  // Current pending total
+  string error = 3;
+}
+
+message GetPendingItemsRequest {}
+
+message PendingItem {
+  string summary = 1;
+  string category = 2;
+  string date = 3;
+}
+
+message GetPendingItemsResponse {
+  bool success = 1;
+  repeated PendingItem items = 2;
+  string error = 3;
+}
+
+message ClearPendingRequest {}
+
+message ClearPendingResponse {
+  bool success = 1;
+  int32 cleared_count = 2;  // Number of entries cleared
+  string error = 3;
+}
+
+// ====== Meeting Tracking ======
+
+message RegisterMeetingRequest {
+  string event_id = 1;     // Calendar event ID
+  string summary = 2;      // Meeting title
+  string start_time = 3;   // ISO time
+  string end_time = 4;     // ISO time
+  repeated string attendees = 5;
+}
+
+message RegisterMeetingResponse {
+  bool success = 1;
+  bool is_new = 2;         // Whether newly registered (false = already exists)
+  string error = 3;
+}
+
+message GetPendingMeetingsRequest {
+  int32 grace_hours = 1;   // Hours past end time to be considered pending (default 24)
+}
+
+message MeetingInfo {
+  string event_id = 1;
+  string summary = 2;
+  string start_time = 3;
+  string end_time = 4;
+  repeated string attendees = 5;
+  string state = 6;        // registered / notes_submitted / doc_created / reminded
+}
+
+message GetPendingMeetingsResponse {
+  bool success = 1;
+  repeated MeetingInfo meetings = 2;
+  string error = 3;
+}
+
+message UpdateMeetingStateRequest {
+  string event_id = 1;
+  string new_state = 2;    // notes_submitted / doc_created / reminded
+}
+
+message UpdateMeetingStateResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+// ====== User Config ======
+
+message GetUserConfigRequest {}
+
+message KanbanFieldConfig {
+  string start_date = 1;        // field ID for Start Date
+  string end_date = 2;          // field ID for Due Date
+  string task_type = 3;         // field ID for Task Type
+  string task_desc = 4;         // field ID for Task Description
+  string sales = 5;             // field ID for Sales
+  string owner = 6;             // field ID for Owner
+  string notes = 7;             // field ID for Description
+  string customer_l1 = 8;       // field ID for Customer Tier
+  string customer_l2 = 9;       // field ID for Sub-department
+  string status = 10;           // field ID for Status
+  string presale = 11;          // field ID for Pre-sales
+  string crm_link = 12;         // field ID for CRM Project Link
+}
+
+message KanbanOptionConfig {
+  string id = 1;
+  string name = 2;
+}
+
+message KanbanTaskTypeConfig {
+  repeated KanbanOptionConfig communication = 1;   // Communication
+  repeated KanbanOptionConfig documentation = 2;   // Documentation
+  repeated KanbanOptionConfig bidding = 3;          // Bidding
+  repeated KanbanOptionConfig poc = 4;              // POC & Others
+}
+
+message KanbanStatusConfig {
+  repeated KanbanOptionConfig completed = 1;        // Done
+  repeated KanbanOptionConfig in_progress = 2;      // In Progress
+}
+
+message KanbanCustomerConfig {
+  repeated KanbanOptionConfig customers = 1;
+}
+
+message KanbanConfig {
+  string base_id = 1;
+  string table_id = 2;
+  string instance = 3;                             // OctoBus instance name (e.g. "aitable-instance")
+  KanbanFieldConfig fields = 4;
+  KanbanTaskTypeConfig task_types = 5;
+  KanbanStatusConfig statuses = 6;
+  KanbanCustomerConfig customers = 7;
+}
+
+message IdentityConfig {
+  string user_id = 1;              // Login name (e.g. "user01")
+  string display_name = 2;         // Display name (e.g. "Alice")
+  string role = 3;                 // Role (e.g. "Pre-sales")
+  string crm_user_id = 4;          // CRM system user ID (look up via ListUsers on first use)
+  string default_sales_user_id = 5;// Default sales userId (e.g. "sales01")
+  string default_sales_name = 6;   // Default sales name (e.g. "Bob")
+  string team = 7;                 // Team name (e.g. "Enterprise Pre-sales")
+}
+
+message OctoBusInstanceConfig {
+  string aitable = 1;     // e.g. "aitable-instance"
+  string doc = 2;         // e.g. "doc-instance"
+  string calendar = 3;    // e.g. "calendar-instance"
+  string todo = 4;        // e.g. "todo-instance"
+  string message = 5;     // e.g. "message-instance"
+  string crm = 6;         // e.g. "crm-instance"
+  string state = 7;       // e.g. "state-instance"
+}
+
+message UserConfig {
+  IdentityConfig identity = 1;
+  KanbanConfig kanban = 2;
+  OctoBusInstanceConfig instances = 3;
+  string knowledge_file = 4;       // Product knowledge file path (e.g. "/opt/knowledge/company-products.md")
+  string company_name = 5;         // Company name (e.g. "Acme Corp")
+  string company_english = 6;      // Company English name (e.g. "Acme")
+}
+
+message GetUserConfigResponse {
+  bool success = 1;
+  UserConfig config = 2;
+  string error = 3;
+}
+
+// ====== Agent Memory ======
+
+message RememberRequest {
+  string key = 1;                // Memory key (e.g. "crm_user:self")
+  string value = 2;              // JSON string
+  string type = 3;               // entity_cache | action_log | user_correction | commitment | session_summary
+  int32 ttl_seconds = 4;         // 0=use type default, -1=never expire
+  int32 dedup_window_sec = 5;    // 0=use type default
+  double confidence = 6;         // 0=use type default
+}
+
+message RememberResponse {
+  bool success = 1;
+  bool unchanged = 2;            // Dedup hit, not actually written
+  int32 evicted_count = 3;       // Entries evicted due to capacity
+  string error = 4;
+}
+
+message RecallRequest {
+  string key = 1;                // Exact match (mutually exclusive with prefix)
+  string prefix = 2;             // Prefix match
+  string type = 3;               // Filter by type
+  int32 limit = 4;               // Max entries to return, default 10
+}
+
+message MemoryEntry {
+  string key = 1;
+  string value = 2;              // JSON string
+  string type = 3;
+  double confidence = 4;
+  string created_at = 5;         // ISO 8601
+  string expires_at = 6;         // ISO 8601, empty=never expire
+}
+
+message RecallResponse {
+  bool success = 1;
+  repeated MemoryEntry entries = 2;
+  string error = 3;
+}
+
+message ForgetRequest {
+  string key = 1;                // Exact delete (mutually exclusive with prefix)
+  string prefix = 2;             // Batch prefix delete
+  string type = 3;               // Filter by type
+}
+
+message ForgetResponse {
+  bool success = 1;
+  int32 deleted_count = 2;
+  string error = 3;
+}
+
+// ====== General KV ======
+
+message GetStateRequest {
+  string key = 1;
+}
+
+message GetStateResponse {
+  bool success = 1;
+  string value = 2;       // JSON string
+  string error = 3;
+}
+
+message SetStateRequest {
+  string key = 1;
+  string value = 2;       // JSON string
+}
+
+message SetStateResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+// ====== Memory Engine Statistics ======
+
+message GetMemoryStatsRequest {}
+
+message TypeStats {
+  int32 count = 1;
+  int32 protected_count = 2;
+}
+
+message GetMemoryStatsResponse {
+  bool success = 1;
+  int32 total_entries = 2;
+  map<string, TypeStats> type_stats = 3;
+  int64 remember_calls = 4;
+  int64 recall_calls = 5;
+  int64 forget_calls = 6;
+  int64 total_evictions = 7;
+  int64 total_dedups = 8;
+  string tenant = 9;
+  string user_id = 10;
+  string error = 11;
+}
+
+// ====== Distillation Engine ======
+
+message DistillRequest {}
+
+message DistillSummary {
+  int32 compressed = 1;
+  int32 created = 2;
+  int32 deleted = 3;
+  string reason = 4;
+}
+
+message DistillResponse {
+  bool success = 1;
+  DistillSummary action_log = 2;
+  DistillSummary session_summary = 3;
+  int32 corrections_upgraded = 4;
+  int32 corrections_demoted = 5;
+  string error = 6;
+}
+
+message GetDistillStatsRequest {}
+
+message GetDistillStatsResponse {
+  bool success = 1;
+  int32 total_runs = 2;
+  string last_run_at = 3;
+  int64 action_log_compressed = 4;
+  int64 session_summary_compressed = 5;
+  int64 corrections_upgraded = 6;
+  string error = 7;
+}
+
+// ====== Task State Machine ======
+
+message TaskStep {
+  string step_id = 1;
+  string name = 2;
+  string state = 3;          // pending / running / done / skipped
+  string completed_at = 4;
+  string notes = 5;
+}
+
+message StateHistoryEntry {
+  string state = 1;
+  string at = 2;
+  string reason = 3;
+}
+
+message TaskInfo {
+  string task_id = 1;
+  string name = 2;
+  string description = 3;
+  string assignee = 4;
+  string state = 5;
+  string priority = 6;
+  string due_date = 7;
+  string current_step = 8;
+  repeated TaskStep steps = 9;
+  int32 progress = 10;       // 0-100 completion percentage
+  string created_at = 11;
+  string updated_at = 12;
+  repeated StateHistoryEntry state_history = 13;
+}
+
+message CreateTaskRequest {
+  string task_id = 1;         // Optional, auto-generated
+  string name = 2;
+  string description = 3;
+  string assignee = 4;
+  string due_date = 5;        // ISO 8601
+  repeated string steps = 6;
+  string priority = 7;        // high / medium / low
+}
+
+message CreateTaskResponse {
+  bool success = 1;
+  string task_id = 2;
+  string error = 3;
+}
+
+message UpdateTaskRequest {
+  string task_id = 1;
+  string new_state = 2;      // pending / running / done / failed / cancelled / timed_out
+  string reason = 3;
+}
+
+message UpdateTaskResponse {
+  bool success = 1;
+  string old_state = 2;
+  string new_state = 3;
+  string error = 4;
+}
+
+message UpdateStepRequest {
+  string task_id = 1;
+  string step_id = 2;        // Optional, adds new step if omitted
+  string name = 3;
+  string state = 4;          // pending / running / done / skipped
+  string notes = 5;
+}
+
+message UpdateStepResponse {
+  bool success = 1;
+  string step_id = 2;
+  string error = 3;
+}
+
+message GetTaskRequest {
+  string task_id = 1;
+}
+
+message GetTaskResponse {
+  bool success = 1;
+  TaskInfo task = 2;
+  string error = 3;
+}
+
+message ListTasksRequest {
+  string state = 1;          // Comma-separated, e.g. "pending,running"
+  string assignee = 2;
+  string priority = 3;
+  string due_before = 4;     // ISO 8601
+  string due_after = 5;
+  int32 limit = 6;
+}
+
+message ListTasksResponse {
+  bool success = 1;
+  repeated TaskInfo tasks = 2;
+  int32 total = 3;
+  string error = 4;
+}
+
+message GetTaskStatsRequest {}
+
+message GetTaskStatsResponse {
+  bool success = 1;
+  int32 total_tasks = 2;
+  map<string, int32> state_counts = 3;
+  int64 total_created = 4;
+  int64 total_completed = 5;
+  int64 total_failed = 6;
+  int64 total_timed_out = 7;
+  string error = 8;
+}
+
+// ====== Event Log ======
+
+message LogEventRequest {
+  string event_type = 1;     // e.g. agent.remember, loader.triggered
+  string actor = 2;          // Triggered by
+  string description = 3;
+  string data = 4;           // JSON string
+  string level = 5;          // info / warning / error
+}
+
+message LogEventResponse {
+  bool success = 1;
+  string event_id = 2;
+  string error = 3;
+}
+
+message EventInfo {
+  string event_id = 1;
+  string event_type = 2;
+  string actor = 3;
+  string description = 4;
+  string data = 5;           // JSON string
+  string level = 6;
+  string timestamp = 7;
+}
+
+message QueryEventsRequest {
+  string event_type = 1;     // Comma-separated
+  string actor = 2;
+  string level = 3;
+  string since = 4;          // ISO 8601
+  string until = 5;
+  string search = 6;         // Keyword search
+  int32 limit = 7;
+}
+
+message QueryEventsResponse {
+  bool success = 1;
+  repeated EventInfo events = 2;
+  int32 total = 3;
+  string error = 4;
+}
+
+message GetEventStatsRequest {}
+
+message GetEventStatsResponse {
+  bool success = 1;
+  int32 total_events = 2;
+  int64 total_logged = 3;
+  int64 total_rotated = 4;
+  string oldest_event = 5;
+  string newest_event = 6;
+  string error = 7;
+}
