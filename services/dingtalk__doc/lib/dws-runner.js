@@ -59,7 +59,7 @@ export async function runDws(command, options = {}) {
   const fullCommand = `${command} --yes`;
 
   return new Promise((resolve) => {
-    execFile('sh', ['-c', `${dwsPath} ${fullCommand}`], {
+    execFile('sh', ['-c', `${shellEscape(dwsPath)} ${fullCommand}`], {
       timeout,
       maxBuffer: 10 * 1024 * 1024, // 10MB
     }, (error, stdout, stderr) => {

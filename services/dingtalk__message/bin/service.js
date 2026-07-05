@@ -6,8 +6,9 @@ import { defineService, runServiceMain } from '@chaitin-ai/octobus-sdk';
 import { execFile } from 'child_process';
 
 function runDws(command, timeout = 60000) {
+  const dwsPath = process.env.DWS_PATH || 'dws';
   return new Promise((resolve) => {
-    execFile('sh', ['-c', `dws ${command} --yes --format json`], { timeout, maxBuffer: 10*1024*1024 },
+    execFile('sh', ['-c', `${dwsPath} ${command} --yes --format json`], { timeout, maxBuffer: 10*1024*1024 },
       (error, stdout) => {
         const raw = stdout.trim();
         let data = null;

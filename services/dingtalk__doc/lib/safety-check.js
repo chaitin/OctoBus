@@ -52,7 +52,8 @@ export async function backupDocument(nodeId, content, backupDir) {
   await mkdir(backupDir, { recursive: true });
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const filename = `${nodeId}_${timestamp}.md`;
+  const safeNodeId = String(nodeId).replace(/[^a-zA-Z0-9_-]/g, '_');
+  const filename = `${safeNodeId}_${timestamp}.md`;
   const filepath = join(backupDir, filename);
 
   await writeFile(filepath, content, 'utf-8');

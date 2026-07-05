@@ -39,7 +39,7 @@ const service = defineService({
     'dingtalk.doc.v1.DocService/ReadDoc': async (ctx) => {
       const { nodeId } = ctx.request;
       const result = await runDws(
-        `doc read --node-id ${nodeId}`,
+        `doc read --node-id ${shellEscape(nodeId)}`,
         { dwsPath: config.dwsPath, timeout: config.dwsTimeout }
       );
       // dws doc read 返回 JSON 对象: {markdown, nodeId, docUrl, ...}
@@ -67,7 +67,7 @@ const service = defineService({
       const tmpFile = await writeTempFile(cleanContent);
       try {
         const result = await runDws(
-          `doc update --node-id ${nodeId} --mode overwrite --content-file ${shellEscape(tmpFile)}`,
+          `doc update --node-id ${shellEscape(nodeId)} --mode overwrite --content-file ${shellEscape(tmpFile)}`,
           { dwsPath: config.dwsPath, timeout: config.dwsTimeout }
         );
         return { success: result.success, error: result.error };
@@ -86,7 +86,7 @@ const service = defineService({
       try {
         let cmd = `doc create --title ${shellEscape(title)} --content-file ${shellEscape(tmpFile)}`;
         if (parentFolder) {
-          cmd += ` --folder-id ${parentFolder}`;
+          cmd += ` --folder-id ${shellEscape(parentFolder)}`;
         }
         const result = await runDws(cmd, { dwsPath: config.dwsPath, timeout: config.dwsTimeout });
 
@@ -122,7 +122,7 @@ const service = defineService({
 
         // 2. 读取文档
         const readResult = await runDws(
-          `doc read --node-id ${nodeId}`,
+          `doc read --node-id ${shellEscape(nodeId)}`,
           { dwsPath: config.dwsPath, timeout: config.dwsTimeout }
         );
         if (!readResult.success) {
@@ -156,7 +156,7 @@ const service = defineService({
         const tmpFile = await writeTempFile(cleanContent);
         try {
           const writeResult = await runDws(
-            `doc update --node-id ${nodeId} --mode overwrite --content-file ${shellEscape(tmpFile)}`,
+            `doc update --node-id ${shellEscape(nodeId)} --mode overwrite --content-file ${shellEscape(tmpFile)}`,
             { dwsPath: config.dwsPath, timeout: config.dwsTimeout }
           );
           if (!writeResult.success) {
@@ -184,7 +184,7 @@ const service = defineService({
     'dingtalk.doc.v1.DocService/ListBlocks': async (ctx) => {
       const { nodeId, startIndex, endIndex } = ctx.request;
       const result = await runDws(
-        `doc block list --node ${nodeId} --start-index ${startIndex} --end-index ${endIndex}`,
+        `doc block list --node ${shellEscape(nodeId)} --start-index ${shellEscape(String(startIndex))} --end-index ${shellEscape(String(endIndex))}`,
         { dwsPath: config.dwsPath, timeout: config.dwsTimeout }
       );
 
@@ -223,7 +223,7 @@ const service = defineService({
       const tmpFile = await writeTempFile(content);
       try {
         const result = await runDws(
-          `doc block update --node ${nodeId} --block-id ${blockId} --content-file ${shellEscape(tmpFile)}`,
+          `doc block update --node ${shellEscape(nodeId)} --block-id ${shellEscape(blockId)} --content-file ${shellEscape(tmpFile)}`,
           { dwsPath: config.dwsPath, timeout: config.dwsTimeout }
         );
         return { success: result.success, error: result.error };
@@ -239,9 +239,9 @@ const service = defineService({
       const { nodeId, afterBlockId, blockType, content, level } = ctx.request;
       const tmpFile = await writeTempFile(content);
       try {
-        let cmd = `doc block insert --node ${nodeId} --after-block-id ${afterBlockId} --type ${blockType} --content-file ${shellEscape(tmpFile)}`;
+        let cmd = `doc block insert --node ${shellEscape(nodeId)} --after-block-id ${shellEscape(afterBlockId)} --type ${shellEscape(blockType)} --content-file ${shellEscape(tmpFile)}`;
         if (level && blockType === 'heading') {
-          cmd += ` --level ${level}`;
+          cmd += ` --level ${shellEscape(String(level))}`;
         }
         const result = await runDws(cmd, { dwsPath: config.dwsPath, timeout: config.dwsTimeout });
         const newBlockId = result.data?.blockId || result.data?.id || '';
@@ -258,7 +258,7 @@ const service = defineService({
       const { keyword, maxResults } = ctx.request;
       const limit = maxResults || 10;
       const result = await runDws(
-        `doc search --keyword ${shellEscape(keyword)} --limit ${limit}`,
+        `doc search --keyword ${shellEscape(keyword)} --limit ${shellEscape(String(limit))}`,
         { dwsPath: config.dwsPath, timeout: config.dwsTimeout }
       );
 
@@ -294,7 +294,7 @@ const service = defineService({
 
         // 读取文档，找到上次简报
         const readResult = await runDws(
-          `doc read --node-id ${nodeId}`,
+          `doc read --node-id ${shellEscape(nodeId)}`,
           { dwsPath: config.dwsPath, timeout: config.dwsTimeout }
         );
         if (!readResult.success) {
@@ -346,7 +346,7 @@ const service = defineService({
       // ── 辅助函数 ──
       const listBlocks = async (start, end) => {
         const result = await runDws(
-          `doc block list --node ${nodeId} --start-index ${start} --end-index ${end}`,
+          `doc block list --node ${shellEscape(nodeId)} --start-index ${shellEscape(String(start))} --end-index ${shellEscape(String(end))}`,
           { dwsPath: config.dwsPath, timeout: config.dwsTimeout }
         );
         if (!result.success) return [];
@@ -373,7 +373,7 @@ const service = defineService({
       const updateBlock = async (blockId, text) => {
         const safeText = shellEscape(text);
         const result = await runDws(
-          `doc block update --node ${nodeId} --block-id ${blockId} --type orderedList --text ${safeText} --fix-jsonml`,
+          `doc block update --node ${shellEscape(nodeId)} --block-id ${shellEscape(blockId)} --type orderedList --text ${safeText} --fix-jsonml`,
           { dwsPath: config.dwsPath, timeout: config.dwsTimeout }
         );
         return result.success;
@@ -382,7 +382,7 @@ const service = defineService({
       const insertBlockAfter = async (refBlockId, text) => {
         const safeText = shellEscape(text);
         const result = await runDws(
-          `doc block insert --node ${nodeId} --ref-block ${refBlockId} --type orderedList --text ${safeText} --fix-jsonml`,
+          `doc block insert --node ${shellEscape(nodeId)} --ref-block ${shellEscape(refBlockId)} --type orderedList --text ${safeText} --fix-jsonml`,
           { dwsPath: config.dwsPath, timeout: config.dwsTimeout }
         );
         return result.success;
@@ -585,7 +585,7 @@ const service = defineService({
         cmd += ` --folder ${shellEscape(folderId)}`;
       }
       if (pageSize && pageSize > 0) {
-        cmd += ` --page-size ${pageSize}`;
+        cmd += ` --page-size ${shellEscape(String(pageSize))}`;
       }
       const result = await runDws(cmd, { dwsPath: config.dwsPath, timeout: config.dwsTimeout });
       const rawItems = result.data?.nodes || result.data?.items || (Array.isArray(result.data) ? result.data : []);

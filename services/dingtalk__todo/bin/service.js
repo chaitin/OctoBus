@@ -7,7 +7,7 @@ import { defineService, runServiceMain } from '@chaitin-ai/octobus-sdk';
 import { execFile } from 'child_process';
 
 function runDws(command, timeout = 60000) {
-  const dwsPath = 'dws';
+  const dwsPath = process.env.DWS_PATH || 'dws';
   return new Promise((resolve) => {
     execFile('sh', ['-c', `${dwsPath} ${command} --yes --format json`], { timeout, maxBuffer: 10*1024*1024 },
       (error, stdout) => {
@@ -48,7 +48,7 @@ const service = defineService({
 
     'dingtalk.todo.v1.TodoService/ListTodos': async (ctx) => {
       const { isDone, limit } = ctx.request;
-      let cmd = `todo task list --size ${limit || 10}`;
+      let cmd = `todo task list --size ${parseInt(limit || 10, 10)}`;
       if (isDone === true) cmd += ` --status true`;
       else if (isDone === false) cmd += ` --status false`;
 

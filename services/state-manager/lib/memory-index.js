@@ -36,6 +36,9 @@ export class MemoryIndex {
   set(fullKey, entry) {
     const old = this.entries.get(fullKey);
 
+    // Store fullKey on the entry for O(1) reconstruction
+    entry._fullKey = fullKey;
+
     // 更新扁平 Map
     this.entries.set(fullKey, entry);
 
@@ -294,18 +297,28 @@ export class MemoryIndex {
   _deleteTrie(fullKey) {
     const segments = fullKey.split(':');
     let node = this.trie;
-    const path = [this.trie];
+    const path = [{ node: this.trie, key: null }];
 
     for (const seg of segments) {
       if (!node.has(seg)) return;
       node = node.get(seg);
-      path.push(node);
+      path.push({ node, key: seg });
     }
 
     // 删除叶子 entry
     node.delete('__entry__');
 
-    // 回溯清理空分支（可选优化，MVP 不做）
+    // 回溯清理空分支（防止 trie 内存泄漏）
+    for (let i = path.length - 1; i >= 1; i--) {
+      const { node: currentNode, key: currentKey } = path[i];
+      if (currentNode.size === 0) {
+        // 当前节点已空，从父节点中删除
+        path[i - 1].node.delete(currentKey);
+      } else {
+        // 该节点还有其他分支，停止回溯
+        break;
+      }
+    }
   }
 
   _collectLeaves(node, results) {
@@ -321,19 +334,13 @@ export class MemoryIndex {
   }
 
   _reconstructKey(entry) {
-    // 从 entry 的 metadata 重建 fullKey
-    // 这是一个简化实现：遍历 entries Map 反查
-    for (const [k, v] of this.entries) {
-      if (v === entry) return k;
-    }
-    return '';
+    // O(1): fullKey is stored on the entry at set() time
+    return entry._fullKey || '';
   }
 
   _findFullKey(entry) {
-    for (const [k, v] of this.entries) {
-      if (v.createdAt === entry.createdAt && v.type === entry.type) return k;
-    }
-    return '';
+    // O(1): fullKey is stored on the entry at set() time
+    return entry._fullKey || '';
   }
 
   _ensureTtlSorted() {
