@@ -216,12 +216,14 @@ export class EventLog {
         // 当前文件不存在，忽略
       }
 
-      // 清空内存
+      // 清空内存（only after successful save + file rotation）
       this.events = [];
       this._stats.totalRotated++;
       this._dirty = false;
     } catch (err) {
-      console.error('[EventLog] rotation error:', err.message);
+      // _save rejected — keep events in memory, do NOT rotate/clear.
+      // The next logEvent call will retry persistence.
+      console.error('[EventLog] rotation aborted (save failed, events held in memory):', err.message);
     }
   }
 
@@ -239,25 +241,27 @@ export class EventLog {
   }
 
   async _save() {
-    // 串行化并发写入，防止同一 tmp 文件冲突
-    this._saveChain = this._saveChain.then(async () => {
-      try {
-        await mkdir(this.dataDir, { recursive: true });
-        const data = {
-          version: 1,
-          updatedAt: new Date().toISOString(),
-          eventCount: this.events.length,
-          events: this.events,
-        };
-        const tmpPath = `${this.filePath}.${Date.now()}.tmp`;
-        await writeFile(tmpPath, JSON.stringify(data, null, 2), 'utf-8');
-        await rename(tmpPath, this.filePath);
-        this._dirty = false;
-      } catch (err) {
-        console.error('[EventLog] save error:', err.message);
-      }
-    }).catch(() => {});
-    return this._saveChain;
+    // 串行化并发写入，防止同一 tmp 文件冲突。
+    // The returned promise propagates errors so callers (_rotate, logEvent,
+    // shutdown) can detect persistence failures. The queue itself recovers
+    // after a failure so subsequent writes are not permanently blocked.
+    const writePromise = this._saveChain.then(async () => {
+      await mkdir(this.dataDir, { recursive: true });
+      const data = {
+        version: 1,
+        updatedAt: new Date().toISOString(),
+        eventCount: this.events.length,
+        events: this.events,
+      };
+      const tmpPath = `${this.filePath}.${Date.now()}.tmp`;
+      await writeFile(tmpPath, JSON.stringify(data, null, 2), 'utf-8');
+      await rename(tmpPath, this.filePath);
+      this._dirty = false;
+    });
+    this._saveChain = writePromise.catch((err) => {
+      console.error('[EventLog] save error (events held in memory, queue continues):', err.message);
+    });
+    return writePromise;
   }
 }
 

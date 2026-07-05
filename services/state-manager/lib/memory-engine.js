@@ -96,8 +96,22 @@ export class MemoryEngine {
     if (!this._writeQueues.has(type)) {
       this._writeQueues.set(type, Promise.resolve());
     }
-    const chain = this._writeQueues.get(type).then(fn, fn);
-    this._writeQueues.set(type, chain.catch(() => {}));
+    // Chain the current write onto the queue. If the previous write failed,
+    // log the error but still attempt the current write — in-memory state
+    // is the source of truth and must not be silently discarded.
+    // The per-write Promise returned to the caller propagates errors;
+    // the queue-level catch prevents a single failure from blocking the
+    // entire queue for subsequent writes.
+    const chain = this._writeQueues.get(type).then(
+      () => fn(),
+      (err) => {
+        console.error(`[MemoryEngine] prior write for type "${type}" failed, continuing with current write:`, err.message);
+        return fn();
+      }
+    );
+    this._writeQueues.set(type, chain.catch((err) => {
+      console.error(`[MemoryEngine] write queue error for type "${type}" (data held in memory, queue continues):`, err.message);
+    }));
     return chain;
   }
 

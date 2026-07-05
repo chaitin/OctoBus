@@ -395,26 +395,28 @@ export class TaskMachine {
   }
 
   async _save() {
-    // 串行化并发写入，防止更新丢失
-    this._saveChain = this._saveChain.then(async () => {
-      try {
-        await mkdir(dirname(this.filePath), { recursive: true });
-        const data = {
-          version: 1,
-          updatedAt: new Date().toISOString(),
-          taskCount: this.tasks.size,
-          tasks: Object.fromEntries(this.tasks),
-        };
-        const tmpPath = `${this.filePath}.${Date.now()}.tmp`;
-        await writeFile(tmpPath, JSON.stringify(data, null, 2), 'utf-8');
-        const { rename } = await import('node:fs/promises');
-        await rename(tmpPath, this.filePath);
-        this._dirty = false;
-      } catch (err) {
-        console.error('[TaskMachine] save error:', err.message);
-      }
-    }).catch(() => {});
-    return this._saveChain;
+    // 串行化并发写入，防止更新丢失。
+    // The returned promise propagates errors so callers (updateTask, createTask)
+    // can detect persistence failures. The queue itself recovers after a
+    // failure so subsequent writes are not permanently blocked.
+    const writePromise = this._saveChain.then(async () => {
+      await mkdir(dirname(this.filePath), { recursive: true });
+      const data = {
+        version: 1,
+        updatedAt: new Date().toISOString(),
+        taskCount: this.tasks.size,
+        tasks: Object.fromEntries(this.tasks),
+      };
+      const tmpPath = `${this.filePath}.${Date.now()}.tmp`;
+      await writeFile(tmpPath, JSON.stringify(data, null, 2), 'utf-8');
+      const { rename } = await import('node:fs/promises');
+      await rename(tmpPath, this.filePath);
+      this._dirty = false;
+    });
+    this._saveChain = writePromise.catch((err) => {
+      console.error('[TaskMachine] save error (tasks held in memory, queue continues):', err.message);
+    });
+    return writePromise;
   }
 }
 

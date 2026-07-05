@@ -28,8 +28,9 @@ function loadKanbanConfig(configPath) {
 
 function runDws(command, timeout = 60000) {
   const dwsPath = process.env.DWS_PATH || 'dws';
+  const escapedPath = `'${dwsPath.replace(/'/g, "'\\''")}'`;
   return new Promise((resolve) => {
-    execFile('sh', ['-c', `${dwsPath} ${command} --yes --format json`], { timeout, maxBuffer: 10*1024*1024 },
+    execFile('sh', ['-c', `${escapedPath} ${command} --yes --format json`], { timeout, maxBuffer: 10*1024*1024 },
       (error, stdout) => {
         const raw = stdout.trim();
         let data = null;

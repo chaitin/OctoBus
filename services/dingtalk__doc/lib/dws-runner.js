@@ -124,5 +124,6 @@ export async function cleanupTempFile(filePath) {
  * Shell 转义
  */
 export function shellEscape(str) {
-  return `'${str.replace(/'/g, "'\\''")}'`;
+  const s = String(str ?? '');
+  return `'${s.replace(/'/g, "'\\''")}'`;
 }
