@@ -353,7 +353,11 @@ export class TaskMachine {
 
     if (changed) {
       this._dirty = true;
-      await this._save();
+      try {
+        await this._save();
+      } catch (err) {
+        console.error('[TaskMachine] timeout check save failed (tasks held in memory):', err.message);
+      }
     }
   }
 
