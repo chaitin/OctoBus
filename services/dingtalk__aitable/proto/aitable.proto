@@ -1,0 +1,56 @@
+syntax = "proto3";
+package dingtalk.aitable.v1;
+
+service AITableService {
+  rpc CreateRecord(CreateRecordRequest) returns (CreateRecordResponse);
+  rpc QueryRecords(QueryRecordsRequest) returns (QueryRecordsResponse);
+  rpc CreateKanbanRecord(CreateKanbanRecordRequest) returns (CreateKanbanRecordResponse);
+}
+
+message CreateRecordRequest {
+  string base_id = 1;       // AI Table base ID
+  string table_id = 2;      // Table ID
+  map<string, string> fields = 3;  // 字段名 → 值
+}
+
+message CreateRecordResponse {
+  bool success = 1;
+  string record_id = 2;
+  string error = 3;
+}
+
+message QueryRecordsRequest {
+  string base_id = 1;
+  string table_id = 2;
+  string filter = 3;        // 筛选条件（可选）
+  int32 limit = 4;
+}
+
+message AITableRecord {
+  string record_id = 1;
+  map<string, string> fields = 2;
+}
+
+message QueryRecordsResponse {
+  bool success = 1;
+  repeated AITableRecord records = 2;
+  string error = 3;
+}
+
+// 看板记录创建（业务封装，自动处理字段映射）
+message CreateKanbanRecordRequest {
+  string summary = 1;        // 任务描述，如"【交流】与XX沟通XX项目"
+  string category = 2;       // 任务类型：沟通交流/文档材料/投标谈判/POC及其他
+  string customer = 3;       // 一级客户分类
+  string date = 4;           // 日期 YYYY-MM-DD
+  string task_type = 5;      // 具体任务类型名（对应 projects.yaml 中 task_types 的 key）
+  string description = 6;    // 必要说明
+  string salesman = 7;       // 销售 userId（从 user-config 读取，不设硬编码默认值）
+  string owner = 8;          // 任务 Owner userId
+}
+
+message CreateKanbanRecordResponse {
+  bool success = 1;
+  string record_id = 2;
+  string error = 3;
+}

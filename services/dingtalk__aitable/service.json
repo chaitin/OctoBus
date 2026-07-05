@@ -1,0 +1,12 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "dingtalk__aitable",
+  "displayName": "DingTalk AITable Service",
+  "description": "DingTalk AITable integration — record creation, querying, and kanban board writing via dws CLI.",
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/aitable.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json"
+}

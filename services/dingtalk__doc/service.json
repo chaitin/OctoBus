@@ -1,0 +1,12 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "dingtalk__doc",
+  "displayName": "DingTalk Document Service",
+  "description": "DingTalk Document integration — document read/write, block editing, and briefing insertion via dws CLI.",
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/doc.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json"
+}

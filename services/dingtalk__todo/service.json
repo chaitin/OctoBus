@@ -1,0 +1,12 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "dingtalk__todo",
+  "displayName": "DingTalk Todo Service",
+  "description": "DingTalk Todo integration — todo creation, listing, and completion marking via dws CLI.",
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/todo.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json"
+}

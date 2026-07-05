@@ -1,0 +1,14 @@
+{
+  "name": "@office-agent/dingtalk-calendar",
+  "displayName": "DingTalk Calendar",
+  "version": "0.1.0",
+  "description": "DingTalk Calendar — schedule queries, meeting management, free-busy detection",
+  "type": "module",
+  "main": "bin/service.js",
+  "scripts": {
+    "start": "node bin/service.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.1.0"
+  }
+}

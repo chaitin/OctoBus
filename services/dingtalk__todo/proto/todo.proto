@@ -1,0 +1,51 @@
+syntax = "proto3";
+package dingtalk.todo.v1;
+
+service TodoService {
+  rpc CreateTodo(CreateTodoRequest) returns (CreateTodoResponse);
+  rpc ListTodos(ListTodosRequest) returns (ListTodosResponse);
+  rpc MarkDone(MarkDoneRequest) returns (MarkDoneResponse);
+}
+
+message CreateTodoRequest {
+  string title = 1;
+  string description = 2;
+  string due_date = 3;      // ISO 时间（可选）
+  string assignee_id = 4;   // 钉钉 userId（默认自己）
+}
+
+message CreateTodoResponse {
+  bool success = 1;
+  string todo_id = 2;
+  string error = 3;
+}
+
+message ListTodosRequest {
+  bool is_done = 1;         // 筛选完成状态（可选）
+  int32 limit = 2;
+}
+
+message TodoItem {
+  string todo_id = 1;
+  string title = 2;
+  string description = 3;
+  bool is_done = 4;
+  string due_date = 5;
+  string created_at = 6;
+}
+
+message ListTodosResponse {
+  bool success = 1;
+  repeated TodoItem todos = 2;
+  string error = 3;
+}
+
+message MarkDoneRequest {
+  string keyword = 1;       // 按关键词匹配待办标题
+}
+
+message MarkDoneResponse {
+  bool success = 1;
+  int32 matched_count = 2;
+  string error = 3;
+}

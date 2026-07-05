@@ -1,0 +1,14 @@
+{
+  "name": "@office-agent/dingtalk-todo",
+  "displayName": "DingTalk Todo",
+  "version": "0.1.0",
+  "description": "DingTalk Todo — task creation, completion, queries, and reminders",
+  "type": "module",
+  "main": "bin/service.js",
+  "scripts": {
+    "start": "node bin/service.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.1.0"
+  }
+}

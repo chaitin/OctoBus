@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package DingDing_GroupRobot;
 
-option go_package = "miner/grpc-service/DingDing_GroupRobot";
+option go_package = "octobus/dingtalk_group_robot";
 
 // DingDing_GroupRobot 提供钉钉群自定义机器人消息推送能力，通过统一 Engine gRPC service 封装钉钉 Webhook 接口。
 service DingDing_GroupRobot {

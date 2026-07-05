@@ -1,0 +1,12 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "dingtalk__calendar",
+  "displayName": "DingTalk Calendar Service",
+  "description": "DingTalk Calendar integration — schedule querying and meeting creation via dws CLI.",
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/calendar.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json"
+}

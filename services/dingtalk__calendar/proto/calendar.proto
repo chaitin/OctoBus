@@ -1,0 +1,43 @@
+syntax = "proto3";
+package dingtalk.calendar.v1;
+
+service CalendarService {
+  rpc ListEvents(ListEventsRequest) returns (ListEventsResponse);
+  rpc CreateEvent(CreateEventRequest) returns (CreateEventResponse);
+}
+
+message ListEventsRequest {
+  string start = 1;    // ISO 时间（起始）
+  string end = 2;      // ISO 时间（结束）
+}
+
+message CalendarEvent {
+  string id = 1;
+  string summary = 2;
+  string start = 3;
+  string end = 4;
+  bool is_all_day = 5;
+  string description = 6;
+  string location = 7;
+  repeated string attendees = 8;
+}
+
+message ListEventsResponse {
+  bool success = 1;
+  repeated CalendarEvent events = 2;
+  string error = 3;
+}
+
+message CreateEventRequest {
+  string title = 1;
+  string start = 2;         // ISO 时间
+  string end = 3;           // ISO 时间
+  string location = 4;      // 地点（可选）
+  repeated string attendees = 5;  // 参与者 userId 列表（可选）
+}
+
+message CreateEventResponse {
+  bool success = 1;
+  string event_id = 2;
+  string error = 3;
+}

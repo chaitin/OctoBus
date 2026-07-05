@@ -1,0 +1,12 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "dingtalk__message",
+  "displayName": "DingTalk Message Service",
+  "description": "DingTalk Message integration — DING messages, group messages, and email via dws CLI.",
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/message.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json"
+}
