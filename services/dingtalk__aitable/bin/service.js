@@ -27,8 +27,9 @@ function loadKanbanConfig(configPath) {
 }
 
 function runDws(command, timeout = 60000) {
+  const dwsPath = process.env.DWS_PATH || 'dws';
   return new Promise((resolve) => {
-    execFile('sh', ['-c', `dws ${command} --yes --format json`], { timeout, maxBuffer: 10*1024*1024 },
+    execFile('sh', ['-c', `${dwsPath} ${command} --yes --format json`], { timeout, maxBuffer: 10*1024*1024 },
       (error, stdout) => {
         const raw = stdout.trim();
         let data = null;
@@ -81,7 +82,7 @@ const service = defineService({
 
     'dingtalk.aitable.v1.AITableService/QueryRecords': async (ctx) => {
       const { baseId, tableId, limit } = ctx.request;
-      const cmd = `aitable record list --base-id ${shellEscape(baseId)} --table-id ${shellEscape(tableId)} --limit ${limit || 10}`;
+      const cmd = `aitable record list --base-id ${shellEscape(baseId)} --table-id ${shellEscape(tableId)} --limit ${shellEscape(String(parseInt(limit || 10, 10)))}`;
 
       const res = await runDws(cmd);
       if (!res.success) return { success: false, records: [], error: res.error };

@@ -42,6 +42,8 @@ export class MemoryEngine {
       totalEvictions: 0,
       totalDedups: 0,
     };
+    // per-type Promise 串行队列，确保容量检查→淘汰→写入原子化
+    this._writeQueues = new Map();
   }
 
   /**
@@ -90,6 +92,20 @@ export class MemoryEngine {
     }
   }
 
+  /**
+   * 串行化 per-type 写入操作，防止并发竞态导致容量超限
+   * @param {string} type
+   * @param {() => Promise<any>} fn
+   */
+  async _enqueueWrite(type, fn) {
+    if (!this._writeQueues.has(type)) {
+      this._writeQueues.set(type, Promise.resolve());
+    }
+    const chain = this._writeQueues.get(type).then(fn, fn);
+    this._writeQueues.set(type, chain.catch(() => {}));
+    return chain;
+  }
+
   // ─── Remember ───
 
   /**
@@ -104,7 +120,7 @@ export class MemoryEngine {
       const fullKey = this._fullKey(resolved.type, resolved.key);
       const now = new Date();
 
-      // 去重检查
+      // 去重检查（读操作，无需串行化）
       const existing = this.index.get(fullKey);
       if (existing && resolved.dedupWindowSec > 0) {
         const createdMs = new Date(existing.createdAt).getTime();
@@ -140,20 +156,22 @@ export class MemoryEngine {
         protected: resolved.protected,
       };
 
-      // 容量检查 + 淘汰
+      // 容量检查 + 淘汰 + 写入 + 持久化 在 per-type 队列中串行化
       let evictedCount = 0;
-      const currentCount = this.index.getTypeCount(resolved.type);
-      const maxEntries = resolved.maxEntries;
-      if (!existing && currentCount >= maxEntries) {
-        evictedCount = await this._evict(resolved.type, resolved.evictPolicy, currentCount - maxEntries + 1);
-        this._stats.totalEvictions += evictedCount;
-      }
+      await this._enqueueWrite(resolved.type, async () => {
+        const currentCount = this.index.getTypeCount(resolved.type);
+        const maxEntries = resolved.maxEntries;
+        if (!existing && currentCount >= maxEntries) {
+          evictedCount = await this._evict(resolved.type, resolved.evictPolicy, currentCount - maxEntries + 1);
+          this._stats.totalEvictions += evictedCount;
+        }
 
-      // 写入索引
-      this.index.set(fullKey, entry);
+        // 写入索引
+        this.index.set(fullKey, entry);
 
-      // 持久化
-      await this._persistType(resolved.type);
+        // 持久化
+        await this._persistType(resolved.type);
+      });
 
       this._log('remember', { key: resolved.key, type: resolved.type, result: existing ? 'updated' : 'created', evicted: evictedCount });
       return { success: true, unchanged: false, evictedCount, error: '' };

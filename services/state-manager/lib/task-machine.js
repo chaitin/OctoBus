@@ -37,6 +37,7 @@ export class TaskMachine {
     this.checkIntervalMs = opts.checkIntervalMs || 60000;
     this._timer = null;
     this._dirty = false;
+    this._saveChain = Promise.resolve();  // 串行化并发 _save 调用
 
     // Statistics
     this._stats = {
@@ -394,22 +395,26 @@ export class TaskMachine {
   }
 
   async _save() {
-    try {
-      await mkdir(dirname(this.filePath), { recursive: true });
-      const data = {
-        version: 1,
-        updatedAt: new Date().toISOString(),
-        taskCount: this.tasks.size,
-        tasks: Object.fromEntries(this.tasks),
-      };
-      const tmpPath = this.filePath + '.tmp';
-      await writeFile(tmpPath, JSON.stringify(data, null, 2), 'utf-8');
-      const { rename } = await import('node:fs/promises');
-      await rename(tmpPath, this.filePath);
-      this._dirty = false;
-    } catch (err) {
-      console.error('[TaskMachine] save error:', err.message);
-    }
+    // 串行化并发写入，防止更新丢失
+    this._saveChain = this._saveChain.then(async () => {
+      try {
+        await mkdir(dirname(this.filePath), { recursive: true });
+        const data = {
+          version: 1,
+          updatedAt: new Date().toISOString(),
+          taskCount: this.tasks.size,
+          tasks: Object.fromEntries(this.tasks),
+        };
+        const tmpPath = `${this.filePath}.${Date.now()}.tmp`;
+        await writeFile(tmpPath, JSON.stringify(data, null, 2), 'utf-8');
+        const { rename } = await import('node:fs/promises');
+        await rename(tmpPath, this.filePath);
+        this._dirty = false;
+      } catch (err) {
+        console.error('[TaskMachine] save error:', err.message);
+      }
+    }).catch(() => {});
+    return this._saveChain;
   }
 }
 

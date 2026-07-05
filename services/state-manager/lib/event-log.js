@@ -35,6 +35,7 @@ export class EventLog {
     // 内存中的事件缓冲（最近的事件）
     this.events = [];
     this._dirty = false;
+    this._saveChain = Promise.resolve();  // 串行化并发 _save 调用
 
     // 统计
     this._stats = {
@@ -88,7 +89,8 @@ export class EventLog {
         await this._rotate();
       }
 
-      // 立即持久化（事件日志要求可靠写入）
+      // 立即持久化（事件日志要求可靠写入，串行化防并发损坏）
+      this._dirty = true;
       await this._save();
 
       return { success: true, event_id: eventId, error: '' };
@@ -193,6 +195,9 @@ export class EventLog {
    */
   async _rotate() {
     try {
+      // 先落盘内存中的事件，防止轮转时丢数据
+      await this._save();
+
       // 递增轮转文件编号
       for (let i = this.maxFiles - 1; i >= 1; i--) {
         const from = join(this.dataDir, `event_log.${i}.json`);
@@ -234,21 +239,25 @@ export class EventLog {
   }
 
   async _save() {
-    try {
-      await mkdir(this.dataDir, { recursive: true });
-      const data = {
-        version: 1,
-        updatedAt: new Date().toISOString(),
-        eventCount: this.events.length,
-        events: this.events,
-      };
-      const tmpPath = this.filePath + '.tmp';
-      await writeFile(tmpPath, JSON.stringify(data, null, 2), 'utf-8');
-      await rename(tmpPath, this.filePath);
-      this._dirty = false;
-    } catch (err) {
-      console.error('[EventLog] save error:', err.message);
-    }
+    // 串行化并发写入，防止同一 tmp 文件冲突
+    this._saveChain = this._saveChain.then(async () => {
+      try {
+        await mkdir(this.dataDir, { recursive: true });
+        const data = {
+          version: 1,
+          updatedAt: new Date().toISOString(),
+          eventCount: this.events.length,
+          events: this.events,
+        };
+        const tmpPath = `${this.filePath}.${Date.now()}.tmp`;
+        await writeFile(tmpPath, JSON.stringify(data, null, 2), 'utf-8');
+        await rename(tmpPath, this.filePath);
+        this._dirty = false;
+      } catch (err) {
+        console.error('[EventLog] save error:', err.message);
+      }
+    }).catch(() => {});
+    return this._saveChain;
   }
 }
 

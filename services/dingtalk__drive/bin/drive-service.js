@@ -112,7 +112,7 @@ const service = defineService({
       let cmd = `drive list`;
       if (spaceId)   cmd += ` --space-id ${shellEscape(spaceId)}`;
       if (folderId)  cmd += ` --folder ${shellEscape(folderId)}`;
-      if (maxResults) cmd += ` --max-results ${maxResults}`;
+      if (maxResults) cmd += ` --max-results ${shellEscape(String(parseInt(maxResults, 10)))}`;
       if (nextToken)  cmd += ` --next-token ${shellEscape(nextToken)}`;
 
       const res = await runDws(cmd);
