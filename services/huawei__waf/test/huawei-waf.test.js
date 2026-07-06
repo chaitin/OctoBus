@@ -232,6 +232,12 @@ test('handles HTTP transport errors', async () => {
     'UNAVAILABLE',
   );
 
+  setFetch(async () => response(401, 'unauthorized'));
+  await expectGrpcError(
+    () => handlers['Huawei_WAF.Huawei_WAF/ListRules']({ ...ctx(), request: {} }),
+    'PERMISSION_DENIED',
+  );
+
   setFetch(async () => response(400, 'bad request'));
   await expectGrpcError(
     () => handlers['Huawei_WAF.Huawei_WAF/ListRules']({ ...ctx(), request: {} }),
