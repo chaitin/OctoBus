@@ -1,0 +1,13 @@
+{
+  "name": "api7-enterprise-v3-10-2",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "api7-enterprise-v3-10-2": "bin/api7-enterprise-v3-10-2.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.6.0",
+    "undici": "^7.16.0"
+  }
+}

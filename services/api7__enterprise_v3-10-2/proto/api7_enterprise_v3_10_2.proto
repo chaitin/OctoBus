@@ -1,0 +1,419 @@
+syntax = "proto3";
+
+package API7_Enterprise_V3_10_2;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
+
+option go_package = "miner/grpc-service/API7_Enterprise_V3_10_2";
+
+service API7_Enterprise_V3_10_2 {
+  rpc ListAuditLogs(ListAuditLogsRequest) returns (ListResponse) {}
+  rpc ExportAuditLogs(ExportAuditLogsRequest) returns (BlobResponse) {}
+  rpc ListAlertPolicies(ListAlertPoliciesRequest) returns (ListResponse) {}
+  rpc ListAlertHistories(ListAlertHistoriesRequest) returns (ListResponse) {}
+  rpc ListUsers(ListUsersRequest) returns (ListResponse) {}
+  rpc ListRoles(ListRolesRequest) returns (ListResponse) {}
+  rpc ListTokens(ListTokensRequest) returns (ListResponse) {}
+  rpc ListConsumers(ListConsumersRequest) returns (ListResponse) {}
+  rpc ListConsumerCredentials(ListConsumerCredentialsRequest) returns (ListResponse) {}
+  rpc ListCertificates(ListCertificatesRequest) returns (ListResponse) {}
+  rpc ListCACertificates(ListCertificatesRequest) returns (ListResponse) {}
+  rpc ListSNIs(ListSNIsRequest) returns (ListResponse) {}
+  rpc GetCertificateUsage(GetCertificateUsageRequest) returns (ListResponse) {}
+  rpc ListGatewayGroups(ListGatewayGroupsRequest) returns (ListResponse) {}
+  rpc ListGatewayInstances(ListGatewayInstancesRequest) returns (ListResponse) {}
+  rpc ListRoutes(ListRoutesRequest) returns (ListResponse) {}
+  rpc ListServices(ListServicesRequest) returns (ListResponse) {}
+  rpc ListGlobalRules(ListGlobalRulesRequest) returns (ListResponse) {}
+  rpc ListPlugins(ListPluginsRequest) returns (ObjectResponse) {}
+  rpc GetPluginSchema(GetPluginSchemaRequest) returns (ObjectResponse) {}
+  rpc ListApprovals(ListApprovalsRequest) returns (ListResponse) {}
+  rpc ListSecretProviders(ListSecretProvidersRequest) returns (ListResponse) {}
+  rpc GetSecretProviderUsage(GetSecretProviderUsageRequest) returns (ListResponse) {}
+  rpc ParseCertificate(ParseCertificateRequest) returns (ObjectResponse) {}
+  rpc ValidateCertificateKey(ValidateCertificateKeyRequest) returns (ObjectResponse) {}
+  rpc ListDebugSessions(ListDebugSessionsRequest) returns (ListResponse) {}
+  rpc ListDebugTraces(ListDebugTracesRequest) returns (ListResponse) {}
+  rpc GetServiceHealthcheck(GetServiceHealthcheckRequest) returns (ObjectResponse) {}
+  rpc CreateToken(CreateTokenRequest) returns (ObjectResponse) {}
+  rpc CreateConsumer(CreateConsumerRequest) returns (ObjectResponse) {}
+  rpc CreateConsumerCredential(CreateConsumerCredentialRequest) returns (ObjectResponse) {}
+  rpc CreateCertificate(CreateCertificateRequest) returns (ObjectResponse) {}
+  rpc CreateSNI(CreateSNIRequest) returns (ObjectResponse) {}
+  rpc CreateService(CreateServiceRequest) returns (ObjectResponse) {}
+  rpc CreateRoute(CreateRouteRequest) returns (ObjectResponse) {}
+  rpc CreateGlobalRule(CreateGlobalRuleRequest) returns (ObjectResponse) {}
+}
+
+message PagingRequest {
+  google.protobuf.Int64Value page = 1;
+  google.protobuf.Int64Value page_size = 2 [json_name = "pageSize"];
+  string direction = 3;
+  string order_by = 4 [json_name = "orderBy"];
+  string search = 5;
+}
+
+message ListAuditLogsRequest {
+  google.protobuf.Int64Value page = 1;
+  google.protobuf.Int64Value page_size = 2 [json_name = "pageSize"];
+  string direction = 3;
+  string order_by = 4 [json_name = "orderBy"];
+  string event_type = 5 [json_name = "eventType"];
+  string operator_id = 6 [json_name = "operatorId"];
+  string gateway_group_id = 7 [json_name = "gatewayGroupId"];
+  string resource_id = 8 [json_name = "resourceId"];
+  google.protobuf.Int64Value start_at = 9 [json_name = "startAt"];
+  google.protobuf.Int64Value end_at = 10 [json_name = "endAt"];
+}
+
+message ExportAuditLogsRequest {
+  string format = 1;
+  string event_type = 2 [json_name = "eventType"];
+  string operator_id = 3 [json_name = "operatorId"];
+  string gateway_group_id = 4 [json_name = "gatewayGroupId"];
+  string resource_id = 5 [json_name = "resourceId"];
+  google.protobuf.Int64Value start_at = 6 [json_name = "startAt"];
+  google.protobuf.Int64Value end_at = 7 [json_name = "endAt"];
+}
+
+message ListAlertPoliciesRequest {
+  google.protobuf.Int64Value page = 1;
+  google.protobuf.Int64Value page_size = 2 [json_name = "pageSize"];
+  string direction = 3;
+  string order_by = 4 [json_name = "orderBy"];
+  string search = 5;
+  map<string, string> labels = 6;
+  repeated string status = 7;
+  repeated string severity = 8;
+}
+
+message ListAlertHistoriesRequest {
+  google.protobuf.Int64Value page = 1;
+  google.protobuf.Int64Value page_size = 2 [json_name = "pageSize"];
+  string direction = 3;
+  string order_by = 4 [json_name = "orderBy"];
+  string search = 5;
+  string alert_policy_id = 6 [json_name = "alertPolicyId"];
+  repeated string severity = 7;
+  google.protobuf.Int64Value start_at = 8 [json_name = "startAt"];
+  google.protobuf.Int64Value end_at = 9 [json_name = "endAt"];
+  string gateway_group_id = 10 [json_name = "gatewayGroupId"];
+}
+
+message ListUsersRequest {
+  google.protobuf.Int64Value page = 1;
+  google.protobuf.Int64Value page_size = 2 [json_name = "pageSize"];
+  string direction = 3;
+  string order_by = 4 [json_name = "orderBy"];
+  repeated string roles = 5;
+}
+
+message ListRolesRequest {
+  google.protobuf.Int64Value page = 1;
+  google.protobuf.Int64Value page_size = 2 [json_name = "pageSize"];
+  string direction = 3;
+  string order_by = 4 [json_name = "orderBy"];
+  string search = 5;
+  map<string, string> labels = 6;
+}
+
+message ListTokensRequest {
+  google.protobuf.Int64Value page = 1;
+  google.protobuf.Int64Value page_size = 2 [json_name = "pageSize"];
+  string direction = 3;
+  string order_by = 4 [json_name = "orderBy"];
+  string search = 5;
+}
+
+message ListConsumersRequest {
+  string gateway_group_id = 1 [json_name = "gatewayGroupId"];
+  google.protobuf.Int64Value page = 2;
+  google.protobuf.Int64Value page_size = 3 [json_name = "pageSize"];
+  string direction = 4;
+  string order_by = 5 [json_name = "orderBy"];
+  string search = 6;
+  map<string, string> labels = 7;
+}
+
+message ListConsumerCredentialsRequest {
+  string username = 1;
+  string gateway_group_id = 2 [json_name = "gatewayGroupId"];
+  string plugin_name = 3 [json_name = "pluginName"];
+  google.protobuf.Int64Value page = 4;
+  google.protobuf.Int64Value page_size = 5 [json_name = "pageSize"];
+  string direction = 6;
+  string order_by = 7 [json_name = "orderBy"];
+  string search = 8;
+  map<string, string> labels = 9;
+}
+
+message ListCertificatesRequest {
+  string gateway_group_id = 1 [json_name = "gatewayGroupId"];
+  google.protobuf.Int64Value page = 2;
+  google.protobuf.Int64Value page_size = 3 [json_name = "pageSize"];
+  string direction = 4;
+  string order_by = 5 [json_name = "orderBy"];
+  string search = 6;
+  map<string, string> labels = 7;
+  string sni_id = 8 [json_name = "sniId"];
+  string sni_name = 9 [json_name = "sniName"];
+  google.protobuf.Int64Value exptime = 10;
+}
+
+message ListSNIsRequest {
+  string gateway_group_id = 1 [json_name = "gatewayGroupId"];
+  google.protobuf.Int64Value page = 2;
+  google.protobuf.Int64Value page_size = 3 [json_name = "pageSize"];
+  string direction = 4;
+  string order_by = 5 [json_name = "orderBy"];
+  string search = 6;
+  map<string, string> labels = 7;
+  string domain = 8;
+  google.protobuf.BoolValue mtls_enabled = 9 [json_name = "mtlsEnabled"];
+}
+
+message GetCertificateUsageRequest {
+  string gateway_group_id = 1 [json_name = "gatewayGroupId"];
+  string certificate_id = 2 [json_name = "certificateId"];
+  string resource_type = 3 [json_name = "resourceType"];
+  google.protobuf.Int64Value page = 4;
+  google.protobuf.Int64Value page_size = 5 [json_name = "pageSize"];
+  string direction = 6;
+  string order_by = 7 [json_name = "orderBy"];
+}
+
+message ListGatewayGroupsRequest {
+  google.protobuf.Int64Value page = 1;
+  google.protobuf.Int64Value page_size = 2 [json_name = "pageSize"];
+  string direction = 3;
+  string order_by = 4 [json_name = "orderBy"];
+  string search = 5;
+  string name = 6;
+  map<string, string> labels = 7;
+}
+
+message ListGatewayInstancesRequest {
+  string gateway_group_id = 1 [json_name = "gatewayGroupId"];
+  google.protobuf.Int64Value page = 2;
+  google.protobuf.Int64Value page_size = 3 [json_name = "pageSize"];
+  string direction = 4;
+  string order_by = 5 [json_name = "orderBy"];
+  string search = 6;
+  string status = 7;
+  string compatibility = 8;
+}
+
+message ListRoutesRequest {
+  string gateway_group_id = 1 [json_name = "gatewayGroupId"];
+  string service_id = 2 [json_name = "serviceId"];
+  google.protobuf.Int64Value page = 3;
+  google.protobuf.Int64Value page_size = 4 [json_name = "pageSize"];
+  string direction = 5;
+  string order_by = 6 [json_name = "orderBy"];
+  string search = 7;
+  google.protobuf.BoolValue with_publish_info = 8 [json_name = "withPublishInfo"];
+}
+
+message ListServicesRequest {
+  string gateway_group_id = 1 [json_name = "gatewayGroupId"];
+  google.protobuf.Int64Value page = 2;
+  google.protobuf.Int64Value page_size = 3 [json_name = "pageSize"];
+  string direction = 4;
+  string order_by = 5 [json_name = "orderBy"];
+  string search = 6;
+  google.protobuf.BoolValue unhealthy_nodes = 7 [json_name = "unhealthyNodes"];
+  map<string, string> labels = 8;
+  string hosts = 9;
+  string type = 10;
+  google.protobuf.BoolValue with_publish_info = 11 [json_name = "withPublishInfo"];
+}
+
+message ListGlobalRulesRequest {
+  string gateway_group_id = 1 [json_name = "gatewayGroupId"];
+  google.protobuf.Int64Value page = 2;
+  google.protobuf.Int64Value page_size = 3 [json_name = "pageSize"];
+  string direction = 4;
+  string order_by = 5 [json_name = "orderBy"];
+  string search = 6;
+}
+
+message ListPluginsRequest {
+  string subsystem = 1;
+}
+
+message GetPluginSchemaRequest {
+  string plugin_name = 1 [json_name = "pluginName"];
+  string subsystem = 2;
+}
+
+message ListApprovalsRequest {
+  google.protobuf.Int64Value page = 1;
+  google.protobuf.Int64Value page_size = 2 [json_name = "pageSize"];
+  string direction = 3;
+  string order_by = 4 [json_name = "orderBy"];
+  string search = 5;
+  string status = 6;
+  string result = 7;
+  string event = 8;
+  string resource_type = 9 [json_name = "resourceType"];
+  string resource_name = 10 [json_name = "resourceName"];
+  string operator_name = 11 [json_name = "operatorName"];
+  string applicant_name = 12 [json_name = "applicantName"];
+}
+
+message ListSecretProvidersRequest {
+  string gateway_group_id = 1 [json_name = "gatewayGroupId"];
+  google.protobuf.Int64Value page = 2;
+  google.protobuf.Int64Value page_size = 3 [json_name = "pageSize"];
+  string direction = 4;
+  string order_by = 5 [json_name = "orderBy"];
+  string search = 6;
+}
+
+message GetSecretProviderUsageRequest {
+  string gateway_group_id = 1 [json_name = "gatewayGroupId"];
+  string secret_provider = 2 [json_name = "secretProvider"];
+  string secret_provider_id = 3 [json_name = "secretProviderId"];
+  string resource_type = 4 [json_name = "resourceType"];
+  google.protobuf.Int64Value page = 5;
+  google.protobuf.Int64Value page_size = 6 [json_name = "pageSize"];
+  string direction = 7;
+  string order_by = 8 [json_name = "orderBy"];
+}
+
+message ParseCertificateRequest {
+  string cert = 1;
+}
+
+message ValidateCertificateKeyRequest {
+  string cert = 1;
+  string key = 2;
+}
+
+message ListDebugSessionsRequest {
+  string gateway_group_id = 1 [json_name = "gatewayGroupId"];
+  google.protobuf.Int64Value page = 2;
+  google.protobuf.Int64Value page_size = 3 [json_name = "pageSize"];
+  string direction = 4;
+  string order_by = 5 [json_name = "orderBy"];
+  string search = 6;
+}
+
+message ListDebugTracesRequest {
+  string gateway_group_id = 1 [json_name = "gatewayGroupId"];
+  string debug_session_id = 2 [json_name = "debugSessionId"];
+}
+
+message GetServiceHealthcheckRequest {
+  string gateway_group_id = 1 [json_name = "gatewayGroupId"];
+  string apisix_service_id = 2 [json_name = "apisixServiceId"];
+  string upstream_id = 3 [json_name = "upstreamId"];
+}
+
+
+message CreateTokenRequest {
+  string name = 1;
+  int64 expires_at = 2 [json_name = "expiresAt"];
+}
+
+message CreateConsumerRequest {
+  string gateway_group_id = 1 [json_name = "gatewayGroupId"];
+  string username = 2;
+  string desc = 3;
+  map<string, string> labels = 4;
+  google.protobuf.Struct plugins = 5;
+}
+
+message CreateConsumerCredentialRequest {
+  string username = 1;
+  string gateway_group_id = 2 [json_name = "gatewayGroupId"];
+  string name = 3;
+  string desc = 4;
+  map<string, string> labels = 5;
+  google.protobuf.Struct plugins = 6;
+}
+
+message CreateCertificateRequest {
+  string gateway_group_id = 1 [json_name = "gatewayGroupId"];
+  string name = 2;
+  string desc = 3;
+  map<string, string> labels = 4;
+  string cert = 5;
+  string key = 6;
+}
+
+message CreateSNIRequest {
+  string gateway_group_id = 1 [json_name = "gatewayGroupId"];
+  string name = 2;
+  string desc = 3;
+  string domain = 4;
+  repeated string certificates = 5;
+  google.protobuf.Struct mtls = 6;
+  google.protobuf.Struct plugins = 7;
+}
+
+message UpstreamNode {
+  string host = 1;
+  int32 port = 2;
+  int32 weight = 3;
+  int32 priority = 4;
+}
+
+message CreateServiceRequest {
+  string gateway_group_id = 1 [json_name = "gatewayGroupId"];
+  string name = 2;
+  string desc = 3;
+  map<string, string> labels = 4;
+  string type = 5;
+  repeated string hosts = 6;
+  string path_prefix = 7 [json_name = "pathPrefix"];
+  google.protobuf.BoolValue strip_path_prefix = 8 [json_name = "stripPathPrefix"];
+  google.protobuf.Struct plugins = 9;
+  string upstream_scheme = 10 [json_name = "upstreamScheme"];
+  string upstream_pass_host = 11 [json_name = "upstreamPassHost"];
+  string upstream_host = 12 [json_name = "upstreamHost"];
+  repeated UpstreamNode upstream_nodes = 13 [json_name = "upstreamNodes"];
+}
+
+message CreateRouteRequest {
+  string gateway_group_id = 1 [json_name = "gatewayGroupId"];
+  string service_id = 2 [json_name = "serviceId"];
+  string name = 3;
+  string desc = 4;
+  map<string, string> labels = 5;
+  repeated string methods = 6;
+  repeated string paths = 7;
+  int32 priority = 8;
+  google.protobuf.BoolValue enable_websocket = 9 [json_name = "enableWebsocket"];
+  google.protobuf.Struct plugins = 10;
+  google.protobuf.Struct timeout = 11;
+  google.protobuf.ListValue vars = 12;
+}
+
+message CreateGlobalRuleRequest {
+  string gateway_group_id = 1 [json_name = "gatewayGroupId"];
+  google.protobuf.Struct plugins = 2;
+}
+
+message ListResponse {
+  int32 http_status = 1;
+  string raw_body = 2;
+  int64 count = 3;
+  repeated google.protobuf.Value results = 4;
+  google.protobuf.Value raw_json = 5;
+}
+
+message ObjectResponse {
+  int32 http_status = 1;
+  string raw_body = 2;
+  google.protobuf.Value raw_json = 3;
+}
+
+message BlobResponse {
+  int32 http_status = 1;
+  string raw_body = 2;
+  string content_type = 3 [json_name = "contentType"];
+  string filename = 4;
+  google.protobuf.Value raw_json = 5;
+}

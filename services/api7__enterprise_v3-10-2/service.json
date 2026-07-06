@@ -1,0 +1,12 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "api7-enterprise-v3-10-2",
+  "displayName": "API7 Enterprise 3.10.2",
+  "description": "OctoBus service package for API7 Enterprise Admin APIs focused on security operations and gateway governance.",
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/api7_enterprise_v3_10_2.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json"
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "api7_base_url": {
+      "type": "string",
+      "minLength": 1,
+      "description": "API7 Enterprise base URL, for example https://api7.example.com"
+    },
+    "baseUrl": {
+      "type": "string"
+    },
+    "restBaseUrl": {
+      "type": "string"
+    },
+    "gateway_group_id": {
+      "type": "string",
+      "description": "Default gateway group ID for APISIX admin style list operations."
+    },
+    "gatewayGroupId": {
+      "type": "string"
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000
+    },
+    "headers": {
+      "description": "Optional JSON object or JSON string with extra HTTP headers.",
+      "oneOf": [
+        { "type": "object", "additionalProperties": { "type": ["string", "number", "boolean"] } },
+        { "type": "string" }
+      ]
+    },
+    "skipTlsVerify": { "type": "boolean" },
+    "tlsInsecureSkipVerify": { "type": "boolean" },
+    "insecureSkipVerify": { "type": "boolean" }
+  },
+  "required": ["api7_base_url"]
+}
