@@ -92,10 +92,25 @@ test('handles empty response', async () => {
 });
 
 test('maps HTTP errors', async () => {
+  setFetch(async () => response(401, 'unauthorized'));
+  await expectGrpcError(
+    () => handlers['Shodan_InternetDB.Shodan_InternetDB/LookupIP']({ ...ctx(), request: { ip: '0.0.0.0' } }),
+    'PERMISSION_DENIED',
+  );
+  setFetch(async () => response(403, 'forbidden'));
+  await expectGrpcError(
+    () => handlers['Shodan_InternetDB.Shodan_InternetDB/LookupIP']({ ...ctx(), request: { ip: '0.0.0.0' } }),
+    'PERMISSION_DENIED',
+  );
   setFetch(async () => response(404, 'not found'));
   await expectGrpcError(
     () => handlers['Shodan_InternetDB.Shodan_InternetDB/LookupIP']({ ...ctx(), request: { ip: '0.0.0.0' } }),
     'FAILED_PRECONDITION',
+  );
+  setFetch(async () => response(429, 'too many'));
+  await expectGrpcError(
+    () => handlers['Shodan_InternetDB.Shodan_InternetDB/LookupIP']({ ...ctx(), request: { ip: '0.0.0.0' } }),
+    'UNAVAILABLE',
   );
   setFetch(async () => response(500, 'error'));
   await expectGrpcError(
