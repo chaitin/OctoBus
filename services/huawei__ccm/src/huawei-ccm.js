@@ -165,7 +165,7 @@ const parseJson = (text) => {
 };
 
 const mapHttpError = (res, bodyText) => {
-  if (res.status === 403) throw errorWithCode('PERMISSION_DENIED', `upstream http ${res.status}`);
+  if (res.status === 401 || res.status === 403) throw errorWithCode('PERMISSION_DENIED', `upstream http ${res.status}`);
   if (res.status === 429) throw errorWithCode('UNAVAILABLE', `upstream http ${res.status}`);
   if (res.status >= 400 && res.status < 500) throw errorWithCode('FAILED_PRECONDITION', `upstream http ${res.status}`);
   throw errorWithCode('UNAVAILABLE', `upstream http ${res.status}`);
