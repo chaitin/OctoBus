@@ -108,6 +108,11 @@ test('maps 403 to PERMISSION_DENIED', async () => {
   await expectGrpcError(() => handlers['AlienVault_OTX.AlienVault_OTX/CheckIP']({ ...ctx(), request: { ip: '8.8.8.8' } }), 'PERMISSION_DENIED');
 });
 
+test('maps 401 to PERMISSION_DENIED', async () => {
+  setFetch(async () => response(401, 'unauthorized'));
+  await expectGrpcError(() => handlers['AlienVault_OTX.AlienVault_OTX/CheckIP']({ ...ctx(), request: { ip: '8.8.8.8' } }), 'PERMISSION_DENIED');
+});
+
 test('maps 429 to UNAVAILABLE', async () => {
   setFetch(async () => response(429, 'too many'));
   await expectGrpcError(() => handlers['AlienVault_OTX.AlienVault_OTX/CheckIP']({ ...ctx(), request: { ip: '8.8.8.8' } }), 'UNAVAILABLE');
