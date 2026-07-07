@@ -114,9 +114,24 @@ export class EventLog {
    * @returns {object} { success, events, total, error }
    */
   async queryEvents(filter = {}) {
+    // 1. 先查内存中的事件
     let results = [...this.events];
 
-    // 按事件类型过滤
+    // 2. 读取轮转文件中的历史事件
+    const { readFile } = await import('node:fs/promises');
+    for (let i = 1; i <= this.maxFiles; i++) {
+      const rotatedPath = join(this.dataDir, `event_log.${i}.json`);
+      try {
+        const raw = await readFile(rotatedPath, 'utf-8');
+        const parsed = JSON.parse(raw);
+        const events = Array.isArray(parsed) ? parsed : (parsed.events || []);
+        results.push(...events);
+      } catch {
+        // 文件不存在，跳过
+      }
+    }
+
+    // 3. 按事件类型过滤
     if (filter.event_type) {
       const types = filter.event_type.split(',');
       results = results.filter(e => types.includes(e.event_type));
