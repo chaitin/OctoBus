@@ -393,6 +393,10 @@ const services = {
     entryFile: "../venus__ips_v6079/bin/venus-ips-v6079.js",
     serviceModule: "../venus__ips_v6079/src/service.js",
   },
+  "venus-tar": {
+    entryFile: "../venus__tar/bin/venus-tar.js",
+    serviceModule: "../venus__tar/src/service.js",
+  },
   "wangsu-label-ip": {
     entryFile: "../wangsu__label-ip/bin/wangsu-label-ip.js",
     serviceModule: "../wangsu__label-ip/src/service.js",
