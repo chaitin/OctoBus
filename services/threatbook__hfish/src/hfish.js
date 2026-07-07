@@ -94,25 +94,13 @@ export function rpcdef(ctx) {
   const meta = ctx.meta || {};
   const skipTlsVerify = Boolean(bindings.tlsInsecureSkipVerify || bindings.skipTlsVerify || bindings.skip_tls_verify || bindings.tls_insecure_skip_verify);
 
-  // TLS skip must be configured at the process level (e.g. OctoBus daemon sets
-  // the relevant env var before spawning the subprocess), NOT by mutating
-  // process.env inside rpcdef. Mutating process.env is a global, irreversible
-  // side effect that disables TLS verification for the entire Node.js process
-  // — affecting all services, handlers, and even third-party library HTTPS
-  // calls. If different instances have different skipTlsVerify configs, one
-  // instance's skip would break another's security.
-  // The insecureSkipVerify/tlsInsecureSkipVerify fetch options below are kept
-  // as OctoBus runtime conventions; the daemon may intercept them or set the
-  // env var externally before process start.
-  if (skipTlsVerify && process.env.TLS_REJECT_UNAUTHORIZED !== '0') {
-    const inst = meta.instance_id || meta.instanceId || 'unknown';
-    console.warn(
-      `[ThreatBook_HFISH][TLS] skipTlsVerify=true but TLS rejection is not disabled. ` +
-      `TLS certificate verification will NOT be skipped. ` +
-      `Disable TLS rejection at process startup (e.g. via OctoBus daemon config) or export it before running. ` +
-      `[inst=${inst}]`,
-    );
-  }
+  // TLS skip is handled at the process level by the OctoBus daemon, which
+  // sets the appropriate environment variable before spawning the subprocess.
+  // Handler code must NOT mutate process.env — that would be a global,
+  // irreversible side effect affecting all services and third-party HTTPS
+  // calls in the process. The insecureSkipVerify/tlsInsecureSkipVerify fetch
+  // options below are OctoBus runtime conventions; the daemon may intercept
+  // them or configure TLS externally before process start.
 
   const logFlow = (action, details) => {
     const inst = meta.instance_id || meta.instanceId;
