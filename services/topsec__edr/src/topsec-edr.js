@@ -20,6 +20,7 @@
 //   3. sign = MD5(token + stime + nonce + "dO(QK*EX@cTG")
 
 import crypto from 'node:crypto';
+import { Agent } from 'undici';
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
@@ -193,15 +194,19 @@ const toBoolean = (value) => {
   return false;
 };
 
+// Lazy singleton for insecure TLS dispatcher (undici Agent with rejectUnauthorized: false)
+let insecureTlsDispatcher;
+const getInsecureTlsDispatcher = () => {
+  insecureTlsDispatcher ??= new Agent({ connect: { rejectUnauthorized: false } });
+  return insecureTlsDispatcher;
+};
+
 const buildTlsOptions = (ctx = {}) => {
   const bindings = ctx.bindings || {};
   // Only skip TLS verification when explicitly enabled by the user
-  if (toBoolean(bindings.skipTlsVerify) || toBoolean(bindings.tlsInsecureSkipVerify) || toBoolean(bindings.insecureSkipVerify)) {
-    return {
-      skipTlsVerify: true,
-      tlsInsecureSkipVerify: true,
-      insecureSkipVerify: true,
-    };
+  const skipTlsVerify = toBoolean(bindings.skipTlsVerify) || toBoolean(bindings.tlsInsecureSkipVerify) || toBoolean(bindings.insecureSkipVerify);
+  if (skipTlsVerify) {
+    return { dispatcher: getInsecureTlsDispatcher() };
   }
   return {};
 };
