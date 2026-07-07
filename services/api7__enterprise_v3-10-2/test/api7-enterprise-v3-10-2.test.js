@@ -146,6 +146,19 @@ test('GetPluginSchema builds path params and supports subsystem filter', async (
   assert.equal(res.raw_json.structValue.fields.properties.structValue.fields.key.structValue.fields.type.stringValue, 'string');
 });
 
+
+test('ExportAuditLogs falls back when Content-Disposition filename is not URI-encoded', async () => {
+  setFetch(async () => response(200, 'id,event\n1,route.update\n', {
+    'content-type': 'text/csv',
+    'content-disposition': 'attachment; filename="report_100%.csv"',
+  }));
+
+  const handler = await loadHandler('ExportAuditLogs', { format: 'csv' });
+  const res = await handler();
+
+  assert.equal(res.filename, 'report_100%.csv');
+});
+
 test('ParseCertificate and ValidateCertificateKey send JSON bodies', async () => {
   const captured = [];
   setFetch(async (url, init) => {
@@ -249,6 +262,46 @@ test('CreateConsumer uses default gateway group and sends labels/plugins', async
   });
 });
 
+
+
+test('CreateConsumerCredential preserves empty plugins object', async () => {
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url, init, body: JSON.parse(init.body) };
+    return response(200, JSON.stringify({ id: 'cred-1', name: 'cred-name' }));
+  });
+
+  const handler = await loadHandler('CreateConsumerCredential', {
+    gatewayGroupId: 'default',
+    username: 'alice',
+    name: 'cred-name',
+  });
+  await handler();
+
+  assert.equal(captured.url, 'https://api7.example.test/apisix/admin/consumers/alice/credentials?gateway_group_id=default');
+  assert.deepEqual(captured.body, {
+    name: 'cred-name',
+    plugins: {},
+  });
+});
+
+test('CreateGlobalRule preserves empty plugins object', async () => {
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url, init, body: JSON.parse(init.body) };
+    return response(200, JSON.stringify({ id: 'global-rule-1' }));
+  });
+
+  const handler = await loadHandler('CreateGlobalRule', {
+    gatewayGroupId: 'default',
+  });
+  await handler();
+
+  assert.equal(captured.url, 'https://api7.example.test/apisix/admin/global_rules?gateway_group_id=default');
+  assert.deepEqual(captured.body, {
+    plugins: {},
+  });
+});
 
 test('CreateService accepts camelCase upstreamNodes and sends upstream.nodes', async () => {
   let captured;

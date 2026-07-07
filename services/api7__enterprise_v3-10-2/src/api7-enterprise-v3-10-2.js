@@ -390,20 +390,38 @@ const inferCount = (value, fallbackLength) => {
 
 const parseFilename = (contentDisposition = '') => {
   const match = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i.exec(String(contentDisposition));
-  return decodeURIComponent(match?.[1] || match?.[2] || '');
+  const raw = match?.[1] || match?.[2] || '';
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+};
+
+const KEEP_EMPTY_OBJECT = Symbol('keepEmptyObject');
+const preserveEmptyObjectTree = (value) => {
+  if (Array.isArray(value)) return value.map((item) => preserveEmptyObjectTree(item));
+  if (value && typeof value === 'object') {
+    const out = Object.fromEntries(Object.entries(value).map(([key, item]) => [key, preserveEmptyObjectTree(item)]));
+    out[KEEP_EMPTY_OBJECT] = true;
+    return out;
+  }
+  return value;
 };
 
 const sanitizeObject = (value) => {
   if (Array.isArray(value)) return value.map(sanitizeObject).filter((item) => item !== undefined);
   if (value && typeof value === 'object') {
+    const preserveEmpty = value[KEEP_EMPTY_OBJECT] === true;
     const out = {};
     for (const [key, item] of Object.entries(value)) {
       const cleaned = sanitizeObject(item);
       if (cleaned === undefined) continue;
       if (Array.isArray(cleaned) && cleaned.length === 0) continue;
-      if (typeof cleaned === 'object' && cleaned && !Array.isArray(cleaned) && Object.keys(cleaned).length === 0) continue;
+      if (typeof cleaned === 'object' && cleaned && !Array.isArray(cleaned) && Object.keys(cleaned).length === 0 && !preserveEmpty && cleaned[KEEP_EMPTY_OBJECT] !== true) continue;
       out[key] = cleaned;
     }
+    if (preserveEmpty) out[KEEP_EMPTY_OBJECT] = true;
     return out;
   }
   if (value === undefined || value === null || value === '') return undefined;
@@ -722,7 +740,7 @@ const OPERATIONS = {
       username: requireString(req.username, 'username'),
       desc: toTrimmedString(req.desc),
       labels: toStringMap(req.labels),
-      plugins: structToPlainObject(req.plugins),
+      plugins: preserveEmptyObjectTree(structToPlainObject(req.plugins)),
     },
   })),
   CreateConsumerCredential: operation('POST', 'object', (req, ctx) => ({
@@ -734,7 +752,7 @@ const OPERATIONS = {
       name: requireString(req.name, 'name'),
       desc: toTrimmedString(req.desc),
       labels: toStringMap(req.labels),
-      plugins: structToPlainObject(req.plugins) || {},
+      plugins: preserveEmptyObjectTree(structToPlainObject(req.plugins) ?? {}),
     },
   })),
   CreateCertificate: operation('POST', 'object', (req, ctx) => ({
@@ -757,7 +775,7 @@ const OPERATIONS = {
       domain: requireString(req.domain, 'domain'),
       certificates: toStringArray(req.certificates),
       mtls: structToPlainObject(req.mtls),
-      plugins: structToPlainObject(req.plugins),
+      plugins: preserveEmptyObjectTree(structToPlainObject(req.plugins)),
     },
   })),
   CreateService: operation('POST', 'object', (req, ctx) => {
@@ -782,7 +800,7 @@ const OPERATIONS = {
         hosts: toStringArray(req.hosts),
         path_prefix: toTrimmedString(reqField(req, 'path_prefix', 'pathPrefix')),
         strip_path_prefix: toOptionalBool(reqField(req, 'strip_path_prefix', 'stripPathPrefix')),
-        plugins: structToPlainObject(req.plugins),
+        plugins: preserveEmptyObjectTree(structToPlainObject(req.plugins)),
         upstream: {
           scheme: toTrimmedString(reqField(req, 'upstream_scheme', 'upstreamScheme')) || 'http',
           pass_host: toTrimmedString(reqField(req, 'upstream_pass_host', 'upstreamPassHost')) || 'pass',
@@ -804,7 +822,7 @@ const OPERATIONS = {
       paths: toStringArray(req.paths),
       priority: toOptionalInt(req.priority) ?? 0,
       enable_websocket: toOptionalBool(reqField(req, 'enable_websocket', 'enableWebsocket')),
-      plugins: structToPlainObject(req.plugins),
+      plugins: preserveEmptyObjectTree(structToPlainObject(req.plugins)),
       timeout: structToPlainObject(req.timeout),
       vars: listValueToPlainArray(req.vars),
     },
@@ -813,7 +831,7 @@ const OPERATIONS = {
     path: '/apisix/admin/global_rules',
     query: { gateway_group_id: requireString(reqField(req, 'gateway_group_id', 'gatewayGroupId') || resolveDefaultGatewayGroupId(ctx.bindings || {}), 'gateway_group_id') },
     body: {
-      plugins: structToPlainObject(req.plugins) || {},
+      plugins: preserveEmptyObjectTree(structToPlainObject(req.plugins) ?? {}),
     },
   })),
 };
