@@ -357,6 +357,37 @@ test('InsertAccessControl: SDK camelCase request shape is normalized', async () 
   assert.equal(body.accessControlConfigs[0].publicRange[0].publicContent, '192.0.2.20');
 });
 
+test('InsertAccessControl: legacy public_range items wrapper is flattened', async () => {
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url: String(url), init };
+    return response(200, { code: '100000', data: [{ successIds: [66666] }], message: 'success' });
+  });
+
+  const result = await handlers[RPC_INSERT_ACCESS_CONTROL]({
+    domains: ['test-jzb.ctcdn.cn'],
+    product_code: '020',
+    configs: [{
+      mod: 'ON',
+      act: 'LOG',
+      rule_name: 'legacy_items_ok',
+      public_range: [{
+        items: [
+          { zone: 'IP', equal: 'TRUE', public_content: '192.0.2.60' },
+          { zone: 'IP', equal: 'FALSE', public_content: '192.0.2.61' },
+        ],
+      }],
+    }],
+  }, buildCtx());
+
+  assert.equal(result.http_status, 200);
+  const body = JSON.parse(captured.init.body);
+  assert.equal(body.accessControlConfigs[0].publicRange.length, 2);
+  assert.equal(body.accessControlConfigs[0].publicRange[0].publicContent, '192.0.2.60');
+  assert.equal(body.accessControlConfigs[0].publicRange[1].publicContent, '192.0.2.61');
+  assert.equal(body.accessControlConfigs[0].publicRange[1].equal, 'false');
+});
+
 test('InsertAccessControl: missing domains', async () => {
   await expectGrpcError(
     () => handlers[RPC_INSERT_ACCESS_CONTROL]({ domains: [], product_code: '020', configs: [{ mod: 'ON', act: 'LOG', rule_name: 'x' }] }, buildCtx()),
@@ -394,6 +425,38 @@ test('InsertAccessControl: invalid act DENY is rejected in favor of BLOCK', asyn
     () => handlers[RPC_INSERT_ACCESS_CONTROL]({ domains: ['a.com'], product_code: '020', configs: [{ mod: 'ON', act: 'DENY', rule_name: 'x', public_range: [{ zone: 'IP', equal: 'TRUE', public_content: '192.0.2.31' }] }] }, buildCtx()),
     'INVALID_ARGUMENT',
     (e) => assert.match(e.message, /BLOCK/),
+  );
+});
+
+test('InsertAccessControl: invalid equal is rejected', async () => {
+  await expectGrpcError(
+    () => handlers[RPC_INSERT_ACCESS_CONTROL]({ domains: ['a.com'], product_code: '020', configs: [{ mod: 'ON', act: 'LOG', rule_name: 'x', public_range: [{ zone: 'IP', equal: 'MAYBE', public_content: '192.0.2.32' }] }] }, buildCtx()),
+    'INVALID_ARGUMENT',
+    (e) => assert.match(e.message, /TRUE, FALSE/),
+  );
+});
+
+test('InsertAccessControl: invalid operator is rejected', async () => {
+  await expectGrpcError(
+    () => handlers[RPC_INSERT_ACCESS_CONTROL]({ domains: ['a.com'], product_code: '020', configs: [{ mod: 'ON', act: 'LOG', rule_name: 'x', public_range: [{ zone: 'ARGS', equal: 'TRUE', operator: 'BAD' }] }] }, buildCtx()),
+    'INVALID_ARGUMENT',
+    (e) => assert.match(e.message, /REGEX, STR/),
+  );
+});
+
+test('InsertAccessControl: GEO requires geo_zone', async () => {
+  await expectGrpcError(
+    () => handlers[RPC_INSERT_ACCESS_CONTROL]({ domains: ['a.com'], product_code: '020', configs: [{ mod: 'ON', act: 'LOG', rule_name: 'x', public_range: [{ zone: 'GEO', equal: 'TRUE' }] }] }, buildCtx()),
+    'INVALID_ARGUMENT',
+    (e) => assert.match(e.message, /geo_zone/),
+  );
+});
+
+test('InsertAccessControl: FMT_TIME requires date_period', async () => {
+  await expectGrpcError(
+    () => handlers[RPC_INSERT_ACCESS_CONTROL]({ domains: ['a.com'], product_code: '020', configs: [{ mod: 'ON', act: 'LOG', rule_name: 'x', public_range: [{ zone: 'FMT_TIME', equal: 'TRUE', public_content: '09:00-18:00' }] }] }, buildCtx()),
+    'INVALID_ARGUMENT',
+    (e) => assert.match(e.message, /date_period/),
   );
 });
 
@@ -572,6 +635,8 @@ test('helper functions', () => {
       public_range: [{ items: [{ publicContent: '1.1.1.1', public_content: '1.1.1.1' }] }],
     }],
   });
+  assert.throws(() => _test.normalizeGeoZone([], 'geo_zone'), /non-empty array/);
+  assert.throws(() => _test.normalizeGeoZone(['CN'], 'geo_zone'), /must be an object/);
 });
 
 test('signedPost enforces timeout via AbortController', async () => {
@@ -718,6 +783,13 @@ test('requestWithNodeTransport rejects on response stream error', async () => {
 test('eopDateNow returns valid format', () => {
   const d = _test.eopDateNow();
   assert.match(d, /^\d{8}T\d{6}Z$/);
+});
+
+test('makeCanonicalQueryString uses deterministic bytewise sorting', () => {
+  assert.equal(
+    _test.makeCanonicalQueryString({ ä: '中', b: '2', a: ['~', '!'] }),
+    'a=%21&a=~&b=2&ä=%E4%B8%AD',
+  );
 });
 
 test('makeEopSignature produces valid header', () => {

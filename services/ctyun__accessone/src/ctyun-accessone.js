@@ -72,6 +72,8 @@ const mergedBindings = (ctx = {}) => ({
 const hmacSha256 = (key, data) => crypto.createHmac('sha256', key).update(data).digest();
 const sha256Hex = (data) => crypto.createHash('sha256').update(data).digest('hex');
 
+const compareCanonicalPart = (left, right) => (left === right ? 0 : left < right ? -1 : 1);
+
 const makeCanonicalQueryString = (queryParams) => {
   if (!queryParams) return '';
   const pairs = [];
@@ -83,7 +85,10 @@ const makeCanonicalQueryString = (queryParams) => {
       pairs.push([key, encodeURIComponent(str).replace(/[!'()*]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase()}`)]);
     }
   }
-  pairs.sort((a, b) => (a[0] === b[0] ? a[1].localeCompare(b[1]) : a[0].localeCompare(b[0])));
+  pairs.sort((a, b) => {
+    const keyCmp = compareCanonicalPart(a[0], b[0]);
+    return keyCmp !== 0 ? keyCmp : compareCanonicalPart(a[1], b[1]);
+  });
   return pairs.map(([key, val]) => `${key}=${val}`).join('&');
 };
 
@@ -705,5 +710,6 @@ export const _test = {
   toTrimmedString,
   mergedBindings,
   logFlow,
+  normalizeGeoZone,
   normalizeRequestShape,
 };
