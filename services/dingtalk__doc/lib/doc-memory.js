@@ -39,12 +39,15 @@ export class DocMemory {
   }
 
   /**
-   * 保存记忆到文件
+   * 保存记忆到文件（原子写入：先写临时文件再 rename，防止并发损坏）
    */
   async save() {
     if (!this.cache) return;
     await mkdir(dirname(this.filePath), { recursive: true });
-    await writeFile(this.filePath, JSON.stringify(this.cache, null, 2), 'utf-8');
+    const { rename } = await import('node:fs/promises');
+    const tmpPath = `${this.filePath}.${Date.now()}.tmp`;
+    await writeFile(tmpPath, JSON.stringify(this.cache, null, 2), 'utf-8');
+    await rename(tmpPath, this.filePath);
   }
 
   /**
