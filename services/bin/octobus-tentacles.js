@@ -384,6 +384,10 @@ const services = {
     entryFile: "../leadsec__waf/bin/leadsec-waf.js",
     serviceModule: "../leadsec__waf/src/service.js",
   },
+  "venus-ips-v6079": {
+    entryFile: "../venus__ips_v6079/bin/venus-ips-v6079.js",
+    serviceModule: "../venus__ips_v6079/src/service.js",
+  },
   "wangsu-label-ip": {
     entryFile: "../wangsu__label-ip/bin/wangsu-label-ip.js",
     serviceModule: "../wangsu__label-ip/src/service.js",

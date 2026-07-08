@@ -56,7 +56,7 @@ export const DEFAULT_TIMEOUT_MS = 8000;
 export const DEFAULT_AUTH_HEADER_PREFIX = 'Bearer';
 
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
-const ENV_CACHE = new WeakMap();
+const SESSION_CACHE = new Map();
 
 const JSON_ENDPOINTS = {
   [METHOD_GET_LICENSE_FULL]: { method: 'GET', path: '/api/v3/license' },
@@ -204,6 +204,21 @@ const resolveTimeoutMs = (ctx = {}) => optionalPositiveNumber(ctx.bindings?.time
   ?? optionalPositiveNumber(ctx.limits?.timeoutMs)
   ?? DEFAULT_TIMEOUT_MS;
 
+const buildSessionKey = (ctx, env) => [
+  pickFirstString([
+    ctx.instanceId,
+    ctx.instance_id,
+    ctx.meta?.instance_id,
+    ctx.meta?.instanceId,
+    ctx.bindings?.instance_id,
+    ctx.bindings?.instanceId,
+  ]) || 'default-instance',
+  env.baseUrl,
+  env.deviceType,
+  env.username || '',
+  env.passwordSha256 || '',
+].join('\u001f');
+
 const sha256Hex = (input) => createHash('sha256').update(String(input ?? ''), 'utf8').digest('hex');
 
 const buildEnv = (ctx = {}) => {
@@ -221,7 +236,7 @@ const buildEnv = (ctx = {}) => {
   if (!token && (!username || !passwordSha256)) {
     throw errorWithCode('FAILED_PRECONDITION', 'token or username/password is required');
   }
-  return {
+  const env = {
     baseUrl,
     deviceType,
     username,
@@ -231,7 +246,10 @@ const buildEnv = (ctx = {}) => {
     timeoutMs: resolveTimeoutMs(callCtx),
     headers: sanitizeHeaders(bindings.headers),
     skipTlsVerify: pickBoolean(bindings.skipTlsVerify) || pickBoolean(bindings.tlsInsecureSkipVerify) || false,
-    session: { token: '' },
+  };
+  return {
+    ...env,
+    sessionKey: buildSessionKey(callCtx, env),
   };
 };
 
@@ -396,6 +414,30 @@ const extractAuthorization = (json = {}) => pickFirstString([
   json?.data?.token,
 ]);
 
+const safeLoginFailureMessage = (json = {}) => {
+  const message = pickFirstString([
+    json.msg,
+    json.message,
+    json?.data?.msg,
+    json?.data?.message,
+  ]);
+  const code = pickFirstString([
+    json.code,
+    json.status,
+    json?.data?.code,
+    json?.data?.status,
+  ]);
+  if (message && code) return `${message} (code ${code})`;
+  return message || (code ? `code ${code}` : 'unknown error');
+};
+
+const getSession = (env) => SESSION_CACHE.get(env.sessionKey);
+
+const setSessionToken = (env, token) => {
+  if (!env.sessionKey || !token) return;
+  SESSION_CACHE.set(env.sessionKey, { token });
+};
+
 const login = async (env) => {
   if (env.token) return { authorization: env.token, message: 'using pre-issued token' };
   if (!env.username || !env.passwordSha256) throw errorWithCode('FAILED_PRECONDITION', 'username/password is required for login');
@@ -407,24 +449,40 @@ const login = async (env) => {
   });
   const json = await parseJsonResponse(response, 'login');
   if (!response.ok || (json.code !== undefined && Number(json.code) !== 0)) {
-    throw errorWithCode('UNAUTHENTICATED', `login failed: ${JSON.stringify(json)}`);
+    throw errorWithCode('UNAUTHENTICATED', `login failed: ${safeLoginFailureMessage(json)}`);
   }
   const authorization = extractAuthorization(json);
   if (!authorization) throw errorWithCode('UNAUTHENTICATED', 'login did not return authorization token');
-  env.session = { token: authorization };
+  setSessionToken(env, authorization);
   return { authorization, message: pickString(json.msg) || pickString(json.message) || 'login ok' };
 };
 
 const getAuthToken = async (env) => {
   if (env.token) return env.token;
-  if (env.session?.token) return env.session.token;
-  const result = await login(env);
-  return result.authorization;
+  const session = getSession(env);
+  if (session?.token) return session.token;
+  if (session?.loginPromise) return session.loginPromise;
+
+  const loginPromise = login(env).then((result) => result.authorization);
+  SESSION_CACHE.set(env.sessionKey, { loginPromise });
+  try {
+    return await loginPromise;
+  } finally {
+    const current = getSession(env);
+    if (current?.loginPromise === loginPromise) SESSION_CACHE.delete(env.sessionKey);
+  }
 };
 
-const clearSession = (env) => {
-  env.session = { token: '' };
+const clearSession = (env, expectedToken = '') => {
+  if (env.token || !env.sessionKey) return;
+  const session = getSession(env);
+  if (!session) return;
+  if (session.loginPromise && !session.token) return;
+  if (expectedToken && session.token && session.token !== expectedToken) return;
+  SESSION_CACHE.delete(env.sessionKey);
 };
+
+const clearSessionCache = () => SESSION_CACHE.clear();
 
 const executeRestRequest = async (env, req = {}, { retry = true } = {}) => {
   const method = pickFirstString([req.method])?.toUpperCase();
@@ -450,7 +508,7 @@ const executeRestRequest = async (env, req = {}, { retry = true } = {}) => {
     action: 'request',
   });
   if ((response.status === 401 || response.status === 403) && retry && !env.token) {
-    clearSession(env);
+    clearSession(env, token);
     await response.text();
     return executeRestRequest(env, req, { retry: false });
   }
@@ -531,7 +589,7 @@ const executeBackupImport = async (env, req = {}, { retry = true } = {}) => {
     action: 'backup import',
   });
   if ((response.status === 401 || response.status === 403) && retry && !env.token) {
-    clearSession(env);
+    clearSession(env, token);
     await response.text();
     return executeBackupImport(env, req, { retry: false });
   }
@@ -546,16 +604,9 @@ const executeBackupImport = async (env, req = {}, { retry = true } = {}) => {
   };
 };
 
-const cachedEnvFor = (ctx = {}) => {
-  if (!ctx || typeof ctx !== 'object') return buildEnv(ctx);
-  const cached = ENV_CACHE.get(ctx);
-  if (cached) return cached;
-  const env = buildEnv(ctx);
-  ENV_CACHE.set(ctx, env);
-  return env;
-};
+const envFor = (ctx = {}) => buildEnv(ctx);
 
-const runWithEnv = (req = {}, ctx = {}, executor) => executor(cachedEnvFor(ctx), req);
+const runWithEnv = (req = {}, ctx = {}, executor) => executor(envFor(ctx), req);
 
 const makeJsonHandler = (methodFull) => (req = {}, ctx = {}) => runWithEnv(req, ctx, (env) => executeJsonEndpoint(env, req, JSON_ENDPOINTS[methodFull]));
 
@@ -593,10 +644,12 @@ export const handlers = {
 
 export const _test = {
   buildEnv,
+  buildSessionKey,
   buildUrl,
-  cachedEnvFor,
   clearSession,
+  clearSessionCache,
   doFetch,
+  envFor,
   errorWithCode,
   executeBackupExport,
   executeBackupImport,

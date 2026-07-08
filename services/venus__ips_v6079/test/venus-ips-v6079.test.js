@@ -8,9 +8,37 @@ import {
   METHOD_ADD_BLOCK_POLICY_FULL,
   METHOD_ADD_WHITE_POLICY_FULL,
   METHOD_BATCH_ADD_BLOCK_POLICY_FULL,
+  METHOD_CONFIG_ALARM_CONFIG_FULL,
+  METHOD_CONFIG_DNS_CONFIG_FULL,
+  METHOD_CONFIG_FEATURE_UPDATE_CONFIG_FULL,
+  METHOD_CONFIG_FEATURE_UPDATE_ONTIME_FULL,
+  METHOD_CONFIG_HTTP_PROXY_FULL,
+  METHOD_CONFIG_KAFKA_SERVER_FULL,
+  METHOD_CONFIG_NTP_CONFIG_FULL,
+  METHOD_CONFIG_PASSWORD_POLICY_FULL,
+  METHOD_CONFIG_SOFTWARE_UPDATE_CONFIG_FULL,
+  METHOD_CONFIG_SOFTWARE_UPDATE_ONTIME_FULL,
+  METHOD_CONFIG_SYSLOG_SERVER_FULL,
+  METHOD_CONFIG_TIMEOUT_FULL,
+  METHOD_DELETE_BLOCK_POLICY_FULL,
+  METHOD_DELETE_WHITE_POLICY_FULL,
   METHOD_EXPORT_BACKUP_FULL,
+  METHOD_GET_ALARM_CONFIG_FULL,
+  METHOD_GET_DNS_CONFIG_FULL,
+  METHOD_GET_FEATURE_UPDATE_CONFIG_FULL,
+  METHOD_GET_HTTP_PROXY_FULL,
+  METHOD_GET_KAFKA_SERVER_FULL,
   METHOD_GET_LICENSE_FULL,
+  METHOD_GET_LOGIN_BLOCK_CONFIG_FULL,
+  METHOD_GET_MANAGEMENT_ACCESS_CONFIG_FULL,
+  METHOD_GET_NTP_CONFIG_FULL,
+  METHOD_GET_PASSWORD_POLICY_FULL,
+  METHOD_GET_RADIUS_CONFIG_FULL,
+  METHOD_GET_SNMP_CONFIG_FULL,
+  METHOD_GET_SOFTWARE_UPDATE_CONFIG_FULL,
+  METHOD_GET_SOFTWARE_UPDATE_ONTIME_FULL,
   METHOD_GET_SOFTWARE_STATUS_FULL,
+  METHOD_GET_SYSLOG_SERVER_FULL,
   METHOD_GET_SYSTEM_RESOURCE_INFO_FULL,
   METHOD_HEALTH_CHECK_FULL,
   METHOD_IMPORT_BACKUP_FULL,
@@ -19,6 +47,8 @@ import {
   METHOD_LIST_WHITE_POLICY_FULL,
   METHOD_LOGIN_FULL,
   METHOD_REQUEST_FULL,
+  METHOD_START_FEATURE_UPDATE_FULL,
+  METHOD_START_SOFTWARE_UPDATE_FULL,
   METHOD_SYSTEM_OPERATE_FULL,
   _test,
   handlers,
@@ -80,8 +110,52 @@ const expectGrpcError = async (fn, legacyCode, checker = () => {}) => {
   checker(caught);
 };
 
+const jsonEndpointCases = [
+  [METHOD_GET_LICENSE_FULL, 'GET', '/api/v3/license', {}],
+  [METHOD_IMPORT_LICENSE_FULL, 'POST', '/api/v3/license', { json_body: '{"license":"abc"}' }],
+  [METHOD_GET_SYSTEM_RESOURCE_INFO_FULL, 'GET', '/api/v3/sys_resource_info', {}],
+  [METHOD_CONFIG_FEATURE_UPDATE_ONTIME_FULL, 'POST', '/api/v3/feature_update_ontime', { json_body: '{"enable":1}' }],
+  [METHOD_GET_FEATURE_UPDATE_CONFIG_FULL, 'GET', '/api/v3/feature_update_config/ips', { feature_type: 'ips' }],
+  [METHOD_CONFIG_FEATURE_UPDATE_CONFIG_FULL, 'POST', '/api/v3/feature_update_config', { json_body: '{"feature_type":"ips"}' }],
+  [METHOD_START_FEATURE_UPDATE_FULL, 'POST', '/api/v3/feature_update_now', { json_body: '{"feature_type":"ips"}' }],
+  [METHOD_CONFIG_SOFTWARE_UPDATE_ONTIME_FULL, 'POST', '/api/v3/software_update_ontime', { json_body: '{"enable":1}' }],
+  [METHOD_GET_SOFTWARE_UPDATE_ONTIME_FULL, 'GET', '/api/v3/software_update_ontime', {}],
+  [METHOD_GET_SOFTWARE_UPDATE_CONFIG_FULL, 'GET', '/api/v3/software_update_config', {}],
+  [METHOD_CONFIG_SOFTWARE_UPDATE_CONFIG_FULL, 'POST', '/api/v3/software_update_config', { json_body: '{"server":"updates.example"}' }],
+  [METHOD_GET_SOFTWARE_STATUS_FULL, 'GET', '/api/v3/software_status', {}],
+  [METHOD_START_SOFTWARE_UPDATE_FULL, 'POST', '/api/v3/software_update_now', { json_body: '{"version":"latest"}' }],
+  [METHOD_GET_SYSLOG_SERVER_FULL, 'GET', '/api/v3/syslog_server', {}],
+  [METHOD_CONFIG_SYSLOG_SERVER_FULL, 'POST', '/api/v3/syslog_server', { json_body: '{"host":"192.0.2.1"}' }],
+  [METHOD_GET_KAFKA_SERVER_FULL, 'GET', '/api/v3/kafka_server', {}],
+  [METHOD_CONFIG_KAFKA_SERVER_FULL, 'POST', '/api/v3/kafka_server', { json_body: '{"host":"192.0.2.2"}' }],
+  [METHOD_GET_NTP_CONFIG_FULL, 'GET', '/api/v3/ntp_config', {}],
+  [METHOD_CONFIG_NTP_CONFIG_FULL, 'POST', '/api/v3/ntp_config', { json_body: '{"server":"pool.ntp.org"}' }],
+  [METHOD_GET_DNS_CONFIG_FULL, 'GET', '/api/v3/dns_config', {}],
+  [METHOD_CONFIG_DNS_CONFIG_FULL, 'POST', '/api/v3/dns_config', { json_body: '{"primary":"8.8.8.8"}' }],
+  [METHOD_GET_SNMP_CONFIG_FULL, 'GET', '/api/v3/snmp_config', {}],
+  [METHOD_GET_MANAGEMENT_ACCESS_CONFIG_FULL, 'GET', '/api/v3/mgmaccess_config', {}],
+  [METHOD_CONFIG_TIMEOUT_FULL, 'POST', '/api/v3/timeout', { json_body: '{"timeout":30}' }],
+  [METHOD_GET_PASSWORD_POLICY_FULL, 'GET', '/api/v3/password_policy', {}],
+  [METHOD_CONFIG_PASSWORD_POLICY_FULL, 'POST', '/api/v3/password_policy', { json_body: '{"length":12}' }],
+  [METHOD_GET_LOGIN_BLOCK_CONFIG_FULL, 'GET', '/api/v3/block_config', {}],
+  [METHOD_GET_RADIUS_CONFIG_FULL, 'GET', '/api/v3/radius', {}],
+  [METHOD_GET_ALARM_CONFIG_FULL, 'GET', '/api/v3/alarm_config', {}],
+  [METHOD_CONFIG_ALARM_CONFIG_FULL, 'POST', '/api/v3/alarm_config', { json_body: '{"enable":1}' }],
+  [METHOD_GET_HTTP_PROXY_FULL, 'GET', '/api/v3/http_proxy', {}],
+  [METHOD_CONFIG_HTTP_PROXY_FULL, 'POST', '/api/v3/http_proxy', { json_body: '{"host":"proxy.example"}' }],
+  [METHOD_SYSTEM_OPERATE_FULL, 'POST', '/api/v3/system_operate', { json_body: '{"operation":2}' }],
+  [METHOD_LIST_BLOCK_POLICY_FULL, 'GET', '/api/v3/block_policy', { query: { page_num: '1' } }],
+  [METHOD_ADD_BLOCK_POLICY_FULL, 'POST', '/api/v3/block_policy', { json_body: '{"type":2}' }],
+  [METHOD_DELETE_BLOCK_POLICY_FULL, 'DELETE', '/api/v3/block_policy', { json_body: '{"id":"block-1"}' }],
+  [METHOD_BATCH_ADD_BLOCK_POLICY_FULL, 'POST', '/api/v3/block_policy/batch', { json_body: '[{"type":3}]' }],
+  [METHOD_LIST_WHITE_POLICY_FULL, 'GET', '/api/v3/white_policy', {}],
+  [METHOD_ADD_WHITE_POLICY_FULL, 'POST', '/api/v3/white_policy', { json_body: '{"type":4}' }],
+  [METHOD_DELETE_WHITE_POLICY_FULL, 'DELETE', '/api/v3/white_policy', { json_body: '{"id":"white-1"}' }],
+];
+
 test.afterEach(() => {
   globalThis.fetch = originalFetch;
+  _test.clearSessionCache?.();
 });
 
 test('service exports SDK handlers and rpcdef path handlers', () => {
@@ -90,18 +164,9 @@ test('service exports SDK handlers and rpcdef path handlers', () => {
     METHOD_HEALTH_CHECK_FULL,
     METHOD_LOGIN_FULL,
     METHOD_REQUEST_FULL,
-    METHOD_GET_LICENSE_FULL,
-    METHOD_IMPORT_LICENSE_FULL,
-    METHOD_GET_SYSTEM_RESOURCE_INFO_FULL,
-    METHOD_GET_SOFTWARE_STATUS_FULL,
-    METHOD_SYSTEM_OPERATE_FULL,
-    METHOD_LIST_BLOCK_POLICY_FULL,
-    METHOD_ADD_BLOCK_POLICY_FULL,
-    METHOD_BATCH_ADD_BLOCK_POLICY_FULL,
-    METHOD_LIST_WHITE_POLICY_FULL,
-    METHOD_ADD_WHITE_POLICY_FULL,
     METHOD_EXPORT_BACKUP_FULL,
     METHOD_IMPORT_BACKUP_FULL,
+    ...jsonEndpointCases.map(([method]) => method),
   ]) {
     assert.equal(typeof handlers[method], 'function', `${method} handler missing`);
     assert.equal(typeof service.handlers[method], 'function', `${method} SDK handler missing`);
@@ -228,6 +293,115 @@ test('401 clears cached token, logs in again, and retries once', async () => {
     assert.equal(mock.loginCount, 2);
   } finally {
     await mock.close();
+  }
+});
+
+test('service SDK HandlerContext reuses token across repeated calls', async () => {
+  const mock = createMockServer();
+  const host = await mock.start();
+  try {
+    const ctx = {
+      request: { requestId: 'sdk-cache-1' },
+      config: { baseUrl: host, username: USERNAME, deviceType: DEVICE_TYPE },
+      secret: { password: PASSWORD },
+      method: METHOD_GET_LICENSE_FULL,
+      serviceId: 'venus-ips-v6079',
+      instanceId: 'ips-sdk-cache',
+      workdir: '/tmp',
+      packageDir: '/tmp',
+      getMetadata: () => undefined,
+      getMetadataAll: () => [],
+    };
+
+    const first = await service.handlers[METHOD_GET_LICENSE_FULL](ctx);
+    ctx.request = { requestId: 'sdk-cache-2' };
+    const second = await service.handlers[METHOD_GET_LICENSE_FULL](ctx);
+
+    assert.equal(JSON.parse(first.json_body).code, 0);
+    assert.equal(JSON.parse(second.json_body).code, 0);
+    assert.equal(mock.loginCount, 1);
+  } finally {
+    await mock.close();
+  }
+});
+
+test('concurrent requests share one login for the same instance', async () => {
+  const mock = createMockServer();
+  const host = await mock.start();
+  try {
+    const ctx = buildCtx({ bindings: { baseUrl: host }, meta: { instance_id: 'ips-concurrent-login' } });
+
+    const results = await Promise.all(Array.from({ length: 5 }, () => handlers[METHOD_GET_LICENSE_FULL]({}, ctx)));
+
+    for (const result of results) assert.equal(JSON.parse(result.json_body).code, 0);
+    assert.equal(mock.loginCount, 1);
+  } finally {
+    await mock.close();
+  }
+});
+
+test('concurrent expired-token retries share one refresh login', async () => {
+  let loginCount = 0;
+  let expireToken = false;
+  setFetch(async (url, init = {}) => {
+    if (String(url).endsWith('/api/v3/login')) {
+      loginCount += 1;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return responseOf(200, JSON.stringify({ code: 0, msg: 'success', data: { authorization: `token-${loginCount}` } }));
+    }
+    if (expireToken && init.headers.Authorization === 'Bearer token-1') {
+      return responseOf(401, JSON.stringify({ code: 401, msg: 'expired' }), { 'content-type': 'application/json' });
+    }
+    return responseOf(200, JSON.stringify({ code: 0, msg: 'success' }), { 'content-type': 'application/json' });
+  });
+
+  const ctx = buildCtx({ meta: { instance_id: 'ips-concurrent-refresh' } });
+  await handlers[METHOD_GET_LICENSE_FULL]({}, ctx);
+  expireToken = true;
+
+  const results = await Promise.all(Array.from({ length: 3 }, () => handlers[METHOD_GET_LICENSE_FULL]({}, ctx)));
+
+  for (const result of results) assert.equal(JSON.parse(result.json_body).code, 0);
+  assert.equal(loginCount, 2);
+});
+
+test('login failure errors do not include sensitive upstream fields', async () => {
+  setFetch(async () => responseOf(200, JSON.stringify({
+    code: 401,
+    msg: 'bad credentials',
+    password: 'clear-text-password',
+    token: 'secret-token',
+    internal: { secret: 'internal-secret' },
+  })));
+
+  await expectGrpcError(
+    () => handlers[METHOD_LOGIN_FULL]({}, buildCtx({ meta: { instance_id: 'ips-login-sanitize' } })),
+    'UNAUTHENTICATED',
+    (err) => {
+      assert.match(err.message, /bad credentials/);
+      assert.doesNotMatch(err.message, /clear-text-password/);
+      assert.doesNotMatch(err.message, /secret-token/);
+      assert.doesNotMatch(err.message, /internal-secret/);
+    },
+  );
+});
+
+test('all named JSON endpoint handlers use the expected REST method and path', async () => {
+  const calls = [];
+  setFetch(async (url, init = {}) => {
+    calls.push({ method: init.method, path: new URL(String(url)).pathname });
+    return responseOf(200, JSON.stringify({ code: 0, msg: 'success' }), { 'content-type': 'application/json' });
+  });
+
+  for (const [method, expectedMethod, expectedPath, req] of jsonEndpointCases) {
+    calls.length = 0;
+    const result = await handlers[method](req, buildCtx({
+      secret: { token: TOKEN },
+      meta: { instance_id: `endpoint-${method.split('/').at(-1)}` },
+    }));
+
+    assert.equal(JSON.parse(result.json_body).code, 0);
+    assert.deepEqual(calls, [{ method: expectedMethod, path: expectedPath }], method);
   }
 });
 
