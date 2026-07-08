@@ -169,6 +169,33 @@ test('pre-issued token and cookie skip automatic login', async () => {
   assert.equal(calls[0].url, 'https://tar.example.com/user/info');
 });
 
+test('apiPrefix applies to built-in endpoints but generic requests stay explicit', async () => {
+  const calls = [];
+  setFetch(async (url, init = {}) => {
+    calls.push({ url: String(url), init });
+    if (String(url).endsWith('/user/checkCode')) {
+      return responseOf(200, JSON.stringify({ codeKey: 'mock-code-key' }), { 'content-type': 'application/json' });
+    }
+    if (String(url).endsWith('/user/login')) {
+      return responseOf(200, JSON.stringify({ code: 0, token: TOKEN }), { 'content-type': 'application/json' });
+    }
+    return responseOf(200, JSON.stringify({ ok: true }), { 'content-type': 'application/json' });
+  });
+
+  const ctx = buildCtx({ bindings: { baseUrl: 'https://tar.example.com', apiPrefix: '/tar' } });
+  await handlers[METHOD_GET_CURRENT_USER_FULL]({}, ctx);
+  await handlers[METHOD_LIST_ASSETS_FULL]({ json_body: '{}' }, ctx);
+  await handlers[METHOD_REQUEST_FULL]({ method: 'GET', path: '/tar/messageTips/overview' }, ctx);
+
+  assert.deepEqual(calls.map((call) => call.url), [
+    'https://tar.example.com/tar/user/checkCode',
+    'https://tar.example.com/tar/user/login',
+    'https://tar.example.com/tar/user/info',
+    'https://tar.example.com/tar/asset/page',
+    'https://tar.example.com/tar/messageTips/overview',
+  ]);
+});
+
 test('401 clears cached session, logs in again, and retries once', async () => {
   const mock = createMockServer();
   const host = await mock.start();
@@ -304,6 +331,10 @@ test('doFetch uses insecure TLS fallback for https requests', async () => {
 test('helper functions cover parsing and context behavior', () => {
   assert.equal(_test.normalizeBaseUrl(' https://tar.example.com/ '), 'https://tar.example.com');
   assert.equal(_test.normalizeBaseUrl('tar.example.com'), '');
+  assert.equal(_test.normalizeApiPrefix(undefined), '/tar');
+  assert.equal(_test.normalizeApiPrefix('tar/'), '/tar');
+  assert.equal(_test.normalizeApiPrefix(''), '');
+  assert.throws(() => _test.normalizeApiPrefix('https://tar.example.com'), /apiPrefix must be a path prefix/);
   assert.equal(_test.pickFirstString([' ', 7]), '7');
   assert.equal(_test.pickBoolean('yes'), true);
   assert.equal(_test.pickBoolean('off'), false);

@@ -15,6 +15,11 @@
       "type": "string",
       "description": "Alias for baseUrl."
     },
+    "apiPrefix": {
+      "type": "string",
+      "default": "/tar",
+      "description": "Optional TAR REST API path prefix for built-in RPCs, for example /tar. Set to an empty string for deployments that expose APIs at the root path."
+    },
     "username": {
       "type": "string",
       "description": "Optional default TAR login username."

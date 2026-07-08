@@ -35,6 +35,12 @@ const textResponse = (res, status, body, headers = {}) => {
   res.end(body);
 };
 
+const normalizePath = (pathname) => {
+  if (pathname === '/tar') return '/';
+  if (pathname.startsWith('/tar/')) return pathname.slice('/tar'.length);
+  return pathname;
+};
+
 export function createMockServer({ username = USERNAME, password = PASSWORD } = {}) {
   const activeTokens = new Set();
   const activeCookies = new Set();
@@ -64,14 +70,15 @@ export function createMockServer({ username = USERNAME, password = PASSWORD } = 
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
+    const path = normalizePath(url.pathname);
     requests.push({ method: req.method, path: url.pathname, search: url.search, headers: req.headers });
     try {
-      if (req.method === 'GET' && url.pathname === '/user/checkCode') {
+      if (req.method === 'GET' && path === '/user/checkCode') {
         jsonResponse(res, 200, { codeKey: 'mock-code-key', codeValue: Buffer.from('1234').toString('base64') });
         return;
       }
 
-      if (req.method === 'POST' && url.pathname === '/user/login') {
+      if (req.method === 'POST' && path === '/user/login') {
         const body = await collectBody(req);
         loginCount += 1;
         if (body.logonName !== username || body.pwd !== password || body.checkCode !== '1234' || body.formState !== '1') {
@@ -92,69 +99,69 @@ export function createMockServer({ username = USERNAME, password = PASSWORD } = 
         return;
       }
 
-      if (req.method === 'GET' && url.pathname === '/user/logout') {
+      if (req.method === 'GET' && path === '/user/logout') {
         requireAuth(req, res);
         jsonResponse(res, 200, { ok: true, msg: 'logout ok' });
         return;
       }
 
-      if (req.method === 'GET' && url.pathname === '/user/info') {
+      if (req.method === 'GET' && path === '/user/info') {
         if (!requireAuth(req, res)) return;
         jsonResponse(res, 200, { userName: username, role: 'admin' });
         return;
       }
 
-      if (req.method === 'POST' && url.pathname === '/dashboard/overview') {
+      if (req.method === 'POST' && path === '/dashboard/overview') {
         if (!requireAuth(req, res)) return;
         jsonResponse(res, 200, { posture: 'stable' });
         return;
       }
 
-      if (req.method === 'POST' && url.pathname === '/dashboard/statistics/total') {
+      if (req.method === 'POST' && path === '/dashboard/statistics/total') {
         if (!requireAuth(req, res)) return;
         jsonResponse(res, 200, 42);
         return;
       }
 
-      if (req.method === 'POST' && url.pathname === '/eventLog/detailPage') {
+      if (req.method === 'POST' && path === '/eventLog/detailPage') {
         if (!requireAuth(req, res)) return;
         const body = await collectBody(req);
         jsonResponse(res, 200, { records: [{ eventName: 'DGA', pageNum: body.pageNum }], total: 1 });
         return;
       }
 
-      if (req.method === 'POST' && url.pathname === '/asset/page') {
+      if (req.method === 'POST' && path === '/asset/page') {
         if (!requireAuth(req, res)) return;
         jsonResponse(res, 200, { records: [{ assetName: 'web-01' }], total: 1 });
         return;
       }
 
-      if (req.method === 'POST' && url.pathname === '/asset/getAssetById') {
+      if (req.method === 'POST' && path === '/asset/getAssetById') {
         if (!requireAuth(req, res)) return;
         const body = await collectBody(req);
         jsonResponse(res, 200, { id: body.id, assetName: 'web-01' });
         return;
       }
 
-      if (req.method === 'POST' && url.pathname === '/pcap/detail') {
+      if (req.method === 'POST' && path === '/pcap/detail') {
         if (!requireAuth(req, res)) return;
         jsonResponse(res, 200, { pcapName: 'sample.pcap' });
         return;
       }
 
-      if (req.method === 'POST' && url.pathname === '/pcap/trackFlow') {
+      if (req.method === 'POST' && path === '/pcap/trackFlow') {
         if (!requireAuth(req, res)) return;
         jsonResponse(res, 200, { stream: 'GET / HTTP/1.1' });
         return;
       }
 
-      if (req.method === 'GET' && url.pathname === '/binary') {
+      if (req.method === 'GET' && path === '/binary') {
         if (!requireAuth(req, res)) return;
         textResponse(res, 200, 'pcap-bytes', { 'content-type': 'application/octet-stream' });
         return;
       }
 
-      if (req.method === 'POST' && url.pathname === '/echo') {
+      if (req.method === 'POST' && path === '/echo') {
         if (!requireAuth(req, res)) return;
         const body = await collectBody(req);
         jsonResponse(res, 200, { query: Object.fromEntries(url.searchParams), body, header: req.headers['x-extra'] || '' });

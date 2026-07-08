@@ -59,19 +59,21 @@ services/venus__tar/
 | RPC | TAR API | 说明 |
 | --- | --- | --- |
 | `HealthCheck` | 登录链路或预置凭据检查 | 验证 instance config/secret 是否可用。 |
-| `Login` | `/user/checkCode`、`/user/login` | 使用用户名密码登录，或返回预置 token/cookie 状态。 |
-| `Logout` | `/user/logout` | 调用 TAR 登出并清空 service 内存中的 session。 |
-| `GetCurrentUser` | `/user/info` | 查询当前认证用户。 |
-| `Request` | 调用方传入 `path` | 通用 REST 透传方法，覆盖任意未建模 TAR API。 |
-| `GetDashboardOverview` | `POST /dashboard/overview` | 查询大屏概览。 |
-| `GetAlarmTotal` | `POST /dashboard/statistics/total` | 查询告警统计总数。 |
-| `ListEventLogs` | `POST /eventLog/detailPage` | 查询事件日志分页。 |
-| `ListAssets` | `POST /asset/page` | 查询资产分页。 |
-| `GetAssetById` | `POST /asset/getAssetById` | 按资产 ID 查询详情。 |
-| `GetPcapDetail` | `POST /pcap/detail` | 查询 PCAP 详情。 |
-| `TrackPcapFlow` | `POST /pcap/trackFlow` | 查询 PCAP 流追踪结果。 |
+| `Login` | `${apiPrefix}/user/checkCode`、`${apiPrefix}/user/login` | 使用用户名密码登录，或返回预置 token/cookie 状态。 |
+| `Logout` | `${apiPrefix}/user/logout` | 调用 TAR 登出并清空 service 内存中的 session。 |
+| `GetCurrentUser` | `${apiPrefix}/user/info` | 查询当前认证用户。 |
+| `Request` | 调用方传入 `path` | 通用 REST 透传方法，覆盖任意未建模 TAR API；不会自动添加 `apiPrefix`。 |
+| `GetDashboardOverview` | `POST ${apiPrefix}/dashboard/overview` | 查询大屏概览。 |
+| `GetAlarmTotal` | `POST ${apiPrefix}/dashboard/statistics/total` | 查询告警统计总数。 |
+| `ListEventLogs` | `POST ${apiPrefix}/eventLog/detailPage` | 查询事件日志分页。 |
+| `ListAssets` | `POST ${apiPrefix}/asset/page` | 查询资产分页。 |
+| `GetAssetById` | `POST ${apiPrefix}/asset/getAssetById` | 按资产 ID 查询详情。 |
+| `GetPcapDetail` | `POST ${apiPrefix}/pcap/detail` | 查询 PCAP 详情。 |
+| `TrackPcapFlow` | `POST ${apiPrefix}/pcap/trackFlow` | 查询 PCAP 流追踪结果。 |
 
 推荐优先使用 `Request` 做真实产品连通性验证，因为它能直接复现 TAR API 文档中的 HTTP 请求。
+
+默认 `apiPrefix` 是 `/tar`，匹配 TAR 前端常见的 REST base path。若某个部署直接在根路径暴露 API，可在 config 中设置 `"apiPrefix": ""`。
 
 ## Config 和 Secret
 
@@ -82,6 +84,7 @@ Config 保存非敏感连接参数，例如产品 URL、用户名、TLS 策略�
 ```json
 {
   "baseUrl": "https://10.2.28.106:9090",
+  "apiPrefix": "/tar",
   "username": "admin",
   "checkCode": "1234",
   "skipTlsVerify": true,
@@ -104,6 +107,7 @@ Secret 保存敏感认证信息。
 | `baseUrl` | string | TAR 产品根地址，例如 `https://10.2.28.106:9090`。 |
 | `restBaseUrl` | string | `baseUrl` 的别名。 |
 | `host` | string | `baseUrl` 的别名。 |
+| `apiPrefix` | string | 内置 RPC 的 TAR REST 路径前缀，默认 `/tar`；通用 `Request.path` 不会自动添加该前缀。 |
 | `username` | string | TAR 登录用户名。 |
 | `user` | string | `username` 的别名。 |
 | `formState` | string | TAR 登录表单状态，默认 `"1"`。 |
@@ -133,6 +137,7 @@ Secret 保存敏感认证信息。
 ```json
 {
   "baseUrl": "https://10.2.28.106:9090",
+  "apiPrefix": "/tar",
   "username": "admin",
   "checkCode": "1234",
   "skipTlsVerify": true,
@@ -159,6 +164,7 @@ service 会在运行实例中缓存 session。业务请求返回 401 或 403 时
 ```json
 {
   "baseUrl": "https://10.2.28.106:9090",
+  "apiPrefix": "/tar",
   "skipTlsVerify": true,
   "timeoutMs": 10000
 }
@@ -230,7 +236,7 @@ Venus_TAR.TARService/Request
 | 字段 | 说明 |
 | --- | --- |
 | `method` | HTTP 方法，支持 `GET`、`POST`、`PUT`、`PATCH`、`DELETE`。 |
-| `path` | TAR API 路径，必须以 `/` 开头，例如 `/api/v3/block`。不要写完整 URL。 |
+| `path` | TAR API 路径，必须以 `/` 开头，例如 `/tar/user/info` 或 `/api/v3/block`。不要写完整 URL。 |
 | `query` | 查询参数对象，会拼到 URL query string。 |
 | `headers` | 本次请求的 HTTP header，会覆盖默认 header。 |
 | `jsonBody` | JSON 字符串，不是 JSON 对象。 |
@@ -278,6 +284,7 @@ jq -r '.jsonBody' /data/report-tar-001/response.json | jq .
 
 - `jsonBody` 仍然是字符串。
 - service 会把它解析成 JSON，然后作为 POST body 调用对应 TAR API。
+- 业务包装方法会自动使用 `apiPrefix`；通用 `Request` 不会自动添加 `apiPrefix`。
 - 响应是 `JSONResponse`，字段为 `jsonBody` 和 `requestId`。
 
 示例：
@@ -485,10 +492,12 @@ npm --cache /tmp/octobus-npm-cache run pack:check
 | 现象 | 排查方向 |
 | --- | --- |
 | `bindings.baseUrl/restBaseUrl must be a valid http(s) URL` | config 中没有合法的 `baseUrl`、`restBaseUrl` 或 `host`。 |
+| `apiPrefix must be a path prefix, not a URL` | `apiPrefix` 只能是路径前缀，例如 `/tar`，不能写完整 URL。 |
 | `token/cookie or username/password is required` | secret 中没有 token/cookie，也没有提供 username/password。 |
 | `path must be an absolute path beginning with /` | `Request.path` 必须以 `/` 开头，不能写完整 URL。 |
 | `json_body must be valid JSON` | `jsonBody` 是字符串，但字符串内容不是合法 JSON。 |
 | 401 或 403 | 检查用户名、密码、验证码、token、cookie 或 `Authorization` header。 |
+| 上游返回 `{"code":401,"msg":"请求参数校验不通过"}` | OctoBus 链路通常已通，TAR 业务接口认为 POST body 缺少必填条件；从浏览器 F12 Network 复制真实 payload。 |
 | 自签名证书失败 | config 中设置 `"skipTlsVerify": true`。 |
 | `protoc failed` | 安装 `protobuf-compiler`；OctoBus import service 时需要 `protoc`。 |
 | `rawBodyBase64` 有值但 `jsonBody` 为空 | 上游 TAR 返回了非 JSON 内容。 |

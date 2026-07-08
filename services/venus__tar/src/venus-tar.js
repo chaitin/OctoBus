@@ -36,6 +36,7 @@ export const LOGOUT_PATH = '/user/logout';
 export const CURRENT_USER_PATH = '/user/info';
 export const DEFAULT_TIMEOUT_MS = 8000;
 export const DEFAULT_FORM_STATE = '1';
+export const DEFAULT_API_PREFIX = '/tar';
 
 const CORE_ENDPOINTS = {
   [METHOD_GET_DASHBOARD_OVERVIEW_FULL]: { method: 'POST', path: '/dashboard/overview' },
@@ -157,6 +158,18 @@ const normalizeBaseUrl = (rawUrl) => {
   return trimmed;
 };
 
+const normalizeApiPrefix = (rawPrefix) => {
+  const value = pickString(rawPrefix);
+  if (value === undefined) return DEFAULT_API_PREFIX;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === '/') return '';
+  if (/^https?:\/\//i.test(trimmed)) {
+    throw errorWithCode('FAILED_PRECONDITION', 'apiPrefix must be a path prefix, not a URL');
+  }
+  const stripped = trimmed.replace(/^\/+|\/+$/g, '');
+  return stripped ? `/${stripped}` : '';
+};
+
 const resolveTimeoutMs = (ctx = {}) => optionalPositiveNumber(ctx.bindings?.timeoutMs)
   ?? optionalPositiveNumber(ctx.limits?.timeoutMs)
   ?? DEFAULT_TIMEOUT_MS;
@@ -179,6 +192,7 @@ const buildEnv = (ctx = {}) => {
     password,
     token,
     cookie,
+    apiPrefix: normalizeApiPrefix(bindings.apiPrefix),
     formState: pickFirstString([bindings.formState]) || DEFAULT_FORM_STATE,
     checkCode: pickFirstString([bindings.checkCode]),
     codeKey: pickFirstString([bindings.codeKey]),
@@ -252,6 +266,15 @@ const buildUrl = (env, path, query = {}) => {
   }
   return url;
 };
+
+const withApiPrefix = (env, path) => {
+  const rawPath = pickFirstString([path]);
+  if (!rawPath || !env.apiPrefix) return rawPath;
+  if (rawPath === env.apiPrefix || rawPath.startsWith(`${env.apiPrefix}/`)) return rawPath;
+  return `${env.apiPrefix}${rawPath}`;
+};
+
+const buildApiUrl = (env, path, query = {}) => buildUrl(env, withApiPrefix(env, path), query);
 
 const applyAuthHeaders = (headers, auth = {}) => {
   if (auth.token) headers.Authorization = `Bearer ${auth.token}`;
@@ -353,8 +376,8 @@ const ensureOk = async (response, action) => {
   throw errorWithCode(mapHttpStatus(response.status), `${action} upstream http ${response.status}: ${text}`);
 };
 
-const requestJson = async (env, { method = 'GET', path, query, body, auth, headers, action = 'request' }) => {
-  const url = buildUrl(env, path, query);
+const requestJson = async (env, { method = 'GET', path, query, body, auth, headers, action = 'request', apiPrefix = true }) => {
+  const url = apiPrefix ? buildApiUrl(env, path, query) : buildUrl(env, path, query);
   const response = await doFetch(env, { url, method, body, auth, headers, action });
   await ensureOk(response, action);
   const text = await response.text();
@@ -379,7 +402,7 @@ const login = async (env, req = {}) => {
   const codeKey = pickFirstString([req.code_key, req.codeKey, env.codeKey, captcha.codeKey]);
   const checkCode = pickFirstString([req.check_code, req.checkCode, env.checkCode]);
   if (!checkCode) throw errorWithCode('FAILED_PRECONDITION', 'checkCode is required for TAR captcha login');
-  const url = buildUrl(env, LOGIN_PATH);
+  const url = buildApiUrl(env, LOGIN_PATH);
   const response = await doFetch(env, {
     url,
     method: 'POST',
@@ -455,7 +478,7 @@ const executeRestRequest = async (env, req = {}, { retry = true } = {}) => {
 const executeJsonEndpoint = async (env, req = {}, endpoint) => {
   const restReq = {
     method: endpoint.method,
-    path: endpoint.path,
+    path: withApiPrefix(env, endpoint.path),
     request_id: requestIdOf(req),
   };
   if (endpoint.method !== 'GET') restReq.json_body = req.json_body || '{}';
@@ -547,6 +570,7 @@ export const handlers = {
 
 export const _test = {
   buildEnv,
+  buildApiUrl,
   cachedEnvFor,
   buildUrl,
   clearSession,
@@ -567,6 +591,7 @@ export const _test = {
   isPlainObject,
   login,
   mapHttpStatus,
+  normalizeApiPrefix,
   normalizeBaseUrl,
   optionalPositiveNumber,
   parseJsonBody,
