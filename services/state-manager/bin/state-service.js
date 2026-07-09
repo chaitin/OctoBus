@@ -23,7 +23,7 @@
  */
 
 import { defineService, runServiceMain } from '@chaitin-ai/octobus-sdk';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, rename, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { StorageAdapter } from '../lib/storage-adapter.js';
 import { MemoryIndex } from '../lib/memory-index.js';
@@ -73,6 +73,36 @@ async function loadJSON(filePath, defaultValue = {}) {
 async function saveJSON(filePath, data) {
   await mkdir(dirname(filePath), { recursive: true });
   await writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+// ====== KV State Store (lock + atomic write, 防 GetState/SetState 并发竞态) ======
+// 串行化 read-modify-write，防止两个并发 SetState 各自读到旧数据、后写覆盖前写；
+// 原子写入（tmp+rename）防写入中途崩溃损坏文件。
+let _kvChain = Promise.resolve();
+const _kvPath = () => join(config.dataDir, 'kv_state.json');
+
+async function _kvRead() {
+  try {
+    const raw = await readFile(_kvPath(), 'utf-8');
+    return JSON.parse(raw);
+  } catch (err) {
+    // 仅 ENOENT 属正常首次启动；其他错误记日志并返回空，避免静默吞没
+    if (err.code !== 'ENOENT') {
+      console.warn(`[StateService] kv_state load failed (${err.code || err.name}): ${err.message}`);
+    }
+    return {};
+  }
+}
+
+async function _kvWrite(data) {
+  await mkdir(dirname(_kvPath()), { recursive: true });
+  const tmpPath = `${_kvPath()}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`;
+  try {
+    await writeFile(tmpPath, JSON.stringify(data, null, 2), 'utf-8');
+    await rename(tmpPath, _kvPath());
+  } finally {
+    await rm(tmpPath, { force: true }).catch(() => {});
+  }
 }
 
 // ====== Meeting State Machine (migrated to memory engine, this constant is for internal filtering only) ======
@@ -785,11 +815,14 @@ const service = defineService({
      */
     'state.manager.v1.StateManagerService/GetState': async (ctx) => {
       const { key } = ctx.request;
-      const filePath = join(config.dataDir, 'kv_state.json');
-
+      // 经串行链：等在途写完成后再读，避免读到半写状态
+      const next = _kvChain.then(async () => {
+        const data = await _kvRead();
+        return JSON.stringify(data[key] ?? null);
+      });
+      _kvChain = next.catch(() => {});
       try {
-        const data = await loadJSON(filePath, {});
-        return { success: true, value: JSON.stringify(data[key] ?? null), error: '' };
+        return { success: true, value: await next, error: '' };
       } catch (err) {
         return { success: false, value: '', error: err.message };
       }
@@ -800,17 +833,19 @@ const service = defineService({
      */
     'state.manager.v1.StateManagerService/SetState': async (ctx) => {
       const { key, value } = ctx.request;
-      const filePath = join(config.dataDir, 'kv_state.json');
-
-      try {
-        const data = await loadJSON(filePath, {});
+      // 串行化 load→modify→save，防并发 SetState 后写覆盖前写
+      const next = _kvChain.then(async () => {
+        const data = await _kvRead();
         try {
           data[key] = JSON.parse(value);
         } catch {
           data[key] = value;
         }
-        await saveJSON(filePath, data);
-
+        await _kvWrite(data);
+      });
+      _kvChain = next.catch(() => {});
+      try {
+        await next;
         return { success: true, error: '' };
       } catch (err) {
         return { success: false, error: err.message };
