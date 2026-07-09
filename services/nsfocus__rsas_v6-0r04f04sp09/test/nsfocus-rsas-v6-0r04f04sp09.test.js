@@ -178,17 +178,46 @@ test('GetTaskStatus, ListTasks, GetTaskResult round-trip', async () => {
   }
 });
 
-test('ListTasks omits type/page/page_size when they are proto3 default 0', async () => {
+test('ListTasks omits type but defaults page/page_size on proto3 default 0', async () => {
   const mock = await createMockServer();
   try {
     // Simulates a decoded proto3 request where unset int64 fields arrive as 0.
     await call('ListTasks', { type: 0, page: 0, page_size: 0 }, { bindings: { host: mock.url } });
     const req = mock.requests.find((r) => r.pathname === '/api/task/list');
     assert.equal(req.query.type, undefined);
-    assert.equal(req.query.page, undefined);
-    assert.equal(req.query.page_size, undefined);
-    // format/curr_lang auth params are still present.
+    // 1-based pagination defaults, never a proto3 0.
+    assert.equal(req.query.page, '1');
+    assert.equal(req.query.page_size, '10');
     assert.equal(req.query.format, 'json');
+  } finally {
+    await mock.close();
+  }
+});
+
+test('normalizeRequest mirrors camelCase runtime keys to snake_case, recursively', () => {
+  const out = _test.normalizeRequest({
+    taskId: '60',
+    templateUuid: 'u-1',
+    jumparray: [{ ipRange: '10.0.0.2', userName: 'root', userPwd: 'x', port: 22 }],
+  });
+  assert.equal(out.task_id, '60');
+  assert.equal(out.template_uuid, 'u-1');
+  assert.equal(out.jumparray[0].ip_range, '10.0.0.2');
+  assert.equal(out.jumparray[0].user_name, 'root');
+  assert.equal(out.jumparray[0].user_pwd, 'x');
+  // pre-existing snake_case keys are preserved and not clobbered
+  const keep = _test.normalizeRequest({ task_id: 'a', taskId: 'b' });
+  assert.equal(keep.task_id, 'a');
+});
+
+test('handlers resolve camelCase request keys end-to-end (real-runtime shape)', async () => {
+  const mock = await createMockServer();
+  try {
+    // The CLI runtime delivers task_id as taskId; the handler must still work.
+    const out = await call('GetTaskStatus', { taskId: '60' }, { bindings: { host: mock.url } });
+    assert.equal(out.ret_code, 0);
+    const req = mock.requests.find((r) => r.pathname.startsWith('/api/task/status/'));
+    assert.equal(req.pathname, '/api/task/status/60');
   } finally {
     await mock.close();
   }

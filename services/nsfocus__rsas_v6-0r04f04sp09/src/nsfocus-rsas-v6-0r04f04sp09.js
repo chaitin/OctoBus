@@ -50,7 +50,30 @@ const resolveCallContext = (ctx = {}) => ({
   req: ctx.request ?? ctx.req ?? {},
 });
 
-const requestFromContext = (ctx = {}) => ctx?.request ?? ctx?.req ?? {};
+const snakeCaseKey = (key) => key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+
+// The SDK serializes request fields with protobuf jsonName (camelCase), so the
+// runtime delivers e.g. task_id as taskId. Handlers read snake_case, so mirror
+// every camelCase key to its snake_case form — recursively, to also cover
+// nested messages such as jumparray entries (ip_range/user_name/user_pwd) —
+// without clobbering any snake_case key that is already present.
+const normalizeRequest = (value) => {
+  if (Array.isArray(value)) return value.map((item) => normalizeRequest(item));
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const [key, val] of Object.entries(value)) out[key] = normalizeRequest(val);
+    for (const key of Object.keys(value)) {
+      if (!key.includes('_') && /[A-Z]/.test(key)) {
+        const snakeKey = snakeCaseKey(key);
+        if (!(snakeKey in out)) out[snakeKey] = out[key];
+      }
+    }
+    return out;
+  }
+  return value;
+};
+
+const requestFromContext = (ctx = {}) => normalizeRequest(ctx?.request ?? ctx?.req ?? {});
 
 const normalizeBaseUrl = (value) => {
   const raw = String(unwrapScalar(value) ?? '').trim();
@@ -482,13 +505,16 @@ const handleBatchDeleteTasks = async (req, ctx) => {
 
 const handleListTasks = async (req, ctx) => {
   const callCtx = resolveCallContext(ctx);
+  const pageVal = toInteger(req?.page, 0);
+  const pageSizeVal = toInteger(req?.page_size, 0);
   const query = {
     type: toOptionalPositiveInt(req?.type),
     end_time_start: toTrimmed(req?.end_time_start),
     end_time_end: toTrimmed(req?.end_time_end),
     isfinished: toTrimmed(req?.isfinished),
-    page: toOptionalPositiveInt(req?.page),
-    page_size: toOptionalPositiveInt(req?.page_size),
+    // RSAS pagination is 1-based; send sane defaults rather than a proto3 0.
+    page: pageVal > 0 ? pageVal : 1,
+    page_size: pageSizeVal > 0 ? pageSizeVal : 10,
   };
   return toRsasResponse(await requestJson(callCtx, { path: '/api/task/list', method: 'GET', query }));
 };
@@ -500,10 +526,12 @@ const handleListActiveTasks = async (_req, ctx) => {
 
 const handleGetTaskResult = async (req, ctx) => {
   const callCtx = resolveCallContext(ctx);
+  const pageVal = toInteger(req?.page, 0);
+  const pageSizeVal = toInteger(req?.page_size, 0);
   const query = {
     targets: toTrimmed(req?.targets),
-    page: toOptionalPositiveInt(req?.page),
-    page_size: toOptionalPositiveInt(req?.page_size),
+    page: pageVal > 0 ? pageVal : 1,
+    page_size: pageSizeVal > 0 ? pageSizeVal : 20,
   };
   return toRsasResponse(await requestJson(callCtx, { path: `/api/report/task/${requireTaskId(req)}`, method: 'GET', query }));
 };
@@ -766,6 +794,7 @@ export const _test = {
   formFromFields,
   guardHttpStatus,
   normalizeBaseUrl,
+  normalizeRequest,
   pickCredential,
   requestBinary,
   requestJson,
