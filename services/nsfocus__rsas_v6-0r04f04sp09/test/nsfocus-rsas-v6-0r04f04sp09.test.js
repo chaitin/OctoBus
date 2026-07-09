@@ -61,6 +61,27 @@ test('authQuery pulls credentials with precedence and rejects when missing', () 
   assert.throws(() => _test.authQuery(noCred), /INVALID_ARGUMENT/);
 });
 
+test('password is read from secret only, never from config or bindings', () => {
+  // username may fall back to config for dev, but password must come from secret.
+  const ctx = _test.resolveCallContext({
+    secret: { user: 'u' },
+    config: { password: 'leaky-from-config' },
+    bindings: { host: 'http://x', password: 'leaky-from-bindings' },
+  });
+  assert.throws(() => _test.authQuery(ctx), /password is required/);
+  const ok = _test.resolveCallContext({ secret: { user: 'u', password: 'p' }, config: { user: 'cfg-user' } });
+  assert.equal(_test.authQuery(ok).password, 'p');
+});
+
+test('toOptionalPositiveInt treats 0/unset as omitted (proto3 default guard)', () => {
+  assert.equal(_test.toOptionalPositiveInt(undefined), undefined);
+  assert.equal(_test.toOptionalPositiveInt(0), undefined);
+  assert.equal(_test.toOptionalPositiveInt('0'), undefined);
+  assert.equal(_test.toOptionalPositiveInt(''), undefined);
+  assert.equal(_test.toOptionalPositiveInt(5), 5);
+  assert.equal(_test.toOptionalPositiveInt('22'), 22);
+});
+
 test('filenameFromContentDisposition parses plain and extended forms', () => {
   assert.equal(_test.filenameFromContentDisposition('attachment; filename="a.zip"'), 'a.zip');
   assert.equal(_test.filenameFromContentDisposition("attachment; filename*=UTF-8''b%20c.zip"), 'b c.zip');
@@ -152,6 +173,37 @@ test('GetTaskStatus, ListTasks, GetTaskResult round-trip', async () => {
     assert.equal(listReq.query.type, '1');
     const result = await call('GetTaskResult', { task_id: '60', targets: '10.65.194.153' }, { bindings: { host: mock.url } });
     assert.equal(result.ret_code, 0);
+  } finally {
+    await mock.close();
+  }
+});
+
+test('ListTasks omits type/page/page_size when they are proto3 default 0', async () => {
+  const mock = await createMockServer();
+  try {
+    // Simulates a decoded proto3 request where unset int64 fields arrive as 0.
+    await call('ListTasks', { type: 0, page: 0, page_size: 0 }, { bindings: { host: mock.url } });
+    const req = mock.requests.find((r) => r.pathname === '/api/task/list');
+    assert.equal(req.query.type, undefined);
+    assert.equal(req.query.page, undefined);
+    assert.equal(req.query.page_size, undefined);
+    // format/curr_lang auth params are still present.
+    assert.equal(req.query.format, 'json');
+  } finally {
+    await mock.close();
+  }
+});
+
+test('CreatePwdTask omits port when it is proto3 default 0', async () => {
+  const mock = await createMockServer();
+  try {
+    // pwd endpoint returns 404 in mock, but we only assert the outgoing form here.
+    await call('CreatePwdTask', {
+      name: 't', targets: '1.1.1.1', template_id: '188', service_type: 'SSH', port: 0,
+    }, { bindings: { host: mock.url } }).catch(() => {});
+    const req = mock.requests.find((r) => r.pathname === '/api/task/pwd/create');
+    assert.ok(req, 'expected a request to pwd/create');
+    assert.doesNotMatch(req.rawBody, /name="port"/);
   } finally {
     await mock.close();
   }

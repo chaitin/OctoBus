@@ -84,8 +84,11 @@ const resolveCurrLang = (callCtx) => {
   return raw === 'en' ? 'en' : 'cn';
 };
 
-const pickCredential = (callCtx, fieldNames, fieldLabel) => {
-  const sources = [callCtx?.secret || {}, callCtx?.config || {}, callCtx?.bindings || {}];
+// scopeKeys selects which binding spaces to search. Password must stay
+// secret-only: config permits arbitrary extra properties and is far more
+// likely to be logged, version-controlled, or exported than secret.
+const pickCredential = (callCtx, fieldNames, fieldLabel, scopeKeys = ['secret', 'config', 'bindings']) => {
+  const sources = scopeKeys.map((key) => callCtx?.[key] || {});
   for (const field of fieldNames) {
     for (const source of sources) {
       const text = String(unwrapScalar(source[field]) ?? '').trim();
@@ -97,7 +100,7 @@ const pickCredential = (callCtx, fieldNames, fieldLabel) => {
 
 const authQuery = (callCtx) => ({
   username: pickCredential(callCtx, ['user', 'username'], 'username'),
-  password: pickCredential(callCtx, ['password'], 'password'),
+  password: pickCredential(callCtx, ['password'], 'password', ['secret']),
   format: 'json',
   curr_lang: resolveCurrLang(callCtx),
 });
@@ -133,6 +136,17 @@ const toInteger = (value, fallback = 0) => {
   const num = Number(unwrapScalar(value));
   if (!Number.isFinite(num) || Number.isNaN(num)) return fallback;
   return Math.trunc(num);
+};
+
+// For optional int64 request fields: proto3 scalars decode unset values as 0,
+// so `=== undefined` cannot distinguish "unset" from "0". These fields
+// (template_id, port, type, page, page_size) have no valid 0 business value,
+// so treat 0/unset alike and omit them rather than sending 0 downstream.
+const toOptionalPositiveInt = (value) => {
+  const raw = unwrapScalar(value);
+  if (raw === undefined || raw === null || raw === '') return undefined;
+  const num = toInteger(raw, 0);
+  return num > 0 ? num : undefined;
 };
 
 const toTrimmed = (value) => String(unwrapScalar(value) ?? '').trim();
@@ -327,7 +341,7 @@ const handleCreateVulnTask = async (req, ctx) => {
   const form = formFromFields({
     name: requireField(req?.name, 'name'),
     targets: requireField(req?.targets, 'targets'),
-    template_id: req?.template_id === undefined ? undefined : toInteger(req.template_id, 0),
+    template_id: toOptionalPositiveInt(req?.template_id),
   });
   return toTaskCreateResponse(await requestJson(callCtx, { path: '/api/task/vul/create', method: 'POST', form }));
 };
@@ -356,7 +370,7 @@ const handleCreatePwdTask = async (req, ctx) => {
     template_id: requireField(req?.template_id, 'template_id'),
     service_type: requireField(req?.service_type, 'service_type'),
     pass_mode: toTrimmed(req?.pass_mode),
-    port: req?.port === undefined ? undefined : toInteger(req.port, 0),
+    port: toOptionalPositiveInt(req?.port),
   });
   return toTaskCreateResponse(await requestJson(callCtx, { path: '/api/task/pwd/create', method: 'POST', form }));
 };
@@ -400,7 +414,7 @@ const handleCreateCodeauditTask = async (req, ctx) => {
     repo_path: requireField(req?.repo_path, 'repo_path'),
     repo_username: toTrimmed(req?.repo_username),
     repo_password: toTrimmed(req?.repo_password),
-    template_id: req?.template_id === undefined ? undefined : toInteger(req.template_id, 0),
+    template_id: toOptionalPositiveInt(req?.template_id),
     exclude_files: toTrimmed(req?.exclude_files),
     exclude_dirs: toTrimmed(req?.exclude_dirs),
     git_branch: toTrimmed(req?.git_branch),
@@ -469,12 +483,12 @@ const handleBatchDeleteTasks = async (req, ctx) => {
 const handleListTasks = async (req, ctx) => {
   const callCtx = resolveCallContext(ctx);
   const query = {
-    type: req?.type === undefined ? undefined : toInteger(req.type, 0),
+    type: toOptionalPositiveInt(req?.type),
     end_time_start: toTrimmed(req?.end_time_start),
     end_time_end: toTrimmed(req?.end_time_end),
     isfinished: toTrimmed(req?.isfinished),
-    page: req?.page === undefined ? undefined : toInteger(req.page, 0),
-    page_size: req?.page_size === undefined ? undefined : toInteger(req.page_size, 0),
+    page: toOptionalPositiveInt(req?.page),
+    page_size: toOptionalPositiveInt(req?.page_size),
   };
   return toRsasResponse(await requestJson(callCtx, { path: '/api/task/list', method: 'GET', query }));
 };
@@ -488,8 +502,8 @@ const handleGetTaskResult = async (req, ctx) => {
   const callCtx = resolveCallContext(ctx);
   const query = {
     targets: toTrimmed(req?.targets),
-    page: req?.page === undefined ? undefined : toInteger(req.page, 0),
-    page_size: req?.page_size === undefined ? undefined : toInteger(req.page_size, 0),
+    page: toOptionalPositiveInt(req?.page),
+    page_size: toOptionalPositiveInt(req?.page_size),
   };
   return toRsasResponse(await requestJson(callCtx, { path: `/api/report/task/${requireTaskId(req)}`, method: 'GET', query }));
 };
@@ -762,6 +776,7 @@ export const _test = {
   resolveTimeoutMs,
   toBoolean,
   toInteger,
+  toOptionalPositiveInt,
   toRsasResponse,
   toTaskCreateResponse,
   toValue,
