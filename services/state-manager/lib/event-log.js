@@ -126,8 +126,12 @@ export class EventLog {
         const parsed = JSON.parse(raw);
         const events = Array.isArray(parsed) ? parsed : (parsed.events || []);
         results.push(...events);
-      } catch {
-        // 文件不存在，跳过
+      } catch (err) {
+        // 仅 ENOENT（文件不存在）属正常跳过；其他错误（权限不足、JSON 损坏、
+        // 磁盘故障）需记录，避免静默吞没导致查询结果不完整且无可排查
+        if (err.code !== 'ENOENT') {
+          console.warn(`[EventLog] failed to read rotated log ${rotatedPath} (${err.code || err.name}): ${err.message}`);
+        }
       }
     }
 
@@ -219,16 +223,21 @@ export class EventLog {
         const to = join(this.dataDir, `event_log.${i + 1}.json`);
         try {
           await rename(from, to);
-        } catch {
-          // 文件不存在，跳过
+        } catch (err) {
+          // 仅 ENOENT 属正常（该编号文件尚未生成）；其他错误需记录
+          if (err.code !== 'ENOENT') {
+            console.warn(`[EventLog] rotate rename ${from} -> ${to} failed (${err.code || err.name}): ${err.message}`);
+          }
         }
       }
 
       // 当前文件 → .1
       try {
         await rename(this.filePath, join(this.dataDir, 'event_log.1.json'));
-      } catch {
-        // 当前文件不存在，忽略
+      } catch (err) {
+        if (err.code !== 'ENOENT') {
+          console.warn(`[EventLog] rotate rename current file failed (${err.code || err.name}): ${err.message}`);
+        }
       }
 
       // 清空内存（only after successful save + file rotation）
@@ -250,8 +259,11 @@ export class EventLog {
       if (Array.isArray(data.events)) {
         this.events = data.events;
       }
-    } catch {
-      // 文件不存在，从空开始
+    } catch (err) {
+      // 仅 ENOENT 属正常首次启动；其他错误（权限/损坏）需记录，避免静默丢历史
+      if (err.code !== 'ENOENT') {
+        console.warn(`[EventLog] failed to load ${this.filePath} (${err.code || err.name}): ${err.message}; starting empty`);
+      }
     }
   }
 
