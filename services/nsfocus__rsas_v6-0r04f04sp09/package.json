@@ -1,0 +1,13 @@
+{
+  "name": "nsfocus-rsas-v6-0r04f04sp09",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "nsfocus-rsas-v6-0r04f04sp09": "bin/nsfocus-rsas-v6-0r04f04sp09.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.6.0",
+    "undici": "^7.16.0"
+  }
+}

@@ -156,6 +156,10 @@ const services = {
     entryFile: "../nsfocus__nips_v5-6-r11/bin/nsfocus-nips-v5-6-r11.js",
     serviceModule: "../nsfocus__nips_v5-6-r11/src/service.js",
   },
+  "nsfocus-rsas-v6-0r04f04sp09": {
+    entryFile: "../nsfocus__rsas_v6-0r04f04sp09/bin/nsfocus-rsas-v6-0r04f04sp09.js",
+    serviceModule: "../nsfocus__rsas_v6-0r04f04sp09/src/service.js",
+  },
   "owasp-dependency-track-sca-v5-0": {
     entryFile: "../owasp__dependency-track-sca_v5-0/bin/owasp-dependency-track-sca-v5-0.js",
     serviceModule: "../owasp__dependency-track-sca_v5-0/src/service.js",

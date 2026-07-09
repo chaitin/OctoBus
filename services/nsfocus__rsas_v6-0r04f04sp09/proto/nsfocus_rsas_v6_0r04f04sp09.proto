@@ -1,0 +1,297 @@
+syntax = "proto3";
+
+package Nsfocus_RSAS_V60R04F04SP09;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Nsfocus_RSAS_V60R04F04SP09";
+
+// NSFOCUS RSAS (Remote Security Assessment System) V6.0R04F04SP09 REST API.
+// Credentials (username/password) are provided through config/secret bindings
+// and appended to every request as query parameters, matching the device's
+// URL-parameter authentication scheme.
+service Nsfocus_RSAS_V60R04F04SP09 {
+  // Task lifecycle
+  rpc CreateTask(CreateTaskRequest) returns (TaskCreateResponse) {}
+  rpc CreateVulnTask(CreateVulnTaskRequest) returns (TaskCreateResponse) {}
+  rpc CreateBaselineTask(CreateBaselineTaskRequest) returns (TaskCreateResponse) {}
+  rpc CreatePwdTask(CreatePwdTaskRequest) returns (TaskCreateResponse) {}
+  rpc CreateWebTask(CreateWebTaskRequest) returns (TaskCreateResponse) {}
+  rpc CreateOfflineTask(CreateOfflineTaskRequest) returns (TaskCreateResponse) {}
+  rpc CreateDockerTask(CreateDockerTaskRequest) returns (TaskCreateResponse) {}
+  rpc CreateCodeauditTask(CreateCodeauditTaskRequest) returns (TaskCreateResponse) {}
+  rpc CreateHostAssetsTask(CreateHostAssetsTaskRequest) returns (TaskCreateResponse) {}
+  rpc CreateWebAssetsTask(CreateWebAssetsTaskRequest) returns (TaskCreateResponse) {}
+  rpc GetTaskStatus(TaskIdRequest) returns (RsasResponse) {}
+  rpc PauseTask(TaskIdRequest) returns (RsasResponse) {}
+  rpc ResumeTask(TaskIdRequest) returns (RsasResponse) {}
+  rpc StopTask(TaskIdRequest) returns (RsasResponse) {}
+  rpc DeleteTask(TaskIdRequest) returns (RsasResponse) {}
+  rpc BatchDeleteTasks(BatchDeleteTasksRequest) returns (RsasResponse) {}
+  rpc ListTasks(ListTasksRequest) returns (RsasResponse) {}
+  rpc ListActiveTasks(EmptyRequest) returns (RsasResponse) {}
+  rpc GetTaskResult(GetTaskResultRequest) returns (RsasResponse) {}
+  rpc CreateAuthInfo(CreateAuthInfoRequest) returns (RsasResponse) {}
+  rpc LoginVerify(LoginVerifyRequest) returns (RsasResponse) {}
+
+  // Templates and dictionaries
+  rpc ListSysvulnTemplate(EmptyRequest) returns (RsasResponse) {}
+  rpc ListWebvulnTemplate(EmptyRequest) returns (RsasResponse) {}
+  rpc ListBaselineTemplate(ListBaselineTemplateRequest) returns (RsasResponse) {}
+  rpc GetBaselineParams(GetBaselineParamsRequest) returns (RsasResponse) {}
+  rpc ListCodeauditTemplate(ListCodeauditTemplateRequest) returns (RsasResponse) {}
+  rpc ListAssetTemplate(EmptyRequest) returns (RsasResponse) {}
+  rpc CreateBaselineTemplate(CreateBaselineTemplateRequest) returns (RsasResponse) {}
+  rpc ListUserpwd(EmptyRequest) returns (RsasResponse) {}
+  rpc CreateUserpwd(CreateUserpwdRequest) returns (RsasResponse) {}
+
+  // System and audit
+  rpc GetSystemStatus(EmptyRequest) returns (RsasResponse) {}
+  rpc GetLogInfo(GetLogInfoRequest) returns (RsasResponse) {}
+
+  // Reports
+  rpc ListReportTemplate(EmptyRequest) returns (RsasResponse) {}
+  rpc GenerateReport(GenerateReportRequest) returns (RsasResponse) {}
+  rpc GetReportProgress(GetReportProgressRequest) returns (RsasResponse) {}
+  rpc DownloadReport(DownloadReportRequest) returns (BinaryResponse) {}
+  rpc DeleteReports(DeleteReportsRequest) returns (RsasResponse) {}
+
+  // Agent
+  rpc GetAgentMethodConfig(EmptyRequest) returns (RsasResponse) {}
+  rpc SetAgentMethodConfig(SetAgentMethodConfigRequest) returns (RsasResponse) {}
+  rpc GetAgentAuth(EmptyRequest) returns (RsasResponse) {}
+  rpc GetAgentPackageUrl(EmptyRequest) returns (RsasResponse) {}
+  rpc DownloadAgent(DownloadAgentRequest) returns (BinaryResponse) {}
+}
+
+message EmptyRequest {
+}
+
+// Standard RSAS JSON envelope: {"ret_code":0,"ret_msg":"success","data":{...}}.
+message RsasResponse {
+  int64 ret_code = 1;
+  string ret_msg = 2;
+  google.protobuf.Value data = 3;
+  int32 http_status = 4;
+}
+
+// Task creation responses additionally surface the created task_id for convenience.
+message TaskCreateResponse {
+  int64 ret_code = 1;
+  string ret_msg = 2;
+  google.protobuf.Value data = 3;
+  int32 http_status = 4;
+  string task_id = 5;
+}
+
+// Binary download responses (report zip, agent installer).
+message BinaryResponse {
+  int32 http_status = 1;
+  string content_type = 2;
+  int64 content_length = 3;
+  string filename = 4;
+  string body_base64 = 5;
+}
+
+message TaskIdRequest {
+  string task_id = 1;
+}
+
+message CreateTaskRequest {
+  // Task type validation hint: 1 vuln, 2 baseline, 3 vuln+baseline, 4 pwd, 8 web.
+  int64 type = 1;
+  // config.xml content (the file body); sent as a multipart file field.
+  string config_xml = 2;
+  // Optional file name for the multipart part (default config.xml).
+  string config_xml_filename = 3;
+}
+
+message CreateVulnTaskRequest {
+  string name = 1;
+  string targets = 2;
+  int64 template_id = 3;
+}
+
+message CreateBaselineTaskRequest {
+  string name = 1;
+  string targets = 2;
+  string login_type = 3;
+  string login_port = 4;
+  string login_name = 5;
+  string login_password = 6;
+  string template_uuid = 7;
+  string template_param = 8;
+  string protect_level = 9;
+}
+
+message CreatePwdTaskRequest {
+  string name = 1;
+  string targets = 2;
+  string template_id = 3;
+  string service_type = 4;
+  string pass_mode = 5;
+  int64 port = 6;
+}
+
+message CreateWebTaskRequest {
+  string name = 1;
+  string targets = 2;
+  string template_id = 3;
+  string component_scan = 4;
+}
+
+message CreateOfflineTaskRequest {
+  // Offline scan result file content, base64-encoded.
+  string task_field_base64 = 1;
+  string filename = 2;
+}
+
+message CreateDockerTaskRequest {
+  string name = 1;
+  string targets = 2;
+  string registry_address = 3;
+  string registry_username = 4;
+  string registry_password = 5;
+}
+
+message CreateCodeauditTaskRequest {
+  string name = 1;
+  int64 code_source = 2;
+  string repo_path = 3;
+  string repo_username = 4;
+  string repo_password = 5;
+  int64 template_id = 6;
+  string exclude_files = 7;
+  string exclude_dirs = 8;
+  string git_branch = 9;
+}
+
+message CreateHostAssetsTaskRequest {
+  string name = 1;
+  string targets = 2;
+  string is_related = 3;
+  string template_id = 4;
+  string prohibit_config = 5;
+  string prohibit_ports = 6;
+}
+
+message CreateWebAssetsTaskRequest {
+  string name = 1;
+  string targets = 2;
+  string is_related = 3;
+  string is_sitetree = 4;
+}
+
+message BatchDeleteTasksRequest {
+  repeated int64 task_ids = 1;
+}
+
+message ListTasksRequest {
+  int64 type = 1;
+  string end_time_start = 2;
+  string end_time_end = 3;
+  string isfinished = 4;
+  int64 page = 5;
+  int64 page_size = 6;
+}
+
+message GetTaskResultRequest {
+  string task_id = 1;
+  string targets = 2;
+  int64 page = 3;
+  int64 page_size = 4;
+}
+
+message AuthInfoEntry {
+  string accountname = 1;
+  string accountpwd = 2;
+  string port = 3;
+  string protocol = 4;
+  string ip = 5;
+}
+
+message CreateAuthInfoRequest {
+  repeated AuthInfoEntry authinfo = 1;
+}
+
+message JumpHost {
+  string ip_range = 1;
+  string protocol = 2;
+  string user_name = 3;
+  string user_pwd = 4;
+  int64 port = 5;
+}
+
+message LoginVerifyRequest {
+  string ip = 1;
+  string protocol = 2;
+  int64 port = 3;
+  string user_name = 4;
+  string userpwd = 5;
+  bool jump_ifuse = 6;
+  repeated JumpHost jumparray = 7;
+  string web_login_url = 8;
+  string web_login_cookie = 9;
+}
+
+message ListBaselineTemplateRequest {
+  string industry = 1;
+}
+
+message GetBaselineParamsRequest {
+  string uuid = 1;
+}
+
+message ListCodeauditTemplateRequest {
+  int64 type = 1;
+}
+
+message CreateBaselineTemplateRequest {
+  // Exported template file content, base64-encoded.
+  string template_base64 = 1;
+  string filename = 2;
+}
+
+message CreateUserpwdRequest {
+  // JSON array of {type,title,data} where data is base64 line content.
+  string userpwd = 1;
+}
+
+message GetLogInfoRequest {
+  string account = 1;
+  string type = 2;
+  string starttime = 3;
+  string endtime = 4;
+  string ip = 5;
+}
+
+message GenerateReportRequest {
+  string task_id = 1;
+  string summary_template_id = 2;
+  string host_template_id = 3;
+  string report_type = 4;
+}
+
+message GetReportProgressRequest {
+  string report_id = 1;
+}
+
+message DownloadReportRequest {
+  string report_id = 1;
+  string report_type = 2;
+}
+
+message DeleteReportsRequest {
+  // Report ids: repeated integers, or the literal "all".
+  repeated int64 report_ids = 1;
+  bool all = 2;
+}
+
+message SetAgentMethodConfigRequest {
+  int64 agent_method = 1;
+}
+
+message DownloadAgentRequest {
+  // Target platform: "linux" or "windows".
+  string platform = 1;
+}

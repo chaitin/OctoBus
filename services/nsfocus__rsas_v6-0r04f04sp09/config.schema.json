@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "host": {
+      "type": "string",
+      "description": "NSFOCUS RSAS base URL with http(s) scheme, e.g. https://10.65.193.127."
+    },
+    "restBaseUrl": {
+      "type": "string",
+      "description": "Alias for host."
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "Alias for host."
+    },
+    "rest_base_url": {
+      "type": "string",
+      "description": "Alias for host."
+    },
+    "base_url": {
+      "type": "string",
+      "description": "Alias for host."
+    },
+    "user": {
+      "type": "string",
+      "description": "Login username. Prefer secret.user for persistent credentials."
+    },
+    "username": {
+      "type": "string",
+      "description": "Alias for user."
+    },
+    "currLang": {
+      "type": "string",
+      "enum": ["cn", "en"],
+      "default": "cn",
+      "description": "Response language (RSAS curr_lang parameter)."
+    },
+    "curr_lang": {
+      "type": "string",
+      "description": "Alias for currLang."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 30000,
+      "description": "HTTP timeout in milliseconds. RSAS scan-result and report calls can be slow."
+    },
+    "timeout_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Alias for timeoutMs."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for private deployments with self-signed certs."
+    },
+    "tlsInsecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Legacy alias for skipTlsVerify."
+    },
+    "insecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Alias for skipTlsVerify."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional additional HTTP headers."
+    }
+  }
+}

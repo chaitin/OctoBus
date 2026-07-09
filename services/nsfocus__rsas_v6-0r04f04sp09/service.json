@@ -1,0 +1,193 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "nsfocus-rsas-v6-0r04f04sp09",
+  "displayName": "NSFOCUS RSAS V6.0R04F04SP09",
+  "description": "OctoBus package for NSFOCUS RSAS (Remote Security Assessment System) V6.0R04F04SP09 REST APIs: scan tasks, templates, reports, and agent management.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/nsfocus_rsas_v6_0r04f04sp09.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/CreateTask": {
+          "name": "create-task",
+          "description": "Create a task from a config.xml payload."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/CreateVulnTask": {
+          "name": "create-vuln-task",
+          "description": "Create a vulnerability scan task."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/CreateBaselineTask": {
+          "name": "create-baseline-task",
+          "description": "Create a configuration/baseline check task."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/CreatePwdTask": {
+          "name": "create-pwd-task",
+          "description": "Create a password guessing task."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/CreateWebTask": {
+          "name": "create-web-task",
+          "description": "Create a web application scan task."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/CreateOfflineTask": {
+          "name": "create-offline-task",
+          "description": "Create an offline scan task from a result file."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/CreateDockerTask": {
+          "name": "create-docker-task",
+          "description": "Create a container image scan task."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/CreateCodeauditTask": {
+          "name": "create-codeaudit-task",
+          "description": "Create a source code audit task."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/CreateHostAssetsTask": {
+          "name": "create-host-assets-task",
+          "description": "Create a host asset discovery task."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/CreateWebAssetsTask": {
+          "name": "create-web-assets-task",
+          "description": "Create a web asset discovery task."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/GetTaskStatus": {
+          "name": "get-task-status",
+          "description": "Query the status of a task by id."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/PauseTask": {
+          "name": "pause-task",
+          "description": "Pause a running task."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/ResumeTask": {
+          "name": "resume-task",
+          "description": "Resume a paused task."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/StopTask": {
+          "name": "stop-task",
+          "description": "Stop a task."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/DeleteTask": {
+          "name": "delete-task",
+          "description": "Delete a task by id."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/BatchDeleteTasks": {
+          "name": "batch-delete-tasks",
+          "description": "Delete multiple tasks by id list."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/ListTasks": {
+          "name": "list-tasks",
+          "description": "List tasks with optional filters."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/ListActiveTasks": {
+          "name": "list-active-tasks",
+          "description": "List currently running tasks."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/GetTaskResult": {
+          "name": "get-task-result",
+          "description": "Fetch scan results for a task."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/CreateAuthInfo": {
+          "name": "create-auth-info",
+          "description": "Push scan authentication credentials."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/LoginVerify": {
+          "name": "login-verify",
+          "description": "Verify a scan login credential against a target."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/ListSysvulnTemplate": {
+          "name": "list-sysvuln-template",
+          "description": "List system vulnerability templates."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/ListWebvulnTemplate": {
+          "name": "list-webvuln-template",
+          "description": "List web vulnerability templates."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/ListBaselineTemplate": {
+          "name": "list-baseline-template",
+          "description": "List configuration/baseline templates."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/GetBaselineParams": {
+          "name": "get-baseline-params",
+          "description": "Get parameters for a baseline template."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/ListCodeauditTemplate": {
+          "name": "list-codeaudit-template",
+          "description": "List code audit templates."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/ListAssetTemplate": {
+          "name": "list-asset-template",
+          "description": "List asset discovery templates."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/CreateBaselineTemplate": {
+          "name": "create-baseline-template",
+          "description": "Import a baseline template file."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/ListUserpwd": {
+          "name": "list-userpwd",
+          "description": "List password dictionaries."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/CreateUserpwd": {
+          "name": "create-userpwd",
+          "description": "Push a custom password dictionary."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/GetSystemStatus": {
+          "name": "get-system-status",
+          "description": "Get device system status and resource usage."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/GetLogInfo": {
+          "name": "get-log-info",
+          "description": "Query audit logs."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/ListReportTemplate": {
+          "name": "list-report-template",
+          "description": "List report templates."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/GenerateReport": {
+          "name": "generate-report",
+          "description": "Generate a report for a task."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/GetReportProgress": {
+          "name": "get-report-progress",
+          "description": "Query report generation progress."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/DownloadReport": {
+          "name": "download-report",
+          "description": "Download a generated report zip."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/DeleteReports": {
+          "name": "delete-reports",
+          "description": "Delete reports by id list or all."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/GetAgentMethodConfig": {
+          "name": "get-agent-method-config",
+          "description": "Get the agent deployment method."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/SetAgentMethodConfig": {
+          "name": "set-agent-method-config",
+          "description": "Set the agent deployment method."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/GetAgentAuth": {
+          "name": "get-agent-auth",
+          "description": "Get agent authorization/registration counts."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/GetAgentPackageUrl": {
+          "name": "get-agent-package-url",
+          "description": "Get agent installer download links."
+        },
+        "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/DownloadAgent": {
+          "name": "download-agent",
+          "description": "Download the agent installer for a platform."
+        }
+      }
+    }
+  }
+}
