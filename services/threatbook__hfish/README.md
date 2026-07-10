@@ -56,7 +56,7 @@ Requests may still pass `api_key` or `apiKey`; configured secret values take pre
 
 ## Behavior Notes
 
-- HTTP 401/403 maps to `PERMISSION_DENIED`.
+- HTTP 401 maps to `UNAUTHENTICATED`, 403 maps to `PERMISSION_DENIED`.
 - Other HTTP 4xx responses map to `FAILED_PRECONDITION`.
 - HTTP 5xx, network, and TLS failures map to `UNAVAILABLE`.
 - Non-JSON success bodies map to `UNKNOWN`.

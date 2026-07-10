@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { grpcStatus } from '@chaitin-ai/octobus-sdk';
 
 const listAttackIpsPath = '/ThreatBook_HFISH.ThreatBook_HFISH/ListAttackIPs';
 const listAttackDetailsPath = '/ThreatBook_HFISH.ThreatBook_HFISH/ListAttackDetails';
@@ -168,7 +169,13 @@ test('ListAttackIPs http error 401 returns UNAUTHENTICATED', async () => {
   }));
 
   const handler = await loadListAttackIpsHandler({});
-  await assert.rejects(handler(), /UNAUTHENTICATED/);
+  try {
+    await handler();
+    assert.fail('should have thrown');
+  } catch (e) {
+    assert.match(e.message, /UNAUTHENTICATED/);
+    assert.equal(e.code, grpcStatus.UNAUTHENTICATED, `expected gRPC status UNAUTHENTICATED but got ${e.code}`);
+  }
 });
 
 test('ListAttackIPs http error 403 returns PERMISSION_DENIED', async () => {
@@ -179,7 +186,13 @@ test('ListAttackIPs http error 403 returns PERMISSION_DENIED', async () => {
   }));
 
   const handler = await loadListAttackIpsHandler({});
-  await assert.rejects(handler(), /PERMISSION_DENIED/);
+  try {
+    await handler();
+    assert.fail('should have thrown');
+  } catch (e) {
+    assert.match(e.message, /PERMISSION_DENIED/);
+    assert.equal(e.code, grpcStatus.PERMISSION_DENIED, `expected gRPC status PERMISSION_DENIED but got ${e.code}`);
+  }
 });
 
 test('throwForHttpError does not leak upstream response body', async () => {
