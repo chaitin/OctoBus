@@ -123,6 +123,33 @@ test('ListAttackIPs success', async () => {
   assert.equal(result.data[0].attack_count, 10);
 });
 
+test('ListAttackIPs with subpath endpoint preserves path prefix', async () => {
+  // Regression: buildApiKeyUrl must preserve subpaths in baseUrl
+  // (e.g. http://host/hfish). new URL('/api/...', base) would discard
+  // the /hfish prefix because absolute paths replace the entire pathname.
+  mockFetch(async (url) => {
+    assert.ok(url.startsWith('http://example.com/hfish/api/v1/attack/ip'), `URL missing subpath prefix: ${url}`);
+    assert.ok(url.includes('api_key=test-api-key'));
+    return {
+      ok: true, status: 200, headers: { get: () => 'application/json' },
+      text: async () => JSON.stringify({
+        response_code: 0,
+        verbose_msg: '成功',
+        data: { attack_ip: [{ ip: '1.2.3.4', attack_count: 1 }] },
+      }),
+    };
+  });
+
+  const handler = await loadListAttackIpsHandler(
+    { page: 1, limit: 20 },
+    { bindings: { endpoint: 'http://example.com/hfish' } }
+  );
+  const result = await handler();
+  assert.equal(result.response_code, 0);
+  assert.equal(result.data.length, 1);
+  assert.equal(result.data[0].ip, '1.2.3.4');
+});
+
 test('ListAttackIPs empty', async () => {
   mockFetch(async () => ({
     ok: true, status: 200, headers: { get: () => 'application/json' },
