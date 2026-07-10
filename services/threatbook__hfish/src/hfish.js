@@ -166,7 +166,12 @@ export function rpcdef(ctx) {
   };
 
   const buildApiKeyUrl = (baseUrl, path, apiKey, extraParams = {}) => {
-    const url = new URL(path, baseUrl);
+    // String concatenation to preserve subpath in baseUrl (e.g. http://host/hfish).
+    // new URL('/api/...', 'http://host/hfish') would discard /hfish because
+    // absolute paths replace the entire pathname.
+    const base = baseUrl.replace(/\/+$/, '');
+    const normalizedPath = path.replace(/^\/+/, '');
+    const url = new URL(`${base}/${normalizedPath}`);
     url.searchParams.set('api_key', apiKey);
     for (const [k, v] of Object.entries(extraParams)) {
       if (v !== undefined && v !== null) {
@@ -223,7 +228,7 @@ export function rpcdef(ctx) {
     }));
 
     logFlow('ListAttackIPs:done', { count: records.length });
-    return { response_code: json.response_code, verbose_msg: json.verbose_msg || '', data: { attack_ip: records } };
+    return { response_code: json.response_code, verbose_msg: json.verbose_msg || '', data: records };
   };
 
   const callListAttackDetails = async (req) => {

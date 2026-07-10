@@ -118,9 +118,9 @@ test('ListAttackIPs success', async () => {
   const handler = await loadListAttackIpsHandler({ page: 1, limit: 20 });
   const result = await handler();
   assert.equal(result.response_code, 0);
-  assert.equal(result.data.attack_ip.length, 2);
-  assert.equal(result.data.attack_ip[0].ip, '1.2.3.4');
-  assert.equal(result.data.attack_ip[0].attack_count, 10);
+  assert.equal(result.data.length, 2);
+  assert.equal(result.data[0].ip, '1.2.3.4');
+  assert.equal(result.data[0].attack_count, 10);
 });
 
 test('ListAttackIPs empty', async () => {
@@ -132,7 +132,7 @@ test('ListAttackIPs empty', async () => {
   const handler = await loadListAttackIpsHandler({});
   const result = await handler();
   assert.equal(result.response_code, 0);
-  assert.equal(result.data.attack_ip.length, 0);
+  assert.equal(result.data.length, 0);
 });
 
 test('ListAttackIPs auth failure', async () => {
