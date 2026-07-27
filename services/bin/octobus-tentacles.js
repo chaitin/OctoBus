@@ -5,6 +5,10 @@ import { runServiceMain } from "@chaitin-ai/octobus-sdk";
 import { Command } from "commander";
 
 const services = {
+  "alienvault-otx": {
+    entryFile: "../alienvault__otx/bin/alienvault-otx.js",
+    serviceModule: "../alienvault__otx/src/service.js",
+  },
   "dbappsecurity-mingyu-waf": {
     entryFile: "../dbappsecurity__mingyu-waf/bin/dbappsecurity-mingyu-waf.js",
     serviceModule: "../dbappsecurity__mingyu-waf/src/service.js",

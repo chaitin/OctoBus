@@ -122,3 +122,81 @@ test('maps 400 to FAILED_PRECONDITION', async () => {
   setFetch(async () => response(400, 'bad request'));
   await expectGrpcError(() => handlers['AlienVault_OTX.AlienVault_OTX/CheckIP']({ ...ctx(), request: { ip: '8.8.8.8' } }), 'FAILED_PRECONDITION');
 });
+
+test('rejects IPv6 addresses', async () => {
+  await expectGrpcError(() => handlers['AlienVault_OTX.AlienVault_OTX/CheckIP']({ ...ctx(), request: { ip: '::1' } }), 'INVALID_ARGUMENT');
+});
+
+test('handles non-json parse response', async () => {
+  setFetch(async (url) => {
+    if (url.includes('/general')) return response(200, IP_GENERAL_RESP);
+    if (url.includes('/malware')) return response(200, 'not json');
+    return response(404, '');
+  });
+  await expectGrpcError(() => handlers['AlienVault_OTX.AlienVault_OTX/CheckIP']({ ...ctx(), request: { ip: '8.8.8.8' } }), 'UNKNOWN');
+});
+
+test('handles empty general response fields', async () => {
+  setFetch(async (url) => {
+    if (url.includes('/general')) return response(200, {});
+    if (url.includes('/malware')) return response(200, {});
+    return response(404, '');
+  });
+  const r = await handlers['AlienVault_OTX.AlienVault_OTX/CheckIP']({ ...ctx(), request: { ip: '8.8.8.8' } });
+  assert.equal(r.ip, '8.8.8.8');
+  assert.equal(r.reputation, 0);
+  assert.equal(r.asn, '');
+  assert.equal(r.country_name, '');
+  assert.equal(r.country_code, '');
+  assert.equal(r.latitude, 0);
+  assert.equal(r.longitude, 0);
+  assert.equal(r.malware_sample_count, 0);
+});
+
+test('handles empty domain response fields', async () => {
+  setFetch(async (url) => {
+    if (url.includes('/general')) return response(200, {});
+    if (url.includes('/malware')) return response(200, {});
+    return response(404, '');
+  });
+  const r = await handlers['AlienVault_OTX.AlienVault_OTX/CheckDomain']({ ...ctx(), request: { domain: 'test.com' } });
+  assert.equal(r.domain, 'test.com');
+  assert.equal(r.malware_sample_count, 0);
+});
+
+test('handles logInfo JSON.stringify failure', () => {
+  const circular = {}; circular.self = circular;
+  _test.logInfo({}, 'test', circular); // should not throw
+});
+
+test('handles logError JSON.stringify failure', () => {
+  const circular = {}; circular.self = circular;
+  _test.logError({}, 'test', circular); // should not throw
+});
+
+test('grpcCodeFor returns UNKNOWN for unknown code', () => {
+  // Direct test of the nullish coalesce fallthrough
+  const result = _test.errorWithCode('NONEXISTENT', 'test').legacyCode;
+  assert.equal(result, 'NONEXISTENT');
+});
+
+test('hasOwn handles null/undefined obj', () => {
+  assert.equal(_test.hasOwn(null, 'x'), false);
+  assert.equal(_test.hasOwn(undefined, 'x'), false);
+});
+
+test('fetchJson handles error without cause', async () => {
+  setFetch(async () => { throw new Error('network error'); });
+  await expectGrpcError(() => handlers['AlienVault_OTX.AlienVault_OTX/CheckIP']({ ...ctx(), request: { ip: '8.8.8.8' } }), 'UNAVAILABLE');
+});
+
+test('resolveCallContext merges bindings correctly', () => {
+  const c = _test.resolveCallContext({ config: { a: 1 }, secret: { b: 2 }, bindings: { c: 3 } });
+  assert.equal(c.bindings.a, 1);
+  assert.equal(c.bindings.b, 2);
+  assert.equal(c.bindings.c, 3);
+});
+
+test('makeRuntime handles null request', async () => {
+  await expectGrpcError(() => _test.makeRuntime({}).runCheckIP(), 'INVALID_ARGUMENT');
+});

@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "bin": {
+    "alienvault-otx": "bin/alienvault-otx.js",
     "octobus-tentacles": "bin/octobus-tentacles.js",
     "dbappsecurity-mingyu-waf": "bin/dbappsecurity-mingyu-waf.js",
     "epp-360": "bin/360-epp.js",
@@ -91,6 +92,8 @@
     "anyi-cloud-native-security": "bin/anyi-cloud-native-security.js"
   },
   "files": [
+    "alienvault__otx",
+    "bin/alienvault-otx.js",
     "dbappsecurity__mingyu-waf",
     "bin/dbappsecurity-mingyu-waf.js",
     "360__360-epp_v10-0-0-08331",
