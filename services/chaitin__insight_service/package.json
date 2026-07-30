@@ -1,0 +1,14 @@
+{
+  "name": "insight-service",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "insight-service": "bin/insight-service.js"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.12.0",
+    "@chaitin-ai/octobus-sdk": "^0.6.0",
+    "undici": "^7.16.0"
+  }
+}

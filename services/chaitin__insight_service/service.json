@@ -1,0 +1,39 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "insight-service",
+  "displayName": "Chaitin Insight",
+  "description": "Community OctoBus package for public Insight API capabilities exposed by chaitin-cli.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/insight_service.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "chaitin.insight.v1.InsightService/HealthCheck": { "name": "health-check", "description": "Check Insight JSON-RPC connectivity and authentication." },
+        "chaitin.insight.v1.InsightService/ListTasks": { "name": "list-tasks", "description": "List scan tasks." },
+        "chaitin.insight.v1.InsightService/StartTask": { "name": "start-task", "description": "Start a task re-execution without automatic retries." },
+        "chaitin.insight.v1.InsightService/StopTask": { "name": "stop-task", "description": "Stop a task execution without automatic retries." },
+        "chaitin.insight.v1.InsightService/GetTaskStatus": { "name": "get-task-status", "description": "Get task execution status." },
+        "chaitin.insight.v1.InsightService/ListIpAssets": { "name": "list-ip-assets", "description": "List IP assets." },
+        "chaitin.insight.v1.InsightService/ListWebAssets": { "name": "list-web-assets", "description": "List Web assets." },
+        "chaitin.insight.v1.InsightService/ListSoftwareAssets": { "name": "list-software-assets", "description": "List software asset overviews." },
+        "chaitin.insight.v1.InsightService/ListAssetTags": { "name": "list-asset-tags", "description": "List asset tags." },
+        "chaitin.insight.v1.InsightService/ListAssetBusinesses": { "name": "list-asset-businesses", "description": "List asset business systems." },
+        "chaitin.insight.v1.InsightService/ListIpVulnerabilities": { "name": "list-ip-vulnerabilities", "description": "List IP vulnerabilities." },
+        "chaitin.insight.v1.InsightService/ListWebVulnerabilities": { "name": "list-web-vulnerabilities", "description": "List Web vulnerabilities." },
+        "chaitin.insight.v1.InsightService/ListTaskResults": { "name": "list-task-results", "description": "List task results." },
+        "chaitin.insight.v1.InsightService/CompareTaskResults": { "name": "compare-task-results", "description": "Compare risks for a task execution." },
+        "chaitin.insight.v1.InsightService/GetAssetSnapshot": { "name": "get-asset-snapshot", "description": "Get managed asset snapshots." },
+        "chaitin.insight.v1.InsightService/ListOrders": { "name": "list-orders", "description": "List workflow orders." },
+        "chaitin.insight.v1.InsightService/GetLicense": { "name": "get-license", "description": "Get license information." },
+        "chaitin.insight.v1.InsightService/GetMachineId": { "name": "get-machine-id", "description": "Get the machine ID." }
+      }
+    }
+  }
+}

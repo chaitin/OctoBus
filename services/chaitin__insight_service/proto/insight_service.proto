@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package chaitin.insight.v1;
+
+import "google/protobuf/struct.proto";
+
+service InsightService {
+  rpc HealthCheck(EmptyRequest) returns (HealthCheckResponse);
+
+  rpc ListTasks(PagedRequest) returns (InsightResponse);
+  // Non-idempotent: resolve an ambiguous result before starting another execution.
+  rpc StartTask(TaskIdRequest) returns (InsightResponse);
+  // Not guaranteed idempotent: query status after an ambiguous result.
+  rpc StopTask(TaskIdRequest) returns (InsightResponse);
+  rpc GetTaskStatus(ExecutionIdRequest) returns (InsightResponse);
+
+  rpc ListIpAssets(PagedFilterRequest) returns (InsightResponse);
+  rpc ListWebAssets(PagedFilterRequest) returns (InsightResponse);
+  rpc ListSoftwareAssets(PagedFilterRequest) returns (InsightResponse);
+  rpc ListAssetTags(PagedFilterRequest) returns (InsightResponse);
+  rpc ListAssetBusinesses(PagedFilterRequest) returns (InsightResponse);
+
+  rpc ListIpVulnerabilities(VulnerabilityListRequest) returns (InsightResponse);
+  rpc ListWebVulnerabilities(VulnerabilityListRequest) returns (InsightResponse);
+
+  rpc ListTaskResults(TaskResultsRequest) returns (InsightResponse);
+  rpc CompareTaskResults(ExecutionIdRequest) returns (InsightResponse);
+  rpc GetAssetSnapshot(EmptyRequest) returns (InsightResponse);
+  rpc ListOrders(ListOrdersRequest) returns (InsightResponse);
+  rpc GetLicense(EmptyRequest) returns (InsightResponse);
+  rpc GetMachineId(EmptyRequest) returns (InsightResponse);
+}
+
+message EmptyRequest {}
+
+message HealthCheckResponse {
+  bool reachable = 1;
+  string message = 2;
+}
+
+message InsightResponse {
+  google.protobuf.Value result = 1;
+}
+
+message PagedRequest {
+  int64 count = 1;
+  uint64 offset = 2;
+}
+
+message PagedFilterRequest {
+  int64 count = 1;
+  uint64 offset = 2;
+  google.protobuf.Struct filter = 3;
+}
+
+message VulnerabilityListRequest {
+  int64 count = 1;
+  uint64 offset = 2;
+  google.protobuf.Struct params = 3;
+}
+
+message TaskIdRequest {
+  string id = 1;
+}
+
+message ExecutionIdRequest {
+  string execution_id = 1;
+}
+
+message TaskResultsRequest {
+  string task_id = 1;
+}
+
+message ListOrdersRequest {
+  int32 page = 1;
+  int32 size = 2;
+  string name = 3;
+  int32 status = 4;
+  optional bool is_timeout = 5;
+}

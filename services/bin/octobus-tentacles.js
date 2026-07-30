@@ -117,6 +117,10 @@ const services = {
     entryFile: "../imperva__waf-gateway_v13-6-90/bin/imperva-waf-gateway-v13-6-90.js",
     serviceModule: "../imperva__waf-gateway_v13-6-90/src/service.js",
   },
+  "insight-service": {
+    entryFile: "../chaitin__insight_service/bin/insight-service.js",
+    serviceModule: "../chaitin__insight_service/src/service.js",
+  },
   "m01-intelligence": {
     entryFile: "../m01__intelligence/bin/m01-intelligence.js",
     serviceModule: "../m01__intelligence/src/service.js",
