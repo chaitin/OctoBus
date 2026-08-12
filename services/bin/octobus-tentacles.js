@@ -344,6 +344,10 @@ const services = {
     entryFile: "../anyi__cloud-native-security/bin/anyi-cloud-native-security.js",
     serviceModule: "../anyi__cloud-native-security/src/service.js",
   },
+  "api7-enterprise-v3-10-2": {
+    entryFile: "../api7__enterprise_v3-10-2/bin/api7-enterprise-v3-10-2.js",
+    serviceModule: "../api7__enterprise_v3-10-2/src/service.js",
+  },
 };
 
 const serviceNames = Object.keys(services);

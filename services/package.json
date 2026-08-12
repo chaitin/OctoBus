@@ -88,7 +88,8 @@
     "nsfocus-waf-v6-0-7": "bin/nsfocus-waf-v6-0-7.js",
     "zhizhangyi-mbs": "bin/zhizhangyi-mbs.js",
     "qianxin-caasm": "bin/qianxin-caasm.js",
-    "anyi-cloud-native-security": "bin/anyi-cloud-native-security.js"
+    "anyi-cloud-native-security": "bin/anyi-cloud-native-security.js",
+    "api7-enterprise-v3-10-2": "bin/api7-enterprise-v3-10-2.js"
   },
   "files": [
     "dbappsecurity__mingyu-waf",
@@ -172,6 +173,7 @@
     "bin/threatbook-hfish.js",
     "bin/opencti.js",
     "bin/qianxin-caasm.js",
+    "bin/api7-enterprise-v3-10-2.js",
     "bin/wangsu-label-ip.js",
     "bin/anyi-cloud-native-security.js",
     "alibaba-cloud__simple-application-server-firewall",
@@ -248,6 +250,7 @@
     "wd__k01",
     "filigran__opencti",
     "qianxin__caasm_v1",
+    "api7__enterprise_v3-10-2",
     "fofa__network-space-mapper",
     "wangsu__label-ip",
     "anyi__cloud-native-security",
