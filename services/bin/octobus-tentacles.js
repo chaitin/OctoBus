@@ -9,6 +9,10 @@ const services = {
     entryFile: "../dbappsecurity__mingyu-waf/bin/dbappsecurity-mingyu-waf.js",
     serviceModule: "../dbappsecurity__mingyu-waf/src/service.js",
   },
+  "epp-360": {
+    entryFile: "../360__360-epp_v10-0-0-08331/bin/360-epp.js",
+    serviceModule: "../360__360-epp_v10-0-0-08331/src/service.js",
+  },
   "ailpha-platform": {
     entryFile: "../ailpha__platform/bin/ailpha-platform.js",
     serviceModule: "../ailpha__platform/src/service.js",
@@ -36,6 +40,9 @@ const services = {
   "cloudatlas": {
     entryFile: "../chaitin__cloudatlas/bin/cloudatlas.js",
     serviceModule: "../chaitin__cloudatlas/src/service.js",
+  "aliyun-sas-vulnerability-management": {
+    entryFile: "../aliyun__sas-vulnerability-management/bin/aliyun-sas-vulnerability-management.js",
+    serviceModule: "../aliyun__sas-vulnerability-management/src/service.js",
   },
   "das-apt": {
     entryFile: "../das__apt/bin/das-apt.js",
@@ -296,6 +303,10 @@ const services = {
   "opencti": {
     entryFile: "../filigran__opencti/bin/opencti.js",
     serviceModule: "../filigran__opencti/src/service.js",
+  },
+  "anyi-cloud-native-security": {
+    entryFile: "../anyi__cloud-native-security/bin/anyi-cloud-native-security.js",
+    serviceModule: "../anyi__cloud-native-security/src/service.js",
   },
 };
 
