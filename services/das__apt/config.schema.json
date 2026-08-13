@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "host"
+  ],
+  "properties": {
+    "host": {
+      "type": "string",
+      "format": "uri",
+      "description": "DAS APT platform base URL, for example https://192.168.x.x."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 10000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for HTTPS upstream connections."
+    }
+  }
+}

@@ -1,0 +1,123 @@
+syntax = "proto3";
+
+package AiLPHA_Platform;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
+
+option go_package = "miner/grpc-service/AiLPHA_Platform";
+
+// AiLPHA 安全分析与管理平台 (SIEM/SOC) - 归并告警查询/详情/处置 + 联动策略封禁/解封。
+// 认证：apiKey HTTP 头。响应形如 { "$page":N, "$size":N, "total":N, "data":... }，无 code/msg 信封，成败看 HTTP 状态码。
+// 大对象（告警/策略）字段繁多，统一用 google.protobuf.Struct 原样透传。
+service AiLPHA_Platform {
+  // GET /openapi/v2.0/merge-alarms — 归并告警列表查询（只读，核心）
+  rpc ListMergeAlarms(ListMergeAlarmsRequest) returns (ListMergeAlarmsResponse) {}
+
+  // GET /openapi/v1.0/merge-alarm/detail — 按 aggCondition + windowId 查询单条归并告警详情（只读）
+  rpc GetMergeAlarmDetail(GetMergeAlarmDetailRequest) returns (GetMergeAlarmDetailResponse) {}
+
+  // POST /openapi/v2.0/merge-alarms/status — 写：批量处置归并告警
+  rpc UpdateMergeAlarmStatus(UpdateMergeAlarmStatusRequest) returns (UpdateMergeAlarmStatusResponse) {}
+
+  // GET /openapi/v1.0/linkage-strategies — 联动策略列表（只读，用于获取策略 id）
+  rpc ListLinkageStrategies(ListLinkageStrategiesRequest) returns (ListLinkageStrategiesResponse) {}
+
+  // POST /openapi/v1.0/linkage-strategies/{ids}/accessIp — 写：对指定联动策略下发/生效 IP 阻断
+  rpc BlockIp(BlockIpRequest) returns (BlockIpResponse) {}
+
+  // DELETE /openapi/v1.0/linkage-strategies/{ids}/blockIp — 写：解除指定联动策略的 IP 阻断（缺失幂等）
+  rpc UnblockIp(UnblockIpRequest) returns (UnblockIpResponse) {}
+}
+
+// ============================ ListMergeAlarms ============================
+
+message ListMergeAlarmsRequest {
+  google.protobuf.StringValue order_by = 1;       // $orderBy，例 "endTime desc"，原样透传
+  google.protobuf.Int64Value page = 2;            // $page，>=1
+  google.protobuf.Int64Value size = 3;            // $size，1~1000
+  google.protobuf.StringValue cascade_org_id = 4; // cascadeOrgId 组织架构ID
+  google.protobuf.StringValue condition = 5;      // condition，AiQL 查询语句
+  string connect_type = 6;                        // connectType：ALL/DIRECT_CONNECT/ONLY_CURRENT；ALL 或空则省略
+  google.protobuf.StringValue end_time = 7;       // endTime "yyyy-MM-dd HH:mm:ss"，默认当天 23:59:59
+  google.protobuf.BoolValue field_mapping = 8;    // fieldMapping 是否属性映射
+  google.protobuf.StringValue params = 9;         // params
+  google.protobuf.StringValue start_time = 10;    // startTime，默认当天 00:00:00
+}
+
+message ListMergeAlarmsResponse {
+  int64 page = 1;                            // $page
+  int64 size = 2;                            // $size
+  int64 total = 3;                           // 总数
+  repeated google.protobuf.Struct data = 4; // 告警对象列表，原样透传
+  string order_by = 5;                       // $orderBy 实际生效排序
+}
+
+// ============================ GetMergeAlarmDetail ============================
+
+message GetMergeAlarmDetailRequest {
+  string agg_condition = 1; // aggCondition 归并字段MD5，必填
+  string window_id = 2;     // windowId 时间窗口id，必填
+}
+
+message GetMergeAlarmDetailResponse {
+  google.protobuf.Struct detail = 1; // 单条告警详情，原样透传
+}
+
+// ============================ UpdateMergeAlarmStatus ============================
+
+message UpdateMergeAlarmStatusRequest {
+  string alarm_status = 1;                       // alarmStatus 处置状态，必填，例 falsePositives/processed/unprocessed/ignored
+  google.protobuf.StringValue alarm_notes = 2;   // alarmNotes 处置备注
+  google.protobuf.StringValue alarm_source = 3;  // alarmSource 告警来源，例 MSS
+  google.protobuf.StringValue condition = 4;     // condition；与 start_time+end_time 二选一作为选择器
+  google.protobuf.StringValue start_time = 5;    // startTime
+  google.protobuf.StringValue end_time = 6;      // endTime
+  google.protobuf.StringValue url = 7;           // url
+}
+
+message UpdateMergeAlarmStatusResponse {
+  int64 page = 1;  // $page
+  int64 size = 2;  // $size
+  string data = 3; // 处置结果描述
+}
+
+// ============================ ListLinkageStrategies ============================
+
+message ListLinkageStrategiesRequest {
+  google.protobuf.StringValue order_by = 1; // $orderBy，可排序字段：blockIp/effectTime/status/linkDevice
+  google.protobuf.Int64Value page = 2;      // $page，>=1
+  google.protobuf.Int64Value size = 3;      // $size，1~1000
+  google.protobuf.StringValue age = 4;      // age
+}
+
+message ListLinkageStrategiesResponse {
+  int64 page = 1;                            // $page
+  int64 size = 2;                            // $size
+  int64 total = 3;                           // 总数
+  repeated google.protobuf.Struct data = 4; // 联动策略列表，原样透传
+}
+
+// ============================ BlockIp ============================
+
+message BlockIpRequest {
+  repeated string ids = 1; // 联动策略 id 列表，必填且非空；逗号拼接进 path，元素不可含 "/"
+}
+
+message BlockIpResponse {
+  int64 page = 1;  // $page
+  int64 size = 2;  // $size
+  string data = 3; // 操作结果描述
+}
+
+// ============================ UnblockIp ============================
+
+message UnblockIpRequest {
+  repeated string ids = 1; // 联动策略 id 列表，必填且非空
+}
+
+message UnblockIpResponse {
+  int64 page = 1;  // $page
+  int64 size = 2;  // $size
+  string data = 3; // 操作结果描述；策略不存在(404)时为空字符串（幂等）
+}

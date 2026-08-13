@@ -549,9 +549,8 @@ test("builds test runner args for root and service tests", () => {
     "--test-coverage-branches=90",
     "--test-coverage-functions=90",
     "--test-coverage-lines=90",
-    "--test-coverage-include=vendor__svc/**/*.js",
+    "--test-coverage-include=vendor__svc/src/**/*.js",
     "--test-coverage-exclude=vendor__svc/node_modules/**",
-    path.join("tests", "root.test.mjs"),
     path.join("vendor__svc", "test", "svc.test.js"),
   ]);
 

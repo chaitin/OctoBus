@@ -125,15 +125,41 @@ test('SendTextMessage rejects non-success HTTP statuses', async () => {
   }
 });
 
-test('business error and non-JSON body are preserved on successful HTTP status', async () => {
+test('validates Feishu business response even when HTTP status is successful', async () => {
   globalThis.fetch = async () => mockResponse(200, { StatusCode: 10003, StatusMessage: 'token is invalid' });
-  const businessRes = await rpcdef(buildCtx({ req: { message: 'test' } }))[METHOD_SEND_TEXT_PATH]();
-  assert.equal(businessRes.http_body, '');
+  await assert.rejects(
+    () => rpcdef(buildCtx({ req: { message: 'test' } }))[METHOD_SEND_TEXT_PATH](),
+    (error) => error.code === grpcStatus.UNAUTHENTICATED
+      && error.legacyCode === 'UNAUTHENTICATED'
+      && error.httpStatus === 200
+      && error.httpBody === ''
+      && error.upstreamCode === 10003,
+  );
 
   globalThis.fetch = async () => mockResponse(200, 'OK');
-  const textRes = await rpcdef(buildCtx({ req: { message: 'test' } }))[METHOD_SEND_TEXT_PATH]();
-  assert.equal(textRes.http_status, 200);
-  assert.equal(textRes.http_body, '');
+  await assert.rejects(
+    () => rpcdef(buildCtx({ req: { message: 'test' } }))[METHOD_SEND_TEXT_PATH](),
+    (error) => error.code === grpcStatus.UNKNOWN && error.httpStatus === 200,
+  );
+
+  globalThis.fetch = async () => mockResponse(200, { code: 9499, msg: 'invalid webhook' });
+  await assert.rejects(
+    () => rpcdef(buildCtx({ req: { message: 'test' } }))[METHOD_SEND_TEXT_PATH](),
+    (error) => error.code === grpcStatus.FAILED_PRECONDITION && error.upstreamCode === 9499,
+  );
+
+  globalThis.fetch = async () => mockResponse(200, { code: 0 });
+  const codeRes = await rpcdef(buildCtx({ req: { message: 'test' } }))[METHOD_SEND_TEXT_PATH]();
+  assert.equal(codeRes.http_status, 200);
+});
+
+test('rejects invalid webhook JSON shapes without exposing the response body', () => {
+  for (const body of ['null', '[]', '{"code":"not-a-number"}']) {
+    assert.throws(
+      () => _test.validateWebhookResponse(body, 200),
+      (error) => error.code === grpcStatus.UNKNOWN && error.httpBody === '' && error.httpBodyLength === body.length,
+    );
+  }
 });
 
 test('network failures map to UNAVAILABLE', async () => {
@@ -151,6 +177,16 @@ test('network failures map to UNAVAILABLE', async () => {
   await assert.rejects(
     () => rpcdef(buildCtx({ req: { message: 'test' } }))[METHOD_SEND_TEXT_PATH](),
     /connection refused/,
+  );
+});
+
+test('webhook timeout maps to DEADLINE_EXCEEDED', async () => {
+  globalThis.fetch = async () => {
+    throw Object.assign(new Error('request timed out'), { name: 'AbortError' });
+  };
+  await assert.rejects(
+    () => rpcdef(buildCtx({ req: { message: 'test' } }))[METHOD_SEND_TEXT_PATH](),
+    (error) => error.code === grpcStatus.DEADLINE_EXCEEDED && error.legacyCode === 'DEADLINE_EXCEEDED',
   );
 });
 
