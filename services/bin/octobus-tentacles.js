@@ -176,6 +176,10 @@ const services = {
     entryFile: "../qianxin__hunter_v23-1/bin/qianxin-hunter.js",
     serviceModule: "../qianxin__hunter_v23-1/src/service.js",
   },
+  "qianxin-vs-secvss3600": {
+    entryFile: "../qianxin__vs-secvss3600/bin/qianxin-vs-secvss3600.js",
+    serviceModule: "../qianxin__vs-secvss3600/src/service.js",
+  },
   "qiming-tianqing-waf": {
     entryFile: "../qiming-tianqing__waf/bin/qiming-tianqing-waf.js",
     serviceModule: "../qiming-tianqing__waf/src/service.js",
@@ -303,6 +307,10 @@ const services = {
   "opencti": {
     entryFile: "../filigran__opencti/bin/opencti.js",
     serviceModule: "../filigran__opencti/src/service.js",
+  },
+  "qianxin-caasm": {
+    entryFile: "../qianxin__caasm_v1/bin/qianxin-caasm.js",
+    serviceModule: "../qianxin__caasm_v1/src/service.js",
   },
   "anyi-cloud-native-security": {
     entryFile: "../anyi__cloud-native-security/bin/anyi-cloud-native-security.js",
