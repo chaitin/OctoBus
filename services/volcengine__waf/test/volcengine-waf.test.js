@@ -116,6 +116,49 @@ test('normalizes protobuf Struct payloads', () => {
   });
 });
 
+test('normalizes plain values and converts response values to protobuf Value shapes', () => {
+  assert.deepEqual(_test.normalizeStruct({
+    text: 'ok',
+    nested: { value: { fields: { count: { numberValue: 2 } } } },
+    list: [{ boolValue: false }, { value: 'plain' }],
+  }), {
+    text: 'ok',
+    nested: { count: 2 },
+    list: [false, 'plain'],
+  });
+  assert.deepEqual(_test.normalizeStruct(null), {});
+  assert.deepEqual(_test.normalizeStruct('not-a-struct'), {});
+  assert.deepEqual(_test.toValue(undefined), { nullValue: 'NULL_VALUE' });
+  assert.deepEqual(_test.toValue(['x', true, 3]), {
+    listValue: { values: [{ stringValue: 'x' }, { boolValue: true }, { numberValue: 3 }] },
+  });
+  assert.deepEqual(_test.toValue({ result: 'ok' }), {
+    structValue: { fields: { result: { stringValue: 'ok' } } },
+  });
+});
+
+test('accepts credential aliases and applies action defaults', () => {
+  assert.deepEqual(_test.validateBindings({
+    access_key_id: { value: ' id ' },
+    secret_access_key: ' secret ',
+    session_token: ' token ',
+  }), {
+    accessKeyId: 'id',
+    secretAccessKey: 'secret',
+    sessionToken: 'token',
+    region: 'cn-beijing',
+    endpoint: '',
+  });
+  assert.deepEqual(_test.validateActionSpec({ action: 'ListDomain' }), {
+    action: 'ListDomain',
+    serviceCode: 'waf',
+    version: '2023-12-25',
+    httpMethod: 'POST',
+    endpoint: '',
+  });
+  assert.throws(() => _test.validateActionName(''), /non-empty/);
+});
+
 test('signs and sends POST WAF list-domain request with body payload', async () => {
   let captured;
   setFetch(async (url, init) => {
@@ -154,6 +197,46 @@ test('signs and sends POST WAF list-domain request with body payload', async () 
     /^HMAC-SHA256 Credential=AKLTEXAMPLE\/20240116\/cn-beijing\/waf\/request, SignedHeaders=content-type;host;x-content-sha256;x-date, Signature=[0-9a-f]{64}$/,
   );
   assert.equal(result.response.structValue.fields.Result.structValue.fields.Total.numberValue, 1);
+});
+
+test('signs GET requests and encodes payload fields in the query string', async () => {
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url: String(url), init };
+    return response(200, '');
+  });
+
+  const result = await _test.invokeVolcengine({
+    action: 'ListDomain',
+    httpMethod: 'GET',
+    endpoint: 'https://waf.example.test/api',
+  }, {
+    Page: 2,
+    Host: 'www.example.com',
+  }, buildCtx({ secret: { sessionToken: 'session-token' } }));
+
+  const url = new URL(captured.url);
+  assert.equal(url.pathname, '/api');
+  assert.equal(url.searchParams.get('Action'), 'ListDomain');
+  assert.equal(url.searchParams.get('Page'), '2');
+  assert.equal(url.searchParams.get('Host'), 'www.example.com');
+  assert.equal(captured.init.method, 'GET');
+  assert.equal(captured.init.body, undefined);
+  assert.equal(captured.init.headers['X-Security-Token'], 'session-token');
+  assert.deepEqual(result.response.structValue.fields, {});
+});
+
+test('validates endpoint and HTTP method before sending a request', async () => {
+  await expectGrpcError(
+    () => _test.invokeVolcengine({ action: 'ListDomain', endpoint: 'file:///tmp/waf' }, {}, buildCtx()),
+    'FAILED_PRECONDITION',
+    (err) => assert.match(err.message, /valid http or https URL/),
+  );
+  await expectGrpcError(
+    () => _test.invokeVolcengine({ action: 'ListDomain', httpMethod: 'DELETE' }, {}, buildCtx()),
+    'INVALID_ARGUMENT',
+    (err) => assert.match(err.message, /GET or POST/),
+  );
 });
 
 test('maps Volcengine and transport errors', async () => {
@@ -211,6 +294,22 @@ test('maps Volcengine and transport errors', async () => {
     () => handlers[`${SERVICE_PACKAGE}/ListDomain`]({}, buildCtx({ limits: { timeoutMs: 5 } })),
     'DEADLINE_EXCEEDED',
     (err) => assert.match(err.message, /timed out after 5ms/),
+  );
+
+  setFetch(async () => response(200, { Error: { Code: 'InternalError', Message: 'upstream failure' } }));
+  await expectGrpcError(
+    () => handlers[`${SERVICE_PACKAGE}/ListDomain`]({}, buildCtx()),
+    'UNKNOWN',
+    (err) => assert.match(err.message, /InternalError/),
+  );
+
+  setFetch(async () => {
+    throw new Error('connection reset');
+  });
+  await expectGrpcError(
+    () => handlers[`${SERVICE_PACKAGE}/ListDomain`]({}, buildCtx()),
+    'UNAVAILABLE',
+    (err) => assert.match(err.message, /connection reset/),
   );
 });
 
