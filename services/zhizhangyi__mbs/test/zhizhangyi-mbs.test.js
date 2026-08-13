@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
-import { rpcdef } from '../src/zhizhangyi-mbs.js';
+import { handlers, rpcdef } from '../src/zhizhangyi-mbs.js';
 
 const ADD_USER = 'zhizhangyi.mbs.UserManagement/AddUser';
 const CHECK_LOGIN_NAME = 'zhizhangyi.mbs.UserManagement/CheckLoginName';
@@ -33,6 +33,82 @@ const signCalc = (secret, ...params) => crypto
 
 test.afterEach(() => {
   globalThis.fetch = originalFetch;
+});
+
+test('exported SDK handlers accept request/config context', async () => {
+  globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => '{"code":0,"data":{"total":0,"userInfos":[]}}' });
+  const result = await handlers[GET_USERS]({
+    request: { condition: { dept_id: 'dept' } },
+    config: { endpoint: 'https://mbs.example' },
+    secret: { appkey: 'appkey', secretkey: 'secretkey', orgCode: 'org' },
+  });
+  assert.equal(result.data.total, 0);
+});
+
+test('all exported SDK handlers dispatch with caller context', async () => {
+  globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => '{"code":0,"data":null}' });
+  const context = (request) => ({ request, config: { endpoint: 'https://mbs.example' }, secret: { appkey: 'a', secretkey: 's', orgCode: 'o' } });
+  const requests = {
+    [ADD_USER]: { user_name: 'u', login_name: 'l', dept_id: 'd', password: 'p' },
+    [UPD_USER]: { user_id: 'u', user_name: 'n', dept_id: 'd' },
+    [DETAIL_USER]: { user_id: 'u' },
+    [DEL_USERS]: { type: 0, user_ids: ['u'] },
+    [STATE_USERS]: { type: 0, state: 1, user_ids: ['u'] },
+    [CHECK_LOGIN_NAME]: { login_name: 'l' },
+    [GET_USER_BY_PHONE]: { phone: '1' },
+    [UPD_USER_PWD]: { user_id: 'u', password: 'p' },
+    [FORCE_OFFLINE]: { user_id: 'u' },
+    [IMPORT_USER]: { file_id: 'f' },
+  };
+  for (const [method, request] of Object.entries(requests)) await handlers[method](context(request));
+});
+
+test('optional user fields, aliases, and nested values are preserved', async () => {
+  let bodies = [];
+  globalThis.fetch = async (_url, init) => { bodies.push(JSON.parse(init.body)); return { ok: true, status: 200, text: async () => '{"code":0,"data":{"nested":[1,"x",null]}}' }; };
+  const add = await rpcdef(buildCtx({ userName: 'U', loginName: 'l', deptId: 'd', password: 'p', userSource: 0, phone_number: '1', job: 'j', employee_number: 'e', address: 'a', mobile: 'm', email: 'x@y', organization: 'o', is_mdm: 0, state: 0, weight: 0, attrs: [{ attr_key: 'k', attr_value: 'v' }] }))[ADD_USER]();
+  assert.equal(bodies[0].userSource, 0);
+  assert.deepEqual(bodies[0].attrs, [{ attrKey: 'k', attrValue: 'v' }]);
+  assert.equal(add.data.structValue.fields.nested.listValue.values[0].numberValue, 1);
+  await rpcdef(buildCtx({ userId: 'u', userName: 'U', deptId: 'd', loginName: 'l', phone_number: '1', is_mdm: 0, weight: 0, attrs: [{ attr_key: 'k', attr_value: 'v' }] }))[UPD_USER]();
+  assert.equal(bodies[1].loginName, 'l');
+  assert.equal(bodies[1].isMdm, 0);
+});
+
+test('explicit credentials, signatures, and condition aliases override defaults', async () => {
+  let body;
+  globalThis.fetch = async (_url, init) => { body = JSON.parse(init.body); return { ok: true, status: 200, text: async () => '{"code":0,"data":{"total":0,"userInfos":[]}}' }; };
+  await rpcdef(buildCtx({ orgCode: 'override-org', appkey: 'override-key', sign: 'provided', index: 2, size: 3, orderCode: 4, orderType: 5, condition: { deptId: 'd', keyWord: 'k', state: 1, isMdm: 1 } }))[GET_USERS]();
+  assert.equal(body.orgCode, 'override-org');
+  assert.equal(body.appkey, 'override-key');
+  assert.equal(body.sign, 'provided');
+  assert.deepEqual(body.condition, { deptId: 'd', keyWord: 'k', state: 1, isMdm: 1 });
+});
+
+test('required AddUser and UpdUser identity fields fail locally', async () => {
+  for (const request of [{ login_name: 'l', dept_id: 'd', password: 'p' }, { user_name: 'u', dept_id: 'd', password: 'p' }, { user_name: 'u', login_name: 'l', password: 'p' }]) {
+    await assert.rejects(() => rpcdef(buildCtx(request))[ADD_USER](), (err) => err.code === grpcStatus.INVALID_ARGUMENT);
+  }
+  for (const request of [{ user_name: 'u', dept_id: 'd' }, { user_id: 'u', dept_id: 'd' }]) {
+    await assert.rejects(() => rpcdef(buildCtx(request))[UPD_USER](), (err) => err.code === grpcStatus.INVALID_ARGUMENT);
+  }
+});
+
+test('empty, invalid JSON, permission, application, and network responses map safely', async () => {
+  const invoke = () => rpcdef(buildCtx({ condition: { dept_id: '1' } }))[GET_USERS]();
+  globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => '' });
+  assert.equal((await invoke()).data.total, 0);
+  globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => 'bad-json' });
+  await assert.rejects(invoke, (err) => err.code === grpcStatus.UNKNOWN);
+  globalThis.fetch = async () => ({ ok: false, status: 401, text: async () => 'denied' });
+  await assert.rejects(invoke, (err) => err.code === grpcStatus.PERMISSION_DENIED);
+  globalThis.fetch = async () => ({ ok: false, status: 422, text: async () => 'invalid' });
+  await assert.rejects(invoke, (err) => err.code === grpcStatus.FAILED_PRECONDITION);
+  globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => '{"code":9,"msg":"rejected"}' });
+  await assert.rejects(invoke, (err) => err.code === grpcStatus.FAILED_PRECONDITION);
+  globalThis.fetch = async () => { throw new Error('offline'); };
+  await assert.rejects(invoke, (err) => err.code === grpcStatus.UNAVAILABLE);
+  await assert.rejects(() => rpcdef({ req: { condition: { dept_id: '1' } } })[GET_USERS](), (err) => err.code === grpcStatus.INVALID_ARGUMENT);
 });
 
 test('AddUser requires password before calling upstream', async () => {
