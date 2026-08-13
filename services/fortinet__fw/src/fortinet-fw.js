@@ -69,8 +69,8 @@ const normalizeBaseUrl = (value) => {
 };
 
 const mergedBindings = (ctx = {}) => ({
-  ...(ctx?.bindings ?? {}),
   ...(ctx?.config ?? {}),
+  ...(ctx?.bindings ?? {}),
   ...(ctx?.secret ?? {}),
 });
 

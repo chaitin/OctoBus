@@ -46,7 +46,8 @@ CLI 展示 config 或 secret 时按字段名启发式脱敏。
 ## 日志脱敏
 
 daemon 主日志和 access log 不记录请求体、响应体、Authorization、token、secret、
-完整 config、原始业务 metadata 或带凭据的 Git source。
+完整 config、原始业务 metadata、multipart body、客户端绝对路径、service import 上传临时路径
+或带凭据的 Git source。
 
 daemon 主日志可以记录 lifecycle 和错误摘要，例如 instance id、service id、hash、
 runtime mode、状态码和 route，但不能记录 config/secret 原文。access log 只记录路由和

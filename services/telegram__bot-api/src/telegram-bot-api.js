@@ -333,16 +333,8 @@ export function rpcdef(ctx = {}) {
 const callSdkHandler = (ctx = {}, path) => registerHandlers(ctx)[path](ctx.req ?? ctx.request ?? {});
 
 export const handlers = {
-  [METHOD_GET_ME_FULL]: (reqOrCtx, ctx) => (
-    ctx === undefined
-      ? callSdkHandler(reqOrCtx ?? {}, METHOD_GET_ME_PATH)
-      : handleGetMe(reqOrCtx ?? {}, ctx)
-  ),
-  [METHOD_SEND_MESSAGE_FULL]: (reqOrCtx, ctx) => (
-    ctx === undefined
-      ? callSdkHandler(reqOrCtx ?? {}, METHOD_SEND_MESSAGE_PATH)
-      : handleSendMessage(reqOrCtx ?? {}, ctx)
-  ),
+  [METHOD_GET_ME_FULL]: (ctx = {}) => callSdkHandler(ctx, METHOD_GET_ME_PATH),
+  [METHOD_SEND_MESSAGE_FULL]: (ctx = {}) => callSdkHandler(ctx, METHOD_SEND_MESSAGE_PATH),
 };
 
 export const _test = {

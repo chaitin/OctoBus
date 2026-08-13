@@ -46,9 +46,9 @@ try {
   for (const [index, serviceDir] of selectedServiceDirs.entries()) {
     const result = await smokeService({ index, serviceDir, addr, mockBaseURL: mock.baseURL });
     evidence.push(result);
-    const status = result.ok ? "ok" : "failed";
+    const status = result.chain_ok ? "chain-ok" : "chain-failed";
     console.error(`[${index + 1}/${selectedServiceDirs.length}] ${status} ${serviceDir} ${result.method ?? ""} http=${result.http_status ?? ""} mock_hits=${result.mock_hits}`);
-    if (!result.ok) {
+    if (!result.chain_ok) {
       failed = true;
       if (!options.continueOnError) {
         break;
@@ -70,8 +70,9 @@ const summary = {
   octobus_addr: addr,
   mock_upstream: mock.baseURL,
   service_count: evidence.length,
-  ok_count: evidence.filter((item) => item.ok).length,
-  failed_count: evidence.filter((item) => !item.ok).length,
+  chain_ok_count: evidence.filter((item) => item.chain_ok).length,
+  chain_failed_count: evidence.filter((item) => !item.chain_ok).length,
+  business_success_count: evidence.filter((item) => item.business_success).length,
   evidence,
 };
 process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
@@ -93,7 +94,8 @@ async function smokeService({ index, serviceDir, addr, mockBaseURL }) {
     instance_id: instanceID,
     capset_id: capsetID,
     runtime_mode: manifest.runtime?.mode ?? "long-running",
-    ok: false,
+    chain_ok: false,
+    business_success: false,
     mock_hits: 0,
   };
 
@@ -132,7 +134,8 @@ async function smokeService({ index, serviceDir, addr, mockBaseURL }) {
     result.http_status = response.status;
     result.response_summary = summarizeBody(body);
     result.mock_hits = mock.hitCount - beforeHits;
-    result.ok = isAcceptableConnectResult(response.status, body);
+    result.business_success = response.status >= 200 && response.status < 300;
+    result.chain_ok = result.mock_hits > 0 && isAcceptableConnectResult(response.status, body);
   } catch (error) {
     result.error = error instanceof Error ? error.message : String(error);
     result.mock_hits = mock.hitCount - beforeHits;
@@ -465,10 +468,19 @@ function numberSample(name, schema) {
     return 443;
   }
   const min = schema.minimum ?? schema.exclusiveMinimum;
-  if (typeof min === "number") {
-    return min + (schema.exclusiveMinimum !== undefined ? 1 : 0);
+  const lowerBound = typeof min === "number"
+    ? min + (schema.exclusiveMinimum !== undefined ? 1 : 0)
+    : 1;
+  const maximum = schema.maximum ?? schema.exclusiveMaximum;
+  const upper = typeof maximum === "number"
+    ? maximum - (schema.exclusiveMaximum !== undefined ? 1 : 0)
+    : Number.POSITIVE_INFINITY;
+  const base = Math.min(lowerBound, upper);
+  const isEndTime = /^(end|to)(?:time|_time|timestamp|_timestamp|ts|_ts|date|_date)(?:_ms)?$/.test(lower);
+  if (isEndTime) {
+    return Math.min(base + 1, upper);
   }
-  return 1;
+  return base;
 }
 
 function booleanSample(name) {

@@ -251,12 +251,12 @@ test('HTTP and network failures preserve legacy JSON details', async () => {
   assert.equal(network.payload.reason, 'socket hangup');
 });
 
-test('Non-JSON success response is UNKNOWN without raw_body leakage', async () => {
+test('Non-JSON success response is UNKNOWN with raw_body details', async () => {
   globalThis.fetch = async () => okResponse('not-json');
   const { payload } = await parseErrorPayload(() => rpcdef(buildCtx())[CHECK_ONLINE_PATH]());
   assert.equal(payload.code, 'UNKNOWN');
   assert.equal(payload.reason, 'invalid_json');
-  assert.equal(payload.raw_body, '');
+  assert.equal(payload.raw_body, 'not-json');
   assert.equal(payload.raw_body_length, 'not-json'.length);
 });
 
