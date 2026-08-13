@@ -1,0 +1,17 @@
+{
+  "name": "qianxin-caasm",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "qianxin-caasm": "bin/qianxin-caasm.js"
+  },
+  "scripts": {
+    "validate": "octobus-sdk validate --strict",
+    "test": "node --test",
+    "pack:check": "npm pack --dry-run"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.6.0"
+  }
+}

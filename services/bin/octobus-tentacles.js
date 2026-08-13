@@ -5,6 +5,10 @@ import { runServiceMain } from "@chaitin-ai/octobus-sdk";
 import { Command } from "commander";
 
 const services = {
+  "dbappsecurity-mingyu-waf": {
+    entryFile: "../dbappsecurity__mingyu-waf/bin/dbappsecurity-mingyu-waf.js",
+    serviceModule: "../dbappsecurity__mingyu-waf/src/service.js",
+  },
   "epp-360": {
     entryFile: "../360__360-epp_v10-0-0-08331/bin/360-epp.js",
     serviceModule: "../360__360-epp_v10-0-0-08331/src/service.js",
@@ -172,6 +176,10 @@ const services = {
     entryFile: "../qianxin__hunter_v23-1/bin/qianxin-hunter.js",
     serviceModule: "../qianxin__hunter_v23-1/src/service.js",
   },
+  "qianxin-vs-secvss3600": {
+    entryFile: "../qianxin__vs-secvss3600/bin/qianxin-vs-secvss3600.js",
+    serviceModule: "../qianxin__vs-secvss3600/src/service.js",
+  },
   "qiming-tianqing-waf": {
     entryFile: "../qiming-tianqing__waf/bin/qiming-tianqing-waf.js",
     serviceModule: "../qiming-tianqing__waf/src/service.js",
@@ -292,6 +300,10 @@ const services = {
     entryFile: "../wd__k01/bin/wd-k01.js",
     serviceModule: "../wd__k01/src/service.js",
   },
+  "dbappsecurity-mingyu-waf": {
+    entryFile: "../dbappsecurity__mingyu-waf/bin/dbappsecurity-mingyu-waf.js",
+    serviceModule: "../dbappsecurity__mingyu-waf/src/service.js",
+  },
   "opencti": {
     entryFile: "../filigran__opencti/bin/opencti.js",
     serviceModule: "../filigran__opencti/src/service.js",
@@ -299,6 +311,10 @@ const services = {
   "zhizhangyi-mbs": {
     entryFile: "../zhizhangyi__mbs/bin/zhizhangyi-mbs.js",
     serviceModule: "../zhizhangyi__mbs/src/service.js",
+  },
+  "qianxin-caasm": {
+    entryFile: "../qianxin__caasm_v1/bin/qianxin-caasm.js",
+    serviceModule: "../qianxin__caasm_v1/src/service.js",
   },
   "anyi-cloud-native-security": {
     entryFile: "../anyi__cloud-native-security/bin/anyi-cloud-native-security.js",

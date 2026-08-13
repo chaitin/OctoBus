@@ -1,0 +1,83 @@
+// CAASM Service — unified proto contract.
+//
+// Only verified, working endpoints are included.
+// Attack surface endpoints (as_ip/as_service/as_url/as_domain),
+// tickets, biz_system, network_range, entity_relation, and dict/list
+// were removed because the CAASM server returns "不支持查询" or 404.
+syntax = "proto3";
+
+// ────────────────────────── Common Messages ──────────────────────────
+
+// Standard paginated query request.
+// Corresponds to CAASM POST body: { offset, limit, filter, login_name }
+message PageRequest {
+  // Pagination offset, defaults to 0 server-side when unset.
+  int32 offset = 1;
+  // Page size. Server defaults to 10. Handler clamps to a safe maximum.
+  int32 limit = 2;
+  // Optional filter as a JSON string.
+  // Example: "{\"asset_code\": \"Dev-xxx\"}"
+  string filter = 3;
+  // Optional data-scoping login name.
+  string login_name = 4 [json_name = "loginName"];
+}
+
+// Response wrapping CAASM JSON as a string.
+// This keeps MCP structuredContent clean — the AI tool receives plain JSON
+// instead of proto Struct's verbose {kind:{oneofKind:"stringValue",...}} wrapper.
+message PageResponse {
+  // JSON string: { "items": [...], "total": N }
+  // Each item in items is a plain JSON object with the CAASM record fields.
+  string json = 1;
+}
+
+// ─────────────────── Asset Service ───────────────────
+
+// Read-only access to CAASM asset entities.
+service AssetService {
+  // Query devices (hardware assets).
+  rpc GetDevices(PageRequest) returns (PageResponse);
+
+  // Query installed software.
+  rpc GetSoftware(PageRequest) returns (PageResponse);
+
+  // Query network services. ⚠️ Very large table (15M+ rows) — keep limit small.
+  rpc GetServices(PageRequest) returns (PageResponse);
+
+  // Query software components (libraries, frameworks). ⚠️ Very large table (19M+ rows).
+  rpc GetComponents(PageRequest) returns (PageResponse);
+
+  // Query web applications / websites.
+  rpc GetWebsites(PageRequest) returns (PageResponse);
+}
+
+// ─────────────── Vulnerability Service ───────────────
+
+// Read-only access to CAASM vulnerability / weakness data.
+service VulnerabilityService {
+  // Query system / software vulnerabilities.
+  rpc GetSysVulnerabilities(PageRequest) returns (PageResponse);
+
+  // Query system weak passwords.
+  rpc GetSysWeakPasswords(PageRequest) returns (PageResponse);
+
+  // Query web application vulnerabilities.
+  rpc GetWebVulnerabilities(PageRequest) returns (PageResponse);
+
+  // Query web application weak passwords.
+  rpc GetWebWeakPasswords(PageRequest) returns (PageResponse);
+}
+
+// ───────────────── Admin Service ─────────────────
+
+// Read-only access to CAASM system administration data.
+service AdminService {
+  // Query users with roles.
+  rpc GetUsers(PageRequest) returns (PageResponse);
+
+  // Query organization tree.
+  rpc GetOrganizations(PageRequest) returns (PageResponse);
+
+  // Query roles.
+  rpc GetRoles(PageRequest) returns (PageResponse);
+}

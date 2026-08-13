@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "host": {
+      "type": "string",
+      "description": "WAF管理口地址，例如 https://10.20.187.204"
+    },
+    "verify_ssl": {
+      "type": "boolean",
+      "default": false,
+      "description": "是否验证SSL证书（WAF自签名证书时设为false）"
+    }
+  },
+  "required": ["host"]
+}
