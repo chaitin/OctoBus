@@ -1,0 +1,9 @@
+{
+  "method": "Tencent_WeixinPersonal.Tencent_WeixinPersonal/SendText",
+  "request": {
+    "to_user_id": "smoke-user",
+    "message": "smoke",
+    "context_token": "smoke-context"
+  },
+  "expectUpstream": true
+}
