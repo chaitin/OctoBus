@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "endpoint": {
+      "type": "string",
+      "description": "NSFOCUS WAF REST API base URL, for example https://waf.example.com:8443."
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "Alias for endpoint."
+    },
+    "apiVersion": {
+      "type": "string",
+      "default": "v3",
+      "description": "REST API version path segment. The current implementation is calibrated against the V6.0.7.3 REST document and uses v3 endpoints by default."
+    },
+    "accountId": {
+      "type": "string",
+      "default": "admin",
+      "description": "NSFOCUS WAF API account id used to fetch V3 OAuth token."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional extra HTTP headers sent to NSFOCUS WAF."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for private deployments."
+    }
+  }
+}

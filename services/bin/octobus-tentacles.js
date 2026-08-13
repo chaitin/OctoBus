@@ -304,6 +304,10 @@ const services = {
     entryFile: "../wd__k01/bin/wd-k01.js",
     serviceModule: "../wd__k01/src/service.js",
   },
+  "threatbook-hfish": {
+    entryFile: "../threatbook__hfish/bin/threatbook-hfish.js",
+    serviceModule: "../threatbook__hfish/src/service.js",
+  },
   "dbappsecurity-mingyu-waf": {
     entryFile: "../dbappsecurity__mingyu-waf/bin/dbappsecurity-mingyu-waf.js",
     serviceModule: "../dbappsecurity__mingyu-waf/src/service.js",
@@ -315,6 +319,18 @@ const services = {
   "tencent-weixin-personal": {
     entryFile: "../tencent__weixin-personal/bin/tencent-weixin-personal.js",
     serviceModule: "../tencent__weixin-personal/src/service.js",
+  },
+  "tencent-qq-chat": {
+    entryFile: "../tencent__qq-chat/bin/tencent-qq-chat.js",
+    serviceModule: "../tencent__qq-chat/src/service.js",
+  },
+  "geyecloud-atd": {
+    entryFile: "../geyecloud__atd_v2-3-6/bin/geyecloud-atd.js",
+    serviceModule: "../geyecloud__atd_v2-3-6/src/service.js",
+  },
+  "nsfocus-waf-v6-0-7": {
+    entryFile: "../nsfocus__waf_v6-0-7/bin/nsfocus-waf-v6-0-7.js",
+    serviceModule: "../nsfocus__waf_v6-0-7/src/service.js",
   },
   "zhizhangyi-mbs": {
     entryFile: "../zhizhangyi__mbs/bin/zhizhangyi-mbs.js",

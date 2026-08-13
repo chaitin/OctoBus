@@ -1,0 +1,144 @@
+syntax = "proto3";
+
+package Tencent_QQ_Chat;
+
+option go_package = "miner/grpc-service/Tencent_QQ_Chat";
+
+// Tencent_QQ_Chat wraps QQ Bot OpenAPI v2 chat messaging.
+service Tencent_QQ_Chat {
+  rpc GetAccessToken(GetAccessTokenRequest) returns (GetAccessTokenResponse) {}
+  rpc StartGateway(StartGatewayRequest) returns (GatewayStatus) {}
+  rpc StopGateway(StopGatewayRequest) returns (GatewayStatus) {}
+  rpc GetGatewayStatus(GetGatewayStatusRequest) returns (GatewayStatus) {}
+  rpc PollMessages(PollMessagesRequest) returns (PollMessagesResponse) {}
+  rpc AckMessage(AckMessageRequest) returns (AckMessageResponse) {}
+  rpc SendC2CMessage(SendC2CMessageRequest) returns (SendMessageResponse) {}
+  rpc SendGroupMessage(SendGroupMessageRequest) returns (SendMessageResponse) {}
+  rpc NormalizeEvent(NormalizeEventRequest) returns (NormalizeEventResponse) {}
+}
+
+message GetAccessTokenRequest {
+  bool force_refresh = 1;
+}
+
+message GetAccessTokenResponse {
+  bool success = 1;
+  int32 http_status = 2;
+  string access_token = 3;
+  int32 expires_in = 4;
+  string http_body = 5;
+}
+
+message StartGatewayRequest {
+  bool force_restart = 1;
+}
+
+message StopGatewayRequest {}
+
+message GetGatewayStatusRequest {}
+
+message GatewayStatus {
+  bool running = 1;
+  bool ready = 2;
+  string state = 3;
+  string session_id = 4;
+  string gateway_url = 5;
+  string last_event_type = 6;
+  string last_error = 7;
+  string started_at = 8;
+  string last_event_at = 9;
+  string last_heartbeat_ack_at = 10;
+  int32 queue_size = 11;
+  int32 dropped_messages = 12;
+  int32 reconnect_count = 13;
+  int32 intents = 14;
+}
+
+message PollMessagesRequest {
+  int32 max_messages = 1;
+  bool ack = 2;
+}
+
+message ReceivedMessage {
+  string local_id = 1;
+  string received_at = 2;
+  NormalizeEventResponse event = 3;
+}
+
+message PollMessagesResponse {
+  repeated ReceivedMessage messages = 1;
+  int32 queue_size = 2;
+}
+
+message AckMessageRequest {
+  repeated string local_id = 1;
+  bool all = 2;
+}
+
+message AckMessageResponse {
+  int32 acked = 1;
+  int32 queue_size = 2;
+}
+
+message SendC2CMessageRequest {
+  string openid = 1;
+  string content = 2;
+  int32 msg_type = 3;
+  string markdown_json = 4;
+  string keyboard_json = 5;
+  string ark_json = 6;
+  string media_json = 7;
+  string message_reference_json = 8;
+  string event_id = 9;
+  string msg_id = 10;
+  int32 msg_seq = 11;
+  bool is_wakeup = 12;
+}
+
+message SendGroupMessageRequest {
+  string group_openid = 1;
+  string content = 2;
+  int32 msg_type = 3;
+  string markdown_json = 4;
+  string keyboard_json = 5;
+  string ark_json = 6;
+  string media_json = 7;
+  string message_reference_json = 8;
+  string event_id = 9;
+  string msg_id = 10;
+  int32 msg_seq = 11;
+}
+
+message SendMessageResponse {
+  bool success = 1;
+  int32 http_status = 2;
+  string id = 3;
+  string timestamp = 4;
+  string http_body = 5;
+}
+
+message NormalizeEventRequest {
+  string payload_json = 1;
+}
+
+message NormalizeEventResponse {
+  bool is_message = 1;
+  bool is_c2c = 2;
+  bool is_group = 3;
+  bool is_channel = 4;
+  string event_id = 5;
+  int32 op = 6;
+  string event_type = 7;
+  string seq = 8;
+  string message_id = 9;
+  string content = 10;
+  string timestamp = 11;
+  string openid = 12;
+  string group_openid = 13;
+  string channel_id = 14;
+  string guild_id = 15;
+  string author_json = 16;
+  string attachments_json = 17;
+  string data_json = 18;
+  string payload_json = 19;
+}

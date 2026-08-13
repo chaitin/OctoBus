@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": [
+    "baseUrl"
+  ],
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "title": "geyecloud-ATD Base URL",
+      "description": "geyecloud-ATD workbench base URL, for example https://192.0.2.10:5443"
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "title": "Request Timeout (ms)",
+      "default": 10000,
+      "minimum": 1000
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "title": "Skip TLS Verification",
+      "default": false
+    }
+  }
+}

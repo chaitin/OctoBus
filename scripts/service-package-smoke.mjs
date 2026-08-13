@@ -83,6 +83,7 @@ if (failed) {
 
 async function smokeService({ index, serviceDir, addr, mockBaseURL }) {
   const manifest = readJSON(path.join(servicesRoot, serviceDir, "service.json"));
+  const fixture = readSmokeFixture(serviceDir);
   const serviceID = manifest.name;
   const instanceID = `smoke-${String(index + 1).padStart(3, "0")}`;
   const capsetID = `smoke-cap-${String(index + 1).padStart(3, "0")}`;
@@ -111,14 +112,18 @@ async function smokeService({ index, serviceDir, addr, mockBaseURL }) {
     await cli(addr, ["capset", "add-instance", capsetID, instanceID], { timeoutMs: options.commandTimeoutMs });
 
     const catalog = await cliJSON(addr, ["catalog", capsetID, "--connect", "--json"], { timeoutMs: options.commandTimeoutMs });
-    const connect = catalog.connect_rpc?.[0];
+    const connect = fixture?.method
+      ? catalog.connect_rpc?.find((rpc) => rpc.method_full_name === fixture.method)
+      : catalog.connect_rpc?.[0];
     if (!connect) {
-      throw new Error("catalog did not expose any Connect RPC methods");
+      throw new Error(fixture?.method
+        ? `smoke fixture method ${fixture.method} is not exposed by the catalog`
+        : "catalog did not expose any Connect RPC methods");
     }
     result.method = connect.method_full_name;
     result.connect_endpoint = connect.endpoint;
 
-    const request = await sampleRequestFromOpenAPI(addr, capsetID, connect.endpoint);
+    const request = fixture?.request ?? await sampleRequestFromOpenAPI(addr, capsetID, connect.endpoint);
     result.request_keys = Object.keys(request).sort();
 
     const response = await fetch(`http://${addr}${connect.endpoint}`, {
@@ -135,7 +140,9 @@ async function smokeService({ index, serviceDir, addr, mockBaseURL }) {
     result.response_summary = summarizeBody(body);
     result.mock_hits = mock.hitCount - beforeHits;
     result.business_success = response.status >= 200 && response.status < 300;
-    result.chain_ok = result.mock_hits > 0 && isAcceptableConnectResult(response.status, body);
+    const expectUpstream = fixture?.expectUpstream ?? true;
+    result.expect_upstream = expectUpstream;
+    result.chain_ok = (!expectUpstream || result.mock_hits > 0) && isAcceptableConnectResult(response.status, body);
   } catch (error) {
     result.error = error instanceof Error ? error.message : String(error);
     result.mock_hits = mock.hitCount - beforeHits;
@@ -145,6 +152,27 @@ async function smokeService({ index, serviceDir, addr, mockBaseURL }) {
   }
 
   return result;
+}
+
+function readSmokeFixture(serviceDir) {
+  const fixturePath = path.join(servicesRoot, serviceDir, "test", "smoke.json");
+  if (!fs.existsSync(fixturePath)) {
+    return null;
+  }
+  const fixture = readJSON(fixturePath);
+  if (fixture == null || typeof fixture !== "object" || Array.isArray(fixture)) {
+    throw new Error(`${fixturePath}: smoke fixture must be a JSON object`);
+  }
+  if (typeof fixture.method !== "string" || fixture.method.length === 0) {
+    throw new Error(`${fixturePath}: method must be a non-empty string`);
+  }
+  if (fixture.request == null || typeof fixture.request !== "object" || Array.isArray(fixture.request)) {
+    throw new Error(`${fixturePath}: request must be a JSON object`);
+  }
+  if (fixture.expectUpstream !== undefined && typeof fixture.expectUpstream !== "boolean") {
+    throw new Error(`${fixturePath}: expectUpstream must be a boolean`);
+  }
+  return fixture;
 }
 
 function parseArgs(args) {

@@ -1,0 +1,61 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "tencent-qq-chat",
+  "displayName": "Tencent QQ Chat",
+  "description": "QQ Bot OpenAPI v2 service for sending C2C/group messages and normalizing incoming chat events.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/tencent_qq_chat.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Tencent_QQ_Chat.Tencent_QQ_Chat/GetAccessToken": {
+          "name": "get-access-token",
+          "description": "Fetch a QQ Bot OpenAPI access token."
+        },
+        "Tencent_QQ_Chat.Tencent_QQ_Chat/StartGateway": {
+          "name": "start-gateway",
+          "description": "Start the QQ Bot WebSocket Gateway receive loop."
+        },
+        "Tencent_QQ_Chat.Tencent_QQ_Chat/StopGateway": {
+          "name": "stop-gateway",
+          "description": "Stop the QQ Bot WebSocket Gateway receive loop."
+        },
+        "Tencent_QQ_Chat.Tencent_QQ_Chat/GetGatewayStatus": {
+          "name": "get-gateway-status",
+          "description": "Return Gateway receiver status and buffered message counts."
+        },
+        "Tencent_QQ_Chat.Tencent_QQ_Chat/PollMessages": {
+          "name": "poll-messages",
+          "description": "Poll received QQ message events buffered by the Gateway receiver."
+        },
+        "Tencent_QQ_Chat.Tencent_QQ_Chat/AckMessage": {
+          "name": "ack-message",
+          "description": "Acknowledge and remove buffered received messages."
+        },
+        "Tencent_QQ_Chat.Tencent_QQ_Chat/SendC2CMessage": {
+          "name": "send-c2c-message",
+          "description": "Send a QQ C2C message through QQ Bot OpenAPI."
+        },
+        "Tencent_QQ_Chat.Tencent_QQ_Chat/SendGroupMessage": {
+          "name": "send-group-message",
+          "description": "Send a QQ group message through QQ Bot OpenAPI."
+        },
+        "Tencent_QQ_Chat.Tencent_QQ_Chat/NormalizeEvent": {
+          "name": "normalize-event",
+          "description": "Normalize an incoming QQ Bot event payload."
+        }
+      }
+    }
+  }
+}

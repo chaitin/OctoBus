@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "default": "https://api.sgroup.qq.com",
+      "description": "QQ Bot OpenAPI base URL."
+    },
+    "base_url": {
+      "type": "string",
+      "description": "Alias for baseUrl."
+    },
+    "tokenUrl": {
+      "type": "string",
+      "default": "https://bots.qq.com/app/getAppAccessToken",
+      "description": "QQ Bot access-token endpoint."
+    },
+    "token_url": {
+      "type": "string",
+      "description": "Alias for tokenUrl."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "timeout_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Alias for timeoutMs."
+    },
+    "autoStartGateway": {
+      "type": "boolean",
+      "default": false,
+      "description": "Start the QQ Bot WebSocket Gateway receiver when the long-running service process starts."
+    },
+    "auto_start_gateway": {
+      "type": "boolean",
+      "description": "Alias for autoStartGateway."
+    },
+    "gatewayIntents": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 33554432,
+      "description": "Gateway intents bitmask. Default is GROUP_AND_C2C_EVENT (1 << 25)."
+    },
+    "gateway_intents": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Alias for gatewayIntents."
+    },
+    "gatewayShardIndex": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0,
+      "description": "Gateway shard index."
+    },
+    "gateway_shard_index": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Alias for gatewayShardIndex."
+    },
+    "gatewayShardCount": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "Gateway shard count."
+    },
+    "gateway_shard_count": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Alias for gatewayShardCount."
+    },
+    "maxBufferedMessages": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1000,
+      "description": "Maximum number of received Gateway message events kept in memory."
+    },
+    "max_buffered_messages": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Alias for maxBufferedMessages."
+    },
+    "gatewayReconnectMs": {
+      "type": "integer",
+      "minimum": 100,
+      "default": 5000,
+      "description": "Reconnect delay after Gateway disconnects."
+    },
+    "gateway_reconnect_ms": {
+      "type": "integer",
+      "minimum": 100,
+      "description": "Alias for gatewayReconnectMs."
+    }
+  }
+}
