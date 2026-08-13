@@ -6,6 +6,9 @@ option go_package = "miner/grpc-service/Tencent_WeixinPersonal";
 
 // Tencent_WeixinPersonal wraps personal Weixin chat messaging through Tencent iLink Bot API.
 service Tencent_WeixinPersonal {
+  // Keep a real upstream-backed operation first so generic catalog smoke tests
+  // verify the complete OctoBus-to-iLink request chain.
+  rpc SendText(SendTextRequest) returns (SendTextResponse) {}
   rpc StartLogin(StartLoginRequest) returns (StartLoginResponse) {}
   rpc WaitLogin(WaitLoginRequest) returns (WaitLoginResponse) {}
   rpc FetchUpdates(FetchUpdatesRequest) returns (FetchUpdatesResponse) {}
@@ -14,7 +17,6 @@ service Tencent_WeixinPersonal {
   rpc GetReceiverStatus(GetReceiverStatusRequest) returns (ReceiverStatus) {}
   rpc PollMessages(PollMessagesRequest) returns (PollMessagesResponse) {}
   rpc AckMessage(AckMessageRequest) returns (AckMessageResponse) {}
-  rpc SendText(SendTextRequest) returns (SendTextResponse) {}
   rpc NormalizeMessage(NormalizeMessageRequest) returns (NormalizedMessage) {}
 }
 
