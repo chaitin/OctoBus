@@ -1,0 +1,5 @@
+{
+  "method": "Tencent_Lighthouse_FIREWALL.Tencent_Lighthouse_FIREWALL/ListFirewallRules",
+  "request": { "instance_id": "lhins-smoke" },
+  "expectUpstream": true
+}

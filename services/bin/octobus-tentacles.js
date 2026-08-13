@@ -265,7 +265,7 @@ const services = {
     serviceModule: "../skycloud__inet/src/service.js",
   },
   "lighthouse-firewall": {
-    entryFile: "../tencent__lighthouse-firewall/bin/lighthouse-firewall.js",
+    entryFile: "../tencent__lighthouse-firewall/bin/tencent-lighthouse-firewall.js",
     serviceModule: "../tencent__lighthouse-firewall/src/service.js",
   },
   "tencent-qyweixin-group-robot": {

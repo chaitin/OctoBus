@@ -18,6 +18,7 @@ const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_PROTOCOL = "TCP";
 const DEFAULT_PORT = "ALL";
 const DEFAULT_DESCRIPTION = "octobus-block-ip";
+const DEFAULT_REGION = "ap-guangzhou";
 
 const ACTIONS = {
   listFirewallRules: "DescribeFirewallRules",
@@ -52,9 +53,7 @@ const getConfig = (ctx = {}) => ctx.config || ctx.bindings || {};
 const getSecret = (ctx = {}) => ctx.secret || ctx.secrets || {};
 
 const resolveRegion = (req, ctx) => {
-  const region = toTrimmedString(firstDefined(req.region, getConfig(ctx).region));
-  if (!region) throw serviceError("FAILED_PRECONDITION", "region is required");
-  return region;
+  return toTrimmedString(firstDefined(req.region, getConfig(ctx).region)) || DEFAULT_REGION;
 };
 
 const resolveCredential = (req, ctx) => {

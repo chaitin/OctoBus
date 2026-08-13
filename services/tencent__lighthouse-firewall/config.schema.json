@@ -5,12 +5,16 @@
   "properties": {
     "endpoint": {
       "type": "string",
+      "format": "uri",
+      "pattern": "^https?://",
       "default": "https://lighthouse.tencentcloudapi.com",
       "description": "Tencent Cloud Lighthouse API endpoint."
     },
     "region": {
       "type": "string",
-      "description": "Default Tencent Cloud region, for example ap-guangzhou. Request region takes precedence."
+      "description": "Default Tencent Cloud region, for example ap-guangzhou. Request region takes precedence.",
+      "default": "ap-guangzhou",
+      "x-octobus-smoke": "ap-guangzhou"
     },
     "timeoutMs": {
       "type": "integer",
@@ -23,5 +27,6 @@
       "default": false,
       "description": "Skip TLS certificate verification for test endpoints only."
     }
-  }
+  },
+  "required": ["region"]
 }

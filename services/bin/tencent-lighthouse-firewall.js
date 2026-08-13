@@ -6,5 +6,5 @@ import { runServiceMain } from "@chaitin-ai/octobus-sdk";
 import { service } from "../tencent__lighthouse-firewall/src/service.js";
 
 runServiceMain(service, {
-  entryFile: fileURLToPath(new URL("../tencent__lighthouse-firewall/bin/lighthouse-firewall.js", import.meta.url)),
+  entryFile: fileURLToPath(new URL("../tencent__lighthouse-firewall/bin/tencent-lighthouse-firewall.js", import.meta.url)),
 });

@@ -121,3 +121,78 @@ test("validates arguments and maps cloud errors", async () => {
     return true;
   });
 });
+
+test("covers context shapes, validation, HTTP and Tencent error mapping", async () => {
+  await assert.rejects(() => handlers.ListFirewallRules({ request: { instance_id: "i" }, config: { region: "r" }, secret: {} }), /secretId is required/);
+  await assert.rejects(() => handlers.ListFirewallRules({ req: { instance_id: "i" }, config: { region: "r" }, secret: { secretId: "id" } }), /secretKey is required/);
+  mockFetch(async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ Response: {} }) }));
+  await handlers.ListFirewallRules({ instance_id: "i" }, { secret: ctx.secret });
+  await assert.rejects(() => handlers.CreateFirewallRules({ instance_id: "i", rules: [null] }, ctx), /must be an object/);
+  await assert.rejects(() => handlers.CreateFirewallRules({ instance_id: "i", rules: [{}] }, ctx), /protocol is required/);
+  await assert.rejects(() => handlers.BlockIP({ instance_id: "i", source_ips: [""] }, ctx), /must be non-empty/);
+  await assert.rejects(() => handlers.ApplyFirewallTemplate({ template_id: "t", instance_ids: [""] }, ctx), /must be non-empty/);
+
+  for (const [code, expected] of [
+    ["InvalidParameter.X", "INVALID_ARGUMENT"], ["ResourceNotFound.X", "FAILED_PRECONDITION"],
+    ["InternalError.X", "UNAVAILABLE"], ["Other.X", "UNKNOWN"],
+  ]) {
+    mockFetch(async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ Response: { Error: { Code: code, Message: "failed" } } }) }));
+    await assert.rejects(() => handlers.ListFirewallRules({ instance_id: "i" }, ctx), (e) => e.legacyCode === expected);
+  }
+
+  mockFetch(async () => ({ ok: false, status: 500, statusText: "down", text: async () => "not-json", headers: new Headers() }));
+  await assert.rejects(() => handlers.ListFirewallRules({ instance_id: "i" }, ctx), (e) => e instanceof GrpcError);
+  mockFetch(async () => { throw new Error("network down"); });
+  await assert.rejects(() => handlers.ListFirewallRules({ instance_id: "i" }, ctx), (e) => e.legacyCode === "UNAVAILABLE");
+});
+
+test("DeleteFirewallRules maps write response", async () => {
+  mockFetch(async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ Response: { RequestId: "deleted" } }) }));
+  const result = await handlers.DeleteFirewallRules({ instance_id: "i", rules: [{ protocol: "TCP", port: "22", cidr_block: "1.1.1.1", action: "DROP" }] }, ctx);
+  assert.equal(result.request_id, "deleted");
+});
+
+test("supports aliases, defaults, sparse responses and temporary credentials", async () => {
+  const calls = [];
+  mockFetch(async (_url, init) => {
+    calls.push(init);
+    return { ok: true, status: 200, text: async () => JSON.stringify({ response: {} }) };
+  });
+  const aliasCtx = {
+    bindings: { region: "ap-beijing" },
+    secrets: { secret_id: "sid", secret_key: "skey", token: "sts" },
+  };
+  const listed = await handlers.ListFirewallRules({ req: { instanceId: "i", offset: -1, limit: "bad" }, ...aliasCtx });
+  assert.equal(listed.total_count, 0);
+  assert.deepEqual(listed.rules, []);
+  assert.equal(calls[0].headers["X-TC-Token"], "sts");
+  const blocked = await handlers.BlockIP({ instanceId: "i", sourceIps: ["1.1.1.1"] }, aliasCtx);
+  assert.equal(blocked.created_rules[0].protocol, "TCP");
+  assert.equal(blocked.created_rules[0].port, "ALL");
+  await handlers.CreateFirewallRules({ instanceId: "i", credential: { secretId: "id", secretKey: "key" }, region: "r", rules: [{ Protocol: "UDP", Port: "53", CidrBlock: "0.0.0.0/0", Action: "ACCEPT" }] }, {});
+});
+
+test("maps HTTP error envelopes and alternative response field names", async () => {
+  for (const envelope of [
+    { Response: { Error: { Code: "AuthFailure.SignatureFailure", Message: "bad signature" } } },
+    { response: { error: { code: "MissingParameter.InstanceId", message: "missing" } } },
+  ]) {
+    mockFetch(async () => ({ ok: false, status: 400, statusText: "bad", headers: new Headers(), text: async () => JSON.stringify(envelope) }));
+    await assert.rejects(() => handlers.ListFirewallRules({ instance_id: "i" }, ctx), (e) => e instanceof GrpcError);
+  }
+  mockFetch(async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ response: { error: { code: "FailedOperation.X", message: "failed" } } }) }));
+  await assert.rejects(() => handlers.ListFirewallRules({ instance_id: "i" }, ctx), (e) => e.legacyCode === "FAILED_PRECONDITION");
+});
+
+test("validates every rule field and write request shape", async () => {
+  const base = { instance_id: "i" };
+  for (const [rule, message] of [
+    [{ protocol: "TCP" }, /port is required/],
+    [{ protocol: "TCP", port: "22" }, /cidr_block is required/],
+    [{ protocol: "TCP", port: "22", cidr_block: "1.1.1.1" }, /action is required/],
+  ]) await assert.rejects(() => handlers.CreateFirewallRules({ ...base, rules: [rule] }, ctx), message);
+  await assert.rejects(() => handlers.ModifyFirewallRules({ ...base, rules: [null] }, ctx), /must be an object/);
+  await assert.rejects(() => handlers.ApplyFirewallTemplate({ template_id: "t", instance_ids: [] }, ctx), /non-empty array/);
+  await assert.rejects(() => handlers.BlockIP({ instance_id: "i", source_ips: "bad" }, ctx), /non-empty array/);
+  await assert.rejects(() => handlers.ModifyFirewallRules({ ...base, rules: [{}] }, ctx), /must be an object/);
+});
