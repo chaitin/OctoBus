@@ -371,3 +371,85 @@ test('rpcdef returns correct handler map structure', async () => {
   assert.equal(typeof defs[listAttackAccountsPath], 'function');
   assert.equal(typeof defs[getSystemInfoPath], 'function');
 });
+
+test('helpers cover invalid scalars, header shapes, and unknown error codes', async () => {
+  const { _test } = await import('../src/hfish.js');
+  assert.equal(_test.toPositiveInt({ other: 1 }), null);
+  assert.equal(_test.toPositiveInt(1.5), null);
+  assert.deepEqual(_test.parseHeaders([]), {});
+  assert.deepEqual(_test.parseHeaders('[]'), {});
+  assert.deepEqual(_test.parseHeaders('{"A":"b"}'), { A: 'b' });
+  assert.deepEqual(_test.parseHeaders(42), {});
+  assert.equal(_test.errorWithCode('OTHER', 'x').code, grpcStatus.UNKNOWN);
+});
+
+test('ListAttackIPs validates endpoint, invalid JSON, empty body, and API errors', async () => {
+  await assert.rejects((await loadListAttackIpsHandler({}, { bindings: { endpoint: 'ftp://bad' } }))(), /INVALID_ARGUMENT/);
+  mockFetch(async () => ({ ok: true, status: 200, text: async () => 'bad-json' }));
+  await assert.rejects((await loadListAttackIpsHandler({}))(), /UNKNOWN/);
+  mockFetch(async () => ({ ok: true, status: 200, text: async () => '' }));
+  assert.deepEqual((await (await loadListAttackIpsHandler({}))()).data, []);
+  mockFetch(async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ response_code: 42 }) }));
+  await assert.rejects((await loadListAttackIpsHandler({}))(), /FAILED_PRECONDITION/);
+});
+
+test('ListAttackDetails validates inputs, forwards filters, and maps errors/defaults', async () => {
+  await assert.rejects((await loadListAttackDetailsHandler({}, { secret: { apiKey: null } }))(), /INVALID_ARGUMENT/);
+  await assert.rejects((await loadListAttackDetailsHandler({}, { bindings: { endpoint: '' } }))(), /INVALID_ARGUMENT/);
+  let requested;
+  mockFetch(async (url) => { requested = url; return { ok: true, status: 200, text: async () => JSON.stringify({ data: {} }) }; });
+  const result = await (await loadListAttackDetailsHandler({ Page: 2, Limit: 3, ip: '1.2.3.4', type: 'ssh' }))();
+  assert.match(requested, /page=2/); assert.match(requested, /limit=3/); assert.match(requested, /ip=1.2.3.4/); assert.match(requested, /type=ssh/);
+  assert.equal(result.data.page_no, 2); assert.equal(result.data.page_size, 3);
+  mockFetch(async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ response_code: 1003 }) }));
+  await assert.rejects((await loadListAttackDetailsHandler({}))(), /PERMISSION_DENIED/);
+  mockFetch(async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ response_code: 9 }) }));
+  await assert.rejects((await loadListAttackDetailsHandler({}))(), /FAILED_PRECONDITION/);
+});
+
+test('ListAttackAccounts validates inputs and maps business errors/default data', async () => {
+  await assert.rejects((await loadListAttackAccountsHandler({}, { secret: { apiKey: null } }))(), /INVALID_ARGUMENT/);
+  await assert.rejects((await loadListAttackAccountsHandler({}, { bindings: { endpoint: 'bad' } }))(), /INVALID_ARGUMENT/);
+  mockFetch(async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ data: {} }) }));
+  assert.deepEqual((await (await loadListAttackAccountsHandler({}))()).data, []);
+  mockFetch(async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ response_code: 1003 }) }));
+  await assert.rejects((await loadListAttackAccountsHandler({}))(), /PERMISSION_DENIED/);
+  mockFetch(async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ response_code: 2 }) }));
+  await assert.rejects((await loadListAttackAccountsHandler({}))(), /FAILED_PRECONDITION/);
+});
+
+test('GetSystemInfo validates endpoint and maps empty/error payloads', async () => {
+  await assert.rejects((await loadGetSystemInfoHandler({}, { bindings: { endpoint: '' } }))(), /INVALID_ARGUMENT/);
+  mockFetch(async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ data: { clients: {}, honeypot_self_cnt: [] } }) }));
+  const empty = await (await loadGetSystemInfoHandler({}))();
+  assert.deepEqual(empty.data.clients, []); assert.deepEqual(empty.data.honeypot_self_cnt, {});
+  mockFetch(async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ response_code: 1003 }) }));
+  await assert.rejects((await loadGetSystemInfoHandler({}))(), /PERMISSION_DENIED/);
+  mockFetch(async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ response_code: 4 }) }));
+  await assert.rejects((await loadGetSystemInfoHandler({}))(), /FAILED_PRECONDITION/);
+});
+
+test('network failures use cause and fallback messages and TLS flags are request-scoped', async () => {
+  mockFetch(async (_url, init) => { assert.equal(init.insecureSkipVerify, true); throw { cause: { message: 'cause failure' } }; });
+  await assert.rejects((await loadListAttackIpsHandler({}, { bindings: { skipTlsVerify: true } }))(), /cause failure/);
+  mockFetch(async () => { throw {}; });
+  await assert.rejects((await loadListAttackIpsHandler({}))(), /fetch failed/);
+});
+
+test('sdk handler accepts request context and merged bindings', async () => {
+  const { handlers } = await import('../src/hfish.js');
+  mockFetch(async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ data: { attack_ip: [] } }) }));
+  const result = await handlers['ThreatBook_HFISH.ThreatBook_HFISH/ListAttackIPs']({
+    request: { Page: 2 },
+    config: { endpoint: 'http://localhost:18080' },
+    secret: { apiKey: 'key' },
+  });
+  assert.deepEqual(result.data, []);
+});
+
+test('legacy handler accepts explicit request plus per-call context', async () => {
+  const { _test } = await import('../src/hfish.js');
+  mockFetch(async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ data: { attack_ip: [] } }) }));
+  const defs = _test.registerHandlers?.({ config: { endpoint: 'http://localhost:18080' }, secret: { apiKey: 'key' } });
+  if (defs) assert.deepEqual(await defs[listAttackIpsPath]({ page: 2 }, { meta: { request_id: 'inner' } }), { response_code: undefined, verbose_msg: '', data: [] });
+});
