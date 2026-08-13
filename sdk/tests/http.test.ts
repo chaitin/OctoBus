@@ -92,14 +92,14 @@ describe("service error helpers", () => {
 });
 
 describe("HTTP helpers", () => {
-  it("normalizes timeout values and creates explicit TLS dispatchers", async () => {
+  it("normalizes timeout values and reuses explicit TLS dispatchers", () => {
     expect(normalizeTimeoutMs("25")).toBe(25);
     expect(normalizeTimeoutMs(-1, 7)).toBe(7);
     expect(createTlsDispatcher(false)).toBeUndefined();
 
     const dispatcher = createTlsDispatcher(true);
     expect(dispatcher).toBeDefined();
-    await (dispatcher as { close(): Promise<void> }).close();
+    expect(createTlsDispatcher(true)).toBe(dispatcher);
   });
 
   it("strips invalid fetch options and only passes explicit dispatchers", async () => {
@@ -129,7 +129,6 @@ describe("HTTP helpers", () => {
     expect(capturedInit).not.toHaveProperty("insecureSkipVerify");
     expect(capturedInit?.dispatcher).toBe(dispatcher);
     expect(capturedInit?.signal).toBeInstanceOf(AbortSignal);
-    await (dispatcher as { close(): Promise<void> }).close();
   });
 
   it("maps timeout, external abort, and network failures", async () => {

@@ -1,0 +1,43 @@
+name: Service L2 gate
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  service-l2-gate:
+    name: service-l2-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout pull request
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+
+      - name: Test service gate tooling
+        run: node --test services/tests/service-pr-gate.test.mjs services/tests/validate-service-package.test.mjs
+
+      - name: Run focused L2 service gate
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node services/scripts/service-pr-gate.mjs --base "$BASE_SHA" --head "$HEAD_SHA"

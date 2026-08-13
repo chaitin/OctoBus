@@ -82,9 +82,9 @@ function existingTestFiles(root, patterns) {
 }
 
 export function buildNodeTestArgs(root, opts) {
-  const tests = existingTestFiles(root, [
-    { dir: "tests", re: /\.test\.mjs$/ },
-  ]);
+  const tests = opts.serviceDir == null
+    ? existingTestFiles(root, [{ dir: "tests", re: /\.test\.mjs$/ }])
+    : [];
 
   if (opts.serviceDir != null) {
     tests.push(...existingTestFiles(root, [
@@ -104,7 +104,7 @@ export function buildNodeTestArgs(root, opts) {
     args.push(`--test-coverage-lines=${opts.coverageLines ?? DEFAULT_COVERAGE_THRESHOLD}`);
     if (opts.serviceDir != null) {
       const serviceDir = opts.serviceDir.replaceAll(path.win32.sep, path.posix.sep);
-      args.push(`--test-coverage-include=${serviceDir}/**/*.js`);
+      args.push(`--test-coverage-include=${serviceDir}/src/**/*.js`);
       args.push(`--test-coverage-exclude=${serviceDir}/node_modules/**`);
     }
   }

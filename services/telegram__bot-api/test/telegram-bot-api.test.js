@@ -92,7 +92,7 @@ test("GetMe calls Telegram getMe and redacts token in logs", async () => {
   });
   globalThis.fetch = mock.fetch;
 
-  const result = await handlers[METHOD_GET_ME_FULL]({}, buildCtx());
+  const result = await handlers[METHOD_GET_ME_FULL](buildCtx());
 
   assert.equal(mock.calls.length, 1);
   assert.equal(mock.calls[0].url, "https://api.telegram.org/bot123456:TEST_TOKEN/getMe");
@@ -156,13 +156,13 @@ test("SendMessage request fields override config aliases", async () => {
   };
 
   await handlers[METHOD_SEND_MESSAGE_FULL](
-    {
+    buildCtx({
+      req: {
       chatId: "-1001",
       sendMsg: "alias text",
       parseMode: "MarkdownV2",
       disableWebPagePreview: "off",
-    },
-    buildCtx({
+      },
       config: { chat_id: "default", parse_mode: "HTML", disableWebPagePreview: true },
       secret: { bot_token: undefined, botToken: "alias-token" },
     }),
@@ -183,22 +183,22 @@ test("validates required bindings and request fields", async () => {
   };
 
   await expectGrpcError(
-    () => handlers[METHOD_GET_ME_FULL]({}, buildCtx({ config: { base_url: "ftp://bad" } })),
+    () => handlers[METHOD_GET_ME_FULL](buildCtx({ config: { base_url: "ftp://bad" } })),
     "INVALID_ARGUMENT",
     (err) => assert.match(err.message, /base_url/),
   );
   await expectGrpcError(
-    () => handlers[METHOD_GET_ME_FULL]({}, buildCtx({ secret: { bot_token: "" } })),
+    () => handlers[METHOD_GET_ME_FULL](buildCtx({ secret: { bot_token: "" } })),
     "INVALID_ARGUMENT",
     (err) => assert.match(err.message, /bot_token/),
   );
   await expectGrpcError(
-    () => handlers[METHOD_SEND_MESSAGE_FULL]({ text: "hi" }, buildCtx({ config: { chat_id: "" } })),
+    () => handlers[METHOD_SEND_MESSAGE_FULL](buildCtx({ config: { chat_id: "" }, req: { text: "hi" } })),
     "INVALID_ARGUMENT",
     (err) => assert.match(err.message, /chat_id/),
   );
   await expectGrpcError(
-    () => handlers[METHOD_SEND_MESSAGE_FULL]({ chat_id: "1", text: " " }, buildCtx()),
+    () => handlers[METHOD_SEND_MESSAGE_FULL](buildCtx({ req: { chat_id: "1", text: " " } })),
     "INVALID_ARGUMENT",
     (err) => assert.match(err.message, /text is required/),
   );
@@ -208,7 +208,7 @@ test("maps HTTP and network failures to gRPC errors", async () => {
   for (const [status, legacyCode] of [[401, "PERMISSION_DENIED"], [403, "PERMISSION_DENIED"], [400, "FAILED_PRECONDITION"], [429, "FAILED_PRECONDITION"], [500, "UNAVAILABLE"]]) {
     globalThis.fetch = async () => response(status, { ok: false, error_code: status, description: `status ${status}` });
     await expectGrpcError(
-      () => handlers[METHOD_GET_ME_FULL]({}, buildCtx()),
+      () => handlers[METHOD_GET_ME_FULL](buildCtx()),
       legacyCode,
       (err) => {
         assert.equal(err.httpStatus, status);
@@ -221,7 +221,7 @@ test("maps HTTP and network failures to gRPC errors", async () => {
     throw Object.assign(new Error("fetch failed"), { cause: new Error("connect timeout") });
   };
   await expectGrpcError(
-    () => handlers[METHOD_GET_ME_FULL]({}, buildCtx()),
+    () => handlers[METHOD_GET_ME_FULL](buildCtx()),
     "UNAVAILABLE",
     (err) => assert.match(err.message, /connect timeout/),
   );
@@ -233,7 +233,7 @@ test("maps HTTP and network failures to gRPC errors", async () => {
     },
   });
   await expectGrpcError(
-    () => handlers[METHOD_GET_ME_FULL]({}, buildCtx()),
+    () => handlers[METHOD_GET_ME_FULL](buildCtx()),
     "UNKNOWN",
     (err) => assert.match(err.message, /read failed/),
   );

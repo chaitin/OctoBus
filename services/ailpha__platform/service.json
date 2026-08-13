@@ -1,0 +1,49 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "ailpha-platform",
+  "displayName": "AiLPHA Security Platform",
+  "description": "OctoBus package for the AiLPHA security analysis & management platform (SIEM/SOC): merged-alarm query/detail/disposition and linkage-strategy IP block/unblock through the /openapi REST API.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/ailpha_platform.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "AiLPHA_Platform.AiLPHA_Platform/ListMergeAlarms": {
+          "name": "list-merge-alarms",
+          "description": "List AiLPHA merged alarms."
+        },
+        "AiLPHA_Platform.AiLPHA_Platform/GetMergeAlarmDetail": {
+          "name": "get-merge-alarm-detail",
+          "description": "Get an AiLPHA merged alarm detail."
+        },
+        "AiLPHA_Platform.AiLPHA_Platform/UpdateMergeAlarmStatus": {
+          "name": "update-merge-alarm-status",
+          "description": "Update (dispose) AiLPHA merged alarm status."
+        },
+        "AiLPHA_Platform.AiLPHA_Platform/ListLinkageStrategies": {
+          "name": "list-linkage-strategies",
+          "description": "List AiLPHA linkage strategies."
+        },
+        "AiLPHA_Platform.AiLPHA_Platform/BlockIp": {
+          "name": "block-ip",
+          "description": "Apply IP block on AiLPHA linkage strategies."
+        },
+        "AiLPHA_Platform.AiLPHA_Platform/UnblockIp": {
+          "name": "unblock-ip",
+          "description": "Remove IP block from AiLPHA linkage strategies."
+        }
+      }
+    }
+  }
+}

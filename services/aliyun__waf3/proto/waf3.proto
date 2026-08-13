@@ -1,0 +1,257 @@
+syntax = "proto3";
+
+package Aliyun_Waf3;
+
+option go_package = "miner/grpc-service/Aliyun_Waf3";
+
+// 阿里云 WAF 3.0 能力服务
+// 提供 IP 黑名单/白名单、自定义 ACL 规则、攻击事件查询和防护资源管理能力
+service Waf3 {
+  // 封禁 IP：将 IP 列表加入黑名单防护规则
+  rpc BlockIP(BlockIPRequest) returns (BlockIPResponse) {}
+
+  // 解封 IP：从黑名单防护规则中移除 IP
+  rpc UnblockIP(UnblockIPRequest) returns (UnblockIPResponse) {}
+
+  // 查询 IP 黑名单：获取当前生效的黑名单规则及 IP 列表
+  rpc DescribeIPBlacklist(DescribeIPBlacklistRequest) returns (DescribeIPBlacklistResponse) {}
+
+  // IP 加白：创建白名单规则，绕过指定防护模块
+  rpc AddIPWhitelist(AddIPWhitelistRequest) returns (AddIPWhitelistResponse) {}
+
+  // 创建自定义 ACL 规则：基于 URL/IP/Header 等条件做访问控制
+  rpc CreateACLRule(CreateACLRuleRequest) returns (CreateACLRuleResponse) {}
+
+  // 删除规则：按规则 ID 删除指定防护规则
+  rpc DeleteRule(DeleteRuleRequest) returns (DeleteRuleResponse) {}
+
+  // 查询单条规则详情
+  rpc DescribeRule(DescribeRuleRequest) returns (DescribeRuleResponse) {}
+
+  // 按防护场景查询规则列表
+  rpc DescribeRules(DescribeRulesRequest) returns (DescribeRulesResponse) {}
+
+  // 查询攻击流量 Top N 统计数据（按源 IP/URL/防护模块等维度）
+  rpc DescribeSecurityTopNMetric(DescribeSecurityTopNMetricRequest) returns (DescribeSecurityTopNMetricResponse) {}
+
+  // 查询防护资源（CNAME 域名 + 云产品接入的 ECS/SLB）
+  rpc DescribeResources(DescribeResourcesRequest) returns (DescribeResourcesResponse) {}
+}
+
+// ═══════════════════════════════════════════
+// IP 黑名单
+// ═══════════════════════════════════════════
+
+message BlockIPRequest {
+  // 防护模板 ID。为空时使用 instance 默认模板。
+  string template_id = 1;
+  // 要封禁的 IP 或 CIDR 列表，例如 ["1.2.3.4", "5.6.7.0/24"]
+  repeated string ips = 2;
+  // 规则名称，可选，默认 "octobus-block"
+  string rule_name = 3;
+  // 处置动作，可选 "block"（拦截）或 "monitor"（观察），默认 "block"
+  string action = 4;
+}
+
+message BlockIPResponse {
+  // 创建或更新的规则 ID
+  string rule_id = 1;
+}
+
+message UnblockIPRequest {
+  // 防护模板 ID。为空时使用 instance 默认模板。
+  string template_id = 1;
+  // 要操作的规则 ID
+  string rule_id = 2;
+  // 要移除的 IP 或 CIDR 列表
+  repeated string ips = 3;
+}
+
+message UnblockIPResponse {
+  bool success = 1;
+}
+
+message DescribeIPBlacklistRequest {
+  // 防护模板 ID。为空时使用 instance 默认模板。
+  string template_id = 1;
+  // 分页页码，默认 1
+  int32 page_number = 2;
+  // 每页条数，默认 20，最大 100
+  int32 page_size = 3;
+}
+
+message DescribeIPBlacklistResponse {
+  repeated IPBlacklistRule rules = 1;
+  int64 total = 2;
+}
+
+message IPBlacklistRule {
+  string rule_id = 1;
+  string name = 2;
+  repeated string ips = 3;
+  string action = 4;
+  int32 status = 5;
+}
+
+// ═══════════════════════════════════════════
+// IP 白名单
+// ═══════════════════════════════════════════
+
+message AddIPWhitelistRequest {
+  // 防护模板 ID。为空时使用 instance 默认模板。
+  string template_id = 1;
+  // 要加白的 IP 列表
+  repeated string ips = 2;
+  // 规则名称，可选，默认 "octobus-whitelist"
+  string rule_name = 3;
+  // 加白的防护模块列表，默认 ["waf"]（全部模块）
+  // 可选值: waf, blacklist, customrule, cc, region_block, antiscan, dlp 等
+  repeated string tags = 4;
+}
+
+message AddIPWhitelistResponse {
+  string rule_id = 1;
+}
+
+// ═══════════════════════════════════════════
+// 自定义 ACL 规则
+// ═══════════════════════════════════════════
+
+message ACLCondition {
+  // 匹配字段：URL, IP, Referer, User-Agent, Header, Cookie, Params, Http-Method, X-Forwarded-For 等
+  string key = 1;
+  // 操作符：eq, ne, contain, not-contain, prefix-match, suffix-match, regex
+  string op_value = 2;
+  // 匹配值
+  string values = 3;
+  // 子键（Header/Cookie/Params 时使用）
+  string sub_key = 4;
+}
+
+message CreateACLRuleRequest {
+  // 防护模板 ID。为空时使用 instance 默认模板。
+  string template_id = 1;
+  // 规则名称
+  string rule_name = 2;
+  // 匹配条件列表，最少 1 个，最多 5 个
+  repeated ACLCondition conditions = 3;
+  // 处置动作：block, monitor, js, captcha, captcha_strict
+  string action = 4;
+  // 规则状态：0=禁用，1=启用（默认 1）
+  int32 status = 5;
+}
+
+message CreateACLRuleResponse {
+  string rule_id = 1;
+}
+
+// ═══════════════════════════════════════════
+// 规则删除
+// ═══════════════════════════════════════════
+
+message DeleteRuleRequest {
+  // 防护模板 ID。为空时使用 instance 默认模板。
+  string template_id = 1;
+  // 要删除的规则 ID
+  string rule_id = 2;
+  // 防护场景类别：ip_blacklist, whitelist, custom_acl 等
+  string defense_scene = 3;
+}
+
+message DeleteRuleResponse {
+  bool success = 1;
+}
+
+// ═══════════════════════════════════════════
+// 规则查询
+// ═══════════════════════════════════════════
+
+message DescribeRuleRequest {
+  // 防护模板 ID。为空时使用 instance 默认模板。
+  string template_id = 1;
+  // 规则 ID
+  string rule_id = 2;
+}
+
+message DescribeRuleResponse {
+  string rule_id = 1;
+  string name = 2;
+  string defense_scene = 3;
+  string action = 4;
+  int32 status = 5;
+  // 规则内容 JSON（阿里云原始返回）
+  string rules_json = 6;
+}
+
+message DescribeRulesRequest {
+  // 防护模板 ID。为空时使用 instance 默认模板。
+  string template_id = 1;
+  // 防护场景类别筛选：ip_blacklist, whitelist, custom_acl 等
+  string defense_scene = 2;
+  int32 page_number = 3;
+  int32 page_size = 4;
+}
+
+message DescribeRulesResponse {
+  repeated DescribeRuleResponse rules = 1;
+  int64 total = 2;
+}
+
+// ═══════════════════════════════════════════
+// 攻击 Top N 统计
+// ═══════════════════════════════════════════
+
+message DescribeSecurityTopNMetricRequest {
+  // 开始时间（Unix 秒）
+  int64 start_time = 1;
+  // 结束时间（Unix 秒）
+  int64 end_time = 2;
+  // 统计维度：real_client_ip（源 IP）、request_path（URL）、defense_scene（防护模块）
+  string metric = 3;
+  // 返回条数，最大 10，默认 5
+  int32 limit = 4;
+}
+
+message SecurityTopNItem {
+  // 维度值（如 IP 地址、URL 路径、模块名）
+  string name = 1;
+  // 攻击请求数量
+  int64 value = 2;
+}
+
+message DescribeSecurityTopNMetricResponse {
+  repeated SecurityTopNItem items = 1;
+}
+
+// ═══════════════════════════════════════════
+// 防护资源（CNAME 域名 + 云产品接入）
+// ═══════════════════════════════════════════
+
+message DescribeResourcesRequest {
+  // 按资源 ID 模糊搜索，可选
+  string resource = 1;
+  int32 page_number = 2;
+  int32 page_size = 3;
+}
+
+message WafResource {
+  // 资源标识，如 ECS: "i-xxx-8080-ecs"，域名: "example.com"
+  string resource = 1;
+  // 接入模式：instance_port（云产品）, domain（CNAME）
+  string pattern = 2;
+  // 产品类型：ecs, slb, domain 等
+  string product = 3;
+  // 资源状态：active
+  string status = 4;
+  // ECS 实例 ID（仅云产品接入）
+  string instance_id = 5;
+  // 端口（仅云产品接入）
+  int32 port = 6;
+  // 协议（仅云产品接入）
+  string protocol = 7;
+}
+
+message DescribeResourcesResponse {
+  repeated WafResource resources = 1;
+  int64 total = 2;
+}
