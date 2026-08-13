@@ -101,7 +101,8 @@ const requestJSON = async (url, init, timeoutMs) => {
     return { body, status: response.status, raw };
   } catch (error) {
     if (error instanceof GrpcError) throw error;
-    throw fail("UNAVAILABLE", error?.name === "AbortError" ? "iLink request timed out" : `iLink request failed: ${error?.message ?? error}`);
+    const detail = error?.cause?.message ?? error?.message ?? error;
+    throw fail("UNAVAILABLE", error?.name === "AbortError" ? "iLink request timed out" : `iLink request failed: ${detail}`);
   } finally {
     clearTimeout(timer);
   }
