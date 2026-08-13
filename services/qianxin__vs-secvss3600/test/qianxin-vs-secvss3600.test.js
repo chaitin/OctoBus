@@ -401,6 +401,10 @@ describe('ControlTask', () => {
       assert.deepEqual(r, {});
     }
   });
+  it('protobuf enum numeric action is accepted', async () => {
+    global.fetch = mockFetchSuccess({ success: true });
+    await ControlTask({ request: { task_id: 1, action: 0 }, bindings: bindings() });
+  });
 
   it('missing task_id -> INVALID_ARGUMENT', async () => {
     await assert.rejects(rpcdef(buildCtx({ req: { action: 'stop' } }))[PATH_CONTROL_TASK](), /INVALID_ARGUMENT/);

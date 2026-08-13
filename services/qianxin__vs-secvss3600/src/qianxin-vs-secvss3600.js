@@ -230,7 +230,11 @@ export function rpcdef(ctx) {
     const token = await getToken(req);
     const taskId = toInt(firstDefined(req?.task_id, req?.taskId, req?.taskallid));
     if (taskId === null) throw err('INVALID_ARGUMENT', 'task_id is required');
-    const action = String(firstDefined(req?.action, req?.controltype) || '').trim().toLowerCase();
+    const rawAction = firstDefined(req?.action, req?.controltype);
+    const enumActions = ['stop', 'start', 'pause', 'continue', 'enable', 'disable', 'delete'];
+    const action = typeof rawAction === 'number'
+      ? enumActions[rawAction]
+      : String(rawAction || '').trim().toLowerCase();
     if (!VALID_ACTIONS.has(action)) {
       throw err('INVALID_ARGUMENT', `action must be one of: ${[...VALID_ACTIONS].join(', ')}`);
     }
