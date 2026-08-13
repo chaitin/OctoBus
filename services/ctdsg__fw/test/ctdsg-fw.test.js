@@ -266,12 +266,15 @@ test('network failures map to UNAVAILABLE', async () => {
 
 test('helpers cover parsing, aliases, signatures, timing, and normalization branches', async () => {
   assert.equal(_test.normalizeString({ value: ' x ' }), 'x');
+  assert.equal(_test.normalizeString(null), '');
   assert.equal(_test.optionalString('  '), undefined);
   assert.equal(_test.optionalString(' value '), 'value');
   assert.equal(_test.optionalUint32({ value: 321 }), 321);
   assert.equal(_test.optionalUint32('42.9'), 42);
   assert.equal(_test.optionalUint32(-1), undefined);
   assert.equal(_test.optionalBoolean(true), true);
+  assert.equal(_test.optionalBoolean(0), false);
+  assert.equal(_test.optionalBoolean(2), true);
   assert.equal(_test.optionalBoolean('0'), false);
   assert.equal(_test.optionalBoolean(undefined), undefined);
   assert.equal(_test.optionalBoolean('maybe'), undefined);
@@ -297,8 +300,13 @@ test('helpers cover parsing, aliases, signatures, timing, and normalization bran
   });
   assert.equal(_test.toBoolean('on'), true);
   assert.equal(_test.toBoolean('off'), false);
+  assert.equal(_test.toBoolean(true), true);
+  assert.equal(_test.toBoolean(0), false);
   assert.equal(_test.toBoolean('maybe'), false);
+  assert.equal(_test.toBoolean(undefined), false);
   assert.equal(_test.shouldSkipTlsVerify({ bindings: {} }), false);
+  assert.equal(_test.shouldSkipTlsVerify({ bindings: { skipTlsVerify: true } }), true);
+  assert.equal(_test.shouldSkipTlsVerify({ bindings: { tlsInsecureSkipVerify: true } }), true);
   assert.equal(_test.shouldSkipTlsVerify({ bindings: { insecureSkipVerify: 'yes' } }), true);
   assert.deepEqual(_test.buildHeaders({ bindings: {}, meta: { instanceId: 'camel-inst', requestId: 'camel-req' } }), {
     'x-engine-instance': 'camel-inst',
@@ -338,6 +346,7 @@ test('helpers cover parsing, aliases, signatures, timing, and normalization bran
   assert.ok(headers['hy-bz-api-signature']);
   const tlsOptions = _test.buildTlsOptions({ bindings: { skipTlsVerify: true } });
   assert.ok(tlsOptions.dispatcher);
+  assert.deepEqual(_test.buildTlsOptions({ bindings: {} }), {});
   assert.deepEqual(_test.toStruct({ a: 1, b: null, c: [true] }), {
     fields: {
       a: { numberValue: 1 },
@@ -354,5 +363,21 @@ test('helpers cover parsing, aliases, signatures, timing, and normalization bran
   assert.deepEqual(_test.parseJsonObject('{"ok":true}'), { ok: true });
   assert.deepEqual(_test.normalizeResponse(200, [{ key: 'x', values: ['1'] }], '{"ok":true}', 'http://x').bodyJson, { ok: true });
   assert.deepEqual(_test.extractHeaders({ headers: createHeaders({ A: ['1', '2'] }) }), [{ key: 'A', values: ['1', '2'] }]);
+  assert.deepEqual(_test.extractHeaders({ headers: { entries: () => [['B', '2']][Symbol.iterator]() } }), [{ key: 'B', values: ['2'] }]);
+  assert.equal(_test.isSdkContext({ request: {} }), true);
+  assert.equal(_test.isSdkContext({ req: {} }), true);
+  assert.equal(_test.isSdkContext({ bindings: {} }), true);
+  assert.equal(_test.isSdkContext({ config: {} }), true);
+  assert.equal(_test.isSdkContext({ secret: {} }), true);
+  assert.equal(_test.isSdkContext({ meta: {} }), true);
+  assert.equal(_test.isSdkContext({ limits: {} }), true);
+  assert.equal(_test.isSdkContext({}), false);
+  const sdkHandler = _test.makeHandler((req, ctx) => ({ req, ctx }));
+  assert.deepEqual(sdkHandler({ req: { ips: ['0.0.0.0'] } }).req, { ips: ['0.0.0.0'] });
+  assert.deepEqual(sdkHandler({ request: { ips: ['1.1.1.1'] }, config: {} }).req, { ips: ['1.1.1.1'] });
+  assert.deepEqual(sdkHandler({ ips: ['2.2.2.2'] }).req, { ips: ['2.2.2.2'] });
+  assert.deepEqual(sdkHandler(undefined, undefined).req, {});
+  assert.deepEqual(_test.extractHeaders({}), []);
+  assert.equal(_test.normalizeResponse(undefined, [], undefined, '').statusCode, 0);
   assert.equal(_test.errorWithCode('FAILED_PRECONDITION', 'bad').legacyCode, 'FAILED_PRECONDITION');
 });

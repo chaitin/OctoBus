@@ -105,6 +105,7 @@ const normalizeBaseUrl = (value) => {
 
 const resolveHost = (ctx = {}) => {
   const req = ctx.req || {};
+  const bindings = ctx.bindings || {};
   for (const candidate of [
     req.host,
     req.baseUrl,
@@ -144,18 +145,16 @@ const resolveTimeoutMs = (ctx = {}) => {
   const req = ctx.req || {};
   const bindings = ctx.bindings || {};
   const limits = ctx.limits || {};
-  for (const candidate of [
+  const candidates = [
     optionalUint32(req.timeoutMs),
     optionalUint32(req.timeout_ms),
     optionalUint32(bindings.timeoutMs),
     optionalUint32(bindings.timeout_ms),
     optionalUint32(limits.timeoutMs),
     DEFAULT_TIMEOUT_MS,
-  ]) {
-    if (Number.isFinite(candidate) && candidate > 0) return Math.trunc(candidate);
-  }
-  /* node:coverage ignore next */
-  return DEFAULT_TIMEOUT_MS;
+  ];
+  const selected = candidates.find((candidate) => Number.isFinite(candidate) && candidate > 0);
+  return Math.trunc(selected);
 };
 
 const toBoolean = (value) => {
@@ -185,6 +184,47 @@ const buildTlsOptions = (ctx = {}) => {
       },
     }),
   };
+};
+
+const buildHeaders = (ctx = {}, extra = {}) => {
+  const bindings = ctx.bindings || {};
+  const meta = ctx.meta || {};
+  return {
+    ...(bindings.headers || {}),
+    'x-engine-instance': meta.instance_id || meta.instanceId || 'unknown',
+    'x-request-id': meta.request_id || meta.requestId || 'unknown',
+    ...extra,
+  };
+};
+
+const buildUrl = (host, path, query = {}) => {
+  const base = host.replace(/\/+$/, '');
+  const normalizedPath = String(path || '').replace(/^\/+/, '');
+  const prefix = `${base}/${normalizedPath}`;
+  const pairs = [];
+  for (const [key, raw] of Object.entries(query)) {
+    if (raw === undefined || raw === null || raw === '') continue;
+    for (const value of Array.isArray(raw) ? raw : [raw]) {
+      pairs.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
+    }
+  }
+  return pairs.length ? `${prefix}?${pairs.join('&')}` : prefix;
+};
+
+const toBodyJson = (body) => JSON.stringify(body ?? {});
+
+const createSignature = (bodyJson, timestamp, secretKey) =>
+  createHmac('md5', secretKey).update(`${bodyJson}${timestamp}`).digest('hex');
+
+const buildSignedHeaders = (ctx, bodyJson) => {
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const signature = createSignature(bodyJson, timestamp, resolveSecretKey(ctx));
+  return buildHeaders(ctx, {
+    'content-type': 'application/json',
+    'hy-bz-api-app-id': resolveAppId(ctx),
+    'hy-bz-api-timestamp': timestamp,
+    'hy-bz-api-signature': signature,
+  });
 };
 
 const fetchHttp = async (ctx, operation, body) => {
@@ -349,25 +389,6 @@ const normalizeResponse = (status, headers, rawBody, effectiveUrl) => ({
   effectiveUrl,
 });
 
-const fetchHttp = async (ctx, operation, body) => {
-  const host = resolveHost(ctx);
-  const url = buildUrl(host, resolveApiPath(ctx), { opt: operation });
-  const bodyJson = toBodyJson(body);
-  let res;
-  try {
-    res = await withTlsBypass(ctx, () => fetch(url, {
-      method: 'POST',
-      timeoutMs: resolveTimeoutMs(ctx),
-      headers: buildSignedHeaders(ctx, bodyJson),
-      body: bodyJson,
-    }));
-  } catch (err) {
-    throw errorWithCode('UNAVAILABLE', err?.cause?.message || err?.message || 'fetch failed');
-  }
-  const text = await res.text();
-  return normalizeResponse(res.status, extractHeaders(res), text, url);
-};
-
 const handleBlockIp = (req, ctx) => {
   const callCtx = resolveCallContext({ ...ctx, req });
   const ips = validateIps(callCtx.req?.ips);
@@ -437,7 +458,6 @@ export const _test = {
   buildHeaders,
   buildSignedHeaders,
   shouldSkipTlsVerify,
-  withTlsBypass,
   buildUnblockBody,
   buildUrl,
   createSignature,
