@@ -1,0 +1,53 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "epp-360",
+  "displayName": "360终端安全管理系统(EPP)",
+  "description": "OctoBus package for 360 Enterprise Endpoint Protection Platform (360 EPP v10.0.0.08331). Provides terminal management, alarm query, virus scan stats, and vulnerability fix stats APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/360_epp.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Qihoo360_EPP.Qihoo360_EPP/GetDashboardInfo": {
+          "name": "get-dashboard-info",
+          "description": "获取 360 EPP 仪表盘概览信息（终端数量、病毒数量、漏洞数量等）"
+        },
+        "Qihoo360_EPP.Qihoo360_EPP/ListTerminals": {
+          "name": "list-terminals",
+          "description": "查询 360 EPP 终端列表，支持分页和关键词搜索"
+        },
+        "Qihoo360_EPP.Qihoo360_EPP/GetTerminalDetail": {
+          "name": "get-terminal-detail",
+          "description": "获取终端详细信息"
+        },
+        "Qihoo360_EPP.Qihoo360_EPP/ListAlarms": {
+          "name": "list-alarms",
+          "description": "查询 360 EPP 告警日志列表"
+        },
+        "Qihoo360_EPP.Qihoo360_EPP/GetVirusStats": {
+          "name": "get-virus-stats",
+          "description": "获取病毒扫描统计数据"
+        },
+        "Qihoo360_EPP.Qihoo360_EPP/GetLeakFixStats": {
+          "name": "get-leakfix-stats",
+          "description": "获取漏洞修复统计数据"
+        },
+        "Qihoo360_EPP.Qihoo360_EPP/GetTerminalHardware": {
+          "name": "get-terminal-hardware",
+          "description": "获取终端硬件配置信息"
+        }
+      }
+    }
+  }
+}
