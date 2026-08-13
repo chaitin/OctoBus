@@ -3,12 +3,16 @@ import { request as httpsRequest } from "node:https";
 import { URL } from "node:url";
 import { GrpcError, grpcStatus } from "@chaitin-ai/octobus-sdk";
 
-function httpCall(method, url, reqBody, headers, timeoutMs, insecure) {
+const MAX_RESPONSE_BYTES = 10 * 1024 * 1024;
+const MAX_REDIRECTS = 5;
+const jwtCache = new Map();
+
+export function httpCall(method, url, reqBody, headers, timeoutMs, insecure, redirectCount = 0) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
     const isHttps = parsed.protocol === "https:";
     const reqModule = isHttps ? httpsRequest : httpRequest;
-    const bodyStr = reqBody ? JSON.stringify(reqBody, (k, v) => typeof v === "bigint" ? Number(v) : v) : null;
+    const bodyStr = reqBody ? JSON.stringify(reqBody, (_k, v) => typeof v === "bigint" ? v.toString() : v) : null;
 
     const opts = {
       hostname: parsed.hostname,
@@ -29,15 +33,38 @@ function httpCall(method, url, reqBody, headers, timeoutMs, insecure) {
 
     const req = reqModule(opts, (res) => {
       const chunks = [];
-      res.on("data", (chunk) => chunks.push(chunk));
+      let received = 0;
+      let settled = false;
+      res.on("data", (chunk) => {
+        received += chunk.length;
+        if (received > MAX_RESPONSE_BYTES) {
+          settled = true;
+          res.destroy();
+          reject(new GrpcError(grpcStatus.RESOURCE_EXHAUSTED, "XSIEM response body exceeds 10 MiB"));
+          return;
+        }
+        chunks.push(chunk);
+      });
+      res.on("error", (e) => {
+        if (!settled) reject(new GrpcError(grpcStatus.UNAVAILABLE, `XSIEM response error: ${e.message}`));
+      });
       res.on("end", () => {
+        if (settled) return;
         const respBody = Buffer.concat(chunks).toString("utf8");
         const sc = res.statusCode;
 
         if (sc === 302 || sc === 301 || sc === 307 || sc === 308) {
           const loc = res.headers.location;
           if (loc) {
-            return resolve(httpCall(method, loc, reqBody, headers, timeoutMs, insecure));
+            if (redirectCount >= MAX_REDIRECTS) {
+              return reject(new GrpcError(grpcStatus.UNAVAILABLE, "XSIEM exceeded redirect limit"));
+            }
+            const target = new URL(loc, parsed);
+            if (target.origin !== parsed.origin) {
+              return reject(new GrpcError(grpcStatus.PERMISSION_DENIED, "XSIEM refused cross-origin redirect"));
+            }
+            const redirectMethod = (sc === 301 || sc === 302) ? "GET" : method;
+            return resolve(httpCall(redirectMethod, target.href, redirectMethod === "GET" ? null : reqBody, headers, timeoutMs, insecure, redirectCount + 1));
           }
         }
 
@@ -96,13 +123,33 @@ async function getJwt(config, secret) {
   return jwt;
 }
 
+function jwtExpiry(jwt) {
+  try {
+    const payload = JSON.parse(Buffer.from(jwt.split(".")[1], "base64url").toString("utf8"));
+    return Number(payload.exp) * 1000;
+  } catch {
+    return Date.now() + 5 * 60 * 1000;
+  }
+}
+
 function apiBase(config) {
   return `${hostUrl(config)}/api/xsiem`;
 }
 
 async function authHeaders(config, secret) {
-  const jwt = await getJwt(config, secret);
+  const key = `${hostUrl(config)}\0${secret.mmToken}`;
+  let cached = jwtCache.get(key);
+  if (!cached || cached.expiresAt <= Date.now() + 30_000) {
+    const jwt = await getJwt(config, secret);
+    cached = { jwt, expiresAt: jwtExpiry(jwt) };
+    jwtCache.set(key, cached);
+  }
+  const jwt = cached.jwt;
   return { Authorization: `Bearer ${jwt}` };
+}
+
+export function clearJwtCache() {
+  jwtCache.clear();
 }
 
 export async function queryAlerts(config, secret, req) {
@@ -120,7 +167,7 @@ export async function queryAlerts(config, secret, req) {
   if (req.ruleTag) body.ruleTag = req.ruleTag;
   if (req.srcAddr) body.srcAddr = req.srcAddr;
   if (req.dstAddr) body.dstAddr = req.dstAddr;
-    if (req.filterDsl) body.filterDsl = req.filterDsl;
+  if (req.filterDsl) body.filterDsl = req.filterDsl;
   const data = await httpCall("POST", `${apiBase(config)}/alert/query`, body, hdrs, config.timeoutMs, config.insecure);
   return { data: (data.data || data || []) };
 }
@@ -137,7 +184,7 @@ export async function alertAggCount(config, secret, req) {
   if (req.ruleTag) body.ruleTag = req.ruleTag;
   if (req.srcAddr) body.srcAddr = req.srcAddr;
   if (req.dstAddr) body.dstAddr = req.dstAddr;
-    if (req.filterDsl) body.filterDsl = req.filterDsl;
+  if (req.filterDsl) body.filterDsl = req.filterDsl;
   const data = await httpCall("POST", `${apiBase(config)}/alert/aggCount`, body, hdrs, config.timeoutMs, config.insecure);
   return { count: (data.data || data).count || 0 };
 }
