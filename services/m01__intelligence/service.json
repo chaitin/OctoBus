@@ -1,0 +1,49 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "m01-intelligence",
+  "displayName": "m01 Mail Gateway Threat Intelligence",
+  "description": "OctoBus package for the m01 mail security gateway local threat-intelligence APIs: IOC detection, paginated list, bulk add/update/delete, and statistics.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/m01_intelligence.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "m01.intelligence.M01IntelligenceService/DetectIntelligence": {
+          "name": "detect-intelligence",
+          "description": "Query local threat intelligence for a batch of indicators."
+        },
+        "m01.intelligence.M01IntelligenceService/ListIntelligence": {
+          "name": "list-intelligence",
+          "description": "Paginated, filterable list of local threat intelligence."
+        },
+        "m01.intelligence.M01IntelligenceService/AddIntelligence": {
+          "name": "add-intelligence",
+          "description": "Bulk-add local threat intelligence indicators."
+        },
+        "m01.intelligence.M01IntelligenceService/UpdateIntelligence": {
+          "name": "update-intelligence",
+          "description": "Bulk-update local threat intelligence by id."
+        },
+        "m01.intelligence.M01IntelligenceService/DeleteIntelligence": {
+          "name": "delete-intelligence",
+          "description": "Bulk-delete local threat intelligence entries."
+        },
+        "m01.intelligence.M01IntelligenceService/GetIntelligenceStats": {
+          "name": "get-intelligence-stats",
+          "description": "Get local threat intelligence statistics."
+        }
+      }
+    }
+  }
+}

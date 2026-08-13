@@ -44,6 +44,9 @@ Current files:
 - `git_import_test.go`: HTTPS Git service import, credential redaction, latest
   SemVer tag resolution, Git `//service-dir` service-root selection, and
   Git-backed service update/restart behavior.
+- `service_import_upload_test.go`: default `service import --source-mode auto`
+  upload behavior for client-local directories, including persisted
+  `client-upload:<basename>` source assertions.
 - `harness_test.go`: binary build, daemon lifecycle, CLI/admin/public helpers,
   SQLite reads, generated fixture package, dynamic protobuf helpers, raw gRPC
   codec, in-process fixture backend, and local HTTPS Git fixture server.

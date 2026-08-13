@@ -282,7 +282,7 @@ const failWithResponse = (code, message, status, rawBody, rawJSON, reason) => {
   const bodyText = String(rawBody ?? '');
   throw errorWithCode(code, message, {
     http_status: status,
-    raw_body: '',
+    raw_body: bodyText,
     raw_body_length: bodyText.length,
     raw_json: undefined,
     reason,

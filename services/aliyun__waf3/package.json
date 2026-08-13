@@ -1,0 +1,13 @@
+{
+  "name": "aliyun-waf3",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "aliyun-waf3": "bin/aliyun-waf3.js"
+  },
+  "dependencies": {
+    "@alicloud/pop-core": "^1.8.0",
+    "@chaitin-ai/octobus-sdk": "^0.6.0"
+  }
+}

@@ -2,7 +2,7 @@
   "schema": "chaitin.octobus.service.v1",
   "name": "feishu-group-robot",
   "displayName": "Feishu Group Robot",
-  "description": "OctoBus package for Feishu group robot text message webhooks.",
+  "description": "OctoBus package for Feishu group robot, approval, and contact capabilities.",
   "runtime": {
     "mode": "long-running"
   },
@@ -22,6 +22,42 @@
         "Feishu_GroupRobot.Feishu_GroupRobot/SendTextMessage": {
           "name": "send-text-message",
           "description": "Send a text message through a Feishu group robot webhook."
+        },
+        "Feishu_GroupRobot.Feishu_GroupRobot/CheckConnectivity": {
+          "name": "check-connectivity",
+          "description": "Verify Feishu custom application credentials without exposing the tenant token."
+        },
+        "Feishu_GroupRobot.Feishu_GroupRobot/GetApprovalDefinition": {
+          "name": "get-approval-definition",
+          "description": "Read an approval definition and its form and workflow nodes."
+        },
+        "Feishu_GroupRobot.Feishu_GroupRobot/ListApprovalInstanceCodes": {
+          "name": "list-approval-instance-codes",
+          "description": "List approval instance codes created in a window of at most ten hours."
+        },
+        "Feishu_GroupRobot.Feishu_GroupRobot/GetApprovalInstance": {
+          "name": "get-approval-instance",
+          "description": "Read an approval instance, its form, task list, and timeline."
+        },
+        "Feishu_GroupRobot.Feishu_GroupRobot/CreateApprovalInstance": {
+          "name": "create-approval-instance",
+          "description": "Create an approval instance with a required Feishu UUID idempotency key; never automatically retried."
+        },
+        "Feishu_GroupRobot.Feishu_GroupRobot/CancelApprovalInstance": {
+          "name": "cancel-approval-instance",
+          "description": "Cancel an approval instance as its submitter; never automatically retried."
+        },
+        "Feishu_GroupRobot.Feishu_GroupRobot/SendApprovalBotMessage": {
+          "name": "send-approval-bot-message",
+          "description": "Send an idempotent custom approval Bot message using the operation ID as Feishu UUID."
+        },
+        "Feishu_GroupRobot.Feishu_GroupRobot/GetUser": {
+          "name": "get-user",
+          "description": "Resolve a Feishu user and department memberships."
+        },
+        "Feishu_GroupRobot.Feishu_GroupRobot/GetDepartment": {
+          "name": "get-department",
+          "description": "Resolve a Feishu department."
         }
       }
     }

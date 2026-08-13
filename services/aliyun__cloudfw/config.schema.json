@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "endpoint",
+    "regionId"
+  ],
+  "properties": {
+    "endpoint": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Alibaba Cloud Cloud Firewall endpoint, for example cloudfw.cn-hangzhou.aliyuncs.com."
+    },
+    "regionId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Alibaba Cloud region ID, for example cn-hangzhou."
+    },
+    "protocol": {
+      "type": "string",
+      "enum": [
+        "HTTP",
+        "HTTPS"
+      ],
+      "default": "HTTPS"
+    },
+    "lang": {
+      "type": "string",
+      "description": "Default CloudFW response language, such as zh or en."
+    },
+    "connectTimeout": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Alibaba Cloud SDK connect timeout in milliseconds."
+    },
+    "readTimeout": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Alibaba Cloud SDK read timeout in milliseconds."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Alias used as both connectTimeout and readTimeout when the specific fields are absent."
+    }
+  }
+}

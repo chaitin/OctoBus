@@ -240,12 +240,7 @@ const fetchJSON = async (ctx, app, path, { method = "POST", body } = {}) => {
 
   let response;
   let rawBody = "";
-  const skipTlsVerify = shouldSkipTlsVerify(bindings);
-  const processEnv = globalThis.process?.env;
-  const hadRejectUnauthorized = Object.prototype.hasOwnProperty.call(processEnv ?? {}, "NODE_TLS_REJECT_UNAUTHORIZED");
-  const previousRejectUnauthorized = processEnv?.NODE_TLS_REJECT_UNAUTHORIZED;
   try {
-    if (skipTlsVerify && processEnv) processEnv.NODE_TLS_REJECT_UNAUTHORIZED = "0";
     response = await globalThis.fetch(url, init);
     rawBody = await response.text();
   } catch (err) {
@@ -254,14 +249,6 @@ const fetchJSON = async (ctx, app, path, { method = "POST", body } = {}) => {
       reason: err?.cause?.message || err?.message || "network_error",
       raw_body: rawBody,
     });
-  } finally {
-    if (skipTlsVerify && processEnv) {
-      if (hadRejectUnauthorized) {
-        processEnv.NODE_TLS_REJECT_UNAUTHORIZED = previousRejectUnauthorized;
-      } else {
-        delete processEnv.NODE_TLS_REJECT_UNAUTHORIZED;
-      }
-    }
   }
 
   const parsed = parseJsonSafe(rawBody || "null");
