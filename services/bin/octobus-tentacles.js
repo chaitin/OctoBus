@@ -5,6 +5,10 @@ import { runServiceMain } from "@chaitin-ai/octobus-sdk";
 import { Command } from "commander";
 
 const services = {
+  "epp-360": {
+    entryFile: "../360__360-epp_v10-0-0-08331/bin/360-epp.js",
+    serviceModule: "../360__360-epp_v10-0-0-08331/src/service.js",
+  },
   "ailpha-platform": {
     entryFile: "../ailpha__platform/bin/ailpha-platform.js",
     serviceModule: "../ailpha__platform/src/service.js",
@@ -32,6 +36,9 @@ const services = {
   "cloudatlas": {
     entryFile: "../chaitin__cloudatlas/bin/cloudatlas.js",
     serviceModule: "../chaitin__cloudatlas/src/service.js",
+  "aliyun-sas-vulnerability-management": {
+    entryFile: "../aliyun__sas-vulnerability-management/bin/aliyun-sas-vulnerability-management.js",
+    serviceModule: "../aliyun__sas-vulnerability-management/src/service.js",
   },
   "das-apt": {
     entryFile: "../das__apt/bin/das-apt.js",
@@ -292,6 +299,10 @@ const services = {
   "geyecloud-atd": {
     entryFile: "../geyecloud__atd_v2-3-6/bin/geyecloud-atd.js",
     serviceModule: "../geyecloud__atd_v2-3-6/src/service.js",
+  },
+  "anyi-cloud-native-security": {
+    entryFile: "../anyi__cloud-native-security/bin/anyi-cloud-native-security.js",
+    serviceModule: "../anyi__cloud-native-security/src/service.js",
   },
 };
 
