@@ -97,6 +97,10 @@ jobs:
       - name: Check OctoBus npm packages
         run: bash ./scripts/build-octobus-npm-packages.sh --dry-run
 
+      - name: Validate service packages
+        working-directory: services
+        run: npm run validate
+
       - name: Install SDK dependencies
         working-directory: sdk
         run: npm ci

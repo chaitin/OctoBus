@@ -87,8 +87,8 @@ const expectRejectPayload = async (fn, code, httpStatus, reasonPattern) => {
     const payload = JSON.parse(err.message);
     assert.equal(payload.code, code);
     assert.equal(payload.http_status, httpStatus);
-    assert.equal(payload.raw_body, '');
     assert.ok(payload.raw_body_length >= 0);
+    assert.equal(payload.raw_body_length, payload.raw_body.length);
     if (reasonPattern) assert.match(payload.reason, reasonPattern);
   });
 };

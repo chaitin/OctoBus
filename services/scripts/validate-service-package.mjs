@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 export const EXPECTED_PACKAGE_NAME = "@chaitin-ai/octobus-tentacles";
 export const EXPECTED_ROOT_BIN_NAME = "octobus-tentacles";
-export const SERVICE_DIR_RE = /^[a-z0-9][a-z0-9-]*__[a-z0-9][a-z0-9-]*(?:_[a-z0-9][a-z0-9-]*)?$/;
+export const SERVICE_DIR_RE = /^[a-z0-9][a-z0-9-]*__[a-z0-9][a-z0-9._-]*$/;
 export const SERVICE_NAME_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const FORBIDDEN_SERVICE_FILE_RE = /(?:^|[/\\])(?:node_modules|\.env)$|(?:\.tgz|\.tar\.gz|\.zip|\.log|\.png|\.jpe?g|\.gif|\.webp)$/i;
 const RELATIVE_IMPORT_RE = /\b(?:import|export)\s+(?:[^'"]+\s+from\s+)?["'](\.{1,2}\/[^"']+)["']/g;

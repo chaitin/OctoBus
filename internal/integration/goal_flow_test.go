@@ -929,7 +929,16 @@ func TestCLIAdminGatewayAndStoreIntegrationCRUD(t *testing.T) {
 		return out.String()
 	}
 
-	runCLI("service", "import", "echo", "--offline", createFixturePackage(t, root))
+	clientRoot := filepath.Join(root, "client")
+	pkgSource := createFixturePackage(t, clientRoot)
+	runCLI("service", "import", "echo", "--offline", pkgSource)
+	importedEcho, err := st.GetService(ctx, "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if importedEcho.PackageSource != "client-upload:fixture" || strings.Contains(importedEcho.PackageSource, pkgSource) {
+		t.Fatalf("uploaded CLI import package source mismatch: %+v", importedEcho)
+	}
 	runCLI("status")
 	runCLI("service", "list")
 	runCLI("service", "get", "echo")
@@ -1033,16 +1042,72 @@ func TestCLIRecursiveServiceImportListsServices(t *testing.T) {
 		if !ok {
 			t.Fatalf("service %s missing from service list: %s", want.id, listOut)
 		}
-		if svc.ServiceRoot != want.serviceRoot || svc.NodeEntry != want.nodeEntry {
+		wantSource := "client-upload:recursive-fixture//" + want.serviceRoot
+		if svc.ServiceRoot != want.serviceRoot || svc.NodeEntry != want.nodeEntry || svc.PackageSource != wantSource {
 			t.Fatalf("service %s metadata mismatch: %+v", want.id, svc)
 		}
 		stored, err := st.GetService(context.Background(), want.id)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if stored.ServiceRoot != want.serviceRoot || stored.NodeEntry != want.nodeEntry {
+		if stored.ServiceRoot != want.serviceRoot || stored.NodeEntry != want.nodeEntry || stored.PackageSource != wantSource {
 			t.Fatalf("stored service %s metadata mismatch: %+v", want.id, stored)
 		}
+	}
+}
+
+func TestCLIServiceImportUploadArchiveAndRemoteModeIntegration(t *testing.T) {
+	root := t.TempDir()
+	dataDir := filepath.Join(root, "data")
+	clientRoot := filepath.Join(root, "client")
+	pkgDir := createFixturePackage(t, clientRoot)
+	zipSource := zipPackage(t, pkgDir, filepath.Join(clientRoot, "fixture.zip"))
+	st, err := store.Open(filepath.Join(dataDir, "octobus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	imp := &packageimport.Importer{DataDir: dataDir, Store: st}
+	adminSrv := &admin.Server{Store: st, Importer: imp, Supervisor: supervisor.New(dataDir, st)}
+	httpSrv := httptest.NewServer(adminSrv.Handler())
+	defer httpSrv.Close()
+
+	c := &cli.CLI{AdminAddr: strings.TrimPrefix(httpSrv.URL, "http://"), Client: httpSrv.Client(), Stdout: &bytes.Buffer{}}
+	runCLI := func(args ...string) string {
+		t.Helper()
+		var out bytes.Buffer
+		c.Stdout = &out
+		if err := c.Run(args); err != nil {
+			t.Fatalf("octobus %s: %v\n%s", strings.Join(args, " "), err, out.String())
+		}
+		return out.String()
+	}
+
+	runCLI("service", "import", "--source-mode", "upload", "--offline", "zip", zipSource)
+	zipSvc, err := st.GetService(context.Background(), "zip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if zipSvc.PackageSource != "client-upload:fixture.zip" || strings.Contains(zipSvc.PackageSource, zipSource) {
+		t.Fatalf("uploaded archive package source mismatch: %+v", zipSvc)
+	}
+	var out bytes.Buffer
+	c.Stdout = &out
+	err = c.Run([]string{"service", "import", "--source-mode", "upload", "--build", "always", "--offline", "zipfail", zipSource})
+	if err == nil || !strings.Contains(err.Error(), "--build=always is only supported") {
+		t.Fatalf("expected uploaded archive build=always error, got %v output=%s", err, out.String())
+	}
+	if _, err := st.GetService(context.Background(), "zipfail"); err == nil {
+		t.Fatal("zipfail service was committed after build=always upload failure")
+	}
+
+	runCLI("service", "import", "--source-mode", "remote", "--offline", "remote", pkgDir)
+	remoteSvc, err := st.GetService(context.Background(), "remote")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if remoteSvc.PackageSource != pkgDir {
+		t.Fatalf("remote source mode package source=%q want %q", remoteSvc.PackageSource, pkgDir)
 	}
 }
 

@@ -217,7 +217,7 @@ test('business failures return FAILED_PRECONDITION with raw body envelope', asyn
       (err, payload) => {
         assert.equal(payload.message, message);
         assert.equal(payload.status_code, status);
-        assert.equal(payload.raw_body, '');
+        assert.equal(payload.raw_body, body);
         assert.equal(payload.raw_body_length, body.length);
       },
     );
@@ -239,7 +239,7 @@ test('401 and 403 responses map to PERMISSION_DENIED with raw body envelope', as
       (err, payload) => {
         assert.equal(payload.message, 'upstream permission denied');
         assert.equal(payload.status_code, status);
-        assert.equal(payload.raw_body, '');
+        assert.equal(payload.raw_body, body);
         assert.equal(payload.raw_body_length, body.length);
       },
     );
@@ -257,7 +257,7 @@ test('invalid JSON object response maps to UNKNOWN', async () => {
     'UNKNOWN',
     (err, payload) => {
       assert.equal(payload.status_code, 200);
-      assert.equal(payload.raw_body, '');
+      assert.equal(payload.raw_body, '{');
       assert.equal(payload.raw_body_length, 1);
     },
   );

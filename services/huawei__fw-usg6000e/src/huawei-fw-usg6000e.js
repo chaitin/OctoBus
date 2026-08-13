@@ -278,7 +278,7 @@ const logFlow = (ctx, action, details) => {
 
 const buildErrorDetails = (requestModel, httpStatus, rawBody, reason) => ({
   http_status: httpStatus,
-  raw_body: '',
+  raw_body: String(rawBody ?? ''),
   raw_body_length: String(rawBody ?? '').length,
   reason,
   request_method: requestModel.request_method,
