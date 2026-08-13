@@ -362,3 +362,93 @@ test('CreateRoute sends required service_id, name, and paths', async () => {
     priority: 10,
   });
 });
+
+test('all remaining read operations build valid requests and normalize response shapes', async () => {
+  const cases = [
+    ['ListAlertPolicies', {}], ['ListAlertHistories', {}], ['ListUsers', {}], ['ListRoles', {}],
+    ['ListTokens', {}], ['ListCertificates', {}], ['ListCACertificates', {}], ['ListSNIs', {}],
+    ['GetCertificateUsage', { gatewayGroupId: 'gw', certificateId: 'cert' }],
+    ['ListGatewayGroups', {}], ['ListGatewayInstances', { gatewayGroupId: 'gw' }],
+    ['ListRoutes', { gatewayGroupId: 'gw', serviceId: 'svc' }], ['ListServices', { gatewayGroupId: 'gw' }],
+    ['ListGlobalRules', { gatewayGroupId: 'gw' }], ['ListApprovals', {}],
+    ['ListSecretProviders', { gatewayGroupId: 'gw' }],
+    ['GetSecretProviderUsage', { gatewayGroupId: 'gw', secretProvider: 'vault', secretProviderId: 'one' }],
+    ['ListDebugSessions', { gatewayGroupId: 'gw' }],
+    ['ListDebugTraces', { gatewayGroupId: 'gw', debugSessionId: 'debug' }],
+  ];
+  const urls = [];
+  setFetch(async (url) => {
+    urls.push(url);
+    return response(200, JSON.stringify({ total: 1, data: [{ id: 'one' }] }));
+  });
+  for (const [name, req] of cases) {
+    const result = await (await loadHandler(name, req))();
+    assert.equal(result.count, 1, name);
+  }
+  assert.equal(urls.length, cases.length);
+});
+
+test('remaining create operations serialize protobuf values and omit empty optional fields', async () => {
+  const captured = [];
+  setFetch(async (url, init) => {
+    captured.push({ url, body: JSON.parse(init.body) });
+    return response(200, JSON.stringify({ id: 'created' }));
+  });
+  const cases = [
+    ['CreateCertificate', { gatewayGroupId: 'gw', cert: 'cert', key: 'key', snis: ['a.test'] }],
+    ['CreateSNI', { gatewayGroupId: 'gw', name: 'a.test', domain: 'a.test', certificates: ['cert'] }],
+  ];
+  for (const [name, req] of cases) await (await loadHandler(name, req))();
+  assert.equal(captured.length, cases.length);
+  assert.ok(captured.every(({ body }) => body.id === undefined));
+});
+
+test('helpers cover protobuf wrappers, invalid values, JSON headers, and sanitization', async () => {
+  const { _test } = await import('../src/api7-enterprise-v3-10-2.js');
+  assert.equal(_test.toOptionalInt({ value: '4' }, { min: 1 }), 4);
+  assert.equal(_test.toOptionalInt('nope'), undefined);
+  assert.equal(_test.toOptionalInt(0, { min: 1 }), undefined);
+  assert.equal(_test.toOptionalBool(true), true);
+  assert.equal(_test.toOptionalBool(1), true);
+  assert.equal(_test.toOptionalBool(0), false);
+  assert.equal(_test.toOptionalBool('false'), false);
+  assert.equal(_test.toOptionalBool('maybe'), undefined);
+  assert.deepEqual(_test.toStringArray('a, b,,'), ['a', 'b']);
+  assert.deepEqual(_test.toStringArray({ value: ['a', ''] }), ['a']);
+  assert.deepEqual(_test.toStringMap('bad'), {});
+  assert.deepEqual(_test.parseHeaders('{"X-One":"1"}'), { 'X-One': '1' });
+  assert.deepEqual(_test.parseHeaders('{bad'), {});
+  assert.deepEqual(_test.parseHeaders([]), {});
+  assert.deepEqual(_test.structToPlainObject({ fields: { x: { stringValue: 'y' } } }), { x: 'y' });
+  assert.deepEqual(_test.listValueToPlainArray({ values: [{ stringValue: 'x' }] }), ['x']);
+  assert.deepEqual(_test.listValueToPlainArray(['x']), ['x']);
+  assert.equal(_test.listValueToPlainArray('x'), undefined);
+  assert.deepEqual(_test.sanitizeObject({ empty: '', nil: null, list: ['', 'x'], nested: { keep: 1 } }), { list: ['x'], nested: { keep: 1 } });
+  assert.equal(_test.inferCount({ pagination: { total: 3 } }, 0), 3);
+  assert.equal(_test.inferCount({ data: { count: 2 } }, 0), 2);
+  assert.equal(_test.inferCount({}, 4), 4);
+  assert.deepEqual(_test.inferResultsArray({ data: { items: [1] } }), [1]);
+  assert.deepEqual(_test.inferResultsArray({ data: { list: [2] } }), [2]);
+  assert.deepEqual(_test.inferResultsArray(null), []);
+  const query = {};
+  _test.addPagingQuery({ page: 2, pageSize: 4, direction: 'desc', orderBy: 'name', search: 'x' }, query);
+  assert.deepEqual(query, { page: 2, page_size: 4, direction: 'desc', order_by: 'name', search: 'x' });
+});
+
+test('upstream failures and invalid configuration become typed errors', async () => {
+  const missingBase = await loadHandler('ListUsers', {}, { bindings: { api7_base_url: '', api7_api_key: 'x' } });
+  await assert.rejects(() => missingBase(), /base_url/i);
+  const missingAuth = await loadHandler('ListUsers', {}, { bindings: { api7_base_url: 'https://api7.test', api7_api_key: '', username: '', password: '' } });
+  await assert.rejects(() => missingAuth(), /api7_api_key|username\/password/i);
+  setFetch(async () => response(403, JSON.stringify({ message: 'denied' })));
+  await assert.rejects(() => loadHandler('ListUsers', {}).then((handler) => handler()), /denied/);
+  setFetch(async () => response(500, 'not-json'));
+  await assert.rejects(() => loadHandler('ListUsers', {}).then((handler) => handler()), /not-json/);
+  setFetch(async () => { throw new Error('socket closed'); });
+  await assert.rejects(() => loadHandler('ListUsers', {}).then((handler) => handler()), /socket closed/);
+  setFetch(async (_url, init) => await new Promise((_resolve, reject) => {
+    init.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+  }));
+  const timedOut = await loadHandler('ListUsers', {}, { limits: { timeoutMs: 1 } });
+  await assert.rejects(() => timedOut(), /timed out/);
+});
