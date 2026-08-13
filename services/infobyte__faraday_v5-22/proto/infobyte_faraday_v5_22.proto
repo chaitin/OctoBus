@@ -1,0 +1,114 @@
+syntax = "proto3";
+
+package InfobyteFaradayV522;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
+
+option go_package = "miner/grpc-service/InfobyteFaradayV522";
+
+service Faraday {
+  // 获取 Faraday 工作区列表。
+  rpc ListWorkspaces(ListWorkspacesRequest) returns (ListResponse) {}
+
+  // 创建 Faraday 工作区。
+  rpc CreateWorkspace(CreateWorkspaceRequest) returns (ObjectResponse) {}
+
+  // 获取指定工作区的主机列表。
+  rpc ListHosts(ListHostsRequest) returns (ListResponse) {}
+
+  // 在指定工作区创建主机。
+  rpc CreateHost(CreateHostRequest) returns (ObjectResponse) {}
+
+  // 获取指定工作区的漏洞列表。
+  rpc ListVulnerabilities(ListVulnerabilitiesRequest) returns (ListResponse) {}
+
+  // 获取指定工作区的单个漏洞。
+  rpc GetVulnerability(GetVulnerabilityRequest) returns (ObjectResponse) {}
+
+  // 在指定工作区创建漏洞。
+  rpc CreateVulnerability(CreateVulnerabilityRequest) returns (ObjectResponse) {}
+}
+
+message ListWorkspacesRequest {
+  google.protobuf.BoolValue histogram = 1;
+  google.protobuf.Int64Value histogram_days = 2;
+}
+
+message CreateWorkspaceRequest {
+  string name = 1;
+  string description = 2;
+  string customer = 3;
+  google.protobuf.BoolValue active = 4;
+  google.protobuf.BoolValue public = 5;
+  google.protobuf.Int64Value importance = 6;
+  google.protobuf.Struct extra_fields = 7;
+}
+
+message ListHostsRequest {
+  string workspace_name = 1;
+  google.protobuf.BoolValue stats = 2;
+}
+
+message CreateHostRequest {
+  string workspace_name = 1;
+  string ip = 2;
+  string description = 3;
+  string os = 4;
+  string mac = 5;
+  google.protobuf.BoolValue owned = 6;
+  google.protobuf.Int64Value importance = 7;
+  google.protobuf.ListValue hostnames = 8;
+  google.protobuf.Struct metadata = 9;
+  google.protobuf.Struct extra_fields = 10;
+}
+
+message ListVulnerabilitiesRequest {
+  string workspace_name = 1;
+}
+
+message GetVulnerabilityRequest {
+  string workspace_name = 1;
+  int64 object_id = 2;
+}
+
+message CreateVulnerabilityRequest {
+  string workspace_name = 1;
+  string name = 2;
+  string severity = 3;
+  string type = 4;
+  string desc = 5;
+  string data = 6;
+  string resolution = 7;
+  string status = 8;
+  google.protobuf.BoolValue confirmed = 9;
+  string tool = 10;
+  string external_id = 11;
+  google.protobuf.ListValue cve = 12;
+  google.protobuf.ListValue cwe = 13;
+  google.protobuf.ListValue refs = 14;
+  google.protobuf.Struct metadata = 15;
+  google.protobuf.Value parent = 16;
+  string parent_type = 17;
+  string website = 18;
+  string path = 19;
+  string method = 20;
+  string request = 21;
+  string response = 22;
+  google.protobuf.Int64Value status_code = 23;
+  google.protobuf.Struct extra_fields = 24;
+}
+
+message ListResponse {
+  int32 http_status = 1;
+  string raw_body = 2;
+  int64 count = 3;
+  repeated google.protobuf.Value results = 4;
+  google.protobuf.Value raw_json = 5;
+}
+
+message ObjectResponse {
+  int32 http_status = 1;
+  string raw_body = 2;
+  google.protobuf.Value raw_json = 3;
+}

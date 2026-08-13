@@ -1,0 +1,5 @@
+{
+  "method": "InfobyteFaradayV522.Faraday/ListWorkspaces",
+  "request": {},
+  "expectUpstream": true
+}

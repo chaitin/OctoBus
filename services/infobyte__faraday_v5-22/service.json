@@ -1,0 +1,53 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "infobyte-faraday-v5-22",
+  "displayName": "Faraday v5.22",
+  "description": "OctoBus package for Faraday v5.22.0 workspace, host, and vulnerability APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/infobyte_faraday_v5_22.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "InfobyteFaradayV522.Faraday/ListWorkspaces": {
+          "name": "list-workspaces",
+          "description": "List Faraday workspaces."
+        },
+        "InfobyteFaradayV522.Faraday/CreateWorkspace": {
+          "name": "create-workspace",
+          "description": "Create a Faraday workspace."
+        },
+        "InfobyteFaradayV522.Faraday/ListHosts": {
+          "name": "list-hosts",
+          "description": "List Faraday hosts in a workspace."
+        },
+        "InfobyteFaradayV522.Faraday/CreateHost": {
+          "name": "create-host",
+          "description": "Create a Faraday host in a workspace."
+        },
+        "InfobyteFaradayV522.Faraday/ListVulnerabilities": {
+          "name": "list-vulnerabilities",
+          "description": "List Faraday vulnerabilities in a workspace."
+        },
+        "InfobyteFaradayV522.Faraday/GetVulnerability": {
+          "name": "get-vulnerability",
+          "description": "Get one Faraday vulnerability by object ID."
+        },
+        "InfobyteFaradayV522.Faraday/CreateVulnerability": {
+          "name": "create-vulnerability",
+          "description": "Create a Faraday vulnerability in a workspace."
+        }
+      }
+    }
+  }
+}
