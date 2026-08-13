@@ -14,7 +14,13 @@ export const createMockServer = async () => {
       body += chunk;
     });
     req.on('end', () => {
-      const parsedBody = body ? JSON.parse(body) : null;
+      let parsedBody = null;
+      try {
+        parsedBody = body ? JSON.parse(body) : null;
+      } catch {
+        json(res, 400, { detail: 'invalid json' });
+        return;
+      }
       requests.push({ method: req.method, path: url.pathname, query: Object.fromEntries(url.searchParams), headers: req.headers, body: parsedBody });
 
       if (url.pathname === '/api/v1/authentication/auth/' && req.method === 'POST') {

@@ -12,6 +12,7 @@ import {
   METHOD_LIST_ONLINE_SESSIONS_PATH,
   METHOD_LIST_USERS_FULL,
   METHOD_LIST_USERS_PATH,
+  _test,
   handlers,
   rpcdef,
 } from '../src/jumpserver-bastionhost-v4-10-16.js';
@@ -131,4 +132,53 @@ test('validates required endpoint and id, maps auth failure', async () => {
   } finally {
     await mock.close();
   }
+});
+
+test('normalizes booleans, integers, TLS settings, and JSON safely', () => {
+  assert.equal(_test.boolOf({ value: 'yes' }), true);
+  assert.equal(_test.boolOf('off'), false);
+  assert.equal(_test.boolOf(2), true);
+  assert.equal(_test.boolOf(Number.NaN), false);
+  assert.equal(_test.boolOf('unknown'), false);
+  assert.equal(_test.intOf({ value: '12.9' }), 12);
+  assert.equal(_test.intOf('bad', 7), 7);
+  assert.deepEqual(_test.buildTlsOptions({ bindings: { skipTlsVerify: true } }), {
+    skipTlsVerify: true, tlsInsecureSkipVerify: true, insecureSkipVerify: true,
+  });
+  assert.deepEqual(_test.buildTlsOptions({ bindings: {} }), {});
+  assert.deepEqual(_test.buildTlsOptions({ bindings: { rejectUnauthorized: false } }), {
+    skipTlsVerify: true, tlsInsecureSkipVerify: true, insecureSkipVerify: true,
+  });
+  const circular = {};
+  circular.self = circular;
+  assert.equal(_test.jsonString(circular), 'null');
+});
+
+test('parses response bodies and maps HTTP status classes', () => {
+  assert.equal(_test.parseBody('', 'request'), null);
+  assert.deepEqual(_test.parseBody('{"ok":true}', 'request'), { ok: true });
+  assert.throws(() => _test.parseBody('invalid', 'request'), /not valid JSON/);
+  assert.equal(_test.mapHttpError('request', 403, '').legacyCode, 'PERMISSION_DENIED');
+  assert.equal(_test.mapHttpError('request', 404, 'missing').legacyCode, 'FAILED_PRECONDITION');
+  assert.equal(_test.mapHttpError('request', 503, 'busy').legacyCode, 'UNAVAILABLE');
+});
+
+test('maps alternative list and entity response shapes', () => {
+  assert.deepEqual(_test.listFromResponse([{ id: 1 }]).total, 1);
+  assert.deepEqual(_test.listFromResponse({ count: '2', data: [{}, {}] }).total, 2);
+  assert.deepEqual(_test.listFromResponse({ unexpected: true }).items, []);
+  assert.equal(_test.mapAsset({ ip: '192.0.2.2', description: 'desc' }).address, '192.0.2.2');
+  assert.equal(_test.mapUser({ role: { name: 'Auditor' }, isActive: true }).role, 'Auditor');
+  assert.equal(_test.mapSession({ user_display_name: 'alice', remoteAddr: '127.0.0.1' }).user, 'alice');
+});
+
+test('requires credentials and rejects unsupported endpoint schemes', async () => {
+  await assert.rejects(
+    () => handlers[METHOD_LIST_ASSETS_FULL]({}, ctx('ftp://example.test')),
+    (err) => err instanceof GrpcError && err.legacyCode === 'INVALID_ARGUMENT',
+  );
+  await assert.rejects(
+    () => handlers[METHOD_LIST_ASSETS_FULL]({}, ctx('http://example.test', { secret: { token: '' } })),
+    (err) => err instanceof GrpcError && err.legacyCode === 'INVALID_ARGUMENT',
+  );
 });

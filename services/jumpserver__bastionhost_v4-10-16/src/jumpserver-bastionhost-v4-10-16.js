@@ -301,8 +301,14 @@ export const rpcdef = (ctx = {}) => ({
 
 export const _test = {
   apiUrl,
+  boolOf,
+  buildTlsOptions,
+  intOf,
+  jsonString,
   listFromResponse,
+  mapHttpError,
   mapAsset,
   mapSession,
   mapUser,
+  parseBody,
 };
