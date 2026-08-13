@@ -289,6 +289,10 @@ const services = {
     entryFile: "../filigran__opencti/bin/opencti.js",
     serviceModule: "../filigran__opencti/src/service.js",
   },
+  "tencent-qq-chat": {
+    entryFile: "../tencent__qq-chat/bin/tencent-qq-chat.js",
+    serviceModule: "../tencent__qq-chat/src/service.js",
+  },
 };
 
 const serviceNames = Object.keys(services);
