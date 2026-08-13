@@ -81,6 +81,7 @@
     "wd-k01": "bin/wd-k01.js",
     "opencti": "bin/opencti.js",
     "nsfocus-waf-v6-0-7": "bin/nsfocus-waf-v6-0-7.js",
+    "zhizhangyi-mbs": "bin/zhizhangyi-mbs.js",
     "qianxin-caasm": "bin/qianxin-caasm.js",
     "anyi-cloud-native-security": "bin/anyi-cloud-native-security.js"
   },
@@ -242,7 +243,9 @@
     "ailpha__platform",
     "bin/octobus-tentacles.js",
     "bin/nsfocus-waf-v6-0-7.js",
-    "nsfocus__waf_v6-0-7"
+    "nsfocus__waf_v6-0-7",
+    "bin/zhizhangyi-mbs.js",
+    "zhizhangyi__mbs"
   ],
   "scripts": {
     "validate": "node scripts/validate-service-package.mjs",
