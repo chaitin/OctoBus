@@ -5,6 +5,7 @@
   "type": "module",
   "bin": {
     "octobus-tentacles": "bin/octobus-tentacles.js",
+    "epp-360": "bin/360-epp.js",
     "ailpha-platform": "bin/ailpha-platform.js",
     "aliyun-waf3": "bin/aliyun-waf3.js",
     "alibaba-cloud-simple-application-server-firewall": "bin/alibaba-cloud-simple-application-server-firewall.js",
@@ -78,6 +79,8 @@
     "opencti": "bin/opencti.js"
   },
   "files": [
+    "360__360-epp_v10-0-0-08331",
+    "bin/360-epp.js",
     "bin/ailpha-platform.js",
     "bin/aliyun-waf3.js",
     "bin/alibaba-cloud-simple-application-server-firewall.js",

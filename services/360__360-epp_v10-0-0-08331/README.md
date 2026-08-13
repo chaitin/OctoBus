@@ -5,7 +5,7 @@
 ## 导入 OctoBus
 
 ```bash
-octobus service import --id 360-epp ./services/360__360-epp_v10-0-0-08331
+octobus service import --id epp-360 ./services/360__360-epp_v10-0-0-08331
 ```
 
 ## 包文件说明

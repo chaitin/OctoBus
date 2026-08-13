@@ -5,6 +5,10 @@ import { runServiceMain } from "@chaitin-ai/octobus-sdk";
 import { Command } from "commander";
 
 const services = {
+  "epp-360": {
+    entryFile: "../360__360-epp_v10-0-0-08331/bin/360-epp.js",
+    serviceModule: "../360__360-epp_v10-0-0-08331/src/service.js",
+  },
   "ailpha-platform": {
     entryFile: "../ailpha__platform/bin/ailpha-platform.js",
     serviceModule: "../ailpha__platform/src/service.js",

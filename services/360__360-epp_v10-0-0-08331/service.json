@@ -1,6 +1,6 @@
 {
   "schema": "chaitin.octobus.service.v1",
-  "name": "360-epp",
+  "name": "epp-360",
   "displayName": "360终端安全管理系统(EPP)",
   "description": "OctoBus package for 360 Enterprise Endpoint Protection Platform (360 EPP v10.0.0.08331). Provides terminal management, alarm query, virus scan stats, and vulnerability fix stats APIs.",
   "runtime": {

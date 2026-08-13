@@ -82,6 +82,19 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (url.pathname === '/api/v2/terminal/list' && req.method === 'GET') {
+    res.end(JSON.stringify({ errno: 0, data: { list: [{ id: 7, hostname: 'pc', ip: '10.0.0.7', groupName: 'g' }], total: 1 } }));
+    return;
+  }
+  if (url.pathname === '/api/v2/terminal/detail' && req.method === 'GET') {
+    res.end(JSON.stringify({ errno: 0, data: { id: 7, hostname: 'pc', osVersion: '11', groupName: 'g', lastOnlineTime: 'now' } }));
+    return;
+  }
+  if (url.pathname === '/api/v2/terminal/hardware' && req.method === 'GET') {
+    res.end(JSON.stringify({ errno: 0, data: { cpuModel: 'cpu', cpuCores: 8, memorySize: '16G', diskSize: '1T', gpuModel: 'gpu' } }));
+    return;
+  }
+
   // GET /alarmcenter/getloglist
   if (url.pathname === '/alarmcenter/getloglist' && req.method === 'GET') {
     if (!req.headers.cookie?.includes('PN=')) {

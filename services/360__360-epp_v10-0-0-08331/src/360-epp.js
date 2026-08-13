@@ -600,3 +600,17 @@ export const METHOD_LIST_ALARMS = LIST_ALARMS;
 export const METHOD_GET_VIRUS_STATS = GET_VIRUS_STATS;
 export const METHOD_GET_LEAKFIX_STATS = GET_LEAKFIX_STATS;
 export const METHOD_GET_TERMINAL_HARDWARE = GET_TERMINAL_HARDWARE;
+
+export const _test = {
+  grpcCodeFor,
+  errorWithCode,
+  firstDefined,
+  hasOwn,
+  normalizeBaseUrl,
+  toPositiveInt,
+  mergedBindings,
+  toStructValue,
+  mapTerminalInfo,
+  mapAlarmInfo,
+  EppSession,
+};
