@@ -1,6 +1,6 @@
 {
   "schema": "chaitin.octobus.service.v1",
-  "name": "f5__awaf",
+  "name": "f5-awaf",
   "displayName": "F5 AWAF",
   "description": "OctoBus package for F5 Advanced WAF IP management and policy control via iControl REST API.",
   "runtime": {

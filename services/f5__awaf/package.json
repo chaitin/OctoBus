@@ -1,11 +1,11 @@
 {
-  "name": "f5__awaf",
+  "name": "f5-awaf",
   "version": "0.1.0",
   "description": "OctoBus service package for F5 Advanced WAF",
   "type": "module",
   "main": "src/service.js",
   "bin": {
-    "f5__awaf": "bin/f5-awaf.js"
+    "f5-awaf": "bin/f5-awaf.js"
   },
   "engines": {
     "node": ">=20"

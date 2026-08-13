@@ -1,4 +1,4 @@
-# f5__awaf
+# f5-awaf
 
 OctoBus service package for **F5 Advanced WAF (AWAF)** — exposes IP management and policy control via iControl REST API.
 
