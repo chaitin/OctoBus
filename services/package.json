@@ -75,9 +75,6 @@
     "volcengine-cloud-firewall": "bin/volcengine-cloud-firewall.js",
     "wangsu-label-ip": "bin/wangsu-label-ip.js",
     "wd-k01": "bin/wd-k01.js",
-    "tencent-bh": "bin/tencent-bh.js",
-    "alibaba-sas": "bin/alibaba-sas.js",
-    "misp": "bin/misp.js",
     "opencti": "bin/opencti.js",
     "anyi-cloud-native-security": "bin/anyi-cloud-native-security.js"
   },
