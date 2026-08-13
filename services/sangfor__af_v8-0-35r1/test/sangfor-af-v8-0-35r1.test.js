@@ -166,3 +166,56 @@ test('helpers validate inputs and aliases', async () => {
   assert.equal(_test.normalizeBaseUrl('example.test'), '');
   await expectGrpc(() => handlers[METHOD_GET_FULL](buildCtx('https://example.test', { request: {} })), grpcStatus.INVALID_ARGUMENT);
 });
+
+test('helper branches and failures remain deterministic', async () => {
+  assert.equal(_test.toBoolean('yes'), true);
+  assert.equal(_test.toBoolean(true), true);
+  assert.equal(_test.toBoolean(0), false);
+  assert.equal(_test.toBoolean(undefined, true), true);
+  assert.equal(_test.toBoolean('1'), true);
+  assert.equal(_test.toBoolean('0'), false);
+  assert.equal(_test.toBoolean('off'), false);
+  assert.equal(_test.toBoolean('bad', true), true);
+  assert.equal(_test.toInteger('4.8', 0), 4);
+  assert.equal(_test.toInteger('bad', 7), 7);
+  assert.equal(_test.toInteger(undefined, 8), 8);
+  assert.equal(_test.toInteger({ value: 9 }, 0), 9);
+  assert.equal(_test.typeToUpstream(0), undefined);
+  assert.throws(() => _test.typeToUpstream(0, { required: true }), /type is required/);
+  assert.equal(_test.upstreamToType('unknown'), 'WHITE_BLACK_LIST_TYPE_UNSPECIFIED');
+  assert.equal(_test.upstreamToType('black'), 'BLACK');
+  assert.equal(_test.upstreamToType('white'), 'WHITE');
+  assert.equal(_test.firstDefined('', null, 'x'), 'x');
+  assert.deepEqual(_test.buildTlsOptions({ skipTlsVerify: false }), {});
+  assert.ok(_test.buildTlsOptions({ skipTlsVerify: true }).dispatcher);
+  assert.ok(_test.buildTlsOptions({ skipTlsVerify: true }).dispatcher);
+  assert.throws(() => _test.parseJson('bad'), /valid JSON/);
+  await expectGrpc(() => handlers[METHOD_LIST_FULL](buildCtx('', {})), grpcStatus.INVALID_ARGUMENT);
+  await expectGrpc(() => handlers[METHOD_LIST_FULL](buildCtx('https://example.test', { secret: { username: '', user: '', password: '' } })), grpcStatus.INVALID_ARGUMENT);
+});
+
+test('session cache is bounded for long-running dynamic instances', async () => {
+  for (let index = 0; index < 140; index += 1) {
+    _test.setSession({ meta: { instance_id: `dynamic-${index}` } }, 'https://af.test', 'public', `token-${index}`);
+  }
+  assert.equal(_test.sessionCache.size, 128);
+  assert.equal(_test.sessionCache.has('dynamic-0::https://af.test::public'), false);
+  assert.equal(_test.sessionCache.has('dynamic-139::https://af.test::public'), true);
+});
+
+test('network and HTTP failures map to stable gRPC errors', async () => {
+  const ctx = buildCtx('https://af.test');
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => { throw Object.assign(new Error('late'), { name: 'TimeoutError' }); };
+    await expectGrpc(() => _test.requestAf(_test.resolveCallContext(ctx), 'GET', '/x'), grpcStatus.DEADLINE_EXCEEDED);
+    globalThis.fetch = async () => { throw new Error('socket'); };
+    await expectGrpc(() => _test.requestAf(_test.resolveCallContext(ctx), 'GET', '/x'), grpcStatus.UNAVAILABLE);
+    globalThis.fetch = async () => ({ status: 503, text: async () => 'down' });
+    await expectGrpc(() => _test.requestAf(_test.resolveCallContext(ctx), 'GET', '/x'), grpcStatus.UNAVAILABLE);
+    globalThis.fetch = async () => ({ status: 200, text: async () => '' });
+    await expectGrpc(() => _test.requestAf(_test.resolveCallContext(ctx), 'GET', '/x'), grpcStatus.UNKNOWN);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

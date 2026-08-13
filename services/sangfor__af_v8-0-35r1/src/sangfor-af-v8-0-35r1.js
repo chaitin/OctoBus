@@ -15,6 +15,7 @@ export const DEFAULT_TIMEOUT_MS = 10000;
 
 const AUTH_EXPIRED_CODES = new Set([1003, 1012]);
 const sessionCache = new Map();
+const MAX_SESSION_CACHE_ENTRIES = 128;
 let insecureTlsDispatcher;
 
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj ?? {}, key);
@@ -119,7 +120,14 @@ const resolveSecret = (ctx) => {
 
 const getSessionKey = (ctx, host, namespace) => `${ctx.meta?.instance_id || ctx.meta?.instanceId || 'default'}::${host}::${namespace}`;
 const getSession = (ctx, host, namespace) => sessionCache.get(getSessionKey(ctx, host, namespace));
-const setSession = (ctx, host, namespace, token) => sessionCache.set(getSessionKey(ctx, host, namespace), { token });
+const setSession = (ctx, host, namespace, token) => {
+  const key = getSessionKey(ctx, host, namespace);
+  sessionCache.delete(key);
+  sessionCache.set(key, { token });
+  while (sessionCache.size > MAX_SESSION_CACHE_ENTRIES) {
+    sessionCache.delete(sessionCache.keys().next().value);
+  }
+};
 const clearSession = (ctx, host, namespace) => sessionCache.delete(getSessionKey(ctx, host, namespace));
 
 const getInsecureTlsDispatcher = () => {
@@ -322,6 +330,7 @@ export const _test = {
   mapEntry,
   namespacePath,
   normalizeBaseUrl,
+  parseJson,
   requestAf,
   resolveCallContext,
   resolveConfig,

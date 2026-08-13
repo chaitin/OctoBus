@@ -1,0 +1,5 @@
+{
+  "method": "Sangfor_AF_V8035R1.Sangfor_AF_V8035R1/ListWhiteBlackListEntries",
+  "request": {},
+  "expectUpstream": true
+}

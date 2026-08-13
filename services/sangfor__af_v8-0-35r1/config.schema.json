@@ -7,6 +7,7 @@
   "properties": {
     "host": {
       "type": "string",
+      "format": "uri",
       "description": "Direct Sangfor AF base URL such as https://192.0.2.10 or https://192.0.2.10:4433"
     },
     "namespace": {
