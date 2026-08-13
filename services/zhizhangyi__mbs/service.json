@@ -1,0 +1,69 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "zhizhangyi-mbs",
+  "displayName": "MBS Mobile Security Management",
+  "description": "OctoBus package for 指掌易 MBS (Mobile Security) User Management APIs. Provides CRUD for users, password management, account validation, force offline, and bulk import.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/zhizhangyi_mbs.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "zhizhangyi.mbs.UserManagement/GetUsers": {
+          "name": "get-users",
+          "description": "List MBS users with pagination, filtering, and sorting."
+        },
+        "zhizhangyi.mbs.UserManagement/AddUser": {
+          "name": "add-user",
+          "description": "Create a new MBS user."
+        },
+        "zhizhangyi.mbs.UserManagement/UpdUser": {
+          "name": "update-user",
+          "description": "Update an existing MBS user."
+        },
+        "zhizhangyi.mbs.UserManagement/DetailUser": {
+          "name": "detail-user",
+          "description": "Get MBS user detail by user ID."
+        },
+        "zhizhangyi.mbs.UserManagement/DelUsers": {
+          "name": "delete-users",
+          "description": "Delete MBS users by ID or condition."
+        },
+        "zhizhangyi.mbs.UserManagement/StateUsers": {
+          "name": "state-users",
+          "description": "Enable or disable MBS users."
+        },
+        "zhizhangyi.mbs.UserManagement/CheckLoginName": {
+          "name": "check-login-name",
+          "description": "Check if a login name is available."
+        },
+        "zhizhangyi.mbs.UserManagement/GetUserByPhone": {
+          "name": "get-user-by-phone",
+          "description": "Find MBS users by phone number."
+        },
+        "zhizhangyi.mbs.UserManagement/UpdUserPwd": {
+          "name": "update-user-password",
+          "description": "Change user password (admin or self-service)."
+        },
+        "zhizhangyi.mbs.UserManagement/ForceOffline": {
+          "name": "force-offline",
+          "description": "Force a user to be logged out."
+        },
+        "zhizhangyi.mbs.UserManagement/ImportUser": {
+          "name": "import-user",
+          "description": "Import users from an uploaded file."
+        }
+      }
+    }
+  }
+}

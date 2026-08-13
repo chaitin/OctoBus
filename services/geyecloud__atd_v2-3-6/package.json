@@ -1,0 +1,26 @@
+{
+  "name": "geyecloud-atd",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "README.md",
+    "bin/",
+    "src/",
+    "proto/",
+    "service.json",
+    "config.schema.json",
+    "secret.schema.json"
+  ],
+  "bin": {
+    "geyecloud-atd": "bin/geyecloud-atd.js"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "pack:check": "npm pack --dry-run",
+    "validate": "octobus-sdk validate --strict"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.6.0"
+  }
+}

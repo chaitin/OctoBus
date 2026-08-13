@@ -201,3 +201,7 @@ docker-compose.override.yml
 # Package locks are ignored by default; keep the SDK lockfile tracked.
 package-lock.json
 !sdk/package-lock.json
+
+# NSFOCUS WAF service — 只忽略 WAF 目录下的 PDF 和本地配置
+services/nsfocus__waf_v6-0-7/*.pdf
+services/nsfocus__waf_v6-0-7/.claude/

@@ -1,0 +1,98 @@
+syntax = "proto3";
+
+package nsfocus.waf.v6;
+
+import "google/protobuf/struct.proto";
+
+service NSFOCUSWAFService {
+  // 创建网络层访问控制策略封禁源 IP POST /rest/v3/l4acl
+  rpc BlockIP(BlockIPRequest) returns (BlockIPResponse) {}
+
+  // 查询网络层访问控制策略 GET /rest/v3/l4acl 或 GET /rest/v3/l4acl/{policy_id}
+  rpc ListBlockedIPs(ListBlockedIPsRequest) returns (ListBlockedIPsResponse) {}
+
+  // 解除网络层访问控制策略 DELETE /rest/v3/l4acl/{policy_id}
+  rpc UnblockIP(UnblockIPRequest) returns (UnblockIPResponse) {}
+}
+
+// ======================== BlockIP ========================
+
+message BlockIPRequest {
+  // 要封禁的 IP 列表，必填
+  repeated string ips = 1;
+  // 策略名称，可选
+  string policy_name = 2;
+  // 策略描述，可选
+  string description = 3;
+  // 是否告警: "1"=告警 "0"=不告警，默认 "1"
+  string alarm = 4;
+  // 动作: "1"=放行 "2"=拒绝 "3"=重定向，默认 "2"
+  string action = 5;
+  // 协议: "0"=任意 "1"=icmp "6"=tcp "17"=udp，默认 "0"
+  string protocol = 6;
+  // 是否启用: "true"/"false"，默认 "true"
+  string enabled = 7;
+  // 优先级索引，可选（不填自动分配）
+  string index = 8;
+}
+
+message BlockIPResponse {
+  // 创建的策略 ID
+  string policy_id = 1;
+  // 策略名称
+  string name = 2;
+  // 创建结果
+  string result = 3;
+  // 上游原始响应
+  google.protobuf.Value raw = 4;
+}
+
+// ======================== ListBlockedIPs ========================
+
+message ListBlockedIPsRequest {
+  // 可选：按 IP 过滤
+  repeated string ips = 1;
+  // 可选：查询单个策略
+  string policy_id = 2;
+}
+
+message L4AclPolicy {
+  string policy_id = 1;
+  string name = 2;
+  string index = 3;
+  string protocol = 4;
+  string alarm = 5;
+  string action = 6;
+  string enabled = 7;
+  // 被该策略封禁的 IP 列表
+  repeated BlockedIpEntry blocked_ips = 8;
+}
+
+message BlockedIpEntry {
+  string ip = 1;
+  string mask = 2;
+}
+
+message ListBlockedIPsResponse {
+  repeated L4AclPolicy policies = 1;
+  google.protobuf.Struct raw = 2;
+}
+
+// ======================== UnblockIP ========================
+
+message UnblockIPRequest {
+  // 按 IP 查找并解封对应的策略
+  repeated string ips = 1;
+  // 按策略 ID 直接删除
+  repeated string policy_ids = 2;
+}
+
+message UnblockIPResult {
+  string policy_id = 1;
+  string result = 2;
+}
+
+message UnblockIPResponse {
+  repeated UnblockIPResult results = 1;
+  google.protobuf.Value raw = 2;
+}

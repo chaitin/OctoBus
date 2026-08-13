@@ -1,0 +1,346 @@
+syntax = "proto3";
+
+package geyecloud.atd.v1;
+
+service GEYECloudATD {
+  rpc AggregateThreatEvents(AggregateThreatEventsRequest) returns (AggregateThreatEventsResponse);
+  rpc GetNetworkLogTimeTrend(NetworkLogQueryRequest) returns (NetworkLogTimeTrendResponse);
+  rpc GetNetworkLogDimensionStatistics(NetworkLogDimensionStatisticsRequest) returns (NetworkLogDimensionStatisticsResponse);
+  rpc ListNetworkLogs(ListNetworkLogsRequest) returns (ListNetworkLogsResponse);
+  rpc GetNetworkLogDetail(GetNetworkLogDetailRequest) returns (GetNetworkLogDetailResponse);
+  rpc ListFileDetectionLogs(ListFileDetectionLogsRequest) returns (ListFileDetectionLogsResponse);
+  rpc GetFileDetectionLogDetail(GetFileDetectionLogDetailRequest) returns (GetFileDetectionLogDetailResponse);
+  rpc GetFileDetectionSeverityStats(FileDetectionQueryRequest) returns (FileDetectionSeverityStatsResponse);
+  rpc ListSceneMonitors(ListSceneMonitorsRequest) returns (ListSceneMonitorsResponse);
+  rpc SearchSceneMonitorEvents(SearchSceneMonitorEventsRequest) returns (SearchThreatEventsResponse);
+  rpc GetSituationOverview(GetSituationOverviewRequest) returns (GetSituationOverviewResponse);
+  rpc SearchThreatEvents(SearchThreatEventsRequest) returns (SearchThreatEventsResponse);
+  rpc GetThreatEventDetail(GetThreatEventDetailRequest) returns (GetThreatEventDetailResponse);
+}
+
+message AggregateThreatEventsRequest {
+  int64 start = 1;
+  int64 end = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+  string terms = 5;
+  string table_name = 6;
+}
+
+message AggregateItem {
+  string key = 1;
+  int64 value = 2;
+}
+
+message AggregateThreatEventsResponse {
+  int32 code = 1;
+  string message = 2;
+  int64 count = 3;
+  int64 total_count = 4;
+  repeated AggregateItem items = 5;
+}
+
+message NetworkLogQueryRequest {
+  int64 start = 1;
+  int64 end = 2;
+  string src_ip = 3;
+  string dst_ip = 4;
+  string app_proto = 5;
+  string host = 6;
+  string query_string = 7;
+  string filter_query_string = 8;
+}
+
+message TrendPoint {
+  int64 timestamp = 1;
+  string time = 2;
+  int64 count = 3;
+}
+
+message NetworkLogTimeTrendResponse {
+  int32 code = 1;
+  string message = 2;
+  repeated TrendPoint items = 3;
+}
+
+message NetworkLogDimensionStatisticsRequest {
+  int64 start = 1;
+  int64 end = 2;
+  string dimension_key = 3;
+  string src_ip = 4;
+  string dst_ip = 5;
+  string app_proto = 6;
+  string host = 7;
+  string query_string = 8;
+  string filter_query_string = 9;
+  int32 page = 10;
+  int32 page_size = 11;
+}
+
+message DimensionStatistic {
+  string key = 1;
+  string name = 2;
+  int64 value = 3;
+  int64 count = 4;
+}
+
+message NetworkLogDimensionStatisticsResponse {
+  int32 code = 1;
+  string message = 2;
+  repeated DimensionStatistic items = 3;
+}
+
+message ListNetworkLogsRequest {
+  int64 start = 1;
+  int64 end = 2;
+  string src_ip = 3;
+  string dst_ip = 4;
+  string src_port = 5;
+  string dst_port = 6;
+  string app_proto = 7;
+  string host = 8;
+  string uri = 9;
+  string uid = 10;
+  string uuid = 11;
+  string query_string = 12;
+  string filter_query_string = 13;
+  string sort = 14;
+  string order = 15;
+  int32 page = 16;
+  int32 page_size = 17;
+  bool is_translate = 18;
+}
+
+message NetworkLog {
+  int64 timestamp = 1;
+  string uid = 2;
+  string src_ip = 3;
+  int32 src_port = 4;
+  string dst_ip = 5;
+  int32 dst_port = 6;
+  string app_proto = 7;
+  string host = 8;
+  string uri = 9;
+  string proto = 10;
+  int64 bytes = 11;
+  int64 packets = 12;
+  int64 sensor_id = 13;
+}
+
+message ListNetworkLogsResponse {
+  int32 code = 1;
+  string message = 2;
+  int64 total = 3;
+  int32 page_size = 4;
+  int32 current = 5;
+  int32 pages = 6;
+  repeated NetworkLog items = 7;
+}
+
+message GetNetworkLogDetailRequest {
+  string detail_id = 1;
+  int64 query_timestamp = 2;
+  int64 start = 3;
+  int64 end = 4;
+}
+
+message GetNetworkLogDetailResponse {
+  int32 code = 1;
+  string message = 2;
+  NetworkLog log = 3;
+}
+
+message FileDetectionQueryRequest {
+  int64 start = 1;
+  int64 end = 2;
+  string file_md5 = 3;
+  string email_from = 4;
+  string src_ip = 5;
+  string dst_ip = 6;
+  string app_proto = 7;
+  string host = 8;
+  string query_string = 9;
+  string filter_query_string = 10;
+  string file_type = 11;
+}
+
+message ListFileDetectionLogsRequest {
+  int64 start = 1;
+  int64 end = 2;
+  string file_md5 = 3;
+  string email_from = 4;
+  string src_ip = 5;
+  string dst_ip = 6;
+  string app_proto = 7;
+  string host = 8;
+  string query_string = 9;
+  string filter_query_string = 10;
+  string file_type = 11;
+  string sort = 12;
+  string order = 13;
+  int32 page = 14;
+  int32 page_size = 15;
+  bool is_translate = 16;
+}
+
+message FileDetectionLog {
+  int64 timestamp = 1;
+  string uuid = 2;
+  string file_name = 3;
+  string file_md5 = 4;
+  string file_type = 5;
+  string file_size = 6;
+  string src_ip = 7;
+  string dst_ip = 8;
+  int32 severity = 9;
+  string classtype = 10;
+  string category = 11;
+  string engine_type = 12;
+  int64 sensor_id = 13;
+}
+
+message ListFileDetectionLogsResponse {
+  int32 code = 1;
+  string message = 2;
+  int64 total = 3;
+  int32 page_size = 4;
+  int32 current = 5;
+  int32 pages = 6;
+  repeated FileDetectionLog items = 7;
+}
+
+message GetFileDetectionLogDetailRequest {
+  string detail_id = 1;
+  int64 query_timestamp = 2;
+  int64 start = 3;
+  int64 end = 4;
+  string file_md5 = 5;
+}
+
+message GetFileDetectionLogDetailResponse {
+  int32 code = 1;
+  string message = 2;
+  FileDetectionLog log = 3;
+}
+
+message FileDetectionSeverityStatsResponse {
+  int32 code = 1;
+  string message = 2;
+  int64 total = 3;
+  int64 danger = 4;
+  int64 high = 5;
+  int64 middle = 6;
+  int64 low = 7;
+  int64 safe = 8;
+}
+
+message ListSceneMonitorsRequest {
+  string name = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+  string table_name = 4;
+  int64 id = 5;
+  int32 type = 6;
+  int64 start = 7;
+  int64 end = 8;
+  string index_name = 9;
+  string user_name = 10;
+}
+
+message SceneMonitor {
+  string raw_json = 1;
+}
+
+message ListSceneMonitorsResponse {
+  int32 code = 1;
+  string message = 2;
+  int64 total = 3;
+  repeated SceneMonitor items = 4;
+}
+
+message SearchSceneMonitorEventsRequest {
+  int64 scene_id = 1;
+  int64 start = 2;
+  int64 end = 3;
+  int32 page = 4;
+  int32 page_size = 5;
+  string table_name = 6;
+}
+
+message GetSituationOverviewRequest {}
+
+message SituationSection {
+  string name = 1;
+  string raw_json = 2;
+}
+
+message GetSituationOverviewResponse {
+  int32 code = 1;
+  string message = 2;
+  repeated SituationSection sections = 3;
+}
+
+message SearchThreatEventsRequest {
+  int64 start = 1;
+  int64 end = 2;
+  string table_name = 3;
+  string severity = 4;
+  string category = 5;
+  string classtype = 6;
+  string src_ip = 7;
+  string dst_ip = 8;
+  string attack_status = 9;
+  string app_proto = 10;
+  string sensor_id = 11;
+  string visit_direction = 12;
+  string append_query = 13;
+  string quick_query = 14;
+  string filter_query = 15;
+  string filter_string = 16;
+  string order_by = 17;
+  string order = 18;
+  int32 page = 19;
+  int32 page_size = 20;
+}
+
+message ThreatEvent {
+  int64 timestamp = 1;
+  string uuid = 2;
+  int32 severity = 3;
+  string category = 4;
+  string classtype = 5;
+  string src_ip = 6;
+  string dst_ip = 7;
+  string attack_status = 8;
+  string kill_chain = 9;
+  string app_proto = 10;
+  int64 sensor_id = 11;
+  string event_source = 12;
+  string severity_text = 13;
+}
+
+message SearchThreatEventsResponse {
+  int32 code = 1;
+  string message = 2;
+  int64 total = 3;
+  int32 page_size = 4;
+  int32 current = 5;
+  int32 pages = 6;
+  repeated ThreatEvent items = 7;
+}
+
+message GetThreatEventDetailRequest {
+  string uuid = 1;
+  string sensor_id = 2;
+  string ip = 3;
+  int64 start = 4;
+  int64 end = 5;
+  string table_name = 6;
+}
+
+message GetThreatEventDetailResponse {
+  int32 code = 1;
+  string message = 2;
+  ThreatEvent event = 3;
+  string raw_json = 4;
+}

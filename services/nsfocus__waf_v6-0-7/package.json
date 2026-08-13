@@ -1,0 +1,12 @@
+{
+  "name": "nsfocus-waf-v6-0-7",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "nsfocus-waf-v6-0-7": "bin/nsfocus-waf-v6-0-7.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.5.0"
+  }
+}

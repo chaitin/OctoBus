@@ -5,6 +5,10 @@ import { runServiceMain } from "@chaitin-ai/octobus-sdk";
 import { Command } from "commander";
 
 const services = {
+  "dbappsecurity-mingyu-waf": {
+    entryFile: "../dbappsecurity__mingyu-waf/bin/dbappsecurity-mingyu-waf.js",
+    serviceModule: "../dbappsecurity__mingyu-waf/src/service.js",
+  },
   "epp-360": {
     entryFile: "../360__360-epp_v10-0-0-08331/bin/360-epp.js",
     serviceModule: "../360__360-epp_v10-0-0-08331/src/service.js",
@@ -83,6 +87,10 @@ const services = {
   "elastic-kibana-7-17-26": {
     entryFile: "../elastic__kibana_7-17-26/bin/elastic-kibana-7-17-26.js",
     serviceModule: "../elastic__kibana_7-17-26/src/service.js",
+  },
+  "f5-awaf": {
+    entryFile: "../f5__awaf/bin/f5-awaf.js",
+    serviceModule: "../f5__awaf/src/service.js",
   },
   "feishu-group-robot": {
     entryFile: "../feishu__group-robot/bin/feishu-group-robot.js",
@@ -171,6 +179,10 @@ const services = {
   "qianxin-hunter": {
     entryFile: "../qianxin__hunter_v23-1/bin/qianxin-hunter.js",
     serviceModule: "../qianxin__hunter_v23-1/src/service.js",
+  },
+  "qianxin-vs-secvss3600": {
+    entryFile: "../qianxin__vs-secvss3600/bin/qianxin-vs-secvss3600.js",
+    serviceModule: "../qianxin__vs-secvss3600/src/service.js",
   },
   "qiming-tianqing-waf": {
     entryFile: "../qiming-tianqing__waf/bin/qiming-tianqing-waf.js",
@@ -296,9 +308,29 @@ const services = {
     entryFile: "../threatbook__hfish/bin/threatbook-hfish.js",
     serviceModule: "../threatbook__hfish/src/service.js",
   },
+  "dbappsecurity-mingyu-waf": {
+    entryFile: "../dbappsecurity__mingyu-waf/bin/dbappsecurity-mingyu-waf.js",
+    serviceModule: "../dbappsecurity__mingyu-waf/src/service.js",
+  },
   "opencti": {
     entryFile: "../filigran__opencti/bin/opencti.js",
     serviceModule: "../filigran__opencti/src/service.js",
+  },
+  "geyecloud-atd": {
+    entryFile: "../geyecloud__atd_v2-3-6/bin/geyecloud-atd.js",
+    serviceModule: "../geyecloud__atd_v2-3-6/src/service.js",
+  },
+  "nsfocus-waf-v6-0-7": {
+    entryFile: "../nsfocus__waf_v6-0-7/bin/nsfocus-waf-v6-0-7.js",
+    serviceModule: "../nsfocus__waf_v6-0-7/src/service.js",
+  },
+  "zhizhangyi-mbs": {
+    entryFile: "../zhizhangyi__mbs/bin/zhizhangyi-mbs.js",
+    serviceModule: "../zhizhangyi__mbs/src/service.js",
+  },
+  "qianxin-caasm": {
+    entryFile: "../qianxin__caasm_v1/bin/qianxin-caasm.js",
+    serviceModule: "../qianxin__caasm_v1/src/service.js",
   },
   "anyi-cloud-native-security": {
     entryFile: "../anyi__cloud-native-security/bin/anyi-cloud-native-security.js",
