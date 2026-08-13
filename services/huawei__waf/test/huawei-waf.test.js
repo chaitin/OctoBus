@@ -55,6 +55,7 @@ const ctx = (overrides = {}) => ({
   config: {
     project_id: 'proj-123',
     policy_id: 'policy-1',
+    endpoint: 'https://waf.cn-north-4.myhuaweicloud.com',
     ...(overrides.config || {}),
   },
   secret: {
@@ -122,6 +123,15 @@ test('BlockIP creates blacklist rule', async () => {
   assert.equal(result.rule_id, 'rule-123');
 });
 
+test('BlockIP supports aliases and custom description', async () => {
+  setFetch(async (_url, init) => {
+    assert.deepEqual(JSON.parse(init.body), { name: 'octo-block-2001:db8::1', white: 0, addr: '2001:db8::1', description: 'incident' });
+    return response(201, {});
+  });
+  const result = await handlers['Huawei_WAF.Huawei_WAF/BlockIP']({ ...ctx(), request: { addr: '2001:db8::1', description: 'incident' } });
+  assert.equal(result.rule_id, '');
+});
+
 test('BlockIP validates required ip', async () => {
   await expectGrpcError(
     () => handlers['Huawei_WAF.Huawei_WAF/BlockIP']({ ...ctx(), request: {} }),
@@ -155,6 +165,10 @@ test('UnblockIP validates rule_id', async () => {
   );
 });
 
+test('UnblockIP validates policy id', async () => {
+  await expectGrpcError(() => handlers['Huawei_WAF.Huawei_WAF/UnblockIP']({ ...ctx({ config: { policy_id: '' } }), request: { ruleId: 'r' } }), 'FAILED_PRECONDITION');
+});
+
 // ---- ListRules ----
 
 test('ListRules returns rule list', async () => {
@@ -167,6 +181,21 @@ test('ListRules returns rule list', async () => {
   assert.equal(result.data[0].ip, '1.2.3.4');
   assert.equal(result.data[0].action, 0);
   assert.equal(result.data[1].action, 1);
+});
+
+test('ListRules applies pagination and maps unknown/sparse rules', async () => {
+  setFetch(async (url) => {
+    assert.match(url, /page=3&pagesize=7/);
+    return response(200, { items: [{ white: 9 }] });
+  });
+  const result = await handlers['Huawei_WAF.Huawei_WAF/ListRules']({ ...ctx(), request: { page: 3, pagesize: 7 } });
+  assert.equal(result.total, 1);
+  assert.equal(result.data[0].action, 2);
+  assert.equal(result.data[0].ip, '');
+});
+
+test('ListRules requires policy id', async () => {
+  await expectGrpcError(() => handlers['Huawei_WAF.Huawei_WAF/ListRules']({ ...ctx({ config: { policy_id: '' } }), request: {} }), 'FAILED_PRECONDITION');
 });
 
 // ---- ListInstances ----
@@ -187,6 +216,13 @@ test('ListInstances returns instance list', async () => {
   assert.equal(result.data[1].hostname, 'api.example.com');
 });
 
+test('ListInstances handles sparse response and aliases', async () => {
+  setFetch(async (url) => { assert.match(url, /page=2&pagesize=5/); return response(200, { items: [{}] }); });
+  const result = await handlers['Huawei_WAF.Huawei_WAF/ListInstances']({ ...ctx(), request: { offset: 2, limit: 5 } });
+  assert.equal(result.total, 1);
+  assert.equal(result.data[0].hostname, '');
+});
+
 // ---- ListPolicies ----
 
 test('service exports ListPolicies handler', () => {
@@ -202,6 +238,13 @@ test('ListPolicies returns policy list', async () => {
   assert.equal(result.data.length, 1);
   assert.equal(result.data[0].name, 'test-policy');
   assert.equal(result.data[0].level, 2);
+});
+
+test('ListPolicies handles sparse response', async () => {
+  setFetch(async () => response(200, { items: [{}] }));
+  const result = await handlers['Huawei_WAF.Huawei_WAF/ListPolicies']({ ...ctx(), request: {} });
+  assert.equal(result.total, 1);
+  assert.equal(result.data[0].action_mode, '');
 });
 
 // ---- Credential Validation ----
@@ -257,13 +300,34 @@ test('handles HTTP transport errors', async () => {
   );
 });
 
+test('rejects invalid JSON response', async () => {
+  setFetch(async () => response(200, '{bad'));
+  await expectGrpcError(() => handlers['Huawei_WAF.Huawei_WAF/ListRules']({ ...ctx(), request: {} }), 'UNKNOWN');
+});
+
 // ---- Signing ----
 
 test('signHuawei produces valid authorization header', () => {
-  const { authorization } = _test.signHuawei('test-ak', 'test-sk', 'POST', '/v1/proj/waf/policy/policy-1/whiteblackip', '', '{"ip":"1.2.3.4"}', '20260626T120000Z', 'cn-north-4');
+  const { authorization } = _test.signHuawei('test-ak', 'test-sk', 'POST', '/v1/proj/waf/policy/policy-1/whiteblackip', '', '{"ip":"1.2.3.4"}', '20260626T120000Z', 'waf.cn-north-4.myhuaweicloud.com');
   assert.ok(authorization.startsWith('SDK-HMAC-SHA256 Access='));
   assert.ok(authorization.includes('Signature='));
   assert.ok(authorization.includes('content-type'));
+});
+
+test('configured endpoint path and host participate in request signing', async () => {
+  setFetch(async (url, init) => {
+    assert.match(url, /^http:\/\/127\.0\.0\.1:9876\/proxy\/v1\/proj-123\/waf\/policy/);
+    assert.equal(init.headers.Host, '127.0.0.1:9876');
+    return response(200, WAF_LIST_RESP);
+  });
+  await handlers['Huawei_WAF.Huawei_WAF/ListRules']({ ...ctx({ config: { endpoint: 'http://127.0.0.1:9876/proxy/' } }), request: {} });
+});
+
+test('rejects malformed endpoint and region configuration', async () => {
+  for (const config of [
+    { endpoint: 'bad' }, { endpoint: 'http://example.com' }, { endpoint: 'https://u:p@example.com' },
+    { endpoint: undefined, region: 'cn/north' },
+  ]) await expectGrpcError(() => handlers['Huawei_WAF.Huawei_WAF/ListRules']({ ...ctx({ config }), request: {} }), 'INVALID_ARGUMENT');
 });
 
 // ---- Helpers ----
@@ -277,6 +341,13 @@ test('helper functions cover value utilities', () => {
   assert.equal(_test.unwrapString(123), '123');
   assert.equal(_test.toBoolean({ value: 'yes' }), true);
   assert.equal(_test.optionalUint32({ value: '10.9' }), 10);
+  assert.equal(_test.optionalUint32(-1), undefined);
+  assert.equal(_test.optionalUint32('bad'), undefined);
+  assert.equal(_test.toBoolean('no'), false);
+  assert.equal(_test.toBoolean(1), true);
+  assert.equal(_test.buildCanonicalQueryString({ z: 'a b', a: 1 }), 'a=1&z=a%20b');
+  assert.equal(_test.parseJson(''), null);
+  assert.equal(_test.ensureTrailingSlash(''), '/');
 });
 
 test('resolveCallContext merges config secret and bindings', () => {
@@ -289,4 +360,13 @@ test('resolveCallContext merges config secret and bindings', () => {
   assert.equal(result.bindings.policy_id, 'override-p');
   assert.equal(result.bindings.accessKey, 'ak-1');
   assert.equal(result.bindings.project_id, 'proj-1');
+});
+
+test('context and timeout helpers provide safe defaults', () => {
+  assert.deepEqual(_test.resolveCallContext(), { bindings: {}, limits: {}, meta: {}, req: {} });
+  assert.equal(_test.resolveTimeoutMs({}, { timeoutMs: 50 }), 50);
+  assert.equal(_test.resolveTimeoutMs({}, {}), 10000);
+  const circular = {}; circular.self = circular;
+  _test.logInfo({}, 'test', circular);
+  _test.logError({}, 'test', circular);
 });

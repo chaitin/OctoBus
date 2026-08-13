@@ -13,7 +13,6 @@ const METHOD_LIST_POLICIES_FULL = 'Huawei_WAF.Huawei_WAF/ListPolicies';
 
 // ---- Constants ----
 
-const SCHEME = 'https';
 const DEFAULT_TIMEOUT_MS = 10000;
 const SDK_REF = 'Huawei_WAF';
 
@@ -94,9 +93,8 @@ const buildCanonicalQueryString = (params = {}) => {
   return keys.map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(String(params[k]))}`).join('&');
 };
 
-const signHuawei = (accessKey, secretKey, method, uri, queryString, body, sdkDate, region) => {
+const signHuawei = (accessKey, secretKey, method, uri, queryString, body, sdkDate, host) => {
   const canonicalURI = uri || '/';
-  const host = `waf.${region}.myhuaweicloud.com`;
   const payloadHash = sha256hex(body);
   const contentType = body ? 'application/json;charset=utf-8' : 'application/json';
   const signedHeaders = ['content-type', 'host', 'x-sdk-date'];
@@ -181,6 +179,18 @@ const fetchJson = async (url, init, { bindings = {}, timeoutMs }) => {
 
 const mergedBindings = (ctx = {}) => ({ ...(ctx.config ?? {}), ...(ctx.secret ?? {}), ...(ctx.bindings ?? {}) });
 
+const resolveEndpoint = (bindings = {}) => {
+  const region = unwrapString(bindings.region).trim() || 'cn-north-4';
+  if (!/^[a-z0-9-]+$/i.test(region)) throw errorWithCode('INVALID_ARGUMENT', 'region is invalid');
+  const raw = unwrapString(firstDefined(bindings.endpoint, bindings.baseUrl, `https://waf.${region}.myhuaweicloud.com`)).trim();
+  let endpoint;
+  try { endpoint = new URL(raw); } catch { throw errorWithCode('INVALID_ARGUMENT', 'endpoint must be a valid URL'); }
+  if (endpoint.username || endpoint.password || endpoint.search || endpoint.hash) throw errorWithCode('INVALID_ARGUMENT', 'endpoint must not contain credentials, query, or fragment');
+  const isLoopback = ['localhost', '127.0.0.1', '::1'].includes(endpoint.hostname);
+  if (endpoint.protocol !== 'https:' && !(endpoint.protocol === 'http:' && isLoopback)) throw errorWithCode('INVALID_ARGUMENT', 'endpoint must use HTTPS');
+  return endpoint;
+};
+
 const resolveCallContext = (ctx = {}) => ({
   ...ctx, bindings: mergedBindings(ctx), limits: ctx.limits ?? {}, meta: ctx.meta ?? {}, req: ctx.req ?? ctx.request ?? {},
 });
@@ -196,13 +206,15 @@ const callWAFAPI = async (method, uriPath, queryString, body, { meta, bindings, 
   if (!accessKey) throw errorWithCode('PERMISSION_DENIED', 'access_key is required in bindings');
   if (!secretKey) throw errorWithCode('PERMISSION_DENIED', 'secret_key is required in bindings');
 
-  const region = unwrapString(bindings.region).trim() || 'cn-north-4';
+  const endpoint = resolveEndpoint(bindings);
+  const basePath = endpoint.pathname === '/' ? '' : endpoint.pathname.replace(/\/$/, '');
+  const requestPath = `${basePath}${uriPath}`;
   const sdkDate = iso8601Basic(Math.floor(Date.now() / 1000));
-  const { authorization, host, contentType } = signHuawei(accessKey, secretKey, method, uriPath, queryString, body || '', sdkDate, region);
+  const { authorization, contentType } = signHuawei(accessKey, secretKey, method, requestPath, queryString, body || '', sdkDate, endpoint.host);
 
-  const url = `${SCHEME}://${host}${uriPath}${queryString ? '?' + queryString : ''}`;
+  const url = `${endpoint.origin}${requestPath}${queryString ? '?' + queryString : ''}`;
   const headers = {
-    Host: host,
+    Host: endpoint.host,
     'X-Sdk-Date': sdkDate,
     Authorization: authorization,
     'Content-Type': contentType,
@@ -351,4 +363,5 @@ export const _test = {
   buildCanonicalQueryString,
   iso8601Basic,
   ensureTrailingSlash,
+  resolveEndpoint,
 };

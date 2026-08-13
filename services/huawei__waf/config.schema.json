@@ -7,6 +7,11 @@
       "type": "string",
       "description": "Huawei Cloud region (default: cn-north-4)."
     },
+    "endpoint": {
+      "type": "string",
+      "format": "uri",
+      "description": "Optional Huawei WAF API endpoint override. HTTPS is required except for local smoke tests."
+    },
     "project_id": {
       "type": "string",
       "description": "Huawei Cloud project ID (required)."
