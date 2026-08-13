@@ -571,6 +571,7 @@ test("helpers validate configuration, payload variants, and error mappings", asy
   assert.equal(_test.resolveGatewayShardIndex({ gateway_shard_index: 0 }), 0);
   assert.equal(_test.resolveGatewayShardCount({ gateway_shard_count: 0 }), 1);
   assert.equal(_test.resolveMaxBufferedMessages({ max_buffered_messages: 2 }), 2);
+  assert.equal(_test.eventData({ content: "plain" }).content, "plain");
   assert.throws(() => _test.normalizeBaseUrl("ftp://host", "", "baseUrl"), /HTTP\/HTTPS/);
   assert.throws(() => _test.normalizeBaseUrl("not a url", "", "baseUrl"), /HTTP\/HTTPS/);
   assert.equal(_test.mapHttpStatusToCode(401), "UNAUTHENTICATED");
@@ -703,4 +704,65 @@ test("runtime auto-start ignores normal commands and disabled configuration", as
   assert.deepEqual(_test.parseRuntimeJsonArg(['--config-json={"a":2}'], "--config-json"), { a: 2 });
   assert.equal(_test.parseRuntimeJsonArg([], "--config-json"), undefined);
   assert.equal(_test.parseRuntimeFileArg([], "--config"), undefined);
+});
+
+test("Gateway socket events expose errors and reconnect after abnormal close", async () => {
+  setFetch(async () => response(200, JSON.stringify({ url: "wss://gateway" })));
+  class FakeWebSocket {
+    static OPEN = 1;
+    constructor() { this.readyState = 1; this.listeners = new Map(); }
+    addEventListener(name, callback) { this.listeners.set(name, callback); }
+    send() {}
+    close() { this.readyState = 3; }
+    emit(name, event = {}) { this.listeners.get(name)?.(event); }
+  }
+  globalThis.WebSocket = FakeWebSocket;
+  const ctx = buildCtx({
+    secret: { accessToken: "token" },
+    config: { gatewayReconnectMs: 100 },
+  });
+  await _test.startGateway(ctx);
+  const socket = _test.gatewayState.ws;
+  socket.emit("open");
+  assert.equal(_test.gatewayState.state, "open");
+  socket.emit("error", { message: "ws broke" });
+  assert.equal(_test.gatewayState.lastError, "ws broke");
+  socket.emit("message", { data: "not-json" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.match(_test.gatewayState.lastError, /JSON/);
+  socket.emit("close");
+  assert.equal(_test.gatewayState.ws, null);
+  assert.equal(_test.gatewayState.state, "reconnecting");
+  assert.ok(_test.gatewayState.reconnectTimer);
+});
+
+test("configured token response and missing WebSocket runtime are explicit", async () => {
+  const token = await _test.fetchAppAccessToken(buildCtx({ secret: { accessToken: "fixed" } }));
+  assert.deepEqual(token, {
+    success: true, http_status: 0, access_token: "fixed", expires_in: 0, http_body: "",
+  });
+  setFetch(async () => response(200, JSON.stringify({ url: "wss://gateway" })));
+  globalThis.WebSocket = undefined;
+  _test.gatewayState.running = true;
+  _test.gatewayState.ctx = buildCtx({ secret: { accessToken: "fixed" } });
+  await expectGrpcError(
+    () => _test.connectGateway(),
+    "FAILED_PRECONDITION",
+    grpcStatus.FAILED_PRECONDITION,
+  );
+});
+
+test("gateway connect and close guards are idempotent", async () => {
+  _test.gatewayState.running = false;
+  _test.gatewayState.ctx = null;
+  assert.equal(await _test.connectGateway(), undefined);
+  assert.equal(_test.gatewayState.reconnectTimer, null);
+
+  _test.gatewayState.ws = { close() { throw new Error("already closed"); } };
+  assert.doesNotThrow(() => _test.closeGatewaySocket());
+  assert.equal(_test.gatewayState.ws, null);
+
+  _test.gatewayState.running = true;
+  const second = await _test.startGateway(buildCtx({ secret: { accessToken: "fixed" } }));
+  assert.equal(second.running, true);
 });
