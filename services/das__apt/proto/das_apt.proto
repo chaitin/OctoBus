@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package DAS_APT;
+
+option go_package = "miner/grpc-service/DAS_APT";
+
+// DAS APT asset service.
+service DASAPTService {
+  // List assets from DAS APT.
+  rpc ListAssets(ListAssetsRequest) returns (ListAssetsResponse) {}
+
+  // Get one asset by IP address.
+  rpc GetAsset(GetAssetRequest) returns (GetAssetResponse) {}
+}
+
+message ListAssetsRequest {
+  int32 offset = 1;
+  int32 limit = 2;
+  string ip = 3;
+  string start_time = 4;
+  string end_time = 5;
+}
+
+message ListAssetsResponse {
+  int32 total = 1;
+  repeated Asset items = 2;
+}
+
+message GetAssetRequest {
+  string ip = 1;
+}
+
+message GetAssetResponse {
+  Asset asset = 1;
+}
+
+message Asset {
+  string ip = 1;
+  string ports = 2;
+  string port_fingerprint_name = 3;
+  string last_found_time = 4;
+  string first_found_time = 5;
+  string last_active_time = 6;
+  string port_server_type = 7;
+  string asset_type = 8;
+  string found_source = 9;
+  string mac = 10;
+  string tag = 11;
+  string content = 12;
+  repeated ProductFingerprint product_fingerprint_list = 13;
+}
+
+message ProductFingerprint {
+  int32 id = 1;
+  string product_code = 2;
+  string fingerprint_class_code = 3;
+  string descr = 4;
+  string offcial_website = 5;
+  string product_website = 6;
+  string product_name_cn = 7;
+  string product_name_en = 8;
+  string product_status = 9;
+  string vendor_name_cn = 10;
+  string vendor_name_en = 11;
+  string tag_list = 12;
+  string create_time = 13;
+  string update_time = 14;
+  string fingerprint_ip = 15;
+  string fingerprint_port = 16;
+  string fingerprint_name = 17;
+  string fingerprint_class2 = 18;
+  string fingerprint_version = 19;
+}

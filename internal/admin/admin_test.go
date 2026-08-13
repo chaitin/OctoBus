@@ -78,6 +78,62 @@ func TestStatus(t *testing.T) {
 	}
 }
 
+func TestServiceSchema(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+	st, err := store.Open(filepath.Join(dataDir, "octobus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	// The daemon stores schema paths as daemon-absolute paths at import time, so
+	// write the schema file to the test data dir and reference it absolutely.
+	configSchemaPath := filepath.Join(dataDir, "config.schema.json")
+	const configSchema = `{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","required":["token"],"properties":{"token":{"type":"string","minLength":3},"mode":{"enum":["dev","prod"],"default":"dev"}},"additionalProperties":false}`
+	if err := os.WriteFile(configSchemaPath, []byte(configSchema), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Service declares a config schema but no secret schema.
+	if err := st.UpsertService(ctx, domain.Service{
+		ID: "echo", Name: "Echo", PackageSource: "fixture", PackageArtifactPath: "pkg",
+		PackageSHA256: "pkgsha", DescriptorPath: "desc", DescriptorSHA256: "descsha",
+		DescriptorVersion: "descsha", NodeEntry: "echo", ConfigSchemaPath: configSchemaPath,
+		Methods: []domain.Method{{FullName: "echo.v1.EchoService/Echo", Unary: true}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	srv := &Server{Store: st, Supervisor: supervisor.New(dataDir, st)}
+
+	body := serveAdmin(t, srv, http.MethodGet, "/admin/v1/services/echo/schema", nil, http.StatusOK)
+
+	var resp struct {
+		ServiceID string          `json:"service_id"`
+		Config    json.RawMessage `json:"config"`
+		Secret    json.RawMessage `json:"secret"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("unmarshal schema response: %v body=%s", err, body)
+	}
+	if resp.ServiceID != "echo" {
+		t.Fatalf("service_id=%q body=%s", resp.ServiceID, body)
+	}
+	if !bytes.Contains(resp.Config, []byte(`"token"`)) || !bytes.Contains(resp.Config, []byte(`"default"`)) {
+		t.Fatalf("config schema content missing expected keys: %s", resp.Config)
+	}
+	// No secret schema declared -> null.
+	if !bytes.Equal(bytes.TrimSpace(resp.Secret), []byte("null")) {
+		t.Fatalf("secret schema should be null: %s", resp.Secret)
+	}
+	// The daemon-side absolute path must never appear in the response body.
+	if bytes.Contains(body, []byte(configSchemaPath)) {
+		t.Fatalf("schema response leaked daemon path: %s", body)
+	}
+
+	// Unknown service -> 404.
+	serveAdmin(t, srv, http.MethodGet, "/admin/v1/services/missing/schema", nil, http.StatusNotFound)
+}
+
 func TestNewHTTPServerSetsTimeouts(t *testing.T) {
 	server := NewHTTPServer("127.0.0.1:0", http.NotFoundHandler())
 	if server.ReadHeaderTimeout != 5*time.Second {

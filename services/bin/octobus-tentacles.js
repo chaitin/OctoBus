@@ -5,6 +5,10 @@ import { runServiceMain } from "@chaitin-ai/octobus-sdk";
 import { Command } from "commander";
 
 const services = {
+  "ailpha-platform": {
+    entryFile: "../ailpha__platform/bin/ailpha-platform.js",
+    serviceModule: "../ailpha__platform/src/service.js",
+  },
   "aliyun-waf3": {
     entryFile: "../aliyun__waf3/bin/aliyun-waf3.js",
     serviceModule: "../aliyun__waf3/src/service.js",
@@ -12,6 +16,10 @@ const services = {
   "alibaba-cloud-simple-application-server-firewall": {
     entryFile: "../alibaba-cloud__simple-application-server-firewall/bin/alibaba-cloud-simple-application-server-firewall.js",
     serviceModule: "../alibaba-cloud__simple-application-server-firewall/src/service.js",
+  },
+  "aliyun-cloudfw": {
+    entryFile: "../aliyun__cloudfw/bin/aliyun-cloudfw.js",
+    serviceModule: "../aliyun__cloudfw/src/service.js",
   },
   "safeline-waf": {
     entryFile: "../chaitin__safeline-waf/bin/safeline-waf.js",
@@ -24,6 +32,10 @@ const services = {
   "cloudatlas": {
     entryFile: "../chaitin__cloudatlas/bin/cloudatlas.js",
     serviceModule: "../chaitin__cloudatlas/src/service.js",
+  },
+  "das-apt": {
+    entryFile: "../das__apt/bin/das-apt.js",
+    serviceModule: "../das__apt/src/service.js",
   },
   "das-gateway-v3": {
     entryFile: "../das__gateway_v3/bin/das-gateway-v3.js",
@@ -141,6 +153,10 @@ const services = {
     entryFile: "../qianxin__fw-secgate3600/bin/qianxin-fw-secgate3600.js",
     serviceModule: "../qianxin__fw-secgate3600/src/service.js",
   },
+  "qianxin-tianyan-platform": {
+    entryFile: "../qianxin__tianyan-platform/bin/qianxin-tianyan-platform.js",
+    serviceModule: "../qianxin__tianyan-platform/src/service.js",
+  },
   "qianxin-fw-secgate3600-http-x": {
     entryFile: "../qianxin__fw-secgate3600-http-x/bin/qianxin-fw-secgate3600-http-x.js",
     serviceModule: "../qianxin__fw-secgate3600-http-x/src/service.js",
@@ -180,6 +196,10 @@ const services = {
   "sangfor-fw-v8-0-45": {
     entryFile: "../sangfor__fw_v8-0-45/bin/sangfor-fw-v8-0-45.js",
     serviceModule: "../sangfor__fw_v8-0-45/src/service.js",
+  },
+  "sangfor-sip": {
+    entryFile: "../sangfor__sip/bin/sangfor-sip.js",
+    serviceModule: "../sangfor__sip/src/service.js",
   },
   "sangfor-xdr-v2-0-45": {
     entryFile: "../sangfor__xdr_v2-0-45/bin/sangfor-xdr-v2-0-45.js",
