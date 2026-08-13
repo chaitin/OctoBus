@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "endpoint": {
+      "type": "string",
+      "default": "https://wafopenapi.cn-hangzhou.aliyuncs.com",
+      "description": "Alibaba Cloud WAF OpenAPI endpoint."
+    },
+    "regionId": {
+      "type": "string",
+      "default": "cn-hangzhou",
+      "description": "WAF instance region ID."
+    },
+    "instanceId": {
+      "type": "string",
+      "description": "WAF 3.0 instance ID, e.g. waf_v2_public_xxxxx."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 10000,
+      "description": "HTTP timeout in milliseconds for Alibaba Cloud API calls."
+    }
+  }
+}

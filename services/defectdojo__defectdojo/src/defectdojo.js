@@ -261,7 +261,7 @@ const throwStructuredError = (code, message, options = {}) => {
     code,
     message,
     http_status: Number(options.httpStatus ?? 0),
-    raw_body: '',
+    raw_body: rawBody,
     raw_body_length: rawBody.length,
   };
   if (options.reason) payload.reason = String(options.reason);

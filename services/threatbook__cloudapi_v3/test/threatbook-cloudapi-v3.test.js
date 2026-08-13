@@ -303,6 +303,7 @@ test('maps network and response read errors', async () => {
       const payload = parseStructuredError(err);
       assert.equal(payload.http_status, 0);
       assert.equal(payload.raw_body, '');
+      assert.equal(payload.raw_body_length, 0);
       assert.equal(payload.reason, 'connection refused');
     },
   );

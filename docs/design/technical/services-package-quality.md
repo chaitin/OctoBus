@@ -165,7 +165,7 @@ npm test -- --service-dir <service-dir>
 npm test -- --coverage --service-dir <service-dir>
 ```
 
-coverage 模式默认要求 branch、function 和 line 都达到 90%。该门禁用于高风险服务、实质改动服务
+coverage 模式默认要求 branch、function 和 line 都达到 90%。PR L2 门禁会显式使用 80%。该门禁用于高风险服务、实质改动服务
 和阶段性质量抽样；全量 service package 的基础门禁仍是 validate/test/pack check。
 
 ## Package 内容门禁
@@ -203,6 +203,33 @@ descriptor/OpenAPI/catalog、runtime invoke 和 Connect 调用。它不调用真
 secret 写入 evidence。
 
 ## 常用门禁
+
+### Pull request L2 门禁
+
+修改 `services/` 的 pull request 由 `service-l2-gate` 自动分类。只修改一个 service root 的
+PR 必须通过以下 L2 自动门禁：focused structure validation、该 service 的 Node test、branch /
+function / line 80% coverage、最终 npm pack 内容检查、OctoBus build 和 service smoke。
+
+Service PR 可以同时提交由 registry 生成流程维护的根 `services/package.json`、根 wrapper 和
+dispatcher，但不能混入第二个 service、runtime、SDK、Docker、example 或其他 services
+infrastructure 修改。删除 service 和修改共享基础设施需要独立的 infrastructure review。
+
+本门禁把“L2”严格限定为 mock 自动验证：focused test 负责厂商协议成功/失败路径，smoke 负责
+import、instance、catalog、runtime 和 Connect 链路。smoke 不证明真实厂商设备兼容性。真实设备
+型号、版本、验证截图和写操作清理证据仍由 reviewer 在 PR 中人工确认，属于 L3 证据。
+smoke 报告分别输出 `chain_ok` 和 `business_success`；通用 mock 无法为所有厂商构造成功响应，
+因此业务 HTTP 失败可以不阻断链路检查，但会显式显示，不能作为业务成功证据。
+
+本地执行与查看计划：
+
+```bash
+npm --prefix services run pr:gate -- --base origin/main --head HEAD
+npm --prefix services run pr:gate -- --base origin/main --head HEAD --dry-run
+```
+
+仓库启用该工作流后，应在 GitHub branch protection 中把 `service-l2-gate` 设为 required check。
+该 workflow 对所有 PR 产生稳定结果，没有 service 实现变更时快速成功，避免 required check 因
+path filter 永久 pending。Actions workflow 本身不能修改 branch protection。
 
 services package 修改后按风险选择以下门禁：
 

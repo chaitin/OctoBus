@@ -367,7 +367,7 @@ test('non-JSON 200 and fetch failures become structured errors', async () => {
   globalThis.fetch = async () => okResponse('not-json');
   await expectStructuredError(() => rpcdef(buildCtx())[GET_PACKET_FILTER_STATUS_PATH](), 'UNKNOWN', (payload) => {
     assert.equal(payload.http_status, 200);
-    assert.equal(payload.raw_body, '');
+    assert.equal(payload.raw_body, 'not-json');
     assert.equal(payload.raw_body_length, 'not-json'.length);
     assert.equal(payload.reason, 'response is not valid JSON');
   });

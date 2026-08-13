@@ -4,6 +4,7 @@ import type { Dispatcher } from "undici";
 import { httpStatusError, redactSensitive, serviceError } from "./errors.js";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
+let insecureTlsDispatcher: Dispatcher | undefined;
 
 type FetchLike = (url: string | URL, init?: RequestInit & { dispatcher?: Dispatcher }) => Promise<Response>;
 type FetchInit = RequestInit & Record<string, unknown>;
@@ -33,7 +34,8 @@ export function createTlsDispatcher(skipTlsVerify = false): Dispatcher | undefin
   if (!skipTlsVerify) {
     return undefined;
   }
-  return new Agent({ connect: { rejectUnauthorized: false } });
+  insecureTlsDispatcher ??= new Agent({ connect: { rejectUnauthorized: false } });
+  return insecureTlsDispatcher;
 }
 
 function bindAbortSignal(controller: AbortController, signal: AbortSignal | null | undefined, onAbort: () => void): () => void {

@@ -70,7 +70,7 @@ octobus catalog dev --all --json
 例如 `--name`、`--description`、`--enabled`、`--service`、`--config`、
 `--config-json`、`--secret`、`--secret-json`、`--restart`、`--no-start`、
 `--no-all-methods`、`--mcp-tool`、`--token`、`--token-file`、`--token-stdin`、
-`--build`、`--offline`、`--reinstall` 和全局 `--addr`。
+`--build`、`--offline`、`--reinstall`、`--source-mode` 和全局 `--addr`。
 
 ### 导入 service package
 
@@ -82,6 +82,12 @@ octobus service import \
 ```
 
 第一个位置参数是 Octobus 本地 service id，必填，不从 `service.json` 推导。`--name` 是可选的展示名覆盖值；未提供时，首次导入按 `service.json.displayName`、`service.json.name` 的顺序选择展示名。
+
+`service import` 默认使用 `--source-mode auto`。当 `SOURCE` 是 CLI 客户端存在的本地目录、本地 `.tgz` / `.tar.gz` / `.zip`，或 `npm:` 后跟客户端存在的本地路径时，CLI 通过 admin API multipart 上传 source；其他 source 保持 daemon-side JSON import，由 daemon 自行解析 npm registry、HTTPS Git、remote HTTP(S) archive 或 daemon 本地路径。
+
+`--source-mode remote` 强制保留 daemon-side 语义，即使客户端也存在同名路径也只发送 JSON 请求。该模式用于远端 daemon 文件系统路径或显式共享路径约定。`--source-mode upload` 强制客户端上传；source 不存在或不是受支持的本地目录/archive/`npm:` local path 时，CLI 在发起 admin 请求前失败。
+
+`auto` 不根据 admin address 判断文件系统边界。`127.0.0.1`、`localhost`、Docker 端口映射、SSH tunnel、kubectl port-forward 或反向代理只说明网络入口位置，不说明 CLI 与 daemon 共享同一个文件系统。
 
 multi-service distribution package 可以使用 recursive 模式一次导入发现到的所有 service：
 
