@@ -173,6 +173,29 @@ test('handles empty response gracefully', async () => {
   assert.equal(result.total, 0);
 });
 
+test('list pagination and sparse certificate aliases are mapped', async () => {
+  setFetch(async (url) => {
+    assert.match(url, /limit=7&offset=3/);
+    return response(200, { certificates: [{ common_name: 'x', certificate_type: 'DV', create_time_stamp: 'c', not_after: 'e' }] });
+  });
+  const result = await handlers['Huawei_CCM.Huawei_CCM/ListCertificates']({ ...ctx(), request: { limit: 7, offset: 3 } });
+  assert.equal(result.total, 1);
+  assert.equal(result.data[0].domain, 'x');
+  assert.equal(result.data[0].cert_type, 'DV');
+});
+
+test('GetCertificate encodes id and maps fallback fields', async () => {
+  setFetch(async (url) => { assert.match(url, /a%2Fb$/); return response(200, { common_name: 'x', certificate_type: 'EV', not_after: 'e', san: ['x'] }); });
+  const result = await handlers['Huawei_CCM.Huawei_CCM/GetCertificate']({ ...ctx(), request: { certificateId: 'a/b' } });
+  assert.equal(result.domain, 'x');
+  assert.deepEqual(result.san, ['x']);
+});
+
+test('invalid JSON is rejected', async () => {
+  setFetch(async () => response(200, '{bad'));
+  await expectGrpcError(() => handlers['Huawei_CCM.Huawei_CCM/ListCertificates']({ ...ctx(), request: {} }), 'UNKNOWN');
+});
+
 test('helper functions cover value utilities', () => {
   assert.equal(_test.firstDefined(undefined, null, 'x'), 'x');
   assert.equal(_test.unwrapString({ value: { value: 'nested' } }), 'nested');
@@ -184,6 +207,18 @@ test('helper functions cover value utilities', () => {
   assert.equal(_test.toBoolean('off'), false);
   assert.equal(_test.optionalUint32({ value: '10.9' }), 10);
   assert.equal(_test.optionalUint32('bad'), undefined);
+  assert.equal(_test.optionalUint32(-1), undefined);
+  assert.equal(_test.optionalUint32(''), undefined);
+  assert.equal(_test.toBoolean(1), true);
+  assert.equal(_test.toBoolean(Number.NaN), false);
+  assert.equal(_test.parseJson(''), null);
+  assert.equal(_test.ensureTrailingSlash(''), '/');
+});
+
+test('context and timeout helpers provide defaults', () => {
+  assert.deepEqual(_test.resolveCallContext(), { bindings: {}, limits: {}, meta: {}, req: {} });
+  assert.equal(_test.resolveTimeoutMs({}, { timeoutMs: 50 }), 50);
+  assert.equal(_test.resolveTimeoutMs({}, {}), 10000);
 });
 
 test('resolveCallContext merges config secret and bindings', () => {
