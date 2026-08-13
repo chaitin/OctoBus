@@ -1,0 +1,143 @@
+syntax = "proto3";
+package mingyu_waf.v1;
+
+// A single IP matching condition
+message IpCondition {
+  // Field to match:
+  //   "sip"     - client source IP connecting to WAF
+  //   "sip_xff" - real client IP from X-Forwarded-For header
+  //   "dip"     - destination IP (protected server)
+  string field = 1;
+  // IPs to match; single IP "1.2.3.4" or CIDR "10.0.0.0/24"
+  repeated string ip_list = 2 [json_name = "ipList"];
+  // When true, matches traffic NOT in the ip_list
+  bool negate = 3;
+}
+
+// Condition group: ALL conditions must match (AND logic within group)
+message ConditionGroup {
+  repeated IpCondition conditions = 1;
+}
+
+// Full rule data returned in list responses
+message RuleInfo {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  bool enabled = 4;
+  // Empty = permanent; "YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS" for date range
+  string effect_time_range = 5 [json_name = "effectTimeRange"];
+  // ANY group must match (OR between groups, AND within group)
+  repeated ConditionGroup condition_groups = 6 [json_name = "conditionGroups"];
+  // "all_apps" or "custom"
+  string apply_to = 7 [json_name = "applyTo"];
+  // Site IDs when apply_to = "custom"
+  repeated string site_ids = 8 [json_name = "siteIds"];
+}
+
+// --- List ---
+message ListRulesRequest {
+  int32 page = 1;
+  int32 per_page = 2 [json_name = "perPage"];
+  string name_filter = 3 [json_name = "nameFilter"];
+  string site_id = 4 [json_name = "siteId"];
+}
+
+message ListRulesResponse {
+  int32 total = 1;
+  int32 page = 2;
+  int32 per_page = 3 [json_name = "perPage"];
+  repeated RuleInfo rules = 4;
+}
+
+// --- Create ---
+message CreateRuleRequest {
+  string name = 1;
+  string description = 2;
+  // Empty = permanent; "YYYY-MM-DD HH:MM:SS,YYYY-MM-DD HH:MM:SS" for custom range
+  string effect_time_range = 3 [json_name = "effectTimeRange"];
+  // At least one group required; ANY group must match (OR between groups)
+  repeated ConditionGroup condition_groups = 4 [json_name = "conditionGroups"];
+  // "all_apps" (default) or "custom"
+  string apply_to = 5 [json_name = "applyTo"];
+  // Site IDs required when apply_to = "custom"
+  repeated string site_ids = 6 [json_name = "siteIds"];
+  bool enabled = 7;
+}
+
+message RuleResponse {
+  string id = 1;
+  string name = 2;
+  bool enabled = 3;
+}
+
+// --- Update (all fields required) ---
+message UpdateRuleRequest {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string effect_time_range = 4 [json_name = "effectTimeRange"];
+  repeated ConditionGroup condition_groups = 5 [json_name = "conditionGroups"];
+  string apply_to = 6 [json_name = "applyTo"];
+  repeated string site_ids = 7 [json_name = "siteIds"];
+  bool enabled = 8;
+}
+
+// --- Delete ---
+message DeleteRuleRequest {
+  string id = 1;
+}
+
+message DeleteRuleResponse {
+  bool success = 1;
+}
+
+// --- Sites ---
+message ListSitesRequest {
+  int32 page = 1;
+  int32 per_page = 2 [json_name = "perPage"];
+  string name_filter = 3 [json_name = "nameFilter"];
+}
+
+message SiteInfo {
+  string id = 1;
+  string name = 2;
+  // "transparent", "reverse", "traction", "sniffer"
+  string type = 3;
+  bool enabled = 4;
+}
+
+message ListSitesResponse {
+  int32 total = 1;
+  repeated SiteInfo sites = 2;
+}
+
+// Mingyu WAF service: IP blocking and allowlisting rules
+service WafService {
+  // === 基础规则 (Basic Rules) - IP阻断，action=deny ===
+
+  // List IP blocking rules
+  rpc ListBlockRules(ListRulesRequest) returns (ListRulesResponse);
+  // Create an IP blocking rule (denied source IPs are blocked by WAF)
+  rpc CreateBlockRule(CreateRuleRequest) returns (RuleResponse);
+  // Update an IP blocking rule (all fields required)
+  rpc UpdateBlockRule(UpdateRuleRequest) returns (RuleResponse);
+  // Delete an IP blocking rule by ID
+  rpc DeleteBlockRule(DeleteRuleRequest) returns (DeleteRuleResponse);
+
+  // === 防护控制规则 (Control Rules) - IP白名单，action=allow ===
+
+  // List IP allowlist rules
+  rpc ListAllowRules(ListRulesRequest) returns (ListRulesResponse);
+  // Create an IP allowlist rule (allowed IPs bypass WAF inspection)
+  rpc CreateAllowRule(CreateRuleRequest) returns (RuleResponse);
+  // Update an IP allowlist rule (all fields required)
+  rpc UpdateAllowRule(UpdateRuleRequest) returns (RuleResponse);
+  // Delete an IP allowlist rule by ID
+  rpc DeleteAllowRule(DeleteRuleRequest) returns (DeleteRuleResponse);
+
+  // === 站点查询 (Sites) ===
+
+  // List protected sites (needed when creating rules for specific sites)
+  rpc ListSites(ListSitesRequest) returns (ListSitesResponse);
+}

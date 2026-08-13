@@ -352,3 +352,128 @@ test("签名辅助函数符合 PDF 规范", () => {
   assert.equal(typeof sig, "string");
   assert.equal(sig.length, 40);
 });
+
+test("输入规整辅助函数覆盖包装值、JSON headers 和列表别名", () => {
+  assert.equal(_test.coerceString({ value: 42 }), "42");
+  assert.equal(_test.coerceString(null), "");
+  assert.deepEqual(_test.parseHeaders('{"X-Test":"yes"}'), { "X-Test": "yes" });
+  assert.deepEqual(_test.parseHeaders("not-json"), {});
+  assert.deepEqual(_test.parseHeaders(["bad"]), {});
+  assert.deepEqual(_test.normalizeList({ values: "a, b" }), ["a", "b"]);
+  assert.deepEqual(_test.normalizeList(""), []);
+});
+
+test("值转换辅助函数覆盖所有 protobuf Value 类型", () => {
+  assert.deepEqual(_test.toValue(null), { nullValue: "NULL_VALUE" });
+  assert.deepEqual(_test.toValue("x"), { stringValue: "x" });
+  assert.deepEqual(_test.toValue(3), { numberValue: 3 });
+  assert.deepEqual(_test.toValue(true), { boolValue: true });
+  assert.deepEqual(_test.toValue(["x"]), { listValue: { values: [{ stringValue: "x" }] } });
+  assert.deepEqual(_test.toStruct(null), { fields: {} });
+  assert.deepEqual(_test.toStruct({ ok: true }), { fields: { ok: { boolValue: true } } });
+});
+
+test("HTTP 错误状态映射保留明确的 gRPC 语义", () => {
+  const cases = [
+    [400, grpcStatus.INVALID_ARGUMENT], [409, grpcStatus.INVALID_ARGUMENT],
+    [403, grpcStatus.PERMISSION_DENIED], [404, grpcStatus.NOT_FOUND],
+    [410, grpcStatus.NOT_FOUND], [503, grpcStatus.UNAVAILABLE],
+    [418, grpcStatus.UNKNOWN],
+  ];
+  for (const [status, code] of cases) {
+    assert.equal(_test.mapHTTPError(status, { message: "failure" }, "", true).code, code);
+  }
+  assert.equal(_test.mapHTTPError(418, {}, "", false).code, grpcStatus.UNAUTHENTICATED);
+  assert.throws(() => _test.parseJSON("not-json"), /non-JSON/);
+});
+
+test("BlockIP 自动 index 冲突后重试并采用递增 index", async () => {
+  const posted = [];
+  globalThis.fetch = async (url, init) => {
+    if (init.method === "GET") return response(200, [{ index: "4" }]);
+    posted.push(JSON.parse(init.body)[0].index);
+    if (posted.length === 1) return response(207, { result: [{ multi_result: "index conflict" }] });
+    return response(207, { result: [{ multi_result: "created successfully", id: "ok" }] });
+  };
+  const result = await handlers[METHOD_BLOCK_IP](buildCtx({
+    secret: { token: "tok", secretKey: "secret" }, request: { ips: ["1.2.3.4"] },
+  }));
+  assert.deepEqual(posted, ["5", "6"]);
+  assert.equal(result.policy_id, "ok");
+});
+
+test("BlockIP 对确定性上游创建错误返回 INVALID_ARGUMENT", async () => {
+  globalThis.fetch = async (_url, init) => init.method === "GET"
+    ? response(200, [])
+    : response(207, { result: [{ multi_result: "invalid address" }] });
+  await assert.rejects(
+    handlers[METHOD_BLOCK_IP](buildCtx({ secret: { token: "t", secretKey: "s" }, request: { ips: ["bad"] } })),
+    (err) => err.code === grpcStatus.INVALID_ARGUMENT,
+  );
+});
+
+test("token 登录支持 JWT 时钟偏移，并拒绝缺失密钥的响应", async () => {
+  const jwt = `x.${Buffer.from(JSON.stringify({ iat: Math.floor(Date.now() / 1000) + 10 })).toString("base64")}.x`;
+  globalThis.fetch = async () => response(200, { token: jwt, seceret_key: "secret" });
+  const client = new _test.NSFOCUSWAFClient({ endpoint: "https://waf.example", accountId: "a", pwd: "p" });
+  await client.ensureToken();
+  assert.ok(client.clockOffset >= 9);
+
+  globalThis.fetch = async () => response(200, { token: "only-token" });
+  const invalid = new _test.NSFOCUSWAFClient({ endpoint: "https://waf.example", accountId: "a", pwd: "p" });
+  await assert.rejects(invalid.ensureToken(), /must include token/);
+});
+
+test("UnblockIP 将 NOT_FOUND 视为幂等成功并重试瞬态错误", async () => {
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls++;
+    if (calls === 1) return response(503, { message: "busy" });
+    return response(404, { message: "gone" });
+  };
+  const result = await handlers[METHOD_UNBLOCK_IP](buildCtx({
+    secret: { token: "t", secretKey: "s" }, request: { policy_ids: ["42"] },
+  }));
+  assert.equal(calls, 2);
+  assert.match(result.results[0].result, /already deleted/);
+});
+
+test("客户端配置别名、路径与 query 构造保持兼容", () => {
+  const client = new _test.NSFOCUSWAFClient({
+    baseUrl: "https://waf.example///", apiVersion: "/v4", account_id: "user",
+    password: "pass", timeout_ms: "7000", skip_tls_verify: 1,
+  });
+  assert.equal(client.baseUrl, "https://waf.example");
+  assert.equal(client.restPath("l4acl"), "/rest/v4/l4acl");
+  assert.equal(client.accountId, "user");
+  assert.equal(client.timeoutMs, 7000);
+  assert.equal(client.skipTlsVerify, true);
+  assert.throws(() => new _test.NSFOCUSWAFClient({ endpoint: "waf.example" }), /http\(s\) URL/);
+  const query = _test.buildQuery({ absent: null, empty: "", list: ["a", "b"], none: [], n: 3 });
+  assert.equal(query.toString(), "list=a%2Cb&n=3");
+});
+
+test("签名请求头包含认证信息且空 query/body 不参与散列", () => {
+  const client = new _test.NSFOCUSWAFClient({ endpoint: "https://waf.example", token: "t", secretKey: "s" });
+  const headers = client.signatureHeaders("/rest/v3/l4acl", new URLSearchParams(), "");
+  assert.equal(headers.Authorization, "Bearer t");
+  assert.equal(headers.Nonce.length, 10);
+  assert.match(headers.Signature, /^[a-f0-9]{40}$/);
+});
+
+test("BlockIP 限制批量 IP 数量", async () => {
+  await assert.rejects(
+    handlers[METHOD_BLOCK_IP](buildCtx({ request: { ips: Array.from({ length: 11 }, (_, i) => `10.0.0.${i}`) } })),
+    /at most 10/,
+  );
+});
+
+test("UnblockIP 对确定性删除错误保留原始错误码", async () => {
+  globalThis.fetch = async () => response(401, { message: "bad token" });
+  await assert.rejects(
+    handlers[METHOD_UNBLOCK_IP](buildCtx({
+      secret: { token: "t", secretKey: "s" }, request: { policy_ids: ["42"] },
+    })),
+    (err) => err.code === grpcStatus.UNAUTHENTICATED,
+  );
+});
