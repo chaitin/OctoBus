@@ -32,9 +32,10 @@ const errorWithCode = (code, message) => {
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj ?? {}, key);
 const firstDefined = (...values) => values.find((v) => v !== undefined && v !== null);
 
-const unwrapString = (source) => {
+const unwrapString = (source, depth = 0) => {
+  if (depth > 10) return '';
   if (source === undefined || source === null) return '';
-  if (typeof source === 'object' && source !== null && hasOwn(source, 'value')) return unwrapString(source.value);
+  if (typeof source === 'object' && source !== null && hasOwn(source, 'value')) return unwrapString(source.value, depth + 1);
   return String(source);
 };
 
@@ -73,8 +74,7 @@ const fetchJson = async (url, init, { bindings = {}, timeoutMs }) => {
     return { json: parseJson(text), text };
   } catch (err) {
     if (err instanceof GrpcError) throw err;
-    const reason = err?.cause?.message || err?.message || 'fetch failed';
-    throw errorWithCode('UNAVAILABLE', reason);
+    throw errorWithCode('UNAVAILABLE', 'upstream request failed');
   } finally {
     clearTimeout(timer);
   }
@@ -91,6 +91,16 @@ const resolveCallContext = (ctx = {}) => ({
 const resolveTimeoutMs = (ctx = {}, bindings = {}) =>
   firstDefined(ctx.limits?.timeoutMs, bindings.timeoutMs, DEFAULT_TIMEOUT_MS);
 
+const resolveBaseUrl = (bindings = {}) => {
+  const raw = String(bindings.baseUrl || API_BASE).trim();
+  let url;
+  try { url = new URL(raw); } catch { throw errorWithCode('INVALID_ARGUMENT', 'baseUrl must be a valid URL'); }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    throw errorWithCode('INVALID_ARGUMENT', 'baseUrl must use http or https');
+  }
+  return raw.replace(/\/+$/, '');
+};
+
 // ---- Handlers ----
 
 const makeRuntime = (ctx = {}) => {
@@ -104,7 +114,7 @@ const makeRuntime = (ctx = {}) => {
     if (!ip) throw errorWithCode('INVALID_ARGUMENT', 'ip is required');
     if (!net.isIP(ip)) throw errorWithCode('INVALID_ARGUMENT', 'invalid IP address format');
 
-    const url = `${API_BASE}/${encodeURIComponent(ip)}`;
+    const url = `${resolveBaseUrl(bindings)}/${encodeURIComponent(ip)}`;
 
     logInfo(meta, 'LookupIP:start', { ip });
 
@@ -136,7 +146,10 @@ const makeRuntime = (ctx = {}) => {
 // ---- Exports ----
 
 export const handlers = {
-  [METHOD_LOOKUP_FULL]: (ctx) => makeRuntime(ctx).runLookup(ctx.request ?? {}),
+  [METHOD_LOOKUP_FULL]: (ctx) => {
+    const callCtx = resolveCallContext(ctx);
+    return makeRuntime(callCtx).runLookup(callCtx.req);
+  },
 };
 
 export const _test = {
@@ -148,6 +161,7 @@ export const _test = {
   makeRuntime,
   mapHttpError,
   parseJson,
+  resolveBaseUrl,
   resolveCallContext,
   resolveTimeoutMs,
   unwrapString,

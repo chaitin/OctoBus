@@ -82,6 +82,30 @@ test('LookupIP validates ip', async () => {
     () => handlers['Shodan_InternetDB.Shodan_InternetDB/LookupIP']({ ...ctx(), request: {} }),
     'INVALID_ARGUMENT',
   );
+  await expectGrpcError(
+    () => handlers['Shodan_InternetDB.Shodan_InternetDB/LookupIP']({ ...ctx(), req: { ip: '256.0.0.1' } }),
+    'INVALID_ARGUMENT',
+  );
+});
+
+test('maps network failures without leaking their details', async () => {
+  setFetch(async () => { throw new Error('getaddrinfo ENOTFOUND secret.internal'); });
+  let caught;
+  try {
+    await handlers['Shodan_InternetDB.Shodan_InternetDB/LookupIP']({ ...ctx(), req: { ip: '8.8.8.8' } });
+  } catch (err) { caught = err; }
+  assert.equal(caught?.legacyCode, 'UNAVAILABLE');
+  assert.doesNotMatch(caught?.message || '', /secret\.internal|ENOTFOUND/);
+});
+
+test('uses configured API URL and rejects unsafe schemes', async () => {
+  setFetch(async (url) => {
+    assert.equal(url, 'http://127.0.0.1:1234/8.8.8.8');
+    return response(200, LOOKUP_RESP);
+  });
+  await handlers['Shodan_InternetDB.Shodan_InternetDB/LookupIP']({ ...ctx({ config: { baseUrl: 'http://127.0.0.1:1234/' } }), req: { ip: '8.8.8.8' } });
+  assert.throws(() => _test.resolveBaseUrl({ baseUrl: 'file:///etc/passwd' }), /INVALID_ARGUMENT/);
+  assert.throws(() => _test.resolveBaseUrl({ baseUrl: 'not a URL' }), /INVALID_ARGUMENT/);
 });
 
 test('handles empty response', async () => {
@@ -122,4 +146,5 @@ test('maps HTTP errors', async () => {
 test('helper utilities', () => {
   assert.equal(_test.firstDefined(undefined, null, 'x'), 'x');
   assert.equal(_test.unwrapString({ value: { value: 'nested' } }), 'nested');
+  assert.equal(_test.unwrapString({ value: { value: { value: 'too deep' } } }, 9), '');
 });

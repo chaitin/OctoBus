@@ -3,6 +3,13 @@
   "type": "object",
   "additionalProperties": true,
   "properties": {
+    "baseUrl": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https?://",
+      "default": "https://internetdb.shodan.io",
+      "description": "Shodan InternetDB API base URL. Override only for compatible gateways or testing."
+    },
     "timeoutMs": {
       "type": "integer",
       "minimum": 1,
