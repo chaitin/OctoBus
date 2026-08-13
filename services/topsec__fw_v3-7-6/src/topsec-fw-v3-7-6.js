@@ -90,8 +90,8 @@ const toArray = (value) => {
 };
 
 const mergedBindings = (ctx = {}) => ({
-  ...(ctx.bindings ?? {}),
   ...(ctx.config ?? {}),
+  ...(ctx.bindings ?? {}),
   ...(ctx.secret ?? {}),
 });
 
@@ -581,6 +581,7 @@ export const _test = {
   makeTimeoutSignal,
   mapHttpError,
   md5Hex,
+  mergedBindings,
   normalizeBaseUrl,
   parseKeyString,
   parseTopSecPayload,

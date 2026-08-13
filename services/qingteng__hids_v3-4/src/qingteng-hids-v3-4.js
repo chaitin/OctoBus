@@ -45,7 +45,7 @@ const upstreamError = (code, message, details = {}) => {
     code,
     message,
     http_status: Number.isFinite(Number(details.httpStatus)) ? Number(details.httpStatus) : 0,
-    raw_body: '',
+    raw_body: rawBody,
     raw_body_length: rawBody.length,
     reason: String(details.reason || '').trim(),
   };

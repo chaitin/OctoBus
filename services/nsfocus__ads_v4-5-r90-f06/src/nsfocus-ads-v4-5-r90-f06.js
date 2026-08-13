@@ -111,7 +111,7 @@ const parseResponseBody = (input) => {
   } catch {
     throw errorWithCode('UNKNOWN', 'response is not valid JSON', {
       status_code: input?.statusCode,
-      raw_body: '',
+      raw_body: text,
       raw_body_length: text.length,
     });
   }
@@ -142,7 +142,7 @@ const buildResponse = (input) => ({
 const buildErrorDetails = (input) => ({
   success: false,
   status_code: input.statusCode,
-  raw_body: '',
+  raw_body: String(input.rawBody ?? ''),
   raw_body_length: String(input.rawBody ?? '').length,
   raw_json: undefined,
   idempotent_success: Boolean(input.idempotentSuccess),

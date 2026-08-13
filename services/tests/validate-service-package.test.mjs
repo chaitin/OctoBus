@@ -205,6 +205,86 @@ program
   assert.deepEqual(result.errors, []);
 });
 
+test("allows existing versioned service directory names with underscores and dots", () => {
+  const root = fixture();
+  const serviceDir = "vendor__product_family_r2-3-2.t0";
+  fs.renameSync(path.join(root, "chaitin__safeline-waf"), path.join(root, serviceDir));
+  writeJSON(path.join(root, "package.json"), {
+    name: "@chaitin-ai/octobus-tentacles",
+    dependencies: {
+      "@chaitin-ai/octobus-sdk": "^0.6.0",
+      commander: "^12.1.0",
+    },
+    bundledDependencies: [
+      "@chaitin-ai/octobus-sdk",
+      "commander",
+    ],
+    bin: {
+      "octobus-tentacles": "bin/octobus-tentacles.js",
+      "vendor-service": "bin/vendor-service.js",
+    },
+    files: [
+      "bin/octobus-tentacles.js",
+      "bin/vendor-service.js",
+      serviceDir,
+    ],
+  });
+  writeJSON(path.join(root, serviceDir, "service.json"), {
+    schema: "chaitin.octobus.service.v1",
+    name: "vendor-service",
+    proto: {
+      roots: ["proto"],
+      files: ["proto/safeline_waf.proto"],
+    },
+    configSchema: "config.schema.json",
+    secretSchema: "secret.schema.json",
+  });
+  fs.renameSync(path.join(root, "bin", "safeline-waf.js"), path.join(root, "bin", "vendor-service.js"));
+  fs.chmodSync(path.join(root, "bin", "vendor-service.js"), 0o755);
+  fs.renameSync(path.join(root, serviceDir, "bin", "safeline-waf.js"), path.join(root, serviceDir, "bin", "vendor-service.js"));
+  fs.writeFileSync(path.join(root, "bin", "vendor-service.js"), `#!/usr/bin/env node
+
+import { fileURLToPath } from "node:url";
+import { runServiceMain } from "@chaitin-ai/octobus-sdk";
+
+import { service } from "../${serviceDir}/src/service.js";
+
+runServiceMain(service, {
+  entryFile: fileURLToPath(new URL("../${serviceDir}/bin/vendor-service.js", import.meta.url)),
+});
+`);
+  fs.chmodSync(path.join(root, "bin", "vendor-service.js"), 0o755);
+  fs.writeFileSync(path.join(root, "bin", "octobus-tentacles.js"), `#!/usr/bin/env node
+import { fileURLToPath } from "node:url";
+import { runServiceMain } from "@chaitin-ai/octobus-sdk";
+import { Command } from "commander";
+
+const services = {
+  "vendor-service": {
+    entryFile: "../${serviceDir}/bin/vendor-service.js",
+    serviceModule: "../${serviceDir}/src/service.js",
+  },
+};
+
+const program = new Command();
+program
+  .allowUnknownOption(true)
+  .allowExcessArguments(true)
+  .passThroughOptions()
+  .action(async () => {
+    const selected = services["vendor-service"];
+    const { service } = await import(new URL(selected.serviceModule, import.meta.url));
+    await runServiceMain(service, {
+      argv: program.args.slice(1),
+      entryFile: fileURLToPath(new URL(selected.entryFile, import.meta.url)),
+    });
+  });
+`);
+
+  const result = validateRepository(root, { serviceDir });
+  assert.deepEqual(result.errors, []);
+});
+
 test("validates repository input and package path rules", () => {
   const missing = fs.mkdtempSync(path.join(os.tmpdir(), "octobus-services-missing-"));
   assert.match(validateRepository(missing).errors.join("\n"), /missing root package\.json/);
@@ -469,9 +549,8 @@ test("builds test runner args for root and service tests", () => {
     "--test-coverage-branches=90",
     "--test-coverage-functions=90",
     "--test-coverage-lines=90",
-    "--test-coverage-include=vendor__svc/**/*.js",
+    "--test-coverage-include=vendor__svc/src/**/*.js",
     "--test-coverage-exclude=vendor__svc/node_modules/**",
-    path.join("tests", "root.test.mjs"),
     path.join("vendor__svc", "test", "svc.test.js"),
   ]);
 

@@ -11,6 +11,51 @@ const errorWithCode = (code, message) => {
   return err;
 };
 
+const businessErrorCode = (payload) => {
+  if (hasOwn(payload, 'code')) return Number(payload.code);
+  if (hasOwn(payload, 'StatusCode')) return Number(payload.StatusCode);
+  return Number.NaN;
+};
+
+const validateWebhookResponse = (httpBody, httpStatus) => {
+  let payload;
+  try {
+    payload = JSON.parse(httpBody);
+  } catch {
+    const error = errorWithCode('UNKNOWN', `Feishu returned a non-JSON response with HTTP ${httpStatus}`);
+    error.httpStatus = httpStatus;
+    error.httpBody = '';
+    error.httpBodyLength = httpBody.length;
+    throw error;
+  }
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    const error = errorWithCode('UNKNOWN', 'Feishu returned an invalid JSON response');
+    error.httpStatus = httpStatus;
+    error.httpBody = '';
+    error.httpBodyLength = httpBody.length;
+    throw error;
+  }
+  const code = businessErrorCode(payload);
+  if (!Number.isFinite(code)) {
+    const error = errorWithCode('UNKNOWN', 'Feishu response is missing a numeric business code');
+    error.httpStatus = httpStatus;
+    error.httpBody = '';
+    error.httpBodyLength = httpBody.length;
+    throw error;
+  }
+  if (code !== 0) {
+    const grpcCode = code === 10003 ? 'UNAUTHENTICATED' : 'FAILED_PRECONDITION';
+    const message = coerceString(payload.msg ?? payload.StatusMessage).trim()
+      || `Feishu rejected the webhook request with code ${code}`;
+    const error = errorWithCode(grpcCode, message.slice(0, 240));
+    error.upstreamCode = code;
+    error.httpStatus = httpStatus;
+    error.httpBody = '';
+    error.httpBodyLength = httpBody.length;
+    throw error;
+  }
+};
+
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj ?? {}, key);
 const firstDefined = (...vals) => vals.find((val) => val !== undefined && val !== null);
 
@@ -131,7 +176,7 @@ const sendToFeishu = async (ctx, webhook, payload, log) => {
     });
   } catch (err) {
     const reason = err?.cause?.message || err?.message || 'fetch failed';
-    throw errorWithCode('UNAVAILABLE', reason);
+    throw errorWithCode(err?.name === 'AbortError' ? 'DEADLINE_EXCEEDED' : 'UNAVAILABLE', reason);
   } finally {
     timeout.clear();
   }
@@ -159,6 +204,8 @@ const sendToFeishu = async (ctx, webhook, payload, log) => {
     err.httpBodyLength = httpBody.length;
     throw err;
   }
+
+  validateWebhookResponse(httpBody, httpStatus);
 
   return {
     http_status: httpStatus,
@@ -219,6 +266,7 @@ rpcdef.__test__ = {
   resolveCallContext,
   resolveTimeoutMs,
   sendToFeishu,
+  validateWebhookResponse,
 };
 
 export const _test = rpcdef.__test__;

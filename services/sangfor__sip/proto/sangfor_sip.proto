@@ -1,0 +1,126 @@
+syntax = "proto3";
+
+package SANGFOR_SIP;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
+
+service SANGFOR_SIP {
+  rpc GetSecurityEvents (GetSecurityEventsRequest) returns (GetSecurityEventsResponse);
+  rpc GetRiskBusiness (GetRiskBusinessRequest) returns (GetRiskBusinessResponse);
+  rpc GetRiskTerminals (GetRiskTerminalsRequest) returns (GetRiskTerminalsResponse);
+  rpc GetServers (GetServersRequest) returns (GetServersResponse);
+  rpc GetTerminals (GetTerminalsRequest) returns (GetTerminalsResponse);
+  rpc GetIPGroups (GetIPGroupsRequest) returns (GetIPGroupsResponse);
+  rpc GetWeakPasswords (GetWeakPasswordsRequest) returns (GetWeakPasswordsResponse);
+  rpc GetVulnerabilities (GetVulnerabilitiesRequest) returns (GetVulnerabilitiesResponse);
+  rpc GetPlaintextTransmissions (GetPlaintextTransmissionsRequest) returns (GetPlaintextTransmissionsResponse);
+}
+
+// GetSecurityEvents — pull security events (安全事件)
+message GetSecurityEventsRequest {
+  int64 from_time = 1;
+  int64 to_time = 2;
+  google.protobuf.Int32Value max_count = 3;
+}
+
+message GetSecurityEventsResponse {
+  repeated google.protobuf.Value items = 1;
+  int32 count = 2;
+}
+
+// GetRiskBusiness — pull risk business assets (风险业务)
+message GetRiskBusinessRequest {
+  int64 from_time = 1;
+  int64 to_time = 2;
+  google.protobuf.Int32Value max_count = 3;
+}
+
+message GetRiskBusinessResponse {
+  repeated google.protobuf.Value items = 1;
+  int32 count = 2;
+}
+
+// GetRiskTerminals — pull risk terminal assets (风险终端)
+message GetRiskTerminalsRequest {
+  int64 from_time = 1;
+  int64 to_time = 2;
+  google.protobuf.Int32Value max_count = 3;
+}
+
+message GetRiskTerminalsResponse {
+  repeated google.protobuf.Value items = 1;
+  int32 count = 2;
+}
+
+// GetServers — pull configured server assets (已配置服务器)
+message GetServersRequest {
+  int64 from_time = 1;
+  int64 to_time = 2;
+  google.protobuf.Int32Value max_count = 3;
+}
+
+message GetServersResponse {
+  repeated google.protobuf.Value items = 1;
+  int32 count = 2;
+}
+
+// GetTerminals — pull terminal assets (资产终端)
+message GetTerminalsRequest {
+  int64 from_time = 1;
+  int64 to_time = 2;
+  google.protobuf.Int32Value max_count = 3;
+}
+
+message GetTerminalsResponse {
+  repeated google.protobuf.Value items = 1;
+  int32 count = 2;
+}
+
+// GetIPGroups — pull monitored IP groups (受监控IP组)
+message GetIPGroupsRequest {
+  int64 from_time = 1;
+  int64 to_time = 2;
+  google.protobuf.Int32Value max_count = 3;
+}
+
+message GetIPGroupsResponse {
+  repeated google.protobuf.Value items = 1;
+  int32 count = 2;
+}
+
+// GetWeakPasswords — pull weak password vulnerabilities (弱密码)
+message GetWeakPasswordsRequest {
+  int64 from_time = 1;
+  int64 to_time = 2;
+  google.protobuf.Int32Value max_count = 3;
+}
+
+message GetWeakPasswordsResponse {
+  repeated google.protobuf.Value items = 1;
+  int32 count = 2;
+}
+
+// GetVulnerabilities — pull vulnerability information (漏洞)
+message GetVulnerabilitiesRequest {
+  int64 from_time = 1;
+  int64 to_time = 2;
+  google.protobuf.Int32Value max_count = 3;
+}
+
+message GetVulnerabilitiesResponse {
+  repeated google.protobuf.Value items = 1;
+  int32 count = 2;
+}
+
+// GetPlaintextTransmissions — pull plaintext transmission vulnerabilities (明文传输)
+message GetPlaintextTransmissionsRequest {
+  int64 from_time = 1;
+  int64 to_time = 2;
+  google.protobuf.Int32Value max_count = 3;
+}
+
+message GetPlaintextTransmissionsResponse {
+  repeated google.protobuf.Value items = 1;
+  int32 count = 2;
+}

@@ -7,8 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"mime"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -37,6 +40,18 @@ type Server struct {
 type serviceImporter interface {
 	Import(context.Context, packageimport.Options) (packageimport.Result, error)
 	ImportRecursive(context.Context, packageimport.Options) (packageimport.RecursiveResult, error)
+}
+
+type serviceImportMultipartLimits struct {
+	OptionsBytes    int64
+	UploadKindBytes int64
+	PackageBytes    int64
+}
+
+var defaultServiceImportMultipartLimits = serviceImportMultipartLimits{
+	OptionsBytes:    16 << 20,
+	UploadKindBytes: 64 << 10,
+	PackageBytes:    4 << 30,
 }
 
 type instanceResponse struct {
@@ -103,6 +118,7 @@ func (s *Server) Handler() http.Handler {
 	e.GET("/admin/v1/services/:service_id", s.echoServicePath)
 	e.PATCH("/admin/v1/services/:service_id", s.echoServicePath)
 	e.DELETE("/admin/v1/services/:service_id", s.echoServicePath)
+	e.GET("/admin/v1/services/:service_id/schema", s.echoServiceSchema)
 	e.GET("/admin/v1/instances", s.echoInstances)
 	e.POST("/admin/v1/instances", s.echoInstances)
 	e.GET("/admin/v1/instances/:instance_id", s.echoInstancePath)
@@ -401,8 +417,11 @@ func (s *Server) handleServiceImport(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	var req packageimport.Options
-	if err := readJSON(r, &req); err != nil {
+	req, cleanup, err := readServiceImportRequest(r)
+	if cleanup != nil {
+		defer cleanup()
+	}
+	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -417,8 +436,9 @@ func (s *Server) handleServiceImport(w http.ResponseWriter, r *http.Request) {
 	s.logger().Info("service_import_started", "service_id", req.ServiceID, "offline", req.Offline, "reinstall", req.Reinstall, "build", req.Build)
 	res, err := s.Importer.Import(r.Context(), req)
 	if err != nil {
-		s.logger().Warn("service_import_failed", "service_id", req.ServiceID, "error", err)
-		writeError(w, http.StatusBadRequest, err.Error())
+		msg := serviceImportErrorMessage(err, req)
+		s.logger().Warn("service_import_failed", "service_id", req.ServiceID, "error", msg)
+		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
 	s.logger().Info("service_import_done", "service_id", res.Service.ID, "runtime_mode", res.Service.RuntimeMode, "descriptor_sha256", res.Service.DescriptorSHA256, "method_count", len(res.Service.Methods))
@@ -428,6 +448,176 @@ func (s *Server) handleServiceImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"service": res.Service, "restarted_instances": restarted, "restart_errors": restartErrs})
+}
+
+func readServiceImportRequest(r *http.Request) (packageimport.Options, func(), error) {
+	contentType := r.Header.Get("Content-Type")
+	if contentType == "" {
+		var req packageimport.Options
+		return req, nil, readJSON(r, &req)
+	}
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return packageimport.Options{}, nil, fmt.Errorf("invalid service import content type: %w", err)
+	}
+	switch mediaType {
+	case "application/json":
+		var req packageimport.Options
+		return req, nil, readJSON(r, &req)
+	case "multipart/form-data":
+		return readMultipartServiceImport(r)
+	default:
+		return packageimport.Options{}, nil, fmt.Errorf("unsupported service import content type %q: expected application/json or multipart/form-data", mediaType)
+	}
+}
+
+func readMultipartServiceImport(r *http.Request) (packageimport.Options, func(), error) {
+	mr, err := r.MultipartReader()
+	if err != nil {
+		return packageimport.Options{}, nil, fmt.Errorf("read multipart service import: %w", err)
+	}
+	var req packageimport.Options
+	var uploadKind packageimport.UploadKind
+	var uploadPath string
+	var tempDir string
+	var haveOptions, haveUploadKind, havePackage bool
+	cleanup := func() {
+		if tempDir != "" {
+			_ = os.RemoveAll(tempDir)
+		}
+	}
+	fail := func(err error) (packageimport.Options, func(), error) {
+		cleanup()
+		return packageimport.Options{}, nil, err
+	}
+	for {
+		part, err := mr.NextPart()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return fail(fmt.Errorf("read multipart service import: %w", err))
+		}
+		switch part.FormName() {
+		case "options":
+			if haveOptions {
+				return fail(errors.New("multipart service import contains duplicate options part"))
+			}
+			raw, err := readLimitedMultipartPart(part, defaultServiceImportMultipartLimits.OptionsBytes, "options")
+			if err != nil {
+				return fail(err)
+			}
+			if err := decodeStrictJSON(bytes.NewReader(raw), &req); err != nil {
+				return fail(fmt.Errorf("decode multipart options: %w", err))
+			}
+			haveOptions = true
+		case "upload_kind":
+			if haveUploadKind {
+				return fail(errors.New("multipart service import contains duplicate upload_kind field"))
+			}
+			raw, err := readLimitedMultipartPart(part, defaultServiceImportMultipartLimits.UploadKindBytes, "upload_kind")
+			if err != nil {
+				return fail(err)
+			}
+			uploadKind, err = parseMultipartUploadKind(strings.TrimSpace(string(raw)))
+			if err != nil {
+				return fail(err)
+			}
+			haveUploadKind = true
+		case "package":
+			if havePackage {
+				return fail(errors.New("multipart service import contains duplicate package part"))
+			}
+			if tempDir == "" {
+				tempDir, err = os.MkdirTemp("", "octobus-service-import-*")
+				if err != nil {
+					return fail(fmt.Errorf("create service import upload temp dir: %w", err))
+				}
+			}
+			uploadPath = filepath.Join(tempDir, "package")
+			out, err := os.OpenFile(uploadPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+			if err != nil {
+				return fail(fmt.Errorf("create service import upload file: %w", err))
+			}
+			_, copyErr := copyLimitedMultipartPart(out, part, defaultServiceImportMultipartLimits.PackageBytes, "package")
+			closeErr := out.Close()
+			if copyErr != nil {
+				return fail(fmt.Errorf("save service import upload: %w", copyErr))
+			}
+			if closeErr != nil {
+				return fail(fmt.Errorf("save service import upload: %w", closeErr))
+			}
+			havePackage = true
+		case "":
+			return fail(errors.New("multipart service import contains unnamed part"))
+		default:
+			return fail(fmt.Errorf("unexpected multipart service import field %q", part.FormName()))
+		}
+	}
+	if !haveOptions {
+		return fail(errors.New("multipart service import options part is required"))
+	}
+	if !haveUploadKind {
+		return fail(errors.New("multipart service import upload_kind field is required"))
+	}
+	if !havePackage {
+		return fail(errors.New("multipart service import package part is required"))
+	}
+	req.Upload = &packageimport.UploadedSource{
+		Kind:          uploadKind,
+		Path:          uploadPath,
+		DisplaySource: req.Source,
+	}
+	return req, cleanup, nil
+}
+
+func readLimitedMultipartPart(src io.Reader, limit int64, label string) ([]byte, error) {
+	var dst bytes.Buffer
+	if _, err := copyLimitedMultipartPart(&dst, src, limit, label); err != nil {
+		return nil, err
+	}
+	return dst.Bytes(), nil
+}
+
+func copyLimitedMultipartPart(dst io.Writer, src io.Reader, limit int64, label string) (int64, error) {
+	if limit < 0 {
+		return 0, fmt.Errorf("multipart service import %s size limit is invalid", label)
+	}
+	reader := &io.LimitedReader{R: src, N: limit + 1}
+	written, err := io.Copy(dst, reader)
+	if err != nil {
+		return written, fmt.Errorf("read multipart service import %s: %w", label, err)
+	}
+	if written > limit {
+		return written, fmt.Errorf("multipart service import %s exceeds size limit of %d bytes", label, limit)
+	}
+	return written, nil
+}
+
+func parseMultipartUploadKind(raw string) (packageimport.UploadKind, error) {
+	switch kind := packageimport.UploadKind(raw); kind {
+	case packageimport.UploadKindDirectory, packageimport.UploadKindArchive, packageimport.UploadKindNPMLocal:
+		return kind, nil
+	default:
+		return "", fmt.Errorf("invalid multipart service import upload_kind %q: expected directory, archive, or npm-local", raw)
+	}
+}
+
+func serviceImportErrorMessage(err error, req packageimport.Options) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	if req.Upload == nil || req.Upload.Path == "" {
+		return msg
+	}
+	uploadPath := req.Upload.Path
+	msg = strings.ReplaceAll(msg, uploadPath, "<uploaded package>")
+	uploadDir := filepath.Dir(uploadPath)
+	if uploadDir != "." && uploadDir != "" {
+		msg = strings.ReplaceAll(msg, uploadDir, "<upload temp dir>")
+	}
+	return msg
 }
 
 func (s *Server) handleRecursiveServiceImport(w http.ResponseWriter, r *http.Request, req packageimport.Options) {
@@ -446,8 +636,9 @@ func (s *Server) handleRecursiveServiceImport(w http.ResponseWriter, r *http.Req
 	s.logger().Info("service_import_recursive_started", "offline", req.Offline, "reinstall", req.Reinstall, "build", req.Build)
 	res, err := s.Importer.ImportRecursive(r.Context(), req)
 	if err != nil {
-		s.logger().Warn("service_import_recursive_failed", "error", err)
-		writeError(w, http.StatusBadRequest, err.Error())
+		msg := serviceImportErrorMessage(err, req)
+		s.logger().Warn("service_import_recursive_failed", "error", msg)
+		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
 	s.logger().Info("service_import_recursive_done", "service_count", len(res.Services))
@@ -503,8 +694,9 @@ func (s *Server) handleStreamingServiceImport(w http.ResponseWriter, r *http.Req
 	s.logger().Info("service_import_started", "service_id", req.ServiceID, "offline", req.Offline, "reinstall", req.Reinstall, "build", req.Build)
 	res, err := s.Importer.Import(r.Context(), req)
 	if err != nil {
-		s.logger().Warn("service_import_failed", "service_id", req.ServiceID, "error", err)
-		_ = writeEvent(packageimport.ImportProgressEvent{Type: "error", Error: err.Error()})
+		msg := serviceImportErrorMessage(err, req)
+		s.logger().Warn("service_import_failed", "service_id", req.ServiceID, "error", msg)
+		_ = writeEvent(packageimport.ImportProgressEvent{Type: "error", Error: msg})
 		return
 	}
 	s.logger().Info("service_import_done", "service_id", res.Service.ID, "runtime_mode", res.Service.RuntimeMode, "descriptor_sha256", res.Service.DescriptorSHA256, "method_count", len(res.Service.Methods))
@@ -529,8 +721,9 @@ func (s *Server) handleStreamingRecursiveServiceImport(w http.ResponseWriter, r 
 	s.logger().Info("service_import_recursive_started", "offline", req.Offline, "reinstall", req.Reinstall, "build", req.Build)
 	res, err := s.Importer.ImportRecursive(r.Context(), req)
 	if err != nil {
-		s.logger().Warn("service_import_recursive_failed", "error", err)
-		_ = writeEvent(packageimport.ImportProgressEvent{Type: "error", Error: err.Error()})
+		msg := serviceImportErrorMessage(err, req)
+		s.logger().Warn("service_import_recursive_failed", "error", msg)
+		_ = writeEvent(packageimport.ImportProgressEvent{Type: "error", Error: msg})
 		return
 	}
 	s.logger().Info("service_import_recursive_done", "service_count", len(res.Services))
@@ -697,6 +890,67 @@ func (s *Server) handleServicePath(w http.ResponseWriter, r *http.Request, servi
 func (s *Server) echoServicePath(c *echo.Context) error {
 	s.handleServicePath(c.Response(), c.Request(), c.Param("service_id"))
 	return nil
+}
+
+func (s *Server) echoServiceSchema(c *echo.Context) error {
+	s.handleServiceSchema(c.Response(), c.Request(), c.Param("service_id"))
+	return nil
+}
+
+// handleServiceSchema returns the JSON Schema documents a service declares for
+// its instance config and secret, so management clients (e.g. fde-admin) can
+// render typed config forms instead of asking users to hand-write JSON. Only the
+// schema documents are returned — never the daemon-side file paths. A null field
+// means the service declared no such schema. Schemas are JSON Schema Draft
+// 2020-12 and carry structure only (no instance secret values).
+func (s *Server) handleServiceSchema(w http.ResponseWriter, r *http.Request, serviceID string) {
+	if serviceID == "" {
+		writeError(w, http.StatusNotFound, "unknown service route")
+		return
+	}
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	svc, err := s.Store.GetService(r.Context(), serviceID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	configSchema, err := readSchemaContent(svc.ConfigSchemaPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	secretSchema, err := readSchemaContent(svc.SecretSchemaPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"service_id": serviceID,
+		"config":     configSchema,
+		"secret":     secretSchema,
+	})
+}
+
+// readSchemaContent reads a schema file declared by a service manifest. An empty
+// path means the service declared no such schema and yields nil (serialized as
+// null). The path is daemon-absolute (resolved at import time); only the file
+// content is returned, never the path. The content is validated as JSON so
+// clients never receive a truncated or corrupt schema document.
+func readSchemaContent(path string) (json.RawMessage, error) {
+	if path == "" {
+		return nil, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read schema file: %w", err)
+	}
+	if !json.Valid(data) {
+		return nil, fmt.Errorf("schema file is not valid JSON")
+	}
+	return json.RawMessage(data), nil
 }
 
 func (s *Server) restartEnabledServiceInstances(ctx context.Context, serviceID string) ([]string, []string) {
@@ -1340,7 +1594,11 @@ func echoErrorStatus(err error) int {
 
 func readJSON(r *http.Request, out any) error {
 	defer r.Body.Close()
-	dec := json.NewDecoder(r.Body)
+	return decodeStrictJSON(r.Body, out)
+}
+
+func decodeStrictJSON(r io.Reader, out any) error {
+	dec := json.NewDecoder(r)
 	dec.DisallowUnknownFields()
 	return dec.Decode(out)
 }
