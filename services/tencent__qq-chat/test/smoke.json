@@ -1,0 +1,8 @@
+{
+  "method": "Tencent_QQ_Chat.Tencent_QQ_Chat/SendC2CMessage",
+  "request": {
+    "openid": "smoke-user",
+    "content": "smoke"
+  },
+  "expectUpstream": true
+}
