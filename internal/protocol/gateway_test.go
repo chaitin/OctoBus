@@ -50,6 +50,28 @@ type memoryAccessLogger struct {
 	err     error
 }
 
+func TestBackendUnaryTimeout(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  time.Duration
+	}{
+		{name: "default", value: "", want: 30 * time.Second},
+		{name: "override", value: " 2m ", want: 2 * time.Minute},
+		{name: "malformed", value: "not-a-duration", want: 30 * time.Second},
+		{name: "zero", value: "0s", want: 30 * time.Second},
+		{name: "negative", value: "-1s", want: 30 * time.Second},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("OCTOBUS_BACKEND_UNARY_TIMEOUT", test.value)
+			if got := backendUnaryTimeout(); got != test.want {
+				t.Fatalf("backendUnaryTimeout() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
 func (l *memoryAccessLogger) Append(record accesslog.Record) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
