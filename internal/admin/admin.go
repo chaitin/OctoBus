@@ -118,6 +118,7 @@ func (s *Server) Handler() http.Handler {
 	e.GET("/admin/v1/services/:service_id", s.echoServicePath)
 	e.PATCH("/admin/v1/services/:service_id", s.echoServicePath)
 	e.DELETE("/admin/v1/services/:service_id", s.echoServicePath)
+	e.GET("/admin/v1/services/:service_id/schema", s.echoServiceSchema)
 	e.GET("/admin/v1/instances", s.echoInstances)
 	e.POST("/admin/v1/instances", s.echoInstances)
 	e.GET("/admin/v1/instances/:instance_id", s.echoInstancePath)
@@ -889,6 +890,67 @@ func (s *Server) handleServicePath(w http.ResponseWriter, r *http.Request, servi
 func (s *Server) echoServicePath(c *echo.Context) error {
 	s.handleServicePath(c.Response(), c.Request(), c.Param("service_id"))
 	return nil
+}
+
+func (s *Server) echoServiceSchema(c *echo.Context) error {
+	s.handleServiceSchema(c.Response(), c.Request(), c.Param("service_id"))
+	return nil
+}
+
+// handleServiceSchema returns the JSON Schema documents a service declares for
+// its instance config and secret, so management clients (e.g. fde-admin) can
+// render typed config forms instead of asking users to hand-write JSON. Only the
+// schema documents are returned — never the daemon-side file paths. A null field
+// means the service declared no such schema. Schemas are JSON Schema Draft
+// 2020-12 and carry structure only (no instance secret values).
+func (s *Server) handleServiceSchema(w http.ResponseWriter, r *http.Request, serviceID string) {
+	if serviceID == "" {
+		writeError(w, http.StatusNotFound, "unknown service route")
+		return
+	}
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	svc, err := s.Store.GetService(r.Context(), serviceID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	configSchema, err := readSchemaContent(svc.ConfigSchemaPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	secretSchema, err := readSchemaContent(svc.SecretSchemaPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"service_id": serviceID,
+		"config":     configSchema,
+		"secret":     secretSchema,
+	})
+}
+
+// readSchemaContent reads a schema file declared by a service manifest. An empty
+// path means the service declared no such schema and yields nil (serialized as
+// null). The path is daemon-absolute (resolved at import time); only the file
+// content is returned, never the path. The content is validated as JSON so
+// clients never receive a truncated or corrupt schema document.
+func readSchemaContent(path string) (json.RawMessage, error) {
+	if path == "" {
+		return nil, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read schema file: %w", err)
+	}
+	if !json.Valid(data) {
+		return nil, fmt.Errorf("schema file is not valid JSON")
+	}
+	return json.RawMessage(data), nil
 }
 
 func (s *Server) restartEnabledServiceInstances(ctx context.Context, serviceID string) ([]string, []string) {

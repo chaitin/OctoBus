@@ -499,3 +499,11 @@ GitHub Actions 中的默认 CI 是轻量验证：检查公开痕迹、Go 格式�
 dry-run。完整 `task test` 和 e2e 仍是本地门禁。SDK 发布由 GitHub Release published
 事件触发，release tag 必须为 `sdk-v<version>` 且匹配 `sdk/package.json.version`，并需要
 仓库 secret `NPM_TOKEN`。
+
+##  社区与支持
+欢迎加入技术社区，与更多开发者交流 OctoBus 的使用、部署和开发经验。
+<table>
+  <tr>
+    <td align="center"><img src="https://github.com/user-attachments/assets/fcdbb42b-2e06-409e-b116-60544461fbc1" width="160" /><br/>微信交流群</td>
+  </tr>
+</table>

@@ -504,3 +504,10 @@ The default GitHub Actions CI is a lightweight validation: it checks public trac
 If you believe this repository contains a security vulnerability, infringing content, or another compliance risk, please report it privately to `octobus-opensource@chaitin.com`.
 
 For the full reporting process and required details, see [SECURITY.md](SECURITY.md).
+## Community and Support
+Join the community to discuss OctoBus usage, deployment, and development with other developers.
+<table>
+  <tr>
+    <td align="center"><img src="https://github.com/user-attachments/assets/fcdbb42b-2e06-409e-b116-60544461fbc1" width="160" /><br/>WeChat Group</td>
+  </tr>
+</table>
