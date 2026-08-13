@@ -118,6 +118,63 @@ describe('handlers export', () => {
   });
 });
 
+describe('error and boundary behavior', () => {
+  afterEach(() => restoreFetch());
+
+  it('maps non-JSON 4xx and JSON 5xx responses without losing status semantics', () => {
+    assert.throws(() => _test.throwForStatus(429, 'rate limited', 'Call'), (err) => err.code === 9 && /rate limited/.test(err.message));
+    assert.throws(() => _test.throwForStatus(500, '{"message":"boom"}', 'Call'), (err) => err.code === 14 && /boom/.test(err.message));
+  });
+
+  it('f5Fetch handles empty and malformed bodies, network failures, and timeouts', async () => {
+    const empty = await _test.f5Fetch(async () => ({ status: 204, text: async () => '' }), 'DELETE', 'https://f5.test');
+    assert.deepEqual(empty.data, {});
+    const malformed = await _test.f5Fetch(async () => ({ status: 200, text: async () => 'not-json' }), 'GET', 'https://f5.test');
+    assert.deepEqual(malformed.data, {});
+    await assert.rejects(() => _test.f5Fetch(async () => { throw new Error('socket'); }, 'GET', 'https://f5.test'), (err) => err.code === 14);
+    await assert.rejects(() => _test.f5Fetch((_url, { signal }) => new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+    }), 'GET', 'https://f5.test', { timeoutMs: 1 }), (err) => err.code === 4);
+  });
+
+  it('covers secure fetch and policy helper error/default responses', async () => {
+    mockFetch(fakeFetchOk({ ok: true }));
+    const secureFetch = _test.makeFetcher(false);
+    assert.equal((await secureFetch('https://f5.test', {})).status, 200);
+    await assert.rejects(() => _test.findPolicyId('p', 't', 'https://f5', fakeFetchErr(500), 10), (err) => err.code === 14);
+    await assert.rejects(() => _test.listIpExceptions('p', 't', 'https://f5', fakeFetchErr(403), 10), (err) => err.code === 7);
+    assert.deepEqual(await _test.listIpExceptions('p', 't', 'https://f5', fakeFetchOk({}), 10), []);
+    await _test.applyPolicy('p', 't', 'https://f5', async () => { throw new Error('best effort'); }, 10);
+  });
+
+  it('validates all mutation request shapes and maps failed upstream mutations', async () => {
+    for (const path of ['/f5.awaf.v1.F5AWAF/UnblockIP', '/f5.awaf.v1.F5AWAF/AllowIP']) {
+      await assert.rejects(() => rpcdef(buildCtx({ token: 't', addresses: [] }))[path](), (err) => err.code === 3);
+      await assert.rejects(() => rpcdef(buildCtx({ token: 't', addresses: ['1.2.3.4'] }, { config: { default_policy_name: null } }))[path](), (err) => err.code === 3);
+    }
+    const upstream = async (url, opts) => {
+      if (url.includes('/policies?')) return (await fakeFetchOk({ items: [{ id: 'p1' }] }))();
+      if (opts.method === 'GET') return (await fakeFetchOk({ items: [{ id: 'e1', ipAddress: '1.2.3.4' }] }))();
+      return (await fakeFetchErr(500))();
+    };
+    mockFetch(upstream);
+    const unblock = await rpcdef(buildCtx({ token: 't', addresses: ['1.2.3.4'] }))['/f5.awaf.v1.F5AWAF/UnblockIP']();
+    assert.deepEqual(unblock.failed, ['1.2.3.4']);
+    const allow = await rpcdef(buildCtx({ token: 't', addresses: ['1.2.3.4'] }))['/f5.awaf.v1.F5AWAF/AllowIP']();
+    assert.deepEqual(allow.failed, ['1.2.3.4']);
+  });
+
+  it('validates enforcement policy and list policy defaults/errors', async () => {
+    await assert.rejects(() => rpcdef(buildCtx({ token: 't', mode: 'blocking' }, { config: { default_policy_name: null } }))['/f5.awaf.v1.F5AWAF/SetEnforcementMode'](), (err) => err.code === 3);
+    mockFetch(fakeFetchErr(500));
+    await assert.rejects(() => rpcdef(buildCtx({ token: 't' }))['/f5.awaf.v1.F5AWAF/ListPolicies'](), (err) => err.code === 14);
+    mockFetch(fakeFetchOk({ items: [{ id: 'p', name: 'p' }] }));
+    const result = await rpcdef(buildCtx({ token: 't' }))['/f5.awaf.v1.F5AWAF/ListPolicies']();
+    assert.equal(result.policies[0].enforcement_mode, 'blocking');
+    assert.equal(result.policies[0].active, false);
+  });
+});
+
 // ── Login (unit, mock fetch) ───────────────────────────────────────────────────
 
 describe('Login — unit (mock fetch)', () => {
