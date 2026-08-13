@@ -1,0 +1,61 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "aliyun-waf3",
+  "displayName": "Aliyun WAF 3.0",
+  "description": "OctoBus package for Alibaba Cloud WAF 3.0 (aliyun WAF) — IP blacklist/whitelist, custom ACL rules, security event query, and resource management.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/waf3.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Aliyun_Waf3.Waf3/BlockIP": {
+          "name": "block-ip",
+          "description": "Block IPs via WAF 3.0 IP blacklist rule."
+        },
+        "Aliyun_Waf3.Waf3/UnblockIP": {
+          "name": "unblock-ip",
+          "description": "Unblock IPs from a WAF 3.0 IP blacklist rule."
+        },
+        "Aliyun_Waf3.Waf3/DescribeIPBlacklist": {
+          "name": "describe-ip-blacklist",
+          "description": "List current IP blacklist rules."
+        },
+        "Aliyun_Waf3.Waf3/AddIPWhitelist": {
+          "name": "add-ip-whitelist",
+          "description": "Add IPs to a WAF 3.0 whitelist rule."
+        },
+        "Aliyun_Waf3.Waf3/CreateACLRule": {
+          "name": "create-acl-rule",
+          "description": "Create a custom ACL access control rule."
+        },
+        "Aliyun_Waf3.Waf3/DeleteRule": {
+          "name": "delete-rule",
+          "description": "Delete a defense rule by ID."
+        },
+        "Aliyun_Waf3.Waf3/DescribeRule": {
+          "name": "describe-rule",
+          "description": "Get details of a single defense rule."
+        },
+        "Aliyun_Waf3.Waf3/DescribeRules": {
+          "name": "describe-rules",
+          "description": "List defense rules by scene."
+        },
+        "Aliyun_Waf3.Waf3/DescribeSecurityTopNMetric": {
+          "name": "describe-security-topn-metric",
+          "description": "Query attack traffic Top N statistics by IP/URL/module."
+        },
+        "Aliyun_Waf3.Waf3/DescribeResources": {
+          "name": "describe-resources",
+          "description": "List protected resources (CNAME domains + cloud product ECS/SLB)."
+        }
+      }
+    }
+  }
+}

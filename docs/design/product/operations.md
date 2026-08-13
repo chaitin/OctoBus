@@ -50,7 +50,8 @@ daemon 主日志默认写入 stderr，使用 `log/slog` text handler 的 `key=va
 - access log 自身异常：`access_log_write_failed` 和 `access_log_follow_failed`。
 
 日志禁止写入请求体、响应体、Authorization、token、secret、完整 config、原始业务
-metadata 或带凭据的 Git source。config/secret 更新只写 hash 和 restart 摘要。
+metadata、multipart body、客户端绝对路径、service import 上传临时路径或带凭据的 Git source。
+config/secret 更新只写 hash 和 restart 摘要。
 
 capset 公共协议访问写入数据目录下的 `access.log`：
 

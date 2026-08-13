@@ -1,0 +1,149 @@
+syntax = "proto3";
+
+package sangfor.xdr.v2_0_45;
+
+import "google/protobuf/struct.proto";
+
+// Read-only investigation capabilities for Sangfor XDR 2.0.45.
+service SangforXdrService {
+  // Searches correlated XDR security incidents.
+  rpc SearchIncidents(SearchIncidentsRequest) returns (SearchResponse) {}
+  // Gets proof and selected entities associated with one incident.
+  rpc GetIncidentContext(GetIncidentContextRequest) returns (IncidentContextResponse) {}
+  // Searches raw XDR security alerts.
+  rpc SearchAlerts(SearchAlertsRequest) returns (SearchResponse) {}
+  // Gets proof and complete context for one alert.
+  rpc GetAlertContext(GetAlertContextRequest) returns (ContextResponse) {}
+  // Searches assets managed by XDR.
+  rpc SearchAssets(SearchAssetsRequest) returns (SearchResponse) {}
+  // Searches hosts currently assessed as risky.
+  rpc SearchRiskHosts(SearchRiskHostsRequest) returns (SearchResponse) {}
+  // Searches vulnerability and weak-password findings.
+  rpc SearchVulnerabilities(SearchVulnerabilitiesRequest) returns (SearchResponse) {}
+}
+
+message SearchIncidentsRequest {
+  int64 start_timestamp = 1 [json_name = "startTimestamp"];
+  int64 end_timestamp = 2 [json_name = "endTimestamp"];
+  string time_field = 3 [json_name = "timeField"];
+  int32 page = 4;
+  int32 page_size = 5 [json_name = "pageSize"];
+  string sort = 6;
+  repeated string uuids = 7 [json_name = "uuIds"];
+  repeated int32 deal_status = 8 [json_name = "dealStatus"];
+  repeated int32 severities = 9;
+  repeated string platform_host_branch_ids = 10 [json_name = "platformHostBranchIds"];
+  repeated string risk_tags = 11 [json_name = "riskTags"];
+  repeated int32 gpt_results = 12 [json_name = "gptResults"];
+  repeated string data_sources = 13 [json_name = "dataSources"];
+  repeated string platform_ids = 14 [json_name = "platformIds"];
+  google.protobuf.Struct extra_filters = 100 [json_name = "extraFilters"];
+}
+
+message GetIncidentContextRequest {
+  string uuid = 1;
+  bool include_processes = 2 [json_name = "includeProcesses"];
+  bool include_files = 3 [json_name = "includeFiles"];
+  bool include_hosts = 4 [json_name = "includeHosts"];
+  bool include_external_ips = 5 [json_name = "includeExternalIps"];
+  bool include_internal_ips = 6 [json_name = "includeInternalIps"];
+  bool include_dns = 7 [json_name = "includeDns"];
+}
+
+message SearchAlertsRequest {
+  repeated string uuids = 1 [json_name = "uuIds"];
+  int32 page = 2;
+  int32 page_size = 3 [json_name = "pageSize"];
+  int64 start_timestamp = 4 [json_name = "startTimestamp"];
+  int64 end_timestamp = 5 [json_name = "endTimestamp"];
+  string time_field = 6 [json_name = "timeField"];
+  string sort_field = 7 [json_name = "sortField"];
+  string sort_order = 8 [json_name = "sortOrder"];
+  repeated int32 alert_deal_status = 9 [json_name = "alertDealStatus"];
+  repeated int32 severities = 10;
+  repeated string product_types = 11 [json_name = "productType"];
+  repeated string access_directions = 12 [json_name = "accessDirections"];
+  repeated string platform_host_branch_ids = 13 [json_name = "platformHostBranchIds"];
+  repeated int32 threat_defines = 14 [json_name = "threatDefines"];
+  repeated string source_ips = 15 [json_name = "srcIps"];
+  repeated string destination_ips = 16 [json_name = "dstIps"];
+  repeated string platform_ids = 17 [json_name = "platformIds"];
+  google.protobuf.Struct extra_filters = 100 [json_name = "extraFilters"];
+}
+
+message GetAlertContextRequest {
+  string uuid = 1;
+}
+
+message SearchAssetsRequest {
+  int32 page = 1;
+  int32 page_size = 2 [json_name = "pageSize"];
+  string ip = 3;
+  string asset_id = 4 [json_name = "assetId"];
+  string host_name = 5 [json_name = "hostName"];
+  string name = 6;
+  repeated int64 asset_ids = 7 [json_name = "assetIds"];
+  repeated int64 branch_ids = 8 [json_name = "branchIds"];
+  repeated int64 business_ids = 9 [json_name = "businessIds"];
+  repeated string tags = 10;
+  string source_device = 11 [json_name = "sourceDevice"];
+  string order_column = 12 [json_name = "orderCol"];
+  string order_type = 13 [json_name = "orderType"];
+  google.protobuf.Struct extra_filters = 100 [json_name = "extraFilters"];
+}
+
+message SearchRiskHostsRequest {
+  repeated int64 host_asset_ids = 1 [json_name = "hostAssetIds"];
+  repeated int64 host_branch_ids = 2 [json_name = "hostBranchIds"];
+  int32 page = 3;
+  int32 page_size = 4 [json_name = "pageSize"];
+  int64 start_timestamp = 5 [json_name = "startTimestamp"];
+  int64 end_timestamp = 6 [json_name = "endTimestamp"];
+  string sort = 7;
+  google.protobuf.Struct extra_filters = 100 [json_name = "extraFilters"];
+}
+
+message SearchVulnerabilitiesRequest {
+  int64 start_timestamp = 1 [json_name = "startTimestamp"];
+  int64 end_timestamp = 2 [json_name = "endTimestamp"];
+  string time_field = 3 [json_name = "timeField"];
+  int32 page_size = 4 [json_name = "pageSize"];
+  string last_id = 5 [json_name = "lastId"];
+  string data_type = 6 [json_name = "dataType"];
+  string name = 7;
+  string asset_ip = 8 [json_name = "assetIp"];
+  repeated string attack_types = 9 [json_name = "attackTypes"];
+  repeated string scan_types = 10 [json_name = "scanTypes"];
+  repeated string threat_tags = 11 [json_name = "threatTags"];
+  repeated int64 asset_branch_ids = 12 [json_name = "assetBranchIds"];
+  repeated int32 risk_levels = 13 [json_name = "riskLevels"];
+  string sort = 14;
+  google.protobuf.Struct extra_filters = 100 [json_name = "extraFilters"];
+}
+
+message SearchResponse {
+  string code = 1;
+  string message = 2;
+  int64 total = 3;
+  int32 page = 4;
+  int32 page_size = 5 [json_name = "pageSize"];
+  google.protobuf.Value data = 6;
+  google.protobuf.Value raw_json = 7 [json_name = "rawJson"];
+}
+
+message ContextResponse {
+  string code = 1;
+  string message = 2;
+  google.protobuf.Value data = 3;
+  google.protobuf.Value raw_json = 4 [json_name = "rawJson"];
+}
+
+message IncidentContextResponse {
+  google.protobuf.Value proof = 1;
+  google.protobuf.Value processes = 2;
+  google.protobuf.Value files = 3;
+  google.protobuf.Value hosts = 4;
+  google.protobuf.Value external_ips = 5 [json_name = "externalIps"];
+  google.protobuf.Value internal_ips = 6 [json_name = "internalIps"];
+  google.protobuf.Value dns = 7;
+}

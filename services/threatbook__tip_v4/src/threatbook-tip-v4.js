@@ -1,4 +1,5 @@
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const METHOD_QUERY_IP_REPUTATION_PATH = '/ThreatBook_TIP_V4.ThreatBook_TIP_V4/QueryIPReputation';
 export const METHOD_QUERY_IP_REPUTATION_FULL = 'ThreatBook_TIP_V4.ThreatBook_TIP_V4/QueryIPReputation';
@@ -53,8 +54,10 @@ const resolveCallContext = (ctx = {}) => ({
   bindings: mergedBindings(ctx),
   limits: ctx.limits ?? {},
   meta: ctx.meta ?? {},
-  req: ctx.req ?? ctx.request ?? {},
+  req: ctx.request ?? ctx.req ?? {},
 });
+
+const requestFromContext = (ctx = {}) => ctx.request ?? ctx.req ?? {};
 
 const resolveDomain = (bindings = {}) => normalizeBaseUrl(firstDefined(
   bindings.threatbook_domain,
@@ -74,14 +77,18 @@ const resolveTimeoutMs = (ctx = {}) => {
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;
 };
 
+const insecureTlsDispatcher = new Agent({ connect: { rejectUnauthorized: false } });
+
 const buildTlsOptions = (bindings = {}) => {
   const enabled = Boolean(bindings.skipTlsVerify || bindings.tlsInsecureSkipVerify || bindings.insecureSkipVerify);
   if (!enabled) return {};
-  return {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  };
+  return { dispatcher: insecureTlsDispatcher };
+};
+
+const makeTimeoutSignal = (timeoutMs) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  return { signal: controller.signal, clear: () => clearTimeout(timeoutId) };
 };
 
 const requireDomain = (ctx = {}) => {
@@ -128,6 +135,31 @@ const encodeQueryPairs = (query = {}) => {
   return parts.join('&');
 };
 
+const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const redactUrlSensitiveQuery = (url) => {
+  try {
+    const parsed = new URL(String(url));
+    for (const key of ['apikey', 'api_key', 'sign', 'token']) {
+      if (parsed.searchParams.has(key)) parsed.searchParams.set(key, '***');
+    }
+    return parsed.toString();
+  } catch {
+    return String(url).replace(/((?:apikey|api_key|sign|token)=)[^&\s]+/gi, '$1***');
+  }
+};
+
+const sanitizeSensitiveText = (value, sensitiveValues = []) => {
+  let text = String(value ?? '');
+  text = text.replace(/((?:apikey|api_key|sign|token)=)[^&\s"'<>]+/gi, '$1***');
+  for (const secretValue of sensitiveValues) {
+    const secretText = String(secretValue ?? '');
+    if (secretText.length < 3) continue;
+    text = text.replace(new RegExp(escapeRegExp(secretText), 'g'), '***');
+  }
+  return text;
+};
+
 const buildQueryUrl = (domain, query) => `${domain}${QUERY_IP_HTTP_PATH}?${encodeQueryPairs(query)}`;
 
 const attachResponse = (err, response) => {
@@ -137,29 +169,34 @@ const attachResponse = (err, response) => {
 
 const fetchWithStatus = async (url, ctx = {}) => {
   const bindings = ctx.bindings || {};
+  const sensitiveValues = [resolveApiKey(bindings)];
+  const logUrl = redactUrlSensitiveQuery(url);
   const timeoutMs = resolveTimeoutMs(ctx);
+  const timeout = makeTimeoutSignal(timeoutMs);
   let res;
   try {
     res = await fetch(url, {
       method: 'GET',
-      timeoutMs,
+      signal: timeout.signal,
       ...buildTlsOptions(bindings),
     });
   } catch (err) {
-    const errMsg = err?.cause?.message || err?.message || 'fetch failed';
-    logFlow(ctx, 'fetch:error', { url, error: errMsg });
+    const errMsg = sanitizeSensitiveText(err?.cause?.message || err?.message || 'fetch failed', sensitiveValues);
+    logFlow(ctx, 'fetch:error', { url: logUrl, error: errMsg });
     return { httpStatus: 0, httpBody: errMsg };
+  } finally {
+    timeout.clear();
   }
   let httpBody;
   try {
     httpBody = await res.text();
   } catch (err) {
-    const errMsg = err?.message || 'response read failed';
-    logFlow(ctx, 'fetch:read-error', { url, httpStatus: res.status, error: errMsg });
+    const errMsg = sanitizeSensitiveText(err?.message || 'response read failed', sensitiveValues);
+    logFlow(ctx, 'fetch:read-error', { url: logUrl, httpStatus: res.status, error: errMsg });
     return { httpStatus: 0, httpBody: errMsg };
   }
   const httpStatus = Number(res.status || 0);
-  logFlow(ctx, 'fetch:response', { url, httpStatus, bodyLength: httpBody?.length || 0 });
+  logFlow(ctx, 'fetch:response', { url: logUrl, httpStatus, bodyLength: httpBody?.length || 0 });
   return { httpStatus, httpBody: String(httpBody ?? '') };
 };
 
@@ -182,12 +219,13 @@ const handleQueryIPReputation = async (req = {}, ctx = {}) => {
   logFlow(callCtx, 'QueryIPReputation', { url: `${domain}${QUERY_IP_HTTP_PATH}`, ip, lang: DEFAULT_LANG });
   const { httpStatus, httpBody } = await fetchWithStatus(url, callCtx);
   if (httpStatus >= 200 && httpStatus < 300) {
-    return { http_status: httpStatus, http_body: httpBody };
+    return { http_status: httpStatus, http_body: '' };
   }
   const code = mapHttpStatusToCode(httpStatus);
-  throw attachResponse(errorWithCode(code, `upstream http ${httpStatus}: ${httpBody}`), {
+  throw attachResponse(errorWithCode(code, `upstream http ${httpStatus}`), {
     http_status: httpStatus,
-    http_body: httpBody,
+    http_body: '',
+    http_body_length: String(httpBody ?? '').length,
   });
 };
 
@@ -199,7 +237,7 @@ export function rpcdef(ctx = {}) {
 }
 
 export const handlers = {
-  [METHOD_QUERY_IP_REPUTATION_FULL]: (req, ctx = {}) => handleQueryIPReputation(req, ctx),
+  [METHOD_QUERY_IP_REPUTATION_FULL]: (ctx = {}) => handleQueryIPReputation(requestFromContext(ctx), ctx),
 };
 
 export const _test = {
@@ -209,11 +247,14 @@ export const _test = {
   buildTlsOptions,
   encodeQueryPairs,
   errorWithCode,
+  escapeRegExp,
   fetchWithStatus,
   firstDefined,
   grpcCodeFor,
   handleQueryIPReputation,
   hasOwn,
+  insecureTlsDispatcher,
+  makeTimeoutSignal,
   logFlow,
   mapHttpStatusToCode,
   mergedBindings,
@@ -225,6 +266,8 @@ export const _test = {
   resolveCallContext,
   resolveDomain,
   resolveTimeoutMs,
+  redactUrlSensitiveQuery,
   toTrimmedString,
+  sanitizeSensitiveText,
   unwrapScalar,
 };

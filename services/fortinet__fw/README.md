@@ -5,7 +5,7 @@ This package preserves legacy gRPC package and method names where applicable.
 Import it into OctoBus with:
 
 ```bash
-octobus service import --id fortinet-fw ./services//fortinet__fw
+octobus service import --id fortinet-fw ./services/fortinet__fw
 ```
 
 ## Package Files
@@ -44,6 +44,8 @@ Use `token` for the Fortinet bearer token. Aliases `accessToken` and `access_tok
 }
 ```
 
+Deprecated compatibility only: `config.token`, `config.accessToken`, and `config.access_token` are still accepted as lower-priority fallbacks for older instances, but `secret` values always take precedence.
+
 ## RPC Methods
 
 - `Fortinet_FW.Fortinet_FW/CreateAddress`
@@ -76,3 +78,35 @@ npm run validate -- --service-dir fortinet__fw
 npm test -- --service-dir fortinet__fw --coverage
 npm run pack:check
 ```
+
+## Service Contract
+
+- Service name: `fortinet-fw`
+- Service dir: `services/fortinet__fw`
+- Runtime mode: `long-running`
+- Config: `host` or `restBaseUrl` is required; `is_vdom`, `vdom`, `timeoutMs`, `skipTlsVerify`, and `headers` are optional. Deprecated `config.token` aliases are fallback only.
+- Secret: `token` is required for new instances; `accessToken` and `access_token` are accepted aliases.
+- RPC read/write properties:
+  - `CreateAddress`: write, `POST /api/v2/cmdb/firewall/address`.
+  - `GetAddress`: read, `GET /api/v2/cmdb/firewall/address/{ip}`.
+  - `DeleteAddress`: write, `DELETE /api/v2/cmdb/firewall/address/{ip}`.
+  - `CreateAddrGroup`: write, creates address objects then `POST /api/v2/cmdb/firewall/addrgrp`.
+  - `GetAddrGroup`: read, `GET /api/v2/cmdb/firewall/addrgrp/{group}`.
+  - `AddAddrGroupMember`: write, creates address object then `POST /member`.
+  - `RemoveAddrGroupMember`: write, `DELETE /member/{ip}`.
+  - `DeleteAddrGroup`: write, `DELETE /api/v2/cmdb/firewall/addrgrp/{group}`.
+  - `AttachSubGroupToPolicyAddrGroup`: read/write, reads current members then `PUT` merged members.
+  - `DetachSubGroupFromPolicyAddrGroup`: read/write, reads current members then `PUT` filtered members.
+
+OctoBus example:
+
+```bash
+octobus service import --id fortinet-fw ./services/fortinet__fw
+octobus instance create fortinet-fw fortinet-fw-demo --config config.json --secret secret.json
+octobus capset create security-devices
+octobus capset add-instance security-devices fortinet-fw-demo
+```
+
+Connect path example: `/capsets/security-devices/connect/fortinet-fw-demo/Fortinet_FW.Fortinet_FW/GetAddress`.
+
+Known limitations: mock tests cover API mapping; production behavior still depends on FortiGate REST API permissions, VDOM configuration, and address-group policy semantics. `skipTlsVerify` is only for private/self-signed device deployments and is applied per request.

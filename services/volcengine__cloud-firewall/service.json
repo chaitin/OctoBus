@@ -1,0 +1,61 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "volcengine-cloud-firewall",
+  "displayName": "Volcengine Cloud Firewall",
+  "description": "OctoBus package for Volcengine Cloud Firewall read-only query APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/volcengine_cloud_firewall.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Volcengine_Cloud_Firewall.Volcengine_Cloud_Firewall/DescribeAddressBook": {
+          "name": "describe-address-book",
+          "description": "Query Volcengine Cloud Firewall address books."
+        },
+        "Volcengine_Cloud_Firewall.Volcengine_Cloud_Firewall/DescribeControlPolicy": {
+          "name": "describe-control-policy",
+          "description": "Query internet boundary firewall access control policies."
+        },
+        "Volcengine_Cloud_Firewall.Volcengine_Cloud_Firewall/DescribeVpcFirewallAclRuleList": {
+          "name": "describe-vpc-firewall-acl-rule-list",
+          "description": "Query VPC firewall access control policies."
+        },
+        "Volcengine_Cloud_Firewall.Volcengine_Cloud_Firewall/DescribeNatFirewallControlPolicy": {
+          "name": "describe-nat-firewall-control-policy",
+          "description": "Query NAT firewall access control policies."
+        },
+        "Volcengine_Cloud_Firewall.Volcengine_Cloud_Firewall/DescribeDnsControlPolicy": {
+          "name": "describe-dns-control-policy",
+          "description": "Query domain blacklist access control policies."
+        },
+        "Volcengine_Cloud_Firewall.Volcengine_Cloud_Firewall/AssetList": {
+          "name": "asset-list",
+          "description": "Query internet boundary protected assets."
+        },
+        "Volcengine_Cloud_Firewall.Volcengine_Cloud_Firewall/GetPolicyAnalyzeOverview": {
+          "name": "get-policy-analyze-overview",
+          "description": "Query policy analysis overview."
+        },
+        "Volcengine_Cloud_Firewall.Volcengine_Cloud_Firewall/QueryUserAlarmConfig": {
+          "name": "query-user-alarm-config",
+          "description": "Query Cloud Firewall alarm notification settings."
+        },
+        "Volcengine_Cloud_Firewall.Volcengine_Cloud_Firewall/InvokeReadOnlyAction": {
+          "name": "invoke-read-only-action",
+          "description": "Invoke an allowed Volcengine Cloud Firewall read-only action."
+        }
+      }
+    }
+  }
+}

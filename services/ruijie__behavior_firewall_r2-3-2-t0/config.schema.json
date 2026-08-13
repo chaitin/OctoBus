@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "manageBaseUrl": {
+      "type": "string",
+      "description": "Management API base URL, for example https://127.0.0.1:9090."
+    },
+    "reportBaseUrl": {
+      "type": "string",
+      "description": "Reporter API base URL, for example https://127.0.0.1:9091."
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "Alias used when management and reporter APIs share one host."
+    },
+    "managePath": {
+      "type": "string",
+      "default": "/api.php/inter/Inter"
+    },
+    "reportPath": {
+      "type": "string",
+      "default": "/api_reporter.php/inter/Inter"
+    },
+    "appId": {
+      "type": "string",
+      "default": "hybzapi"
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 8000
+    },
+    "strictResponseCode": {
+      "type": "boolean",
+      "default": true,
+      "description": "When true, upstream response code values other than 0 are returned as gRPC errors."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    }
+  }
+}

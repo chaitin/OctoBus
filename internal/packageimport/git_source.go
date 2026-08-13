@@ -24,6 +24,7 @@ type sourceKind int
 const (
 	sourceLocal sourceKind = iota
 	sourceNPM
+	sourceRemoteArchive
 	sourceHTTPSGit
 	sourceUnsupportedGit
 )
@@ -44,6 +45,9 @@ func classifySource(source string) sourceKind {
 	if strings.HasPrefix(source, "npm:") {
 		return sourceNPM
 	}
+	if isRemoteArchiveSource(source) {
+		return sourceRemoteArchive
+	}
 	if strings.HasPrefix(source, "https://") {
 		return sourceHTTPSGit
 	}
@@ -51,6 +55,18 @@ func classifySource(source string) sourceKind {
 		return sourceUnsupportedGit
 	}
 	return sourceLocal
+}
+
+func isRemoteArchiveSource(source string) bool {
+	u, err := url.Parse(source)
+	if err != nil {
+		return false
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return false
+	}
+	path := strings.ToLower(u.Path)
+	return strings.HasSuffix(path, ".tgz") || strings.HasSuffix(path, ".tar.gz") || strings.HasSuffix(path, ".zip")
 }
 
 func looksLikeGitScheme(source string) bool {

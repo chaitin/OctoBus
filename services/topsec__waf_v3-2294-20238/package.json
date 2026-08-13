@@ -1,0 +1,13 @@
+{
+  "name": "topsec-waf-v3-2294-20238",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "topsec-waf-v3-2294-20238": "bin/topsec-waf-v3-2294-20238.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.6.0",
+    "undici": "^7.16.0"
+  }
+}

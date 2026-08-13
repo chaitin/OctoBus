@@ -1,0 +1,33 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "das-apt",
+  "displayName": "DAS APT",
+  "description": "OctoBus package for DAS APT asset OpenAPI operations.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/das_apt.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "DAS_APT.DASAPTService/ListAssets": {
+          "name": "list-assets",
+          "description": "List DAS APT assets."
+        },
+        "DAS_APT.DASAPTService/GetAsset": {
+          "name": "get-asset",
+          "description": "Get a DAS APT asset by IP."
+        }
+      }
+    }
+  }
+}

@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -42,6 +44,45 @@ func TestImporterImportsDirectoryPackage(t *testing.T) {
 		if _, err := os.Stat(path); err != nil {
 			t.Fatalf("expected artifact %s: %v", path, err)
 		}
+	}
+}
+
+func TestOptionsUploadIsInternalOnly(t *testing.T) {
+	opts := Options{
+		ServiceID: "echo",
+		Name:      "Echo",
+		Source:    "client-upload:fixture",
+		Offline:   true,
+		Reinstall: true,
+		Build:     "never",
+		Recursive: true,
+		Upload: &UploadedSource{
+			Kind:          UploadKindDirectory,
+			Path:          "/tmp/octobus-upload/package.tgz",
+			DisplaySource: "client-upload:fixture",
+		},
+		Progress: func(ImportProgressEvent) error { return nil },
+	}
+	raw, err := json.Marshal(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	for _, hidden := range []string{`"upload"`, `"Upload"`, "octobus-upload", "package.tgz", "progress"} {
+		if strings.Contains(text, hidden) {
+			t.Fatalf("Options JSON leaked internal field %q in %s", hidden, text)
+		}
+	}
+
+	var decoded Options
+	if err := json.Unmarshal([]byte(`{"service_id":"echo","source":"fixture","upload":{"kind":"directory","path":"/tmp/leak","display_source":"leak"}}`), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.ServiceID != "echo" || decoded.Source != "fixture" {
+		t.Fatalf("decoded public fields regressed: %+v", decoded)
+	}
+	if decoded.Upload != nil {
+		t.Fatalf("decoded internal upload from JSON: %+v", decoded.Upload)
 	}
 }
 
@@ -142,6 +183,39 @@ message ListResponse { string text = 1; }
 	}
 }
 
+func TestImporterImportsUploadedDirectoryPackageServiceRoot(t *testing.T) {
+	dataDir, s := openTestStore(t)
+	pkg := writeMultiServiceTestPackage(t, t.TempDir())
+	uploadPath := filepath.Join(t.TempDir(), "multi-upload.tgz")
+	if err := tarGzDir(pkg.Root, uploadPath); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := (&Importer{DataDir: dataDir, Store: s}).Import(context.Background(), Options{
+		ServiceID: "alpha-service",
+		Source:    "client-upload:multi-upload//vendor__alpha",
+		Upload:    &UploadedSource{Kind: UploadKindDirectory, Path: uploadPath},
+		Build:     "never",
+		Offline:   true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Service.PackageSource != "client-upload:multi-upload//vendor__alpha" || res.Service.ServiceRoot != "vendor__alpha" || res.Service.NodeEntry != filepath.Clean("bin/alpha-service.js") {
+		t.Fatalf("uploaded service-root metadata mismatch: %+v", res.Service)
+	}
+	if strings.Contains(res.Service.PackageSource, uploadPath) {
+		t.Fatalf("uploaded service-root package source leaked a local path: %+v", res.Service)
+	}
+	stored, err := s.GetService(context.Background(), "alpha-service")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.PackageSource != res.Service.PackageSource || stored.ServiceRoot != res.Service.ServiceRoot {
+		t.Fatalf("stored uploaded service-root metadata mismatch: %+v", stored)
+	}
+}
+
 func TestImporterImportRecursiveImportsMultiServicePackage(t *testing.T) {
 	dataDir, s := openTestStore(t)
 	pkg := writeMultiServiceTestPackage(t, t.TempDir())
@@ -204,6 +278,43 @@ func TestImporterImportRecursiveImportsMultiServicePackage(t *testing.T) {
 		if stored.PackageSource != svc.PackageSource || stored.ServiceRoot != svc.ServiceRoot {
 			t.Fatalf("stored service %s mismatch: %+v", want.ID, stored)
 		}
+	}
+}
+
+func TestImporterImportRecursiveUploadedDirectoryPackageSources(t *testing.T) {
+	dataDir, s := openTestStore(t)
+	pkg := writeMultiServiceTestPackage(t, t.TempDir())
+	uploadPath := filepath.Join(t.TempDir(), "multi-upload.tgz")
+	if err := tarGzDir(pkg.Root, uploadPath); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := (&Importer{DataDir: dataDir, Store: s}).ImportRecursive(context.Background(), Options{
+		Source:    "client-upload:multi-upload//nested",
+		Upload:    &UploadedSource{Kind: UploadKindDirectory, Path: uploadPath},
+		Recursive: true,
+		Build:     "never",
+		Offline:   true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ServiceCount != 1 || len(res.Services) != 1 {
+		t.Fatalf("unexpected uploaded recursive result: %+v", res)
+	}
+	svc := res.Services[0]
+	if svc.ID != "gamma-service" || svc.ServiceRoot != "nested/vendor__gamma" || svc.PackageSource != "client-upload:multi-upload//nested/vendor__gamma" {
+		t.Fatalf("uploaded recursive service metadata mismatch: %+v", svc)
+	}
+	if strings.Contains(svc.PackageSource, uploadPath) {
+		t.Fatalf("uploaded recursive package source leaked upload path: %+v", svc)
+	}
+	stored, err := s.GetService(context.Background(), "gamma-service")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.PackageSource != svc.PackageSource || stored.ServiceRoot != svc.ServiceRoot {
+		t.Fatalf("stored uploaded recursive metadata mismatch: %+v", stored)
 	}
 }
 
@@ -968,6 +1079,201 @@ func TestPrepareSourceFileArchives(t *testing.T) {
 	}
 }
 
+func TestPrepareUploadedSourceDirectory(t *testing.T) {
+	dataDir, s := openTestStore(t)
+	imp := &Importer{DataDir: dataDir, Store: s}
+	pkg := writeTestPackage(t, t.TempDir(), `{"schema":"chaitin.octobus.service.v1","name":"echo-wrapper","proto":{"roots":["proto"],"files":["proto/echo.proto"]}}`)
+	uploadPath := filepath.Join(t.TempDir(), "client-dir.tgz")
+	if err := tarGzDir(pkg, uploadPath); err != nil {
+		t.Fatal(err)
+	}
+
+	prepared, err := imp.prepareSource(context.Background(), Options{
+		Source: "client-upload:client-dir",
+		Upload: &UploadedSource{
+			Kind:          UploadKindDirectory,
+			Path:          uploadPath,
+			DisplaySource: "client-upload:client-dir",
+		},
+	}, filepath.Join(t.TempDir(), "upload-dir-staging"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantSHA, err := hashFile(uploadPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !prepared.BuildAllowed || prepared.PackageSource != "client-upload:client-dir" || prepared.ServiceRoot != "." || prepared.PackageSHA256 != wantSHA {
+		t.Fatalf("unexpected uploaded directory prepared source: %+v", prepared)
+	}
+	if filepath.Base(prepared.ArtifactPath) != "package.tgz" || prepared.ArtifactPath == uploadPath {
+		t.Fatalf("uploaded directory artifact path not staged: %+v", prepared)
+	}
+	if strings.Contains(prepared.PackageSource, uploadPath) {
+		t.Fatalf("uploaded directory package source leaked upload path: %+v", prepared)
+	}
+	if _, err := os.Stat(filepath.Join(prepared.PackageDir, "service.json")); err != nil {
+		t.Fatalf("uploaded directory package root missing service.json: %v", err)
+	}
+}
+
+func TestPrepareUploadedSourceArchives(t *testing.T) {
+	dataDir, s := openTestStore(t)
+	imp := &Importer{DataDir: dataDir, Store: s}
+	pkg := writeTestPackage(t, t.TempDir(), `{"schema":"chaitin.octobus.service.v1","name":"echo-wrapper","proto":{"roots":["proto"],"files":["proto/echo.proto"]}}`)
+
+	tgz := filepath.Join(t.TempDir(), "client-package.tar.gz")
+	writeTarGzPackage(t, tgz, pkg)
+	prepared, err := imp.prepareSource(context.Background(), Options{
+		Source: "client-upload:client-package.tar.gz",
+		Upload: &UploadedSource{Kind: UploadKindArchive, Path: tgz},
+	}, filepath.Join(t.TempDir(), "upload-tgz-staging"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prepared.BuildAllowed || filepath.Base(prepared.ArtifactPath) != "package.tgz" || prepared.PackageSource != "client-upload:client-package.tar.gz" {
+		t.Fatalf("unexpected uploaded tgz prepared source: %+v", prepared)
+	}
+	if _, err := os.Stat(filepath.Join(prepared.PackageDir, "service.json")); err != nil {
+		t.Fatalf("uploaded tgz package was not normalized: %v", err)
+	}
+
+	zipPath := filepath.Join(t.TempDir(), "client-package.zip")
+	writeZipPackage(t, zipPath, pkg)
+	prepared, err = imp.prepareSource(context.Background(), Options{
+		Source: "client-upload:client-package.zip",
+		Upload: &UploadedSource{Kind: UploadKindArchive, Path: zipPath},
+	}, filepath.Join(t.TempDir(), "upload-zip-staging"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prepared.BuildAllowed || filepath.Base(prepared.ArtifactPath) != "package.zip" || prepared.PackageSource != "client-upload:client-package.zip" {
+		t.Fatalf("unexpected uploaded zip prepared source: %+v", prepared)
+	}
+	if _, err := os.Stat(filepath.Join(prepared.PackageDir, "service.json")); err != nil {
+		t.Fatalf("uploaded zip package was not normalized: %v", err)
+	}
+}
+
+func TestImporterRejectsBuildAlwaysForUploadedArchive(t *testing.T) {
+	dataDir, s := openTestStore(t)
+	pkg := writeTestPackage(t, t.TempDir(), `{"schema":"chaitin.octobus.service.v1","name":"echo-wrapper","proto":{"roots":["proto"],"files":["proto/echo.proto"]}}`)
+	zipPath := filepath.Join(t.TempDir(), "client-package.zip")
+	writeZipPackage(t, zipPath, pkg)
+
+	_, err := (&Importer{DataDir: dataDir, Store: s}).Import(context.Background(), Options{
+		ServiceID: "echo",
+		Source:    "client-upload:client-package.zip",
+		Upload:    &UploadedSource{Kind: UploadKindArchive, Path: zipPath},
+		Build:     "always",
+		Offline:   true,
+	})
+	if err == nil || !strings.Contains(err.Error(), "--build=always is only supported") {
+		t.Fatalf("expected uploaded archive build=always error, got %v", err)
+	}
+	if _, err := s.GetService(context.Background(), "echo"); err == nil {
+		t.Fatal("service was committed after uploaded archive build=always failure")
+	}
+}
+
+func TestPrepareUploadedSourceNPMLocal(t *testing.T) {
+	dataDir, s := openTestStore(t)
+	imp := &Importer{DataDir: dataDir, Store: s}
+	pkg := writeTestPackage(t, t.TempDir(), `{"schema":"chaitin.octobus.service.v1","name":"echo-wrapper","proto":{"roots":["proto"],"files":["proto/echo.proto"]}}`)
+
+	dirUpload := filepath.Join(t.TempDir(), "npm-local-dir.tgz")
+	if err := tarGzDir(pkg, dirUpload); err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := imp.prepareSource(context.Background(), Options{
+		Source: "client-upload:npm-local-dir",
+		Upload: &UploadedSource{Kind: UploadKindNPMLocal, Path: dirUpload},
+	}, filepath.Join(t.TempDir(), "npm-local-dir-staging"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !prepared.BuildAllowed || prepared.PackageSource != "client-upload:npm-local-dir" {
+		t.Fatalf("unexpected npm-local directory prepared source: %+v", prepared)
+	}
+
+	zipPath := filepath.Join(t.TempDir(), "npm-local-archive.zip")
+	writeZipPackage(t, zipPath, pkg)
+	prepared, err = imp.prepareSource(context.Background(), Options{
+		Source: "client-upload:npm-local-archive.zip",
+		Upload: &UploadedSource{Kind: UploadKindNPMLocal, Path: zipPath},
+	}, filepath.Join(t.TempDir(), "npm-local-archive-staging"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prepared.BuildAllowed || prepared.PackageSource != "client-upload:npm-local-archive.zip" || filepath.Base(prepared.ArtifactPath) != "package.zip" {
+		t.Fatalf("unexpected npm-local archive prepared source: %+v", prepared)
+	}
+}
+
+func TestPrepareSourceRemoteArchives(t *testing.T) {
+	dataDir, s := openTestStore(t)
+	imp := &Importer{DataDir: dataDir, Store: s}
+	pkg := writeTestPackage(t, t.TempDir(), `{"schema":"chaitin.octobus.service.v1","name":"echo-wrapper","proto":{"roots":["proto"],"files":["proto/echo.proto"]}}`)
+
+	tgz := filepath.Join(t.TempDir(), "package.tgz")
+	writeTarGzPackage(t, tgz, pkg)
+	zipPath := filepath.Join(t.TempDir(), "package.zip")
+	writeZipPackage(t, zipPath, pkg)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/package.tgz":
+			http.ServeFile(w, r, tgz)
+		case "/package.zip":
+			http.ServeFile(w, r, zipPath)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	prepared, err := imp.prepareSource(context.Background(), Options{Source: server.URL + "/package.tgz?X-Amz-Signature=test"}, filepath.Join(t.TempDir(), "remote-tgz-staging"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prepared.BuildAllowed || filepath.Base(prepared.ArtifactPath) != "package.tgz" || prepared.PackageSource != server.URL+"/package.tgz" {
+		t.Fatalf("unexpected remote tgz prepared source: %+v", prepared)
+	}
+	if _, err := os.Stat(filepath.Join(prepared.PackageDir, "service.json")); err != nil {
+		t.Fatalf("remote tgz package was not extracted: %v", err)
+	}
+
+	prepared, err = imp.prepareSource(context.Background(), Options{Source: server.URL + "/package.zip"}, filepath.Join(t.TempDir(), "remote-zip-staging"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Base(prepared.ArtifactPath) != "package.zip" {
+		t.Fatalf("unexpected remote zip artifact path: %+v", prepared)
+	}
+	if _, err := os.Stat(filepath.Join(prepared.PackageDir, "service.json")); err != nil {
+		t.Fatalf("remote zip package was not extracted: %v", err)
+	}
+}
+
+func TestPrepareSourceRemoteArchiveErrorsRedactSignedURL(t *testing.T) {
+	dataDir, s := openTestStore(t)
+	imp := &Importer{DataDir: dataDir, Store: s}
+	server := httptest.NewServer(http.NotFoundHandler())
+	defer server.Close()
+
+	source := server.URL + "/missing.zip?X-Amz-Signature=secret"
+	_, err := imp.prepareSource(context.Background(), Options{Source: source}, filepath.Join(t.TempDir(), "remote-error-staging"))
+	if err == nil {
+		t.Fatal("expected remote archive download error")
+	}
+	if strings.Contains(err.Error(), "X-Amz-Signature") || strings.Contains(err.Error(), "secret") {
+		t.Fatalf("remote archive error leaked signed URL: %v", err)
+	}
+	if !strings.Contains(err.Error(), server.URL+"/missing.zip") {
+		t.Fatalf("remote archive error lost useful source context: %v", err)
+	}
+}
+
 func TestArchiveExtractorsRejectUnsafePaths(t *testing.T) {
 	tgz := filepath.Join(t.TempDir(), "unsafe.tgz")
 	var buf bytes.Buffer
@@ -1658,6 +1964,27 @@ func TestPrepareSourceRejectsUnsupportedAndInvalidArchives(t *testing.T) {
 	writeTestFile(t, badArchive, "not gzip", 0o644)
 	if _, err := imp.prepareSource(context.Background(), Options{Source: badArchive}, t.TempDir()); err == nil {
 		t.Fatal("expected invalid archive error")
+	}
+
+	uploadPath := filepath.Join(t.TempDir(), "upload.tgz")
+	writeTestFile(t, uploadPath, "not gzip", 0o644)
+	if _, err := imp.prepareSource(context.Background(), Options{
+		Source: "/client/path",
+		Upload: &UploadedSource{Kind: UploadKindDirectory, Path: uploadPath},
+	}, t.TempDir()); err == nil || !strings.Contains(err.Error(), "client-upload") || strings.Contains(err.Error(), "/client/path") {
+		t.Fatalf("expected sanitized uploaded source prefix error, got %v", err)
+	}
+	if _, err := imp.prepareSource(context.Background(), Options{
+		Source: "client-upload:package.txt",
+		Upload: &UploadedSource{Kind: UploadKindArchive, Path: uploadPath},
+	}, t.TempDir()); err == nil || !strings.Contains(err.Error(), "must end with") {
+		t.Fatalf("expected unsupported uploaded archive suffix error, got %v", err)
+	}
+	if _, err := imp.prepareSource(context.Background(), Options{
+		Source: "client-upload:package",
+		Upload: &UploadedSource{Kind: UploadKind("other"), Path: uploadPath},
+	}, t.TempDir()); err == nil || !strings.Contains(err.Error(), "unsupported uploaded source kind") {
+		t.Fatalf("expected unsupported uploaded source kind error, got %v", err)
 	}
 }
 

@@ -1,0 +1,12 @@
+{
+  "name": "huorong-endpoint-security-management-system-v2-0-19-3",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "huorong-endpoint-security-management-system-v2-0-19-3": "bin/huorong-endpoint-security-management-system-v2-0-19-3.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.5.0"
+  }
+}

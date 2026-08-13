@@ -1,0 +1,13 @@
+{
+  "name": "threatbook-claudsandbox-v3",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "threatbook-claudsandbox-v3": "bin/threatbook-claudsandbox-v3.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.6.0",
+    "undici": "^7.16.0"
+  }
+}

@@ -22,6 +22,7 @@ export const ADD_OPERATION_TYPE = 1;
 export const DELETE_OPERATION_TYPE = 3;
 
 const sessionCache = new Map();
+let insecureDispatcherPromise;
 
 const grpcCodeFor = (code) => ({
   FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
@@ -62,8 +63,8 @@ const normalizeBaseUrl = (value) => {
 
 const mergedBindings = (ctx = {}) => ({
   ...(ctx?.config ?? {}),
-  ...(ctx?.secret ?? {}),
   ...(ctx?.bindings ?? {}),
+  ...(ctx?.secret ?? {}),
 });
 
 const resolveCallContext = (ctx = {}) => ({
@@ -101,14 +102,48 @@ const resolveTimeoutMs = (ctx) => {
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;
 };
 
-const buildTlsOptions = (bindings) => {
-  const enabled = Boolean(bindings?.skipTlsVerify || bindings?.tlsInsecureSkipVerify || bindings?.insecureSkipVerify);
-  if (!enabled) return {};
-  return {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  };
+const shouldSkipTlsVerify = (bindings) => Boolean(bindings?.skipTlsVerify || bindings?.tlsInsecureSkipVerify || bindings?.insecureSkipVerify);
+
+const createTlsDispatcher = async (skipTlsVerify) => {
+  if (!skipTlsVerify) return undefined;
+  insecureDispatcherPromise ??= import('undici').then(({ Agent }) => new Agent({
+    connect: { rejectUnauthorized: false },
+  }));
+  return insecureDispatcherPromise;
+};
+
+const buildTlsOptions = async (bindings) => {
+  const dispatcher = await createTlsDispatcher(shouldSkipTlsVerify(bindings));
+  return dispatcher ? { dispatcher } : {};
+};
+
+const fetchWithTimeout = async (url, init = {}, options = {}) => {
+  const rawTimeout = Number(options.timeoutMs);
+  const timeoutMs = Number.isFinite(rawTimeout) && rawTimeout > 0 ? rawTimeout : DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const parentSignal = init.signal;
+  const abortFromParent = () => controller.abort(parentSignal.reason);
+  if (parentSignal) {
+    if (parentSignal.aborted) {
+      controller.abort(parentSignal.reason);
+    } else if (typeof parentSignal.addEventListener === 'function') {
+      parentSignal.addEventListener('abort', abortFromParent, { once: true });
+    }
+  }
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const tlsOptions = await buildTlsOptions(options.bindings);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+      ...tlsOptions,
+    });
+  } finally {
+    clearTimeout(timer);
+    if (parentSignal && typeof parentSignal.removeEventListener === 'function') {
+      parentSignal.removeEventListener('abort', abortFromParent);
+    }
+  }
 };
 
 const getInstanceId = (ctx) => String(ctx?.meta?.instance_id || ctx?.meta?.instanceId || 'default-instance');
@@ -126,11 +161,7 @@ const requireSession = (ctx, host) => {
   return session;
 };
 
-const resolveUpstreamToken = (req, ctx, host) => {
-  const requestToken = unwrapString(firstDefined(req?.token, req?.umc_token, req?.umcToken)).trim();
-  if (requestToken) {
-    return { token: requestToken, fromCache: false };
-  }
+const resolveUpstreamToken = (_req, ctx, host) => {
   const session = requireSession(ctx, host);
   return { token: session.token, fromCache: true };
 };
@@ -192,14 +223,12 @@ const fetchText = async (ctx, url, init = {}) => {
   const bindings = mergedBindings(ctx);
   let res;
   try {
-    res = await fetch(url, {
-      timeoutMs,
-      ...buildTlsOptions(bindings),
+    res = await fetchWithTimeout(url, {
       ...init,
       headers: {
         ...(init.headers || {}),
       },
-    });
+    }, { timeoutMs, bindings });
   } catch (err) {
     throw errorWithCode('UNAVAILABLE', err?.cause?.message || err?.message || 'fetch failed');
   }
@@ -215,10 +244,10 @@ const fetchText = async (ctx, url, init = {}) => {
 const toResponse = (upstream) => {
   const response = {
     http_status: toInteger(upstream?.status, 0),
-    raw_body: String(upstream?.text ?? ''),
+    raw_body: '',
   };
   if (upstream?.json !== undefined) {
-    response.raw_json = toValue(upstream.json);
+    response.raw_json = undefined;
   }
   return response;
 };
@@ -329,7 +358,10 @@ const runLogin = async (ctx) => {
     });
   }
 
-  return toResponse(upstream);
+  return {
+    http_status: toInteger(upstream?.status, 0),
+    raw_body: '',
+  };
 };
 
 const runQuery = async (req, ctx) => {
@@ -404,7 +436,9 @@ rpcdef.__test__ = {
   buildTlsOptions,
   clearSession,
   clearSessionCache,
+  createTlsDispatcher,
   errorWithCode,
+  fetchWithTimeout,
   fetchText,
   firstDefined,
   getInstanceId,
@@ -431,6 +465,7 @@ rpcdef.__test__ = {
   runMutation,
   runQuery,
   setSession,
+  shouldSkipTlsVerify,
   splitIpv6Part,
   toInteger,
   toResponse,

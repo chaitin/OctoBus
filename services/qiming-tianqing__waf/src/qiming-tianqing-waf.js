@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const METHOD_BLOCK_PATH = '/Qiming_Tianqing_WAF.QimingTianqingWafService/BlockIP';
 export const METHOD_UNBLOCK_PATH = '/Qiming_Tianqing_WAF.QimingTianqingWafService/UnblockIP';
@@ -255,8 +256,8 @@ const resolveIpList = (req = {}) => {
 
 const mergedBindings = (ctx = {}) => ({
   ...(ctx.config ?? {}),
-  ...(ctx.secret ?? {}),
   ...(ctx.bindings ?? {}),
+  ...(ctx.secret ?? {}),
 });
 
 const resolveCallContext = (ctx = {}) => ({
@@ -264,22 +265,21 @@ const resolveCallContext = (ctx = {}) => ({
   bindings: mergedBindings(ctx),
   limits: ctx.limits ?? {},
   meta: ctx.meta ?? {},
-  req: ctx.req ?? ctx.request ?? {},
+  req: ctx.request ?? ctx.req ?? {},
 });
+
+const requestFromContext = (ctx = {}) => ctx?.request ?? ctx?.req ?? {};
 
 const resolveCredential = (req = {}, bindings = {}) => {
   const credential = req.credential || req.credentials || {};
-  const username = pickStringField(credential, ['username', 'user']) || pickStringField(bindings, ['username', 'user']);
-  const passwordSha = pickStringField(credential, ['password_sha256', 'passwordSha256'])
-    || pickStringField(bindings, ['password_sha256', 'passwordSha256']);
-  const passwordClear = pickStringField(credential, ['password', 'password_clear'])
-    || pickStringField(bindings, ['password', 'password_clear']);
+  const username = pickStringField(bindings, ['username', 'user']);
+  const passwordSha = pickStringField(bindings, ['password_sha256', 'passwordSha256']);
+  const passwordClear = pickStringField(bindings, ['password', 'password_clear']);
   const baseUrl = normalizeBaseUrl(firstDefined(
-    pickStringField(credential, ['base_url', 'baseUrl', 'rest_base_url', 'restBaseUrl']),
     pickStringField(bindings, ['restBaseUrl', 'baseUrl', 'rest_base_url', 'base_url', 'url']),
   ));
   if (!baseUrl) throw errorWithCode('INVALID_ARGUMENT', 'base_url/restBaseUrl is required and must start with http:// or https://');
-  if (!username) throw errorWithCode('INVALID_ARGUMENT', 'username is required (request credential or bindings.username)');
+  if (!username) throw errorWithCode('INVALID_ARGUMENT', 'username is required in instance config or secret');
 
   const result = {
     baseUrl,
@@ -356,7 +356,15 @@ const parseJsonResponse = async (res) => {
   }
 };
 
+let insecureTlsDispatcher;
+
+const getInsecureTlsDispatcher = () => {
+  insecureTlsDispatcher ??= new Agent({ connect: { rejectUnauthorized: false } });
+  return insecureTlsDispatcher;
+};
+
 const fetchJson = async (url, init = {}, skipTlsVerify = false) => {
+  const timeoutSignal = init.timeoutMs === undefined ? {} : { signal: AbortSignal.timeout(init.timeoutMs) };
   const options = {
     method: init.method || 'POST',
     headers: {
@@ -364,8 +372,8 @@ const fetchJson = async (url, init = {}, skipTlsVerify = false) => {
       ...(init.headers || {}),
     },
     body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
-    timeoutMs: init.timeoutMs,
-    ...(skipTlsVerify ? { insecureSkipVerify: true, tlsInsecureSkipVerify: true, skipTlsVerify: true } : {}),
+    ...timeoutSignal,
+    ...(skipTlsVerify ? { dispatcher: getInsecureTlsDispatcher() } : {}),
   };
 
   let res;
@@ -381,12 +389,12 @@ const fetchJson = async (url, init = {}, skipTlsVerify = false) => {
   if (!ok) {
     const text = typeof json === 'object' ? JSON.stringify(json) : String(json);
     if (res.status === 401 || res.status === 403) {
-      throw errorWithCode('PERMISSION_DENIED', `upstream http ${res.status}: ${text}`);
+      throw errorWithCode('PERMISSION_DENIED', `upstream http ${res.status}`);
     }
     if (res.status >= 400 && res.status < 500) {
-      throw errorWithCode('FAILED_PRECONDITION', `upstream http ${res.status}: ${text}`);
+      throw errorWithCode('FAILED_PRECONDITION', `upstream http ${res.status}`);
     }
-    throw errorWithCode('UNAVAILABLE', `upstream http ${res.status}: ${text}`);
+    throw errorWithCode('UNAVAILABLE', `upstream http ${res.status}`);
   }
   return { json, headers: res.headers };
 };
@@ -472,9 +480,10 @@ const login = async (config) => {
 
 const callAddressObject = async (config, context, templates, authHeaders) => {
   const payload = applyTemplate(templates.addressTemplate, context);
+  const { timeoutMs } = config;
   const { json } = await fetchJson(
     `${config.baseUrl}${PATH_ADDRESS_OBJECT}`,
-    { method: 'POST', headers: authHeaders, timeoutMs: config.timeoutMs, body: payload },
+    { method: 'POST', headers: authHeaders, timeoutMs, body: payload },
     config.credential.skipTls,
   );
   requireBusinessSuccess(json, 'addAddrObj', 'address object creation failed');
@@ -483,9 +492,10 @@ const callAddressObject = async (config, context, templates, authHeaders) => {
 
 const callBlock = async (config, context, templates, authHeaders) => {
   const payload = applyTemplate(templates.blacklistTemplate, context);
+  const { timeoutMs } = config;
   const { json } = await fetchJson(
     `${config.baseUrl}${PATH_BLOCK}`,
-    { method: 'POST', headers: authHeaders, timeoutMs: config.timeoutMs, body: payload },
+    { method: 'POST', headers: authHeaders, timeoutMs, body: payload },
     config.credential.skipTls,
   );
   requireBusinessSuccess(json, 'add_submit', 'blacklist add failed');
@@ -494,9 +504,10 @@ const callBlock = async (config, context, templates, authHeaders) => {
 
 const callUnblock = async (config, context, templates, authHeaders) => {
   const payload = applyTemplate(templates.unblockTemplate, context);
+  const { timeoutMs } = config;
   const { json } = await fetchJson(
     `${config.baseUrl}${PATH_UNBLOCK}`,
-    { method: 'POST', headers: authHeaders, timeoutMs: config.timeoutMs, body: payload },
+    { method: 'POST', headers: authHeaders, timeoutMs, body: payload },
     config.credential.skipTls,
   );
   requireBusinessSuccess(json, 'delete', 'blacklist delete failed');
@@ -504,10 +515,11 @@ const callUnblock = async (config, context, templates, authHeaders) => {
 };
 
 const tryLogout = async (config, authHeaders) => {
+  const { timeoutMs } = config;
   try {
     await fetchJson(
       `${config.baseUrl}${PATH_LOGOUT}`,
-      { method: 'POST', headers: authHeaders, timeoutMs: config.timeoutMs, body: {} },
+      { method: 'POST', headers: authHeaders, timeoutMs, body: {} },
       config.credential.skipTls,
     );
   } catch (err) {
@@ -521,15 +533,16 @@ const createRuntimeConfig = (ctx = {}) => {
   const authHeadersExtra = { ...(callCtx.bindings.headers || {}), ...(callCtx.bindings.authHeaders || {}) };
   const headers = buildHeaders(authHeadersExtra, callCtx.meta);
   const templates = resolveTemplates(callCtx.req);
+  const timeoutMs = resolveTimeoutMs(callCtx);
   return {
     callCtx,
     credential,
-    timeoutMs: resolveTimeoutMs(callCtx),
+    timeoutMs,
     headers,
     templates,
     config: {
       baseUrl: credential.baseUrl,
-      timeoutMs: resolveTimeoutMs(callCtx),
+      timeoutMs,
       headers,
       templates,
       credential,
@@ -575,8 +588,8 @@ const executeBlock = async (ctx = {}) => {
   return {
     status: 'OPERATION_STATUS_SUCCESS',
     blocked_ips: blocked,
-    authorization: loginResult.authorization,
-    sid: loginResult.sid,
+    authorization: '',
+    sid: '',
   };
 };
 
@@ -609,8 +622,8 @@ const executeUnblock = async (ctx = {}) => {
   return {
     status: 'OPERATION_STATUS_SUCCESS',
     unblocked_ips: unblocked,
-    authorization: loginResult.authorization,
-    sid: loginResult.sid,
+    authorization: '',
+    sid: '',
   };
 };
 
@@ -627,8 +640,8 @@ export function rpcdef(ctx = {}) {
 }
 
 export const handlers = {
-  [METHOD_BLOCK_FULL]: (req, ctx = {}) => handleBlock(req, ctx),
-  [METHOD_UNBLOCK_FULL]: (req, ctx = {}) => handleUnblock(req, ctx),
+  [METHOD_BLOCK_FULL]: (ctx = {}) => handleBlock(requestFromContext(ctx), ctx),
+  [METHOD_UNBLOCK_FULL]: (ctx = {}) => handleUnblock(requestFromContext(ctx), ctx),
 };
 
 export const _test = {

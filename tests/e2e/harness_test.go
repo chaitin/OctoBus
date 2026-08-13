@@ -199,8 +199,13 @@ func waitForFile(t *testing.T, path string) {
 
 func (h *harness) runCLI(args ...string) cliResult {
 	h.t.Helper()
+	return h.runCLIInDir(repoRoot, args...)
+}
+
+func (h *harness) runCLIInDir(dir string, args ...string) cliResult {
+	h.t.Helper()
 	cmd := exec.Command(h.bin, args...)
-	cmd.Dir = repoRoot
+	cmd.Dir = dir
 	cmd.Env = e2eSubprocessEnv("OCTOBUS_ADDR="+h.publicAddr, "OCTOBUS_DATA_DIR="+h.dataDir, "GIT_SSL_NO_VERIFY=true", "NO_PROXY=127.0.0.1,localhost", "no_proxy=127.0.0.1,localhost")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -224,6 +229,16 @@ func (h *harness) mustCLI(args ...string) string {
 	if res.err != nil {
 		h.dumpDiagnostics()
 		h.t.Fatalf("octobus %s failed: code=%d err=%v\nstdout=%s\nstderr=%s", strings.Join(args, " "), res.code, res.err, res.stdout, res.stderr)
+	}
+	return res.stdout
+}
+
+func (h *harness) mustCLIInDir(dir string, args ...string) string {
+	h.t.Helper()
+	res := h.runCLIInDir(dir, args...)
+	if res.err != nil {
+		h.dumpDiagnostics()
+		h.t.Fatalf("octobus %s in %s failed: code=%d err=%v\nstdout=%s\nstderr=%s", strings.Join(args, " "), dir, res.code, res.err, res.stdout, res.stderr)
 	}
 	return res.stdout
 }

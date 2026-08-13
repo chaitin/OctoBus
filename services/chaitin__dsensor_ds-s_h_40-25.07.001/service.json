@@ -1,0 +1,125 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "dsensor",
+  "displayName": "D-Sensor DS-S_H_40-25.07.001 (谛听)",
+  "description": "OctoBus package for Chaitin D-Sensor (谛听) honeypot deception system for DS-S_H_40-25.07.001. Consolidates 25 API endpoints for agent management, event/scanner/alarm/audit queries, CPU/disk stats, user list, honeynet, and honeypot lifecycle.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/dsensor.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "dsensor.dsensor_agent_list/query_dsensor_agent_list": {
+          "name": "query-dsensor-agent-list",
+          "description": "Query agent list."
+        },
+        "dsensor.dsensor_agent_detail/query_dsensor_agent_detail": {
+          "name": "query-dsensor-agent-detail",
+          "description": "Query agent detail by SN."
+        },
+        "dsensor.dsensor_agent_delete/query_dsensor_agent_delete": {
+          "name": "query-dsensor-agent-delete",
+          "description": "Delete agent."
+        },
+        "dsensor.dsensor_agent_upgrade/query_dsensor_agent_upgrade": {
+          "name": "query-dsensor-agent-upgrade",
+          "description": "Upgrade agent."
+        },
+        "dsensor.dsensor_agent_change_type/query_dsensor_agent_change_type": {
+          "name": "query-dsensor-agent-change-type",
+          "description": "Change agent configuration."
+        },
+        "dsensor.dsensor_agent_clear_service/query_dsensor_agent_clear_service": {
+          "name": "query-dsensor-agent-clear-service",
+          "description": "Clear agent service."
+        },
+        "dsensor.dsensor_agent_portmap_update/query_dsensor_agent_portmap_update": {
+          "name": "query-dsensor-agent-portmap-update",
+          "description": "Update agent port mapping."
+        },
+        "dsensor.dsensor_agent_scan_update/query_dsensor_agent_scan_update": {
+          "name": "query-dsensor-agent-scan-update",
+          "description": "Update agent scan ports."
+        },
+        "dsensor.dsensor_event_list/query_dsensor_event_list": {
+          "name": "query-dsensor-event-list",
+          "description": "Query event list."
+        },
+        "dsensor.dsensor_event_detail/query_dsensor_event_detail": {
+          "name": "query-dsensor-event-detail",
+          "description": "Query event detail by connection_id."
+        },
+        "dsensor.dsensor_scanner_list/query_dsensor_scanner_list": {
+          "name": "query-dsensor-scanner-list",
+          "description": "Query scanner list."
+        },
+        "dsensor.dsensor_scanner_detail/query_dsensor_scanner_detail": {
+          "name": "query-dsensor-scanner-detail",
+          "description": "Query scanner detail by id."
+        },
+        "dsensor.dsensor_portrait_list/query_dsensor_portrait_list": {
+          "name": "query-dsensor-portrait-list",
+          "description": "Query attacker portrait list."
+        },
+        "dsensor.dsensor_alarm_list/query_dsensor_alarm_list": {
+          "name": "query-dsensor-alarm-list",
+          "description": "Query alarm list."
+        },
+        "dsensor.dsensor_audit_list/query_dsensor_audit_list": {
+          "name": "query-dsensor-audit-list",
+          "description": "Query audit log list."
+        },
+        "dsensor.dsensor_cpumem_stat/query_dsensor_cpumem_stat": {
+          "name": "query-dsensor-cpumem-stat",
+          "description": "Query CPU & memory statistics."
+        },
+        "dsensor.dsensor_disk_stat/query_dsensor_disk_stat": {
+          "name": "query-dsensor-disk-stat",
+          "description": "Query disk statistics."
+        },
+        "dsensor.dsensor_user_list/query_dsensor_user_list": {
+          "name": "query-dsensor-user-list",
+          "description": "Query user list."
+        },
+        "dsensor.dsensor_honeynet_list/query_dsensor_honeynet_list": {
+          "name": "query-dsensor-honeynet-list",
+          "description": "Query honeynet list."
+        },
+        "dsensor.dsensor_honeynet_create/query_dsensor_honeynet_create": {
+          "name": "query-dsensor-honeynet-create",
+          "description": "Create honeynet."
+        },
+        "dsensor.dsensor_honeypot_list/query_dsensor_honeypot_list": {
+          "name": "query-dsensor-honeypot-list",
+          "description": "Query honeypot list."
+        },
+        "dsensor.dsensor_honeypot_create/query_dsensor_honeypot_create": {
+          "name": "query-dsensor-honeypot-create",
+          "description": "Create honeypot."
+        },
+        "dsensor.dsensor_honeypot_delete/query_dsensor_honeypot_delete": {
+          "name": "query-dsensor-honeypot-delete",
+          "description": "Delete honeypot."
+        },
+        "dsensor.dsensor_honeypot_reset/query_dsensor_honeypot_reset": {
+          "name": "query-dsensor-honeypot-reset",
+          "description": "Reset honeypot."
+        },
+        "dsensor.dsensor_honeypot_upgrade/query_dsensor_honeypot_upgrade": {
+          "name": "query-dsensor-honeypot-upgrade",
+          "description": "Upgrade honeypot."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "threatbook-ngtip-v5",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "threatbook-ngtip-v5": "bin/threatbook-ngtip-v5.js"
+  },
+  "scripts": {
+    "test": "node --test test/threatbook-ngtip-v5.test.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.6.0",
+    "undici": "^7.16.0"
+  }
+}

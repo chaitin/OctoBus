@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package first.epss.v1;
+
+service EpssService {
+  rpc GetScores(GetEpssScoreRequest) returns (EpssScoresResponse);
+}
+
+message GetEpssScoreRequest {
+  repeated string cve_ids = 1 [json_name = "cveIds"];
+}
+
+message EpssScoresResponse {
+  repeated EpssScoreEntry data = 1;
+}
+
+message EpssScoreEntry {
+  string cve_id = 1 [json_name = "cveId"];
+  double epss = 2;
+  double percentile = 3;
+  string date = 4;
+}

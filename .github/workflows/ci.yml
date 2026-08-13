@@ -97,6 +97,10 @@ jobs:
       - name: Check OctoBus npm packages
         run: bash ./scripts/build-octobus-npm-packages.sh --dry-run
 
+      - name: Validate service packages
+        working-directory: services
+        run: npm run validate
+
       - name: Install SDK dependencies
         working-directory: sdk
         run: npm ci
@@ -132,6 +136,11 @@ jobs:
           cache: npm
           cache-dependency-path: sdk/package-lock.json
           registry-url: https://registry.npmjs.org
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
 
       - name: Validate tag
         id: release

@@ -1,0 +1,61 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "sangfor-sip",
+  "displayName": "Sangfor SIP",
+  "description": "OctoBus package for Sangfor SIP (Security Intelligence Platform): pull security events, risk assets/terminals, server/terminal inventory, IP groups, and vulnerability data (weak passwords, CVEs, plaintext transmission).",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/sangfor_sip.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "SANGFOR_SIP.SANGFOR_SIP/GetSecurityEvents": {
+          "name": "get-security-events",
+          "description": "Pull security events from Sangfor SIP within a time range."
+        },
+        "SANGFOR_SIP.SANGFOR_SIP/GetRiskBusiness": {
+          "name": "get-risk-business",
+          "description": "Pull risk business assets from Sangfor SIP within a time range."
+        },
+        "SANGFOR_SIP.SANGFOR_SIP/GetRiskTerminals": {
+          "name": "get-risk-terminals",
+          "description": "Pull risk terminal assets from Sangfor SIP within a time range."
+        },
+        "SANGFOR_SIP.SANGFOR_SIP/GetServers": {
+          "name": "get-servers",
+          "description": "Pull configured server asset records from Sangfor SIP within a time range."
+        },
+        "SANGFOR_SIP.SANGFOR_SIP/GetTerminals": {
+          "name": "get-terminals",
+          "description": "Pull terminal asset records from Sangfor SIP within a time range."
+        },
+        "SANGFOR_SIP.SANGFOR_SIP/GetIPGroups": {
+          "name": "get-ip-groups",
+          "description": "Pull monitored IP group records from Sangfor SIP within a time range."
+        },
+        "SANGFOR_SIP.SANGFOR_SIP/GetWeakPasswords": {
+          "name": "get-weak-passwords",
+          "description": "Pull weak password vulnerability records from Sangfor SIP within a time range."
+        },
+        "SANGFOR_SIP.SANGFOR_SIP/GetVulnerabilities": {
+          "name": "get-vulnerabilities",
+          "description": "Pull vulnerability (CVE/hole) records from Sangfor SIP within a time range."
+        },
+        "SANGFOR_SIP.SANGFOR_SIP/GetPlaintextTransmissions": {
+          "name": "get-plaintext-transmissions",
+          "description": "Pull plaintext transmission vulnerability records from Sangfor SIP within a time range."
+        }
+      }
+    }
+  }
+}

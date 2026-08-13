@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -35,7 +37,22 @@ type Options struct {
 	Reinstall bool                            `json:"reinstall"`
 	Build     string                          `json:"build"`
 	Recursive bool                            `json:"recursive"`
+	Upload    *UploadedSource                 `json:"-"`
 	Progress  func(ImportProgressEvent) error `json:"-"`
+}
+
+type UploadKind string
+
+const (
+	UploadKindDirectory UploadKind = "directory"
+	UploadKindArchive   UploadKind = "archive"
+	UploadKindNPMLocal  UploadKind = "npm-local"
+)
+
+type UploadedSource struct {
+	Kind          UploadKind
+	Path          string
+	DisplaySource string
 }
 
 type Result struct {
@@ -574,6 +591,9 @@ func (i *Importer) importServiceName(ctx context.Context, opts Options, manifest
 }
 
 func (i *Importer) prepareSource(ctx context.Context, opts Options, staging string) (preparedSource, error) {
+	if opts.Upload != nil {
+		return prepareUploadedSource(opts, staging)
+	}
 	source, serviceRoot, err := splitSourceServiceRoot(opts.Source)
 	if err != nil {
 		return preparedSource{}, err
@@ -587,6 +607,8 @@ func (i *Importer) prepareSource(ctx context.Context, opts Options, staging stri
 		prepared.PackageSource = sourceWithServiceRoot(prepared.PackageSource, serviceRoot)
 		prepared.ServiceRoot = serviceRoot
 		return prepared, nil
+	case sourceRemoteArchive:
+		return prepareRemoteArchiveSource(ctx, source, serviceRoot, staging)
 	case sourceHTTPSGit:
 		return i.prepareGitSource(ctx, opts.Source, staging)
 	case sourceUnsupportedGit:
@@ -636,6 +658,205 @@ func (i *Importer) prepareSource(ctx context.Context, opts Options, staging stri
 		return preparedSource{}, err
 	}
 	return preparedSource{ArtifactPath: artifactPath, PackageDir: packageDir, PackageSHA256: domain.HashBytes(b), PackageSource: sourceWithServiceRoot(source, serviceRoot), ServiceRoot: serviceRoot, BuildAllowed: info.IsDir()}, nil
+}
+
+func prepareUploadedSource(opts Options, staging string) (preparedSource, error) {
+	source, serviceRoot, err := splitSourceServiceRoot(opts.Source)
+	if err != nil {
+		return preparedSource{}, err
+	}
+	if !strings.HasPrefix(source, "client-upload:") {
+		return preparedSource{}, errors.New("uploaded package source must start with client-upload:")
+	}
+	if opts.Upload.Path == "" {
+		return preparedSource{}, errors.New("uploaded package path is required")
+	}
+	switch opts.Upload.Kind {
+	case UploadKindDirectory:
+		return prepareUploadedDirectorySource(opts.Upload.Path, source, serviceRoot, staging)
+	case UploadKindArchive:
+		return prepareUploadedArchiveSource(opts.Upload.Path, source, serviceRoot, staging)
+	case UploadKindNPMLocal:
+		if uploadedSourceHasArchiveSuffix(source) {
+			return prepareUploadedArchiveSource(opts.Upload.Path, source, serviceRoot, staging)
+		}
+		return prepareUploadedDirectorySource(opts.Upload.Path, source, serviceRoot, staging)
+	default:
+		return preparedSource{}, fmt.Errorf("unsupported uploaded source kind %q", opts.Upload.Kind)
+	}
+}
+
+func prepareUploadedDirectorySource(uploadPath, source, serviceRoot, staging string) (preparedSource, error) {
+	artifactPath := filepath.Join(staging, "package.tgz")
+	if err := copyFile(uploadPath, artifactPath, 0o644); err != nil {
+		return preparedSource{}, err
+	}
+	packageDir := filepath.Join(staging, "package")
+	if err := untarGz(artifactPath, staging); err != nil {
+		return preparedSource{}, err
+	}
+	if info, err := os.Stat(packageDir); err != nil {
+		return preparedSource{}, fmt.Errorf("uploaded directory package root missing: %w", err)
+	} else if !info.IsDir() {
+		return preparedSource{}, fmt.Errorf("uploaded directory package root %q is not a directory", filepath.Base(packageDir))
+	}
+	sha, err := hashFile(artifactPath)
+	if err != nil {
+		return preparedSource{}, err
+	}
+	return preparedSource{
+		ArtifactPath:  artifactPath,
+		PackageDir:    packageDir,
+		PackageSHA256: sha,
+		PackageSource: sourceWithServiceRoot(source, serviceRoot),
+		ServiceRoot:   serviceRoot,
+		BuildAllowed:  true,
+	}, nil
+}
+
+func prepareUploadedArchiveSource(uploadPath, source, serviceRoot, staging string) (preparedSource, error) {
+	artifactName, err := uploadedArchiveArtifactName(source)
+	if err != nil {
+		return preparedSource{}, err
+	}
+	artifactPath := filepath.Join(staging, artifactName)
+	if err := copyFile(uploadPath, artifactPath, 0o644); err != nil {
+		return preparedSource{}, err
+	}
+	packageDir := filepath.Join(staging, "package")
+	if strings.HasSuffix(artifactName, ".zip") {
+		err = unzip(artifactPath, packageDir)
+	} else {
+		err = untarGz(artifactPath, packageDir)
+	}
+	if err != nil {
+		return preparedSource{}, err
+	}
+	packageDir = normalizePackageDir(packageDir)
+	sha, err := hashFile(artifactPath)
+	if err != nil {
+		return preparedSource{}, err
+	}
+	return preparedSource{
+		ArtifactPath:  artifactPath,
+		PackageDir:    packageDir,
+		PackageSHA256: sha,
+		PackageSource: sourceWithServiceRoot(source, serviceRoot),
+		ServiceRoot:   serviceRoot,
+		BuildAllowed:  false,
+	}, nil
+}
+
+func uploadedArchiveArtifactName(source string) (string, error) {
+	lower := strings.ToLower(source)
+	if strings.HasSuffix(lower, ".zip") {
+		return "package.zip", nil
+	}
+	if strings.HasSuffix(lower, ".tgz") || strings.HasSuffix(lower, ".tar.gz") {
+		return "package.tgz", nil
+	}
+	return "", fmt.Errorf("unsupported uploaded archive source %q: must end with .tgz, .tar.gz, or .zip", source)
+}
+
+func uploadedSourceHasArchiveSuffix(source string) bool {
+	_, err := uploadedArchiveArtifactName(source)
+	return err == nil
+}
+
+func hashFile(path string) (string, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return domain.HashBytes(b), nil
+}
+
+func prepareRemoteArchiveSource(ctx context.Context, source, serviceRoot, staging string) (preparedSource, error) {
+	artifactName, err := remoteArchiveArtifactName(source)
+	if err != nil {
+		return preparedSource{}, err
+	}
+	artifactPath := filepath.Join(staging, artifactName)
+	if err := downloadRemoteArchive(ctx, source, artifactPath); err != nil {
+		return preparedSource{}, err
+	}
+	packageDir := filepath.Join(staging, "package")
+	if strings.HasSuffix(artifactName, ".zip") {
+		err = unzip(artifactPath, packageDir)
+	} else {
+		err = untarGz(artifactPath, packageDir)
+	}
+	if err != nil {
+		return preparedSource{}, err
+	}
+	packageDir = normalizePackageDir(packageDir)
+	b, err := os.ReadFile(artifactPath)
+	if err != nil {
+		return preparedSource{}, err
+	}
+	return preparedSource{
+		ArtifactPath:  artifactPath,
+		PackageDir:    packageDir,
+		PackageSHA256: domain.HashBytes(b),
+		PackageSource: sourceWithServiceRoot(redactedRemoteArchiveSource(source), serviceRoot),
+		ServiceRoot:   serviceRoot,
+		BuildAllowed:  false,
+	}, nil
+}
+
+func remoteArchiveArtifactName(source string) (string, error) {
+	u, err := url.Parse(source)
+	if err != nil {
+		return "", fmt.Errorf("invalid remote package source %q: %w", redactedRemoteArchiveSource(source), err)
+	}
+	path := strings.ToLower(u.Path)
+	if strings.HasSuffix(path, ".zip") {
+		return "package.zip", nil
+	}
+	if strings.HasSuffix(path, ".tgz") || strings.HasSuffix(path, ".tar.gz") {
+		return "package.tgz", nil
+	}
+	return "", fmt.Errorf("unsupported remote package source %q: must end with .tgz, .tar.gz, or .zip", redactedRemoteArchiveSource(source))
+}
+
+func downloadRemoteArchive(ctx context.Context, source, artifactPath string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, source, nil)
+	if err != nil {
+		return fmt.Errorf("download remote package %q: %w", redactedRemoteArchiveSource(source), err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("download remote package %q: %w", redactedRemoteArchiveSource(source), err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("download remote package %q: HTTP %d", redactedRemoteArchiveSource(source), resp.StatusCode)
+	}
+	if err := os.MkdirAll(filepath.Dir(artifactPath), 0o755); err != nil {
+		return err
+	}
+	out, err := os.OpenFile(artifactPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	_, copyErr := io.Copy(out, resp.Body)
+	closeErr := out.Close()
+	if copyErr != nil {
+		return copyErr
+	}
+	return closeErr
+}
+
+func redactedRemoteArchiveSource(source string) string {
+	u, err := url.Parse(source)
+	if err != nil {
+		return "<invalid remote package source>"
+	}
+	u.User = nil
+	u.RawQuery = ""
+	u.ForceQuery = false
+	u.Fragment = ""
+	return u.String()
 }
 
 func splitSourceServiceRoot(raw string) (string, string, error) {

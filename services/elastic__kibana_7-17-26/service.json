@@ -1,0 +1,45 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "elastic-kibana-7-17-26",
+  "displayName": "Elastic Kibana 7.17.26",
+  "description": "OctoBus package for Kibana 7.17.26 status, saved object, dashboard, and alerting rule queries.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/elastic_kibana_7_17_26.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Elastic_Kibana_7_17_26.Elastic_Kibana_7_17_26/CheckStatus": {
+          "name": "check-status",
+          "description": "Check Kibana status."
+        },
+        "Elastic_Kibana_7_17_26.Elastic_Kibana_7_17_26/CallKibanaAPI": {
+          "name": "call-kibana-api",
+          "description": "Call any Kibana REST API path."
+        },
+        "Elastic_Kibana_7_17_26.Elastic_Kibana_7_17_26/FindSavedObjects": {
+          "name": "find-saved-objects",
+          "description": "Find Kibana saved objects."
+        },
+        "Elastic_Kibana_7_17_26.Elastic_Kibana_7_17_26/ListDashboards": {
+          "name": "list-dashboards",
+          "description": "List Kibana dashboards."
+        },
+        "Elastic_Kibana_7_17_26.Elastic_Kibana_7_17_26/FindRules": {
+          "name": "find-rules",
+          "description": "Find Kibana alerting rules."
+        }
+      }
+    }
+  }
+}

@@ -1,31 +1,37 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "additionalProperties": true,
+  "additionalProperties": false,
   "properties": {
     "webhook_url": {
       "type": "string",
-      "description": "DingTalk custom robot webhook URL with access_token."
+      "deprecated": true,
+      "description": "Deprecated fallback for the DingTalk custom robot webhook URL. Prefer secret.webhook_url."
     },
     "webhookUrl": {
       "type": "string",
-      "description": "Alias for webhook_url."
+      "deprecated": true,
+      "description": "Deprecated fallback alias for webhook_url. Prefer secret.webhook_url."
     },
     "webhook": {
       "type": "string",
-      "description": "Alias for webhook_url."
+      "deprecated": true,
+      "description": "Deprecated fallback alias for webhook_url. Prefer secret.webhook_url."
     },
     "url": {
       "type": "string",
-      "description": "Alias for webhook_url."
+      "deprecated": true,
+      "description": "Deprecated fallback alias for webhook_url. Prefer secret.webhook_url."
     },
     "secret": {
       "type": "string",
-      "description": "DingTalk signing secret. Prefer secret.secret for new instances."
+      "deprecated": true,
+      "description": "Deprecated fallback for the DingTalk signing secret. Prefer secret.secret."
     },
     "dingding_secret": {
       "type": "string",
-      "description": "Legacy alias for secret. Prefer secret.dingding_secret for new instances."
+      "deprecated": true,
+      "description": "Deprecated fallback alias for the DingTalk signing secret. Prefer secret.secret."
     },
     "timeoutMs": {
       "type": "integer",

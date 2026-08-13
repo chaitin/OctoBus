@@ -18,9 +18,9 @@ enum OperationStatus {
 }
 
 message Credential {
-  string base_url = 1;
-  string username = 2;
-  string password_sha256 = 3;
+  string base_url = 1 [deprecated = true];
+  string username = 2 [deprecated = true];
+  string password_sha256 = 3 [deprecated = true];
   google.protobuf.BoolValue skip_tls_verify = 4;
   google.protobuf.Struct extra = 5;
 }
@@ -45,7 +45,7 @@ message UnblockSettings {
 
 message BlockIPRequest {
   repeated string ip_list = 1;
-  Credential credential = 2;
+  Credential credential = 2 [deprecated = true];
   AddressObjectSettings address_object = 3;
   BlacklistSettings blacklist = 4;
   google.protobuf.BoolValue logout = 5;
@@ -54,13 +54,13 @@ message BlockIPRequest {
 message BlockIPResponse {
   OperationStatus status = 1;
   repeated string blocked_ips = 2;
-  string authorization = 3;
-  string sid = 4;
+  string authorization = 3 [deprecated = true];
+  string sid = 4 [deprecated = true];
 }
 
 message UnblockIPRequest {
   repeated string ip_list = 1;
-  Credential credential = 2;
+  Credential credential = 2 [deprecated = true];
   BlacklistSettings blacklist = 3;
   UnblockSettings unblock = 4;
   google.protobuf.BoolValue logout = 5;
@@ -69,6 +69,6 @@ message UnblockIPRequest {
 message UnblockIPResponse {
   OperationStatus status = 1;
   repeated string unblocked_ips = 2;
-  string authorization = 3;
-  string sid = 4;
+  string authorization = 3 [deprecated = true];
+  string sid = 4 [deprecated = true];
 }

@@ -26,12 +26,16 @@ const nextInstanceId = () => `inst-${++instanceSeq}`;
 const buildCtx = (overrides = {}) => ({
   bindings: {
     host: 'https://203.0.113.10:8443/',
-    user: 'api_user',
-    password: 'SuperSecret!',
     ...(overrides.bindings || {}),
   },
-  config: overrides.config || {},
-  secret: overrides.secret || {},
+  config: {
+    user: 'api_user',
+    ...(overrides.config || {}),
+  },
+  secret: {
+    password: 'SuperSecret!',
+    ...(overrides.secret || {}),
+  },
   limits: { timeoutMs: 10_000, ...(overrides.limits || {}) },
   meta: { instance_id: overrides.instanceId || nextInstanceId(), request_id: 'req-1', ...(overrides.meta || {}) },
   req: overrides.req || {},
@@ -75,15 +79,16 @@ test('Login uses bindings credentials and caches token for later query', async (
 
   assert.equal(loginCaptured.url, 'https://203.0.113.10:8443/UMC/restful/token/getRestfulInterfaceToken');
   assert.equal(loginCaptured.init.method, 'POST');
-  assert.equal(loginCaptured.init.timeoutMs, 10_000);
+  assert.equal(Object.hasOwn(loginCaptured.init, 'timeoutMs'), false);
+  assert.ok(loginCaptured.init.signal instanceof AbortSignal);
   assert.equal(loginCaptured.init.headers['Content-Type'], 'application/json');
   assert.deepEqual(JSON.parse(loginCaptured.init.body), {
     userName: 'api_user',
     secretKey: 'SuperSecret!',
   });
   assert.equal(loginRes.http_status, 200);
-  assert.match(loginRes.raw_body, /token-123/);
-  assert.equal(loginRes.raw_json.structValue.fields.token.stringValue, 'token-123');
+  assert.equal(loginRes.raw_body, '');
+  assert.equal(loginRes.raw_json, undefined);
   assert.equal(_test.getSession(ctx, 'https://203.0.113.10:8443').token, 'token-123');
 
   const query = rpcdef(buildCtx({ instanceId, req: { page: 2, size: 10 } }))[QUERY_BLACKLIST_PATH];
@@ -95,7 +100,7 @@ test('Login uses bindings credentials and caches token for later query', async (
   assert.deepEqual(JSON.parse(queryCaptured.init.body), { page: 2, size: 10 });
 });
 
-test('business RPC rejects when session is missing and accepts direct request token', async () => {
+test('business RPC rejects when session is missing and ignores direct request token', async () => {
   await assert.rejects(() => rpcdef(buildCtx())[QUERY_BLACKLIST_PATH](), (err) => {
     assert.ok(err instanceof GrpcError);
     assert.equal(err.code, grpcStatus.FAILED_PRECONDITION);
@@ -104,17 +109,12 @@ test('business RPC rejects when session is missing and accepts direct request to
     return true;
   });
 
-  let captured;
   globalThis.fetch = async (url, init) => {
-    captured = { url, init };
+    assert.fail(`request token should not trigger upstream call: ${url} ${JSON.stringify(init)}`);
     return jsonResponse(200, { code: 0, details: [] });
   };
 
-  const res = await rpcdef(buildCtx({ req: { token: 'token-direct', page: 1, size: 10 } }))[QUERY_BLACKLIST_PATH]();
-  assert.equal(res.http_status, 200);
-  assert.equal(captured.url, 'https://203.0.113.10:8443/UMC/restful/api/getBlackAndWhiteListStrategy');
-  assert.equal(captured.init.headers.token, 'token-direct');
-  assert.deepEqual(JSON.parse(captured.init.body), { page: 1, size: 10 });
+  await assert.rejects(() => rpcdef(buildCtx({ req: { token: 'token-direct', page: 1, size: 10 } }))[QUERY_BLACKLIST_PATH](), /call Login first/);
 });
 
 test('QueryBlacklist applies default pagination and optional filters', async () => {
@@ -235,10 +235,10 @@ test('HTTP 500 JSON and non-JSON responses are preserved as OK payloads', async 
   const queryRes = await rpcdef(buildCtx({ instanceId }))[QUERY_BLACKLIST_PATH]();
 
   assert.equal(addRes.http_status, 500);
-  assert.equal(addRes.raw_body, JSON.stringify({ code: 7, message: 'duplicate' }));
-  assert.equal(addRes.raw_json.structValue.fields.code.numberValue, 7);
+  assert.equal(addRes.raw_body, '');
+  assert.equal(addRes.raw_json, undefined);
   assert.equal(queryRes.http_status, 404);
-  assert.equal(queryRes.raw_body, '<html>not found</html>');
+  assert.equal(queryRes.raw_body, '');
   assert.equal(queryRes.raw_json, undefined);
 });
 
@@ -259,8 +259,7 @@ test('cached token is cleared on cached-token 401 but direct token is not cached
   await rpcdef(buildCtx({ instanceId }))[QUERY_BLACKLIST_PATH]();
   assert.equal(_test.getSession(ctx, 'https://203.0.113.10:8443'), undefined);
 
-  const directRes = await rpcdef(buildCtx({ req: { token: 'direct' } }))[QUERY_BLACKLIST_PATH]();
-  assert.equal(directRes.http_status, 401);
+  await assert.rejects(() => rpcdef(buildCtx({ req: { token: 'direct' } }))[QUERY_BLACKLIST_PATH](), /call Login first/);
 });
 
 test('network failures and missing config surface as gRPC errors', async () => {
@@ -276,8 +275,8 @@ test('network failures and missing config surface as gRPC errors', async () => {
   });
 
   await assert.rejects(() => rpcdef(buildCtx({ bindings: { host: 'ftp://bad' } }))[LOGIN_PATH](), /host is required/);
-  await assert.rejects(() => rpcdef(buildCtx({ bindings: { user: '', username: '' } }))[LOGIN_PATH](), /user\/username is required/);
-  await assert.rejects(() => rpcdef(buildCtx({ bindings: { password: '' } }))[LOGIN_PATH](), /password is required/);
+  await assert.rejects(() => rpcdef(buildCtx({ config: { user: '', username: '' }, secret: { user: '', username: '' } }))[LOGIN_PATH](), /user\/username is required/);
+  await assert.rejects(() => rpcdef(buildCtx({ secret: { password: '', pass: '', secret: '' } }))[LOGIN_PATH](), /password is required/);
 });
 
 test('invalid IPs and oversized batches are rejected locally', () => {
@@ -312,11 +311,16 @@ test('SDK handlers merge config and secret fields', async () => {
   });
 
   assert.equal(captured.url, 'https://umc.example.local/UMC/restful/token/getRestfulInterfaceToken');
-  assert.equal(captured.init.timeoutMs, 3100);
-  assert.equal(captured.init.skipTlsVerify, true);
+  assert.equal(Object.hasOwn(captured.init, 'timeoutMs'), false);
+  assert.ok(captured.init.signal instanceof AbortSignal);
+  assert.equal(Object.hasOwn(captured.init, 'skipTlsVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'tlsInsecureSkipVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'insecureSkipVerify'), false);
+  assert.ok(captured.init.dispatcher);
   assert.equal(captured.init.headers['X-Trace'], 'abc');
   assert.deepEqual(JSON.parse(captured.init.body), { userName: 'secret_user', secretKey: 'secret_password' });
-  assert.equal(result.raw_json.structValue.fields.token.stringValue, 'token-secret');
+  assert.equal(result.raw_body, '');
+  assert.equal(result.raw_json, undefined);
 });
 
 test('SDK handler map covers all migrated RPC methods', async () => {
@@ -334,11 +338,13 @@ test('SDK handler map covers all migrated RPC methods', async () => {
     },
   };
 
+  _test.setSession({ meta: { instance_id: 'default-instance' } }, 'https://203.0.113.10:8443', { token: 'cached' });
   await handlers[METHOD_QUERY_BLACKLIST_FULL]({ ...ctx, req: { token: 'direct', page: 2 } });
   await handlers[METHOD_ADD_BLACKLIST_FULL]({ ...ctx, req: { token: 'direct', ips: ['203.0.113.10'] } });
   await handlers[METHOD_DELETE_BLACKLIST_FULL]({ ...ctx, request: { token: 'direct', ips: ['203.0.113.10'] } });
 
   assert.equal(calls.length, 3);
+  assert.deepEqual(calls.map((call) => call.init.headers.token), ['cached', 'cached', 'cached']);
   assert.ok(service);
 });
 

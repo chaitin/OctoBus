@@ -27,16 +27,19 @@ const nextInst = () => `inst-${++instSeq}`;
 const buildCtx = (overrides = {}) => ({
   bindings: {
     host: 'http://device.example:8443',
-    user: 'api_user',
-    password: 'SuperSecret!',
     ...(overrides.bindings || {}),
   },
   config: overrides.config || {},
-  secret: overrides.secret || {},
+  secret: { user: 'api_user', password: 'SuperSecret!', ...(overrides.secret || {}) },
   limits: { timeoutMs: 10_000, ...(overrides.limits || {}) },
   meta: { instance_id: overrides.instance_id || nextInst(), request_id: 'req' },
   req: overrides.req || {},
 });
+
+const callHandler = (method, request = {}, ctx = {}) => {
+  const handler = handlers[method];
+  return handler({ ...ctx, request });
+};
 
 const makeResponse = ({ status = 200, body = '{}', setCookies, headers } = {}) => ({
   status,
@@ -89,12 +92,12 @@ test('Login rejects missing host, username, and password', async () => {
     (err) => assert.match(err.message, /host is required/),
   );
   await expectGrpcError(
-    () => rpcdef(buildCtx({ req: { username: '', password: '' }, bindings: { user: '', password: '' } }))[LOGIN_PATH](),
+    () => rpcdef(buildCtx({ req: { username: '', password: '' }, secret: { user: '', username: '', password: 'pw' } }))[LOGIN_PATH](),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /username is required/),
   );
   await expectGrpcError(
-    () => rpcdef(buildCtx({ req: { username: 'api_user', password: '' }, bindings: { password: '' } }))[LOGIN_PATH](),
+    () => rpcdef(buildCtx({ req: { username: 'api_user', password: '' }, secret: { password: '' } }))[LOGIN_PATH](),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /password is required/),
   );
@@ -131,19 +134,23 @@ test('Login stores cookie and keys; BlockIP sends Cookie, sign query, headers, T
 
   const loginCtx = buildCtx({
     instance_id: inst,
-    req: { username: 'api_user', password: 'SuperSecret!', lang: 'en_US' },
+    req: { username: 'ignored-user', password: 'ignored-password', lang: 'en_US' },
     bindings: { headers: { 'X-Device': 'demo' }, skipTlsVerify: true },
     limits: { timeoutMs: undefined },
   });
   const loginRes = await rpcdef(loginCtx)[LOGIN_PATH]();
 
   assert.equal(loginRes.code, 2000);
-  assert.equal(loginRes.api_key, 'ak');
-  assert.equal(loginRes.security_key, 'sk');
-  assert.equal(calls[0].init.timeoutMs, 1500);
+  assert.equal(loginRes.api_key, '');
+  assert.equal(loginRes.security_key, '');
+  assert.equal(loginRes.raw_body, '');
+  assert.equal(loginRes.raw_json, undefined);
+  assert.ok(calls[0].init.signal instanceof AbortSignal);
+  assert.equal('timeoutMs' in calls[0].init, false);
   assert.equal(calls[0].init.headers['Content-Type'], 'application/json');
   assert.equal(calls[0].init.headers['X-Device'], 'demo');
-  assert.equal(calls[0].init.insecureSkipVerify, true);
+  assert.ok(calls[0].init.dispatcher);
+  assert.equal('insecureSkipVerify' in calls[0].init, false);
   assert.deepEqual(JSON.parse(calls[0].init.body), { username: 'api_user', password: 'SuperSecret!', lang: 'en_US' });
 
   const blockCtx = buildCtx({
@@ -182,7 +189,7 @@ test('Login stores cookie and keys; BlockIP sends Cookie, sign query, headers, T
   assert.match(url.searchParams.get('sign'), /^[0-9a-f]{64}$/);
 });
 
-test('parseable HTTP errors return OK payloads with status and raw fields', async () => {
+test('parseable HTTP errors return OK payloads with sanitized raw fields', async () => {
   const inst = nextInst();
   let step = 0;
   setFetch(async () => {
@@ -197,12 +204,13 @@ test('parseable HTTP errors return OK payloads with status and raw fields', asyn
   });
 
   await rpcdef(buildCtx({ instance_id: inst }))[LOGIN_PATH]();
-  const result = await handlers['Nsfocus_NIPS_V56R11.Nsfocus_NIPS_V56R11/BlockIP']({ ip: '203.0.113.10' }, buildCtx({ instance_id: inst }));
+  const result = await callHandler('Nsfocus_NIPS_V56R11.Nsfocus_NIPS_V56R11/BlockIP', { ip: '203.0.113.10' }, buildCtx({ instance_id: inst }));
 
   assert.equal(result.http_status, 500);
   assert.equal(result.code, 7000);
   assert.equal(result.message, 'duplicate');
-  assert.equal(result.raw_body, '{"code":7000,"message":"duplicate","data":null}');
+  assert.equal(result.raw_body, '');
+  assert.equal(result.raw_json, undefined);
 });
 
 test('network, empty, non-json, and text read failures map to legacy errors', async () => {
@@ -336,7 +344,7 @@ test('config and secret aliases supply bindings, timeout, and headers', async ()
     });
   });
 
-  const result = await handlers[METHOD_LOGIN_FULL]({}, {
+  const result = await callHandler(METHOD_LOGIN_FULL, {}, {
     config: {
       base_url: 'http://config.example/',
       timeout_ms: 2500,
@@ -349,7 +357,8 @@ test('config and secret aliases supply bindings, timeout, and headers', async ()
 
   assert.equal(result.code, 2000);
   assert.equal(captured.url, 'http://config.example/api/system/account/login/login');
-  assert.equal(captured.init.timeoutMs, 2500);
+  assert.ok(captured.init.signal instanceof AbortSignal);
+  assert.equal('timeoutMs' in captured.init, false);
   assert.equal(captured.init.headers['X-Config'], 'yes');
   assert.deepEqual(JSON.parse(captured.init.body), { username: 'secret-user', password: 'secret-pass', lang: 'zh_CN' });
 });
@@ -388,21 +397,25 @@ test('helpers cover scalar, URL, cookie, signing, response, and validation branc
   assert.equal(_test.resolveBaseUrl({ baseUrl: 'http://base.example/' }), 'http://base.example');
   assert.equal(_test.resolveBaseUrl({ rest_base_url: 'http://rest-snake.example/' }), 'http://rest-snake.example');
   assert.equal(_test.resolveBaseUrl({ base_url: 'http://base-snake.example/' }), 'http://base-snake.example');
+  assert.equal(_test.resolveBaseUrl({ host: { value: 'http://wrapped.example/' } }), 'http://wrapped.example');
   assert.equal(_test.resolveTimeoutMs({ limits: { timeoutMs: -1 }, bindings: { timeoutMs: 'bad' } }), 1500);
   assert.equal(_test.resolveTimeoutMs({ bindings: { timeout_ms: 321 } }), 321);
   assert.equal(_test.resolveTimeoutMs({ limits: {}, config: { timeoutMs: 222 } }), 222);
+  assert.equal(_test.resolveTimeoutMs({ limits: {}, config: { timeout_ms: 223 } }), 223);
   assert.equal(_test.toBoolean('on'), true);
   assert.equal(_test.toBoolean('off'), false);
+  assert.equal(_test.toBoolean(''), false);
+  assert.equal(_test.toBoolean('1'), true);
+  assert.equal(_test.toBoolean('0'), false);
   assert.equal(_test.toBoolean(true), true);
   assert.equal(_test.toBoolean(0), false);
+  assert.equal(_test.toBoolean(2), true);
   assert.equal(_test.toBoolean('maybe'), false);
   assert.equal(_test.toBoolean({ value: 1 }), true);
   assert.deepEqual(_test.buildTlsOptions({}), {});
-  assert.deepEqual(_test.buildTlsOptions({ tlsInsecureSkipVerify: 'yes' }), {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  });
+  assert.ok(_test.buildTlsOptions({ skipTlsVerify: true }).dispatcher);
+  assert.ok(_test.buildTlsOptions({ tlsInsecureSkipVerify: 'yes' }).dispatcher);
+  assert.ok(_test.buildTlsOptions({ insecureSkipVerify: 1 }).dispatcher);
   assert.equal(_test.isValidIPv4('01.1.1.1'), true);
   assert.equal(_test.isValidIPv4('1.1.1'), false);
   assert.equal(_test.isValidIPv4('1.1.1.999'), false);
@@ -421,11 +434,15 @@ test('helpers cover scalar, URL, cookie, signing, response, and validation branc
   });
   assert.equal(_test.appendQuery('http://x.test/a?b=1', { c: 'x y', d: '', e: null }), 'http://x.test/a?b=1&c=x%20y');
   assert.equal(_test.appendQuery('http://x.test/a', { d: '', e: null }), 'http://x.test/a');
+  assert.equal(_test.appendQuery('http://x.test/a', { ok: false, zero: 0 }), 'http://x.test/a?ok=false&zero=0');
   assert.match(_test.buildCtAbstract(), /^CT \d{2}:\d{2}:\d{2}$/);
   assert.equal(_test.joinCookieHeader(), '');
   assert.equal(_test.joinCookieHeader(['sid=abc; Path=/', '', ' token=def ; Secure']), 'sid=abc; token=def');
+  assert.equal(_test.joinCookieHeader(['; no-pair', 'sid=abc; Path=/']), 'sid=abc');
   assert.deepEqual(_test.getSetCookies({ headers: { getSetCookie: () => 'bad' } }), []);
+  assert.deepEqual(_test.getSetCookies({ headers: { getSetCookie: () => ['sid=abc'] } }), ['sid=abc']);
   assert.deepEqual(_test.getSetCookies({ headers: { get: () => 'sid=abc; Path=/' } }), ['sid=abc; Path=/']);
+  assert.deepEqual(_test.getSetCookies({ headers: { get: () => null } }), []);
   assert.deepEqual(_test.getSetCookies({}), []);
   assert.equal(_test.sha256Hex('abc'), 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
   assert.match(_test.buildSignQuery({ apiKey: 'ak', securityKey: 'sk' }, '/r').sign, /^[0-9a-f]{64}$/);
@@ -434,16 +451,8 @@ test('helpers cover scalar, URL, cookie, signing, response, and validation branc
     message: 'm',
     data: { listValue: { values: [{ stringValue: 'x' }] } },
     http_status: 201,
-    raw_body: '{"code":1}',
-    raw_json: {
-      structValue: {
-        fields: {
-          code: { stringValue: '1' },
-          message: { stringValue: 'm' },
-          data: { listValue: { values: [{ stringValue: 'x' }] } },
-        },
-      },
-    },
+    raw_body: '',
+    raw_json: undefined,
   });
   assert.equal(_test.errorWithCode('NOT_REAL', 'fallback').code, grpcStatus.UNKNOWN);
 });

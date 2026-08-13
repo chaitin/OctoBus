@@ -1,0 +1,73 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "nsfocus-ngfw-v60-9900",
+  "displayName": "NSFOCUS NGFW V60-9900",
+  "description": "OctoBus package for NSFOCUS Next-generation Firewall NETCONF over SSH system status, address group, block, and unblock operations.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/nsfocus_ngfw_v60_9900.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "nsfocus.ngfw.v60_9900.NSFOCUSNGFWService/GetSystemStatus": {
+          "name": "get-system-status",
+          "description": "Query NSFOCUS NGFW system base status."
+        },
+        "nsfocus.ngfw.v60_9900.NSFOCUSNGFWService/ListSecurityLogs": {
+          "name": "list-security-logs",
+          "description": "Read logs from the NETCONF Syslog log buffer."
+        },
+        "nsfocus.ngfw.v60_9900.NSFOCUSNGFWService/ListSecurityPolicies": {
+          "name": "list-security-policies",
+          "description": "Read IPv4 or IPv6 security policy rules."
+        },
+        "nsfocus.ngfw.v60_9900.NSFOCUSNGFWService/ListSecurityPolicyAddressObjects": {
+          "name": "list-security-policy-address-objects",
+          "description": "Read source and destination address groups referenced by security policy rules."
+        },
+        "nsfocus.ngfw.v60_9900.NSFOCUSNGFWService/CreateNodeObject": {
+          "name": "create-node-object",
+          "description": "Create a NETCONF IPv4 address group."
+        },
+        "nsfocus.ngfw.v60_9900.NSFOCUSNGFWService/DeleteNodeObject": {
+          "name": "delete-node-object",
+          "description": "Delete a NETCONF IPv4 address group by name."
+        },
+        "nsfocus.ngfw.v60_9900.NSFOCUSNGFWService/BlockIP": {
+          "name": "block-ip",
+          "description": "Add IP host entries into a NETCONF IPv4 address group."
+        },
+        "nsfocus.ngfw.v60_9900.NSFOCUSNGFWService/UnblockIP": {
+          "name": "unblock-ip",
+          "description": "Remove IP host entries from a NETCONF IPv4 address group."
+        },
+        "nsfocus.ngfw.v60_9900.NSFOCUSNGFWService/CreateIPv6AddressGroup": {
+          "name": "create-ipv6-address-group",
+          "description": "Create a NETCONF IPv6 address group."
+        },
+        "nsfocus.ngfw.v60_9900.NSFOCUSNGFWService/DeleteIPv6AddressGroup": {
+          "name": "delete-ipv6-address-group",
+          "description": "Delete a NETCONF IPv6 address group by name."
+        },
+        "nsfocus.ngfw.v60_9900.NSFOCUSNGFWService/AddIPv6ToGroup": {
+          "name": "add-ipv6-to-group",
+          "description": "Add IPv6 host entries into a NETCONF IPv6 address group."
+        },
+        "nsfocus.ngfw.v60_9900.NSFOCUSNGFWService/RemoveIPv6FromGroup": {
+          "name": "remove-ipv6-from-group",
+          "description": "Remove IPv6 host entries from a NETCONF IPv6 address group."
+        }
+      }
+    }
+  }
+}

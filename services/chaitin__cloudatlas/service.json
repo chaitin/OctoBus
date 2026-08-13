@@ -1,0 +1,73 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "cloudatlas",
+  "displayName": "CloudAtlas",
+  "description": "OctoBus package for CloudAtlas attack surface management and threat intelligence APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/cloudatlas.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "CloudAtlas.CloudAtlas/ListEnterpriseSubjects": { "name": "list-enterprise-subjects", "description": "List CloudAtlas enterprise subjects." },
+        "CloudAtlas.CloudAtlas/BatchCreateEnterpriseSubjects": { "name": "batch-create-enterprise-subjects", "description": "Batch create enterprise subjects." },
+        "CloudAtlas.CloudAtlas/BatchDeleteEnterpriseSubjects": { "name": "batch-delete-enterprise-subjects", "description": "Batch delete enterprise subjects." },
+        "CloudAtlas.CloudAtlas/ListKeywords": { "name": "list-keywords", "description": "List CloudAtlas keywords." },
+        "CloudAtlas.CloudAtlas/BatchCreateKeywords": { "name": "batch-create-keywords", "description": "Batch create keywords." },
+        "CloudAtlas.CloudAtlas/ListSeedDomains": { "name": "list-seed-domains", "description": "List CloudAtlas domain WHOIS seeds." },
+        "CloudAtlas.CloudAtlas/BatchCreateSeedDomains": { "name": "batch-create-seed-domains", "description": "Batch create domain WHOIS seeds." },
+        "CloudAtlas.CloudAtlas/ListSeedCerts": { "name": "list-seed-certs", "description": "List CloudAtlas certificate seeds." },
+        "CloudAtlas.CloudAtlas/ListSeedIcons": { "name": "list-seed-icons", "description": "List CloudAtlas website icon seeds." },
+        "CloudAtlas.CloudAtlas/ListSeedWebTitles": { "name": "list-seed-web-titles", "description": "List CloudAtlas website title seeds." },
+        "CloudAtlas.CloudAtlas/BatchUpdateSeeds": { "name": "batch-update-seeds", "description": "Batch update seed monitoring switch or confidence." },
+        "CloudAtlas.CloudAtlas/ListRootDomains": { "name": "list-root-domains", "description": "List CloudAtlas root domains." },
+        "CloudAtlas.CloudAtlas/BatchCreateRootDomains": { "name": "batch-create-root-domains", "description": "Batch create root domains." },
+        "CloudAtlas.CloudAtlas/ListSubdomains": { "name": "list-subdomains", "description": "List CloudAtlas subdomain intelligence." },
+        "CloudAtlas.CloudAtlas/ListDNS": { "name": "list-dns", "description": "List CloudAtlas DNS records." },
+        "CloudAtlas.CloudAtlas/ListIPs": { "name": "list-ips", "description": "List CloudAtlas IP addresses." },
+        "CloudAtlas.CloudAtlas/BatchCreateIPs": { "name": "batch-create-ips", "description": "Batch create IP addresses." },
+        "CloudAtlas.CloudAtlas/ListAssetCerts": { "name": "list-asset-certs", "description": "List CloudAtlas asset certificates." },
+        "CloudAtlas.CloudAtlas/BatchUpdateAssetStatus": { "name": "batch-update-asset-status", "description": "Batch update asset status." },
+        "CloudAtlas.CloudAtlas/BatchDeleteAssets": { "name": "batch-delete-assets", "description": "Batch delete assets." },
+        "CloudAtlas.CloudAtlas/ListPorts": { "name": "list-ports", "description": "List CloudAtlas port services." },
+        "CloudAtlas.CloudAtlas/ListOpenPorts": { "name": "list-open-ports", "description": "List CloudAtlas full open ports." },
+        "CloudAtlas.CloudAtlas/ListWebEntities": { "name": "list-web-entities", "description": "List CloudAtlas web entities." },
+        "CloudAtlas.CloudAtlas/ListWebPaths": { "name": "list-web-paths", "description": "List CloudAtlas web paths." },
+        "CloudAtlas.CloudAtlas/ListWebFingerprints": { "name": "list-web-fingerprints", "description": "List CloudAtlas web fingerprints." },
+        "CloudAtlas.CloudAtlas/ListCrawlerData": { "name": "list-crawler-data", "description": "List CloudAtlas crawler data." },
+        "CloudAtlas.CloudAtlas/ListVulnerabilities": { "name": "list-vulnerabilities", "description": "List CloudAtlas vulnerabilities." },
+        "CloudAtlas.CloudAtlas/BatchUpdateVulnStatus": { "name": "batch-update-vuln-status", "description": "Batch update vulnerability status or recheck." },
+        "CloudAtlas.CloudAtlas/ListHighRiskApps": { "name": "list-high-risk-apps", "description": "List CloudAtlas high-risk applications." },
+        "CloudAtlas.CloudAtlas/GetHighRiskAppFingers": { "name": "get-high-risk-app-fingers", "description": "Get high-risk application associated fingerprints." },
+        "CloudAtlas.CloudAtlas/ListHighRiskServices": { "name": "list-high-risk-services", "description": "List CloudAtlas high-risk services." },
+        "CloudAtlas.CloudAtlas/ListVendors": { "name": "list-vendors", "description": "List CloudAtlas vendors." },
+        "CloudAtlas.CloudAtlas/ListProducts": { "name": "list-products", "description": "List CloudAtlas products." },
+        "CloudAtlas.CloudAtlas/ListVulnSubjects": { "name": "list-vuln-subjects", "description": "List CloudAtlas vulnerability subjects." },
+        "CloudAtlas.CloudAtlas/ListKBVulns": { "name": "list-kb-vulns", "description": "List CloudAtlas knowledge base vulnerabilities." },
+        "CloudAtlas.CloudAtlas/ListMonitoringRules": { "name": "list-monitoring-rules", "description": "List CloudAtlas DRPS monitoring rules." },
+        "CloudAtlas.CloudAtlas/BatchCreateMonitoringRules": { "name": "batch-create-monitoring-rules", "description": "Batch create monitoring rules." },
+        "CloudAtlas.CloudAtlas/ListGithubLeaks": { "name": "list-github-leaks", "description": "List CloudAtlas GitHub leak data." },
+        "CloudAtlas.CloudAtlas/ListDiskLeaks": { "name": "list-disk-leaks", "description": "List CloudAtlas disk leak data." },
+        "CloudAtlas.CloudAtlas/ListDocLeaks": { "name": "list-doc-leaks", "description": "List CloudAtlas document leak data." },
+        "CloudAtlas.CloudAtlas/ListDarknetIntel": { "name": "list-darknet-intel", "description": "List CloudAtlas darknet intelligence." },
+        "CloudAtlas.CloudAtlas/ListStolenData": { "name": "list-stolen-data", "description": "List CloudAtlas stolen data." },
+        "CloudAtlas.CloudAtlas/ListEmailLeaks": { "name": "list-email-leaks", "description": "List CloudAtlas email leaks." },
+        "CloudAtlas.CloudAtlas/ListMobileApps": { "name": "list-mobile-apps", "description": "List CloudAtlas mobile applications." },
+        "CloudAtlas.CloudAtlas/ListSocialMedia": { "name": "list-social-media", "description": "List CloudAtlas social media accounts." },
+        "CloudAtlas.CloudAtlas/ListTaskSchedules": { "name": "list-task-schedules", "description": "List CloudAtlas task schedules." },
+        "CloudAtlas.CloudAtlas/CreateTaskSchedule": { "name": "create-task-schedule", "description": "Create a task schedule." },
+        "CloudAtlas.CloudAtlas/ListTaskInstances": { "name": "list-task-instances", "description": "List CloudAtlas task instances." },
+        "CloudAtlas.CloudAtlas/CreateTaskInstance": { "name": "create-task-instance", "description": "Create and run a task instance." },
+        "CloudAtlas.CloudAtlas/ListSpaces": { "name": "list-spaces", "description": "List CloudAtlas spaces." },
+        "CloudAtlas.CloudAtlas/ListTags": { "name": "list-tags", "description": "List CloudAtlas tags." },
+        "CloudAtlas.CloudAtlas/ListBusinessUnits": { "name": "list-business-units", "description": "List CloudAtlas business units." }
+      }
+    }
+  }
+}

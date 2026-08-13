@@ -20,14 +20,19 @@ const validReq = {
   is_global: true,
 };
 
+let activeProxy;
+
+const createProxy = () => ({
+  toGrpc: (cfg) => ({ kind: 'proxy.toGrpc', ...cfg }),
+});
+
 const withProxy = () => {
-  globalThis.proxy = {
-    toGrpc: (cfg) => ({ kind: 'proxy.toGrpc', ...cfg }),
-  };
+  activeProxy = createProxy();
+  return activeProxy;
 };
 
 const withoutProxy = () => {
-  delete globalThis.proxy;
+  activeProxy = undefined;
 };
 
 const buildCtx = (overrides = {}) => ({
@@ -37,7 +42,15 @@ const buildCtx = (overrides = {}) => ({
   meta: {},
   limits: { ...(overrides.limits || {}) },
   req: { ...validReq, ...(overrides.req || {}) },
+  ...(Object.prototype.hasOwnProperty.call(overrides, 'request') ? { request: overrides.request } : {}),
+  ...(Object.prototype.hasOwnProperty.call(overrides, 'proxy') ? { proxy: overrides.proxy } : { proxy: activeProxy ?? createProxy() }),
 });
+
+const callHandler = (method, ctx = {}) => {
+  const handler = handlers[method];
+  const callCtx = Object.prototype.hasOwnProperty.call(ctx, 'proxy') ? ctx : { ...ctx, proxy: activeProxy ?? createProxy() };
+  return handler(callCtx);
+};
 
 test.afterEach(() => {
   withoutProxy();
@@ -91,8 +104,8 @@ test('preserves a leading slash and falls back to default timeout', () => {
 test('returns validation-mode proxy mapping for empty validation probes', () => {
   withProxy();
 
-  const action = rpcdef({ req: {}, limits: { timeoutMs: 9000 } })[LOCAL_METHOD];
-  const defaultCtxAction = rpcdef()[LOCAL_METHOD];
+  const action = rpcdef({ proxy: withProxy(), req: {}, limits: { timeoutMs: 9000 } })[LOCAL_METHOD];
+  const defaultCtxAction = rpcdef({ proxy: withProxy() })[LOCAL_METHOD];
 
   assert.equal(action.kind, 'proxy.toGrpc');
   assert.equal(action.target, '0.0.0.0:0');
@@ -106,6 +119,7 @@ test('buildProxyAction supports wrapped values used by SDK generated inputs', ()
   withProxy();
 
   const action = _test.buildProxyAction({
+    proxy: withProxy(),
     req: {
       target: { value: 'wrapped.example:50053' },
       method: { value: 'wrapped.Service/EliminateFalsePositive' },
@@ -126,7 +140,7 @@ test('buildProxyAction supports wrapped values used by SDK generated inputs', ()
 test('SDK handler resolves config and binding defaults', () => {
   withProxy();
 
-  const action = handlers[METHOD_ELIMINATE_FALSE_POSITIVE_FULL]({
+  const action = callHandler(METHOD_ELIMINATE_FALSE_POSITIVE_FULL, {
     config: {
       target: 'config.example:50053',
       method: 'safeline.eliminate.EliminateService/EliminateFalsePositive',
@@ -143,7 +157,7 @@ test('SDK handler resolves config and binding defaults', () => {
   assert.deepEqual(action.request, { event_id: 'ev-config', is_global: false });
   assert.equal(action.timeoutMs, 2500);
 
-  const bindingAction = handlers[METHOD_ELIMINATE_FALSE_POSITIVE_FULL]({
+  const bindingAction = callHandler(METHOD_ELIMINATE_FALSE_POSITIVE_FULL, {
     bindings: {
       upstream_target: 'binding.example:50053',
       upstream_method: '/custom.Service/EliminateFalsePositive',
@@ -160,7 +174,7 @@ test('SDK handler resolves config and binding defaults', () => {
   assert.deepEqual(bindingAction.request, { event_id: 'ev-binding', is_global: true });
   assert.equal(bindingAction.timeoutMs, 3200);
 
-  const camelAliasAction = handlers[METHOD_ELIMINATE_FALSE_POSITIVE_FULL]({
+  const camelAliasAction = callHandler(METHOD_ELIMINATE_FALSE_POSITIVE_FULL, {
     config: {
       upstreamTarget: 'alias.example:50053',
       upstreamMethod: 'alias.Service/EliminateFalsePositive',
@@ -181,7 +195,7 @@ test('SDK handler resolves config and binding defaults', () => {
 test('request values take precedence over configured defaults', () => {
   withProxy();
 
-  const action = handlers[METHOD_ELIMINATE_FALSE_POSITIVE_FULL]({
+  const action = callHandler(METHOD_ELIMINATE_FALSE_POSITIVE_FULL, {
     config: {
       target: 'config.example:50053',
       method: '/config.Method/Call',
@@ -206,11 +220,11 @@ test('service wrapper exposes the SDK handler map', () => {
 test('throws failed precondition when proxy.toGrpc is unavailable', () => {
   withoutProxy();
 
-  assert.throws(() => rpcdef(buildCtx()), (err) => {
+  assert.throws(() => rpcdef(buildCtx({ proxy: null })), (err) => {
     assert.ok(err instanceof GrpcError);
     assert.equal(err.code, grpcStatus.FAILED_PRECONDITION);
     assert.equal(err.legacyCode, 'FAILED_PRECONDITION');
-    assert.match(err.message, /global proxy\.toGrpc is required/);
+    assert.match(err.message, /ctx\.proxy\.toGrpc is required/);
     return true;
   });
 });
@@ -233,8 +247,7 @@ test('helper utilities unwrap SDK values and merge binding sources', () => {
   });
   assert.equal(_test.isValidationMode({ req: { event_id: 'ev-1' } }), false);
   assert.equal(_test.isValidationMode({ req: { unrelated: 'value' } }), true);
-  withProxy();
-  assert.equal(_test.getProxyToGrpc()({ target: 'direct' }).target, 'direct');
+  assert.equal(_test.getProxyToGrpc({ proxy: withProxy() })({ target: 'direct' }).target, 'direct');
   assert.equal(typeof _test.buildProxyAction, 'function');
   assert.deepEqual(_test.resolveCallContext({
     request: { upstream_target: 'request-alias', upstream_method: 'request.Method/Call' },

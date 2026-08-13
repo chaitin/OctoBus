@@ -5,8 +5,16 @@ This package preserves legacy gRPC package and method names where applicable.
 Import it into OctoBus with:
 
 ```bash
-octobus service import --id dptech-eds ./services//dptech__eds
+octobus service import --id dptech-eds ./services/dptech__eds
 ```
+
+## Service Metadata
+
+- Vendor/product/version: DPtech EDS blacklist/address-group API.
+- Service name: `dptech-eds`.
+- Service dir: `services/dptech__eds`.
+- Runtime mode: `long-running`.
+- Runtime inspect: `node bin/dptech-eds.js --runtime inspect --json`.
 
 ## Package Files
 
@@ -46,8 +54,8 @@ Use `secret.password`, `secret.pass`, or `secret.secret` for the Basic Auth pass
 
 ## RPC Methods
 
-- `DPtech_EDS.DPtech_EDS/BatchBlockIPs`
-- `DPtech_EDS.DPtech_EDS/BatchUnblockIPs`
+- `DPtech_EDS.DPtech_EDS/BatchBlockIPs` - write, adds IPv4/IPv6 addresses to one or more address groups.
+- `DPtech_EDS.DPtech_EDS/BatchUnblockIPs` - write, removes IPv4/IPv6 addresses from one or more address groups.
 
 ## Behavior Notes
 
@@ -59,6 +67,24 @@ Use `secret.password`, `secret.pass`, or `secret.secret` for the Basic Auth pass
 - Empty, non-JSON, or non-object HTTP 200 responses map to `FAILURE_CATEGORY_RESPONSE_REJECTED`.
 - HTTP 200 payloads with an `error` field map to `FAILURE_CATEGORY_DEVICE_REJECTED`.
 - Unblock responses containing not-found wording are treated as idempotent success.
+- `timeoutMs` is enforced with `AbortController`; `skipTlsVerify` uses a per-request undici dispatcher and does not change global TLS settings.
+- Authorization and password values are used only for Basic Auth request headers and are not returned in responses or structured error details.
+- Known limitation: this service reports per-IP result categories instead of failing the whole batch for individual device rejections.
+
+## OctoBus Usage
+
+```bash
+octobus service import --id dptech-eds ./services/dptech__eds
+octobus instance create dptech-eds-prod --service dptech-eds \
+  --config-json '{"host":"https://eds.example:8443","user":"api-user","timeoutMs":5000,"skipTlsVerify":false}' \
+  --secret-json '{"password":"REDACTED"}'
+octobus capset create eds-blacklist
+octobus capset add-instance eds-blacklist dptech-eds-prod
+
+curl -X POST http://127.0.0.1:9000/capsets/eds-blacklist/connect/dptech-eds-prod/DPtech_EDS.DPtech_EDS/BatchBlockIPs \
+  -H 'Content-Type: application/json' \
+  -d '{"request_id":"demo-1","groups":[{"address_group":"blocked","ip_addresses":["203.0.113.10"]}]}'
+```
 
 ## Local Checks
 

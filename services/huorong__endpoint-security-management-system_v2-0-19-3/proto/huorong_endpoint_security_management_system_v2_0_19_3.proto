@@ -1,0 +1,209 @@
+syntax = "proto3";
+
+package huorong.endpoint_security_management_system.v2_0_19_3;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
+
+option go_package = "miner/grpc-service/huorong/endpoint_security_management_system/v2_0_19_3";
+
+service HuorongEndpointSecurityManagementSystem {
+  // 获取全部终端分组
+  rpc ListGroups(ListGroupsRequest) returns (ListGroupsResponse) {}
+
+  // 查询在线终端 MAC 地址
+  rpc ListOnlineMacs(ListOnlineMacsRequest) returns (ListOnlineMacsResponse) {}
+
+  // 查询终端基础信息
+  rpc ListClients(ListClientsRequest) returns (ListClientsResponse) {}
+
+  // 获取终端详细信息
+  rpc GetClientDetails(GetClientDetailsRequest) returns (GetClientDetailsResponse) {}
+
+  // 查询存在高危漏洞未修复的终端
+  rpc ListHighRiskClients(ListHighRiskClientsRequest) returns (ListHighRiskClientsResponse) {}
+
+  // 统计病毒事件数量及处理结果
+  rpc ListVirusEvents(ListVirusEventsRequest) returns (ListVirusEventsResponse) {}
+
+  // 创建终端查杀扫描任务
+  rpc CreateScanTask(CreateScanTaskRequest) returns (TaskResponse) {}
+
+  // 创建终端隔离任务
+  rpc CreateIsolationTask(CreateIsolationTaskRequest) returns (TaskResponse) {}
+
+  // 创建发送通知任务
+  rpc SendNotification(SendNotificationRequest) returns (TaskResponse) {}
+}
+
+message ListGroupsRequest {}
+
+message ListGroupsResponse {
+  repeated Group groups = 1; // 分组列表
+  google.protobuf.Struct raw = 2; // 原始响应 data
+}
+
+message Group {
+  int64 group_id = 1; // 分组 ID
+  int64 parent_group = 2; // 父分组 ID
+  string group_name = 3; // 分组名称
+}
+
+message ListOnlineMacsRequest {
+  google.protobuf.Int64Value limit = 1; // 返回数量，默认 200
+  google.protobuf.Int64Value offset = 2; // 起始偏移，默认 0
+}
+
+message ListOnlineMacsResponse {
+  repeated OnlineMac records = 1; // 在线 MAC 记录
+  int64 total = 2; // 总数
+  google.protobuf.Struct raw = 3; // 原始响应 data
+}
+
+message OnlineMac {
+  string mac = 1; // MAC 地址，多个地址可能以英文分号分隔
+}
+
+message ListClientsRequest {
+  google.protobuf.Int64Value limit = 1; // 返回数量，默认 200
+  google.protobuf.Int64Value offset = 2; // 起始偏移，默认 0
+}
+
+message ListClientsResponse {
+  repeated Client clients = 1; // 终端列表
+  int64 total = 2; // 总数
+  google.protobuf.Struct raw = 3; // 原始响应 data
+}
+
+message GetClientDetailsRequest {
+  repeated string clients = 1; // 终端唯一标识列表
+  repeated string mac = 2; // MAC 地址列表
+  repeated string options = 3; // 可选：hardware / software / assets / netconf
+}
+
+message GetClientDetailsResponse {
+  repeated ClientDetails clients = 1; // 终端详情
+  google.protobuf.Struct raw = 2; // 原始响应 data
+}
+
+message ListHighRiskClientsRequest {
+  google.protobuf.Int64Value limit = 1; // 返回数量，默认 200
+  google.protobuf.Int64Value offset = 2; // 起始偏移，默认 0
+}
+
+message ListHighRiskClientsResponse {
+  repeated HighRiskClient clients = 1; // 高危终端列表
+  int64 all_client = 2; // 全部终端数
+  int64 risk_client = 3; // 高危终端数
+  google.protobuf.Struct raw = 4; // 原始响应 data
+}
+
+message ListVirusEventsRequest {
+  int64 type = 1; // 查询类型：0 按终端，1 按分组，2 全部终端
+  string client_id = 2; // 终端唯一标识，type=0 时使用
+  int64 group_id = 3; // 分组 ID，type=1 时使用
+  google.protobuf.Int64Value begin_time = 4; // 开始时间戳
+  google.protobuf.Int64Value end_time = 5; // 结束时间戳
+  google.protobuf.Int64Value limit = 6; // 返回数量，默认 200
+  google.protobuf.Int64Value offset = 7; // 起始偏移，默认 0
+}
+
+message ListVirusEventsResponse {
+  repeated VirusEventStat records = 1; // 病毒事件统计
+  int64 total = 2; // 总数
+  google.protobuf.Struct raw = 3; // 原始响应 data
+}
+
+message CreateScanTaskRequest {
+  string scan_type = 1; // quick_scan / custom_scan / full_scan
+  repeated string clients = 2; // 终端唯一标识列表
+  repeated int64 groups = 3; // 分组 ID 列表
+  repeated string scan_list = 4; // custom_scan 扫描路径
+  google.protobuf.BoolValue clean_automate = 5; // 发现病毒时自动处理，默认 true
+  google.protobuf.BoolValue clean_quarantine = 6; // 清除时备份到隔离区，默认 true
+  google.protobuf.BoolValue cannot_cancel = 7; // 不允许终端取消任务，默认 true
+  google.protobuf.BoolValue scan_maxspeed = 8; // 极速扫描，默认 false
+  google.protobuf.BoolValue whitelist_ignore = 9; // 扫描信任区，默认 false
+  google.protobuf.BoolValue scan_end_halt = 10; // 扫描结束后关机，默认 false
+}
+
+message CreateIsolationTaskRequest {
+  repeated string clients = 1; // 终端唯一标识列表
+  bool net_isolation = 2; // true 隔离，false 取消隔离
+}
+
+message SendNotificationRequest {
+  repeated string clients = 1; // 终端唯一标识列表
+  string text = 2; // 通知内容
+}
+
+message TaskResponse {
+  int64 errno = 1; // 火绒响应错误码
+  string errmsg = 2; // 火绒响应错误信息
+  google.protobuf.Value data = 3; // 原始响应 data
+  google.protobuf.Struct raw = 4; // 完整原始响应
+}
+
+message Client {
+  int64 id = 1; // 终端 ID
+  string client_id = 2; // 终端唯一标识
+  string local_ip = 3; // 本地 IP
+  string connect_ip = 4; // 通讯 IP
+  string mac = 5; // MAC 地址
+  string client_name = 6; // 终端名称
+  string computer_name = 7; // 计算机名
+  int64 group_id = 8; // 分组 ID
+  string os_version = 9; // 操作系统版本
+  string version = 10; // 终端版本
+  string definitions = 11; // 病毒库时间
+  bool is_online = 12; // 是否在线
+  int64 last_connect_time = 13; // 最后通讯时间
+  int64 last_seen_time = 14; // 最后上线时间
+  int64 first_appear_time = 15; // 首次上线时间
+  int64 last_off_time = 16; // 上次关机时间
+  int64 this_on_time = 17; // 本次开机时间
+}
+
+message ClientDetails {
+  Client base = 1; // 基础终端信息
+  google.protobuf.Struct hardware = 2; // 硬件信息
+  repeated google.protobuf.Struct software = 3; // 软件信息
+  repeated google.protobuf.Struct assets = 4; // 终端登记信息
+  repeated google.protobuf.Struct netconf = 5; // 网络配置信息
+  google.protobuf.Struct raw = 6; // 原始终端详情
+}
+
+message HighRiskClient {
+  string cid = 1; // 终端唯一标识
+  string hostname = 2; // 计算机名称
+  string client_name = 3; // 终端名称
+  string group_name = 4; // 分组名称
+  int64 group_id = 5; // 分组 ID
+  string ip_addr = 6; // 本地 IP
+  string call_ip = 7; // 通讯 IP
+  string mac = 8; // MAC 地址
+  string osver = 9; // 操作系统版本
+  string os_type = 10; // 操作系统类型
+  string prodver = 11; // 终端版本
+  int64 virdb = 12; // 病毒库版本
+  int64 stat = 13; // 状态：1 离线，2 在线，3 异常
+}
+
+message VirusEventStat {
+  int64 group_id = 1; // 分组 ID
+  string client_id = 2; // 终端唯一标识
+  string client_name = 3; // 终端名称
+  string computer_name = 4; // 计算机名
+  string local_ip = 5; // 本地 IP
+  string connect_ip = 6; // 通讯 IP
+  string mac = 7; // MAC 地址
+  int64 count = 8; // 病毒日志数量
+  VirusEventResult result = 9; // 处理结果统计
+}
+
+message VirusEventResult {
+  int64 success = 1; // 处理成功
+  int64 fail = 2; // 处理失败
+  int64 ignored = 3; // 暂不处理
+  int64 trusted = 4; // 已信任
+}

@@ -51,7 +51,7 @@ platform-services/
     "chaitin__hanqing-ticket"
   ],
   "dependencies": {
-    "@chaitin-ai/octobus-sdk": "^0.5.0"
+    "@chaitin-ai/octobus-sdk": "^0.6.0"
   }
 }
 ```

@@ -5,8 +5,16 @@ This package preserves legacy gRPC package and method names where applicable.
 Import it into OctoBus with:
 
 ```bash
-octobus service import --id dptech-fw-v4-6-10 ./services//dptech__fw_v4-6-10
+octobus service import --id dptech-fw-v4-6-10 ./services/dptech__fw_v4-6-10
 ```
+
+## Service Metadata
+
+- Vendor/product/version: DPtech FW V4.6.10 web management API.
+- Service name: `dptech-fw-v4-6-10`.
+- Service dir: `services/dptech__fw_v4-6-10`.
+- Runtime mode: `long-running`.
+- Runtime inspect: `node bin/dptech-fw-v4-6-10.js --runtime inspect --json`.
 
 ## Package Files
 
@@ -46,16 +54,16 @@ Use `secret.password`, `secret.pass`, or `secret.secret` for the Basic Auth pass
 
 ## RPC Methods
 
-- `DPtech_FW_V4610.DPtech_FW_V4610/GetPacketFilterStatus`
-- `DPtech_FW_V4610.DPtech_FW_V4610/EnablePacketFilterImmediate`
-- `DPtech_FW_V4610.DPtech_FW_V4610/ListAddressGroups`
-- `DPtech_FW_V4610.DPtech_FW_V4610/CreateAddressGroup`
-- `DPtech_FW_V4610.DPtech_FW_V4610/UpdateAddressGroup`
-- `DPtech_FW_V4610.DPtech_FW_V4610/DeleteAddressGroup`
-- `DPtech_FW_V4610.DPtech_FW_V4610/GetSecurityPolicy`
-- `DPtech_FW_V4610.DPtech_FW_V4610/CreateSecurityPolicy`
-- `DPtech_FW_V4610.DPtech_FW_V4610/UpdateSecurityPolicy`
-- `DPtech_FW_V4610.DPtech_FW_V4610/DeleteSecurityPolicy`
+- `DPtech_FW_V4610.DPtech_FW_V4610/GetPacketFilterStatus` - read, gets packet filter immediate-effect status.
+- `DPtech_FW_V4610.DPtech_FW_V4610/EnablePacketFilterImmediate` - write, enables packet filter immediate-effect mode.
+- `DPtech_FW_V4610.DPtech_FW_V4610/ListAddressGroups` - read, lists address groups by name keyword.
+- `DPtech_FW_V4610.DPtech_FW_V4610/CreateAddressGroup` - write, creates an address group.
+- `DPtech_FW_V4610.DPtech_FW_V4610/UpdateAddressGroup` - write, updates an address group.
+- `DPtech_FW_V4610.DPtech_FW_V4610/DeleteAddressGroup` - write, deletes an address group.
+- `DPtech_FW_V4610.DPtech_FW_V4610/GetSecurityPolicy` - read, gets one security policy.
+- `DPtech_FW_V4610.DPtech_FW_V4610/CreateSecurityPolicy` - write, creates a security policy.
+- `DPtech_FW_V4610.DPtech_FW_V4610/UpdateSecurityPolicy` - write, updates a security policy.
+- `DPtech_FW_V4610.DPtech_FW_V4610/DeleteSecurityPolicy` - write, deletes a security policy.
 
 ## Behavior Notes
 
@@ -67,6 +75,24 @@ Use `secret.password`, `secret.pass`, or `secret.secret` for the Basic Auth pass
 - HTTP 5xx and network failures map to `UNAVAILABLE`.
 - HTTP 200 responses with non-zero `ret` map to `FAILED_PRECONDITION`.
 - Empty successful update responses are treated as success. The device text `Duplicate IP address ranges.` is also treated as a successful address group update.
+- `timeoutMs` is enforced with `AbortController`; `skipTlsVerify` uses a per-request undici dispatcher and does not change global TLS settings.
+- Raw body proto fields are retained for compatibility but the implementation returns sanitized empty raw fields and structured summaries for errors.
+- Known limitation: the service uses fixed `ipVersion=4` and `vsysName=PublicSystem`; it does not expose arbitrary vsys or generic REST calls.
+
+## OctoBus Usage
+
+```bash
+octobus service import --id dptech-fw-v4-6-10 ./services/dptech__fw_v4-6-10
+octobus instance create dptech-fw --service dptech-fw-v4-6-10 \
+  --config-json '{"host":"https://fw.example:8443","user":"api-user","timeoutMs":3000,"skipTlsVerify":false}' \
+  --secret-json '{"password":"REDACTED"}'
+octobus capset create fw-policy
+octobus capset add-instance fw-policy dptech-fw
+
+curl -X POST http://127.0.0.1:9000/capsets/fw-policy/connect/dptech-fw/DPtech_FW_V4610.DPtech_FW_V4610/ListAddressGroups \
+  -H 'Content-Type: application/json' \
+  -d '{"search_value":"blocked"}'
+```
 
 ## Local Checks
 

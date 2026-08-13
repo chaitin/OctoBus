@@ -31,6 +31,7 @@ OctoBus defines the package contract, exposed interfaces, artifact lifecycle, an
 - local package directory
 - local `.tgz` / `.tar.gz`
 - local `.zip`
+- remote HTTP(S) `.tgz` / `.tar.gz` / `.zip` URL
 - HTTPS Git repository URL
 
 Examples:
@@ -40,10 +41,11 @@ octobus service import --id gitlab npm:@vendor/gitlab-wrapper@1.2.3
 octobus service import --id gitlab ./gitlab-wrapper
 octobus service import --id gitlab ./gitlab-wrapper-1.2.3.tgz
 octobus service import --id gitlab ./gitlab-wrapper.zip
+octobus service import --id gitlab https://packages.example.com/gitlab-wrapper-1.2.3.zip
 octobus service import --id gitlab https://github.com/acme/services.git//gitlab-wrapper@v1.2.3
 ```
 
-Every source type also accepts an optional `//service-dir` suffix to select a service root inside the distribution package:
+Every package source except remote HTTP(S) archive URLs also accepts an optional `//service-dir` suffix to select a service root inside the distribution package:
 
 ```text
 octobus service import --id gitlab npm:@vendor/platform-services@1.2.3//gitlab-wrapper
@@ -52,6 +54,8 @@ octobus service import --id gitlab ./platform-services-1.2.3.tgz//gitlab-wrapper
 octobus service import --id gitlab ./platform-services.zip//gitlab-wrapper
 octobus service import --id gitlab https://github.com/acme/services.git//gitlab-wrapper@v1.2.3
 ```
+
+Remote HTTP(S) archive URLs are treated as already packaged artifacts and use the package root as the service root. Use `--recursive` to import multiple service roots from a remote archive.
 
 HTTPS Git format:
 
@@ -70,6 +74,8 @@ npm registry package -> npm pack -> npm-packed .tgz
 local directory      -> npm pack -> npm-packed .tgz
 local .tgz/.tar.gz   -> copy -> package.tgz
 local .zip           -> copy -> package.zip
+remote .tgz/.tar.gz  -> download -> package.tgz
+remote .zip          -> download -> package.zip
 HTTPS Git repo       -> git archive -> npm pack -> npm-packed .tgz
 ```
 
@@ -177,13 +183,28 @@ For long-running instances, OctoBus executes:
   --host 127.0.0.1 \
   --port <port> \
   --config <instance-workdir>/config.json \
-  --secret <instance-workdir>/secret.json \
+  --secret-fd 3 \
   --workdir <instance-workdir> \
   --service <service-id> \
   --instance <instance-id>
 ```
 
-For on-demand requests, OctoBus invokes the package entry with `--runtime invoke` and passes method/config/secret/metadata paths. The SDK implements this.
+File descriptor 3 contains the instance secret JSON. The SDK reads this fd directly, so service packages should not write the raw secret to ordinary files. If a package needs to persist derived state, write it under the instance workdir and avoid saving original credentials.
+
+For on-demand requests, OctoBus invokes:
+
+```text
+<runtime>/<node_entry> --runtime invoke \
+  --method <full-method> \
+  --config <instance-workdir>/config.json \
+  --secret-fd 3 \
+  --metadata <request-metadata.json> \
+  --workdir <instance-workdir> \
+  --service <service-id> \
+  --instance <instance-id>
+```
+
+`serve` and `invoke` both support `--secret-fd <fd>` for daemon-provided secrets. The SDK also supports `--secret <file>` for local development, but daemon protocol examples use `--secret-fd 3`.
 
 Runtime environment:
 

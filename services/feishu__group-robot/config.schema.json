@@ -1,23 +1,18 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "additionalProperties": true,
+  "additionalProperties": false,
   "properties": {
-    "webhook": {
+    "baseUrl": {
       "type": "string",
-      "description": "Feishu group robot webhook URL."
+      "format": "uri",
+      "default": "https://open.feishu.cn",
+      "description": "Feishu Open Platform root URL used by approval and contact methods."
     },
-    "webhook_url": {
-      "type": "string",
-      "description": "Alias for webhook."
-    },
-    "webhookUrl": {
-      "type": "string",
-      "description": "Alias for webhook."
-    },
-    "url": {
-      "type": "string",
-      "description": "Alias for webhook."
+    "allowInsecureHttp": {
+      "type": "boolean",
+      "default": false,
+      "description": "Allow HTTP for a controlled local Open Platform mock only. Never enable in production."
     },
     "timeoutMs": {
       "type": "integer",

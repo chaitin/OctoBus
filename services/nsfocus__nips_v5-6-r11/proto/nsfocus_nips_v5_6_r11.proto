@@ -15,20 +15,20 @@ service Nsfocus_NIPS_V56R11 {
 }
 
 message LoginRequest {
-  string username = 1;
-  string password = 2;
+  string username = 1 [deprecated = true];
+  string password = 2 [deprecated = true];
   string lang = 3;
 }
 
 message LoginResponse {
   int64 code = 1;
   string message = 2;
-  google.protobuf.Value data = 3;
-  string api_key = 4;
-  string security_key = 5;
+  google.protobuf.Value data = 3 [deprecated = true];
+  string api_key = 4 [deprecated = true];
+  string security_key = 5 [deprecated = true];
   int32 http_status = 6;
-  string raw_body = 7;
-  google.protobuf.Value raw_json = 8;
+  string raw_body = 7 [deprecated = true];
+  google.protobuf.Value raw_json = 8 [deprecated = true];
 }
 
 message BlockIPRequest {
@@ -62,8 +62,8 @@ message ListBlacklistResponse {
   google.protobuf.Value data = 3;
   repeated BlacklistEntry entries = 4;
   int32 http_status = 5;
-  string raw_body = 6;
-  google.protobuf.Value raw_json = 7;
+  string raw_body = 6 [deprecated = true];
+  google.protobuf.Value raw_json = 7 [deprecated = true];
 }
 
 message UnblockByIdsRequest {
@@ -78,6 +78,6 @@ message NipsResponse {
   string message = 2;
   google.protobuf.Value data = 3;
   int32 http_status = 4;
-  string raw_body = 5;
-  google.protobuf.Value raw_json = 6;
+  string raw_body = 5 [deprecated = true];
+  google.protobuf.Value raw_json = 6 [deprecated = true];
 }

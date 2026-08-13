@@ -17,19 +17,21 @@
     },
     "user": {
       "type": "string",
-      "description": "Optional default login username."
+      "description": "Deprecated compatibility fallback for login username. Prefer secret.username."
     },
     "username": {
       "type": "string",
-      "description": "Alias for user."
+      "description": "Deprecated compatibility fallback for login username. Prefer secret.username."
     },
     "aesKey": {
       "type": "string",
-      "description": "AES key as hex, base64, or UTF-8 text."
+      "deprecated": true,
+      "description": "Deprecated compatibility fallback for AES key. Prefer secret.aesKey."
     },
     "aesIv": {
       "type": "string",
-      "description": "AES IV as hex, base64, or UTF-8 text."
+      "deprecated": true,
+      "description": "Deprecated compatibility fallback for AES IV. Prefer secret.aesIv."
     },
     "memo": {
       "type": "string",

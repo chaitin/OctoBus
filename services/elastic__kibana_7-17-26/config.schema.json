@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "endpoint": {
+      "type": "string",
+      "description": "Kibana base URL, including scheme and optional port."
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "Alias for endpoint."
+    },
+    "restBaseUrl": {
+      "type": "string",
+      "description": "Alias for endpoint."
+    },
+    "spaceId": {
+      "type": "string",
+      "description": "Optional default Kibana space id."
+    },
+    "space_id": {
+      "type": "string",
+      "description": "Alias for spaceId."
+    },
+    "kbnVersion": {
+      "type": "string",
+      "default": "7.17.26",
+      "description": "Default Kibana version header value."
+    },
+    "kbn_version": {
+      "type": "string",
+      "description": "Alias for kbnVersion."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1500,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for private deployments."
+    },
+    "tlsInsecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Legacy alias for skipTlsVerify."
+    },
+    "insecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Legacy alias for skipTlsVerify."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional additional HTTP headers."
+    }
+  }
+}

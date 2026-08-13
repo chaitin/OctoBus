@@ -9,14 +9,16 @@ service Tencent_QYWeiXin_GroupRobot {
 }
 
 message SendTextRequest {
-  string webhook = 1;
+  // Deprecated: webhook is resolved from instance secret/config, not from request.
+  string webhook = 1 [deprecated = true];
   string message = 2;
   string mentioned_mobiles = 3;
 }
 
 message SendTextResponse {
   int32 http_status_code = 1;
-  string http_body = 2;
+  // Deprecated: fixed to empty string to avoid leaking upstream response content.
+  string http_body = 2 [deprecated = true];
   int32 errcode = 3;
   string errmsg = 4;
 }

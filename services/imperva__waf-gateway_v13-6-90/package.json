@@ -1,0 +1,13 @@
+{
+  "name": "imperva-waf-gateway-v13-6-90",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "imperva-waf-gateway-v13-6-90": "bin/imperva-waf-gateway-v13-6-90.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.6.0",
+    "undici": "^7.16.0"
+  }
+}

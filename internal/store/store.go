@@ -870,7 +870,7 @@ SELECT c.id, c.name, c.description, c.enabled, c.created_at, c.updated_at,
        cm.id, cm.capset_instance_id, cm.method_full_name, cm.rest_alias, cm.mcp_tool_name, cm.enabled, cm.created_at, cm.updated_at,
        i.id, i.service_id, i.name, i.enabled, i.status, i.pid, i.listen_addr, i.node_entry, i.config_json, i.config_sha256, i.created_at, i.updated_at,
        s.id, s.name, s.package_source, s.package_artifact_path, s.package_sha256, s.package_version, s.proto_bundle_path, s.proto_bundle_sha256,
-       s.descriptor_path, s.descriptor_sha256, s.descriptor_version, s.methods_json, s.node_entry, s.runtime_mode, s.config_schema_path, s.secret_schema_path, s.created_at, s.updated_at
+       s.descriptor_path, s.descriptor_sha256, s.descriptor_version, s.methods_json, s.node_entry, s.service_root, s.runtime_mode, s.config_schema_path, s.secret_schema_path, s.created_at, s.updated_at
 FROM capsets c
 JOIN capset_instances ci ON ci.capset_id = c.id AND ci.enabled = 1
 JOIN capset_methods cm ON cm.capset_instance_id = ci.id AND cm.enabled = 1
@@ -917,7 +917,7 @@ func scanExposedMethod(scanner interface {
 		&item.CapsetMethod.ID, &item.CapsetMethod.CapsetInstanceID, &item.CapsetMethod.MethodFullName, &item.CapsetMethod.RestAlias, &item.CapsetMethod.MCPToolName, &cmEnabled, &cmCreated, &cmUpdated,
 		&item.Instance.ID, &item.Instance.ServiceID, &item.Instance.Name, &instEnabled, &status, &pid, &item.Instance.ListenAddr, &item.Instance.NodeEntry, &config, &item.Instance.ConfigSHA256, &instCreated, &instUpdated,
 		&service.ID, &service.Name, &service.PackageSource, &service.PackageArtifactPath, &service.PackageSHA256, &service.PackageVersion, &service.ProtoBundlePath, &service.ProtoBundleSHA256,
-		&service.DescriptorPath, &service.DescriptorSHA256, &service.DescriptorVersion, &svcMethodsJSON, &service.NodeEntry, &svcRuntimeMode, &service.ConfigSchemaPath, &service.SecretSchemaPath, &svcCreated, &svcUpdated); err != nil {
+		&service.DescriptorPath, &service.DescriptorSHA256, &service.DescriptorVersion, &svcMethodsJSON, &service.NodeEntry, &service.ServiceRoot, &svcRuntimeMode, &service.ConfigSchemaPath, &service.SecretSchemaPath, &svcCreated, &svcUpdated); err != nil {
 		return ExposedMethod{}, false, err
 	}
 	if cached, ok := serviceCache[service.ID]; ok {

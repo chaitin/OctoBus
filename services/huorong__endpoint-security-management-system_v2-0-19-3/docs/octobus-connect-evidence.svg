@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <rect width="1280" height="720" fill="#f6f8fa"/>
+  <rect x="48" y="44" width="1184" height="632" rx="8" fill="#0d1117"/>
+  <rect x="48" y="44" width="1184" height="44" rx="8" fill="#161b22"/>
+  <circle cx="76" cy="66" r="7" fill="#ff5f56"/>
+  <circle cx="99" cy="66" r="7" fill="#ffbd2e"/>
+  <circle cx="122" cy="66" r="7" fill="#27c93f"/>
+  <text x="154" y="72" fill="#c9d1d9" font-family="monospace" font-size="18">OctoBus Connect 联调证据：火绒终端安全管理系统 V2.0.19.3</text>
+  <text x="72" y="124" fill="#8b949e" font-family="monospace" font-size="16">服务包：huorong__endpoint-security-management-system_v2-0-19-3</text>
+  <text x="72" y="154" fill="#8b949e" font-family="monospace" font-size="16">实例：huorong-real    Capset：huorong-dev    调用方式：OctoBus Connect RPC</text>
+  <text x="72" y="196" fill="#58a6ff" font-family="monospace" font-size="16">POST /capsets/huorong-dev/connect/huorong-real/.../ListClients</text>
+  <text x="72" y="226" fill="#7ee787" font-family="monospace" font-size="16">HTTP/1.1 200 OK</text>
+  <text x="72" y="256" fill="#c9d1d9" font-family="monospace" font-size="16">{"clients":[{"clientId":"CDE1AC84...000000","localIp":"192.168.0.xxx","mac":"FA-1E-15-**-**-00",</text>
+  <text x="72" y="282" fill="#c9d1d9" font-family="monospace" font-size="16">"clientName":"DESKTOP-6Q0LN1J","osVersion":"Microsoft Windows 10 专业版","version":"2.0.19.3","isOnline":true}], "total":"1"}</text>
+  <text x="72" y="332" fill="#58a6ff" font-family="monospace" font-size="16">POST /capsets/huorong-dev/connect/huorong-real/.../CreateScanTask</text>
+  <text x="72" y="362" fill="#7ee787" font-family="monospace" font-size="16">HTTP/1.1 200 OK</text>
+  <text x="72" y="392" fill="#c9d1d9" font-family="monospace" font-size="16">Request: {"scanType":"quick_scan","clients":["CDE1AC84...000000"],"cleanAutomate":false,"cannotCancel":false}</text>
+  <text x="72" y="418" fill="#c9d1d9" font-family="monospace" font-size="16">Response: {"data":null, "raw":{"errno":0}}</text>
+  <text x="72" y="468" fill="#58a6ff" font-family="monospace" font-size="16">POST /capsets/huorong-dev/connect/huorong-real/.../CreateIsolationTask</text>
+  <text x="72" y="498" fill="#7ee787" font-family="monospace" font-size="16">HTTP/1.1 200 OK</text>
+  <text x="72" y="528" fill="#c9d1d9" font-family="monospace" font-size="16">Request: {"clients":["CDE1AC84...000000"],"netIsolation":false}</text>
+  <text x="72" y="554" fill="#c9d1d9" font-family="monospace" font-size="16">Response: {"data":null, "raw":{"errno":0}}</text>
+  <text x="72" y="604" fill="#f2cc60" font-family="monospace" font-size="16">已验证 9 个方法：ListGroups / ListOnlineMacs / ListClients / GetClientDetails / ListHighRiskClients / ListVirusEvents / CreateScanTask / CreateIsolationTask / SendNotification</text>
+  <text x="72" y="634" fill="#8b949e" font-family="monospace" font-size="16">生成时间：2026-06-30，本图仅包含脱敏后的 OctoBus 回显摘要；完整 request/response 见 PR 描述。</text>
+</svg>
