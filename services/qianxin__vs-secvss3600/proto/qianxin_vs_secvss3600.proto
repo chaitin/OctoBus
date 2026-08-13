@@ -69,7 +69,17 @@ message SubmitScanTaskResponse {
 message ControlTaskRequest {
   string token = 1;
   int32 task_id = 2;
-  string action = 3;
+  ControlAction action = 3;
+}
+
+enum ControlAction {
+  stop = 0;
+  start = 1;
+  pause = 2;
+  continue = 3;
+  enable = 4;
+  disable = 5;
+  delete = 6;
 }
 
 message ControlTaskResponse {}
