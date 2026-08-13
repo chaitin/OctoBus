@@ -5,6 +5,10 @@ import { runServiceMain } from "@chaitin-ai/octobus-sdk";
 import { Command } from "commander";
 
 const services = {
+  "dbappsecurity-mingyu-waf": {
+    entryFile: "../dbappsecurity__mingyu-waf/bin/dbappsecurity-mingyu-waf.js",
+    serviceModule: "../dbappsecurity__mingyu-waf/src/service.js",
+  },
   "ailpha-platform": {
     entryFile: "../ailpha__platform/bin/ailpha-platform.js",
     serviceModule: "../ailpha__platform/src/service.js",

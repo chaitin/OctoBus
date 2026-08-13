@@ -62,6 +62,9 @@ test('errorWithCode maps known and unknown codes', async () => {
 
   const unknown = _test.errorWithCode('SOME_NEW_CODE', 'x');
   assert.equal(unknown.legacyCode, 'SOME_NEW_CODE');
+  for (const code of ['PERMISSION_DENIED', 'UNAUTHENTICATED', 'UNAVAILABLE', 'UNKNOWN']) {
+    assert.equal(_test.errorWithCode(code, 'x').legacyCode, code);
+  }
 });
 
 test('wafRuleToProto maps WAF API rule to proto format', async () => {
@@ -109,6 +112,35 @@ test('protoToWafBody throws INVALID_ARGUMENT for empty conditionGroups', async (
     () => _test.protoToWafBody({ name: 'rule', conditionGroups: [] }, 'deny'),
     /INVALID_ARGUMENT/,
   );
+});
+
+test('converters apply safe defaults for sparse upstream data', async () => {
+  const { _test } = await import('../src/waf.js');
+  const proto = _test.wafRuleToProto({ cond_suites: [{ cond_terms: [{}] }] });
+  assert.deepEqual(proto, {
+    id: '', name: '', description: '', enabled: true, effectTimeRange: '',
+    conditionGroups: [{ conditions: [{ field: 'sip', ipList: [], negate: false }] }],
+    applyTo: 'all_apps', siteIds: [],
+  });
+  const body = _test.protoToWafBody({
+    name: 'minimal', conditionGroups: [{ conditions: [{}] }],
+  }, 'deny');
+  assert.equal(body.description, '');
+  assert.equal(body.effect_time_range, '');
+  assert.deepEqual(body.cond_suites[0].cond_terms[0], {
+    field: 'sip', operator: 'exact match', operand: [], neg: false,
+  });
+  assert.equal(body.adapt_new_app, 'all_apps');
+  assert.deepEqual(body.apps, []);
+  assert.equal(body.enable, true);
+});
+
+test('getClient caches only matching configurations', async () => {
+  await resetClient();
+  const { _test } = await import('../src/waf.js');
+  const first = _test.getClient(buildCtx());
+  assert.equal(_test.getClient(buildCtx()), first);
+  assert.notEqual(_test.getClient(buildCtx({ config: { host: 'http://other' } })), first);
 });
 
 // ---------------------------------------------------------------------------
@@ -185,6 +217,14 @@ test('WafClient maps network error to UNAVAILABLE', async () => {
   await assert.rejects(() => client.fetch('GET', '/api/v1/security/basic_rules/'), /UNAVAILABLE: ECONNREFUSED/);
 });
 
+test('WafClient reports a generic network error for non-Error failures', async () => {
+  const { _test } = await import('../src/waf.js');
+  setFetch(async () => { throw null; });
+  const client = new _test.WafClient({ host: 'http://localhost', username: 'u', password: 'p' });
+  client.token = 'token';
+  await assert.rejects(() => client.fetch('GET', '/any/'), /UNAVAILABLE: network error/);
+});
+
 test('WafClient maps non-JSON response to UNKNOWN', async () => {
   await resetClient();
   const { _test } = await import('../src/waf.js');
@@ -201,6 +241,35 @@ test('WafClient maps HTTP 401 to PERMISSION_DENIED', async () => {
   const client = new _test.WafClient({ host: 'http://localhost', username: 'u', password: 'p' });
   client.token = 'already-logged-in';
   await assert.rejects(() => client.fetch('GET', '/any/'), /PERMISSION_DENIED: HTTP 401/);
+});
+
+test('WafClient maps HTTP 500 and errors without a cause', async () => {
+  const { _test } = await import('../src/waf.js');
+  let client = new _test.WafClient({ host: 'http://localhost/', username: 'u', password: 'p' });
+  client.token = 'token';
+  setFetch(async () => ({ status: 503, text: async () => '' }));
+  await assert.rejects(() => client.fetch('GET', '/any/'), /UNAVAILABLE: HTTP 503/);
+  setFetch(async () => { throw new Error('socket closed'); });
+  await assert.rejects(() => client.fetch('GET', '/any/'), /UNAVAILABLE: socket closed/);
+});
+
+test('WafClient maps HTTP 403 to PERMISSION_DENIED', async () => {
+  const { _test } = await import('../src/waf.js');
+  setFetch(async () => ({ status: 403, text: async () => '' }));
+  const client = new _test.WafClient({ host: 'http://localhost', username: 'u', password: 'p' });
+  client.token = 'token';
+  await assert.rejects(() => client.fetch('GET', '/any/'), /PERMISSION_DENIED: HTTP 403/);
+});
+
+test('WafClient serializes request bodies and authorization', async () => {
+  const { _test } = await import('../src/waf.js');
+  let init;
+  setFetch(async (_url, options) => { init = options; return successResponse({}); });
+  const client = new _test.WafClient({ host: 'http://localhost/', username: 'u', password: 'p' });
+  client.token = 'token';
+  await client.fetch('POST', '/any/', { value: 1 });
+  assert.equal(init.headers.Authorization, 'Bearer token');
+  assert.equal(init.body, '{"value":1}');
 });
 
 // ---------------------------------------------------------------------------
