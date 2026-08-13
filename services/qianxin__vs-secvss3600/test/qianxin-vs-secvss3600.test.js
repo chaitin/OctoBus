@@ -402,8 +402,9 @@ describe('ControlTask', () => {
     }
   });
   it('protobuf enum numeric action is accepted', async () => {
-    global.fetch = mockFetchSuccess({ success: true });
-    await ControlTask({ request: { task_id: 1, action: 0 }, bindings: bindings() });
+    globalThis.fetch = makeFetch({ success: true });
+    const result = await rpcdef(buildCtx({ req: { task_id: 1, action: 0 } }))[PATH_CONTROL_TASK]();
+    assert.deepEqual(result, {});
   });
 
   it('missing task_id -> INVALID_ARGUMENT', async () => {
