@@ -289,6 +289,10 @@ const services = {
     entryFile: "../filigran__opencti/bin/opencti.js",
     serviceModule: "../filigran__opencti/src/service.js",
   },
+  "tencent-weixin-personal": {
+    entryFile: "../tencent__weixin-personal/bin/tencent-weixin-personal.js",
+    serviceModule: "../tencent__weixin-personal/src/service.js",
+  },
 };
 
 const serviceNames = Object.keys(services);

@@ -59,6 +59,7 @@
     "slack-group-robot": "bin/slack-group-robot.js",
     "tencent-qyweixin-group-robot": "bin/tencent-qyweixin-group-robot.js",
     "tencent-tix-saas": "bin/tencent-tix-saas.js",
+    "tencent-weixin-personal": "bin/tencent-weixin-personal.js",
     "tencent-tsec-v2-5-1": "bin/tencent-tsec-v2-5-1.js",
     "telegram-bot-api": "bin/telegram-bot-api.js",
     "threatbook-cloudapi-v3": "bin/threatbook-cloudapi-v3.js",
@@ -132,6 +133,7 @@
     "bin/sangfor-xdr-v2-0-45.js",
     "bin/tencent-qyweixin-group-robot.js",
     "bin/tencent-tix-saas.js",
+    "bin/tencent-weixin-personal.js",
     "bin/tencent-tsec-v2-5-1.js",
     "bin/telegram-bot-api.js",
     "bin/threatbook-cloudapi-v3.js",
@@ -200,6 +202,7 @@
     "sangfor__xdr_v2-0-45",
     "tencent__qyweixin-group-robot",
     "tencent__tix-saas",
+    "tencent__weixin-personal",
     "tencent__tsec_v2-5-1",
     "telegram__bot-api",
     "threatbook__cloudapi_v3",
@@ -237,6 +240,7 @@
     "@alicloud/swas-open20200601": "^4.0.0",
     "@chaitin-ai/octobus-sdk": "^0.6.0",
     "commander": "^12.1.0",
+    "qrcode-terminal": "0.12.0",
     "undici": "^7.16.0"
   },
   "bundledDependencies": [
@@ -245,6 +249,7 @@
     "@alicloud/swas-open20200601",
     "@chaitin-ai/octobus-sdk",
     "commander",
+    "qrcode-terminal",
     "undici"
   ]
 }
