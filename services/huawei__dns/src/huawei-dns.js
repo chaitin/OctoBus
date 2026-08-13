@@ -12,8 +12,7 @@ const METHOD_DELETE_RECORDSET_FULL = 'Huawei_DNS.Huawei_DNS/DeleteRecordSet';
 
 // ---- Constants ----
 
-const SCHEME = 'https';
-const ENDPOINT = 'dns.myhuaweicloud.com';
+const DEFAULT_ENDPOINT = 'https://dns.myhuaweicloud.com';
 const DEFAULT_TIMEOUT_MS = 10000;
 const SDK_REF = 'Huawei_DNS';
 
@@ -101,14 +100,14 @@ const buildCanonicalQueryString = (params = {}) => {
   return keys.map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(String(params[k]))}`).join('&');
 };
 
-const signHuawei = (accessKey, secretKey, method, uri, queryString, body, sdkDate) => {
+const signHuawei = (accessKey, secretKey, method, uri, queryString, body, sdkDate, host = 'dns.myhuaweicloud.com') => {
   const canonicalURI = uri || '/';
   const payloadHash = sha256hex(body || '');
   const contentType = body ? 'application/json; charset=utf-8' : 'application/json';
   const signedHeaders = ['content-type', 'host', 'x-sdk-date'];
   const canonicalHeaders = [
     `content-type:${contentType}\n`,
-    `host:${ENDPOINT}\n`,
+    `host:${host}\n`,
     `x-sdk-date:${sdkDate}\n`,
   ].join('');
   const canonicalRequest = [
@@ -187,6 +186,21 @@ const fetchJson = async (url, init, { bindings = {}, timeoutMs }) => {
 
 const mergedBindings = (ctx = {}) => ({ ...(ctx.config ?? {}), ...(ctx.secret ?? {}), ...(ctx.bindings ?? {}) });
 
+const resolveEndpoint = (bindings = {}) => {
+  const raw = unwrapString(firstDefined(bindings.endpoint, bindings.baseUrl, DEFAULT_ENDPOINT)).trim();
+  let endpoint;
+  try { endpoint = new URL(raw); } catch { throw errorWithCode('INVALID_ARGUMENT', 'endpoint must be a valid URL'); }
+  if (endpoint.username || endpoint.password || endpoint.search || endpoint.hash) {
+    throw errorWithCode('INVALID_ARGUMENT', 'endpoint must not contain credentials, query, or fragment');
+  }
+  const isLoopback = ['localhost', '127.0.0.1', '::1'].includes(endpoint.hostname);
+  if (endpoint.protocol !== 'https:' && !(endpoint.protocol === 'http:' && isLoopback)) {
+    throw errorWithCode('INVALID_ARGUMENT', 'endpoint must use HTTPS');
+  }
+  endpoint.pathname = endpoint.pathname === '/' ? '' : endpoint.pathname.replace(/\/$/, '');
+  return endpoint;
+};
+
 const resolveCallContext = (ctx = {}) => ({
   ...ctx, bindings: mergedBindings(ctx), limits: ctx.limits ?? {}, meta: ctx.meta ?? {}, req: ctx.req ?? ctx.request ?? {},
 });
@@ -202,12 +216,15 @@ const callDNSAPI = async (method, uriPath, queryString, body, { meta, bindings, 
   if (!accessKey) throw errorWithCode('PERMISSION_DENIED', 'access_key is required in bindings');
   if (!secretKey) throw errorWithCode('PERMISSION_DENIED', 'secret_key is required in bindings');
 
+  const endpoint = resolveEndpoint(bindings);
+  const basePath = endpoint.pathname === '/' ? '' : endpoint.pathname.replace(/\/$/, '');
+  const requestPath = `${basePath}${uriPath}` || '/';
   const sdkDate = iso8601Basic(Math.floor(Date.now() / 1000));
-  const { authorization, contentType } = signHuawei(accessKey, secretKey, method, uriPath, queryString, body || '', sdkDate);
+  const { authorization, contentType } = signHuawei(accessKey, secretKey, method, requestPath, queryString, body || '', sdkDate, endpoint.host);
 
-  const url = `${SCHEME}://${ENDPOINT}${uriPath}${queryString ? '?' + queryString : ''}`;
+  const url = `${endpoint.origin}${requestPath}${queryString ? '?' + queryString : ''}`;
   const headers = {
-    Host: ENDPOINT,
+    Host: endpoint.host,
     'X-Sdk-Date': sdkDate,
     Authorization: authorization,
     'Content-Type': contentType,
@@ -341,4 +358,5 @@ export const _test = {
   ensureTrailingSlash,
   errorWithCode, firstDefined, hasOwn, logInfo, logError, makeRuntime, mapHttpError,
   mergedBindings, optionalUint32, parseJson, resolveCallContext, resolveTimeoutMs, toBoolean, unwrapString,
+  resolveEndpoint,
 };

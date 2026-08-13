@@ -3,6 +3,12 @@
   "type": "object",
   "additionalProperties": true,
   "properties": {
+    "endpoint": {
+      "type": "string",
+      "format": "uri",
+      "default": "https://dns.myhuaweicloud.com",
+      "description": "Huawei Cloud DNS API endpoint. HTTPS is required except for local smoke tests."
+    },
     "timeoutMs": {
       "type": "integer",
       "minimum": 1,
