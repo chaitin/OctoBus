@@ -12,7 +12,7 @@ message CheckKevRequest {
 
 message KevStatusResponse {
   optional bool in_kev = 1 [json_name = "inKev"];
-  KevEntry entry = 2;
+  optional KevEntry entry = 2;
 }
 
 message KevEntry {

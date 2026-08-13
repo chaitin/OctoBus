@@ -6,15 +6,23 @@ const DEFAULT_FALLBACK = "https://raw.githubusercontent.com/cisagov/kev-data/mai
 async function httpGetJson(url, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs || 30000);
-  let res;
   try {
-    res = await fetch(url, {
+    const res = await fetch(url, {
       method: "GET",
       headers: { Accept: "application/json" },
       signal: controller.signal,
       redirect: "follow",
     });
+    const body = await res.text();
+    if (res.status >= 500) throw new GrpcError(grpcStatus.UNAVAILABLE, `KEV API HTTP ${res.status}`);
+    if (res.status >= 400) throw new GrpcError(grpcStatus.INVALID_ARGUMENT, `KEV API HTTP ${res.status}`);
+    try {
+      return JSON.parse(body);
+    } catch {
+      throw new GrpcError(grpcStatus.UNAVAILABLE, "KEV API returned non-JSON");
+    }
   } catch (e) {
+    if (e instanceof GrpcError) throw e;
     if (e?.name === "AbortError") {
       throw new GrpcError(grpcStatus.UNAVAILABLE, `KEV API timeout after ${timeoutMs || 30000}ms`);
     }
@@ -22,32 +30,26 @@ async function httpGetJson(url, timeoutMs) {
   } finally {
     clearTimeout(timer);
   }
-
-  const body = await res.text();
-  if (res.status >= 500) throw new GrpcError(grpcStatus.UNAVAILABLE, `KEV API HTTP ${res.status}`);
-  if (res.status >= 400) throw new GrpcError(grpcStatus.INVALID_ARGUMENT, `KEV API HTTP ${res.status}`);
-  try {
-    return JSON.parse(body);
-  } catch {
-    throw new GrpcError(grpcStatus.UNAVAILABLE, "KEV API returned non-JSON");
-  }
 }
 
 let _cache = null;
 let _cacheTime = 0;
+let _cacheKey = "";
 
 async function fetchCatalog(config) {
   const now = Date.now();
   const ttl = config?.kevCacheTtlMs ?? 3600000;
-  if (_cache && ttl > 0 && (now - _cacheTime) < ttl) return _cache;
   const primary = config?.kevPrimaryUrl || DEFAULT_PRIMARY;
   const fallback = config?.kevFallbackUrl || DEFAULT_FALLBACK;
+  const cacheKey = `${primary}\n${fallback}`;
+  if (_cache && _cacheKey === cacheKey && ttl > 0 && (now - _cacheTime) < ttl) return _cache;
   let lastError = null;
   for (const url of [primary, fallback]) {
     try {
       const data = await httpGetJson(url, config?.timeoutMs);
       _cache = data.vulnerabilities || [];
       _cacheTime = now;
+      _cacheKey = cacheKey;
       return _cache;
     } catch (e) {
       lastError = e;
@@ -88,3 +90,12 @@ export const handlers = {
   "cisa.kev.KevService/Check": (ctx) => checkCve(ctx.config, ctx.request.cveId),
 };
 
+export const _test = {
+  httpGetJson,
+  fetchCatalog,
+  resetCache() {
+    _cache = null;
+    _cacheTime = 0;
+    _cacheKey = "";
+  },
+};
