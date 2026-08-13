@@ -1,0 +1,31 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "anyi-cloud-native-security",
+  "displayName": "Anyi Cloud Native Security",
+  "description": "OctoBus package for Anyi Cloud Native Security Platform (DISS) alert, vulnerability, asset, and container control APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/anyi_cloud_native_security.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Anyi_CloudNativeSecurity.Anyi_CloudNativeSecurity/ListWarnings": { "name": "list-warnings", "description": "List security warnings from Anyi DISS." },
+        "Anyi_CloudNativeSecurity.Anyi_CloudNativeSecurity/ListWarningGroups": { "name": "list-warning-groups", "description": "List aggregated warning groups from Anyi DISS." },
+        "Anyi_CloudNativeSecurity.Anyi_CloudNativeSecurity/DisposeWarnings": { "name": "dispose-warnings", "description": "Dispose warnings (isolation/pause/stop/kill)." },
+        "Anyi_CloudNativeSecurity.Anyi_CloudNativeSecurity/DisposeWarningGroups": { "name": "dispose-warning-groups", "description": "Dispose aggregated warning groups." },
+        "Anyi_CloudNativeSecurity.Anyi_CloudNativeSecurity/ListVulnerabilities": { "name": "list-vulnerabilities", "description": "List image vulnerabilities from Anyi DISS." },
+        "Anyi_CloudNativeSecurity.Anyi_CloudNativeSecurity/ListHosts": { "name": "list-hosts", "description": "List host assets from Anyi DISS." },
+        "Anyi_CloudNativeSecurity.Anyi_CloudNativeSecurity/ListContainers": { "name": "list-containers", "description": "List container assets from Anyi DISS." },
+        "Anyi_CloudNativeSecurity.Anyi_CloudNativeSecurity/ListClusters": { "name": "list-clusters", "description": "List K8s clusters from Anyi DISS." },
+        "Anyi_CloudNativeSecurity.Anyi_CloudNativeSecurity/ContainerControl": { "name": "container-control", "description": "Control container (resume/start/activate/deactivate)." },
+        "Anyi_CloudNativeSecurity.Anyi_CloudNativeSecurity/UnblockNetwork": { "name": "unblock-network", "description": "Unblock container network isolation." }
+      }
+    }
+  }
+}
