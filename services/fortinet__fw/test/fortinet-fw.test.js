@@ -442,7 +442,7 @@ test('SDK handlers prefer secret token over deprecated config and legacy binding
     },
   });
 
-  assert.equal(captured.url, 'https://config-device.example/api/v2/cmdb/firewall/address');
+  assert.equal(captured.url, 'https://legacy-device.example/api/v2/cmdb/firewall/address');
   assert.equal(captured.init.headers.Authorization, 'Bearer secret-token');
 });
 
@@ -531,7 +531,9 @@ test('helper functions keep legacy-compatible edge behavior', async () => {
   assert.equal(_test.hasOwn({ a: 1 }, 'a'), true);
   assert.equal(_test.hasOwn(null, 'a'), false);
   assert.equal(_test.firstDefined(undefined, null, 'x'), 'x');
-  assert.deepEqual(_test.mergedBindings({ config: { a: 1 }, secret: { b: 2 }, bindings: { c: 3 } }), { c: 3, a: 1, b: 2 });
+  assert.deepEqual(_test.mergedBindings({ config: { a: 1 }, secret: { b: 2 }, bindings: { c: 3 } }), { a: 1, c: 3, b: 2 });
+  assert.deepEqual(_test.mergedBindings({ config: { token: 'config' }, bindings: { token: 'binding' }, secret: { token: 'secret' } }), { token: 'secret' });
+  assert.deepEqual(_test.mergedBindings({ config: { vdom: 'config' }, bindings: { vdom: 'request' } }), { vdom: 'request' });
   assert.deepEqual(_test.resolveCallContext({ request: { ip: '1.1.1.1' } }).req, { ip: '1.1.1.1' });
   assert.deepEqual(_test.readRepeatedStrings({ values: [{ value: 'a' }, 'b'] }), ['a', 'b']);
   assert.deepEqual(_test.readRepeatedStrings('bad'), []);

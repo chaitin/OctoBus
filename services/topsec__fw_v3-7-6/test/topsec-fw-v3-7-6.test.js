@@ -199,6 +199,14 @@ test('errors are sanitized and missing AES material is unauthenticated', async (
 });
 
 test('helper functions cover parsing, crypto, cache, status, and outcome branches', () => {
+  assert.deepEqual(_test.mergedBindings({
+    config: { host: 'https://config.example', password: 'config-password' },
+    bindings: { host: 'https://request.example', password: 'binding-password' },
+    secret: { password: 'secret-password' },
+  }), {
+    host: 'https://request.example',
+    password: 'secret-password',
+  });
   assert.equal(_test.grpcCodeFor('missing'), grpcStatus.UNKNOWN);
   assert.equal(_test.unwrapScalar({ value: { value: 7 } }), 7);
   assert.equal(_test.pickString({ value: 'x' }), 'x');

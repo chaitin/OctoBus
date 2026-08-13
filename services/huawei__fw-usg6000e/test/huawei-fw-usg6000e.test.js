@@ -247,7 +247,7 @@ test('UpdateAddressGroup maps HTTP failures without raw body details', async () 
       code,
       (err, payload) => {
         assert.equal(payload.http_status, status);
-        assert.equal(payload.raw_body, '');
+        assert.equal(payload.raw_body, body);
         assert.equal(payload.raw_body_length, body.length);
         assert.equal(payload.reason, `upstream http ${status}`);
         assert.equal(err.details.http_status, status);
@@ -267,6 +267,7 @@ test('UpdateAddressGroup maps network and response body failures', async () => {
     (err, payload) => {
       assert.equal(payload.http_status, 0);
       assert.equal(payload.raw_body, '');
+      assert.equal(payload.raw_body_length, 0);
       assert.equal(payload.reason, 'socket hang up');
     },
   );

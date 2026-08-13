@@ -1,7 +1,9 @@
 FROM ubuntu:26.04 AS builder
 
+ARG GOPROXY=https://proxy.golang.org,direct
 ENV DEBIAN_FRONTEND=noninteractive \
-	GOTOOLCHAIN=auto
+	GOTOOLCHAIN=auto \
+	GOPROXY=${GOPROXY}
 WORKDIR /src
 
 RUN apt-get update \

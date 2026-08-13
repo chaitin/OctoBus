@@ -169,7 +169,7 @@ const throwStructuredError = (code, message, options = {}) => {
     code,
     message: redactSensitive(message, sensitiveValues),
     http_status: Number(options.httpStatus ?? 0),
-    raw_body: '',
+    raw_body: redactSensitive(rawBody, sensitiveValues),
     raw_body_length: rawBody.length,
   };
   if (options.reason) payload.reason = redactSensitive(options.reason, sensitiveValues);

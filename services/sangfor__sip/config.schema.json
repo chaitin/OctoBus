@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "anyOf": [
+    { "required": ["host"] },
+    { "required": ["baseUrl"] },
+    { "required": ["restBaseUrl"] }
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "host": {
+      "type": "string",
+      "format": "uri",
+      "description": "Sangfor SIP base URL, e.g. https://10.0.0.1:7443"
+    },
+    "baseUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "Alias for host."
+    },
+    "restBaseUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "Legacy alias for host."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 10000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": true,
+      "description": "Skip TLS certificate verification (SIP often uses self-signed certs)."
+    }
+  }
+}

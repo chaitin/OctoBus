@@ -279,12 +279,12 @@ const requestJson = async (ctx, method, path, headers, body) => {
   const parsed = parseJsonSafe(text);
   if (!parsed.ok) {
     logFlow(callCtx, `${method}:protocol_error`, { http_status: res.status, reason: 'invalid_json' });
-    throw errorWithCode('UNKNOWN', 'response is not valid JSON', { http_status: res.status, raw_body: '', raw_body_length: text.length });
+    throw errorWithCode('UNKNOWN', 'response is not valid JSON', { http_status: res.status, raw_body: text, raw_body_length: text.length });
   }
   if (res.status < 200 || res.status >= 300) {
     const code = mapHTTPErrorCode(res.status);
     logFlow(callCtx, `${method}:http_error`, { http_status: res.status });
-    throw errorWithCode(code, `upstream http ${res.status}`, { http_status: res.status, raw_body: '', raw_body_length: text.length });
+    throw errorWithCode(code, `upstream http ${res.status}`, { http_status: res.status, raw_body: text, raw_body_length: text.length });
   }
   return { httpStatus: res.status, rawBody: text, rawJson: parsed.value };
 };
