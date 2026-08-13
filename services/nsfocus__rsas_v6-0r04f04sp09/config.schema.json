@@ -5,22 +5,27 @@
   "properties": {
     "host": {
       "type": "string",
+      "format": "uri",
       "description": "NSFOCUS RSAS base URL with http(s) scheme, e.g. https://10.65.193.127."
     },
     "restBaseUrl": {
       "type": "string",
+      "format": "uri",
       "description": "Alias for host."
     },
     "baseUrl": {
       "type": "string",
+      "format": "uri",
       "description": "Alias for host."
     },
     "rest_base_url": {
       "type": "string",
+      "format": "uri",
       "description": "Alias for host."
     },
     "base_url": {
       "type": "string",
+      "format": "uri",
       "description": "Alias for host."
     },
     "user": {
