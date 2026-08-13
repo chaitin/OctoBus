@@ -79,7 +79,6 @@ const headers = (bindings, token = "", body = "") => ({
   "iLink-App-ClientVersion": String(ILINK_APP_CLIENT_VERSION),
   ...(text(first(bindings.routeTag, bindings.route_tag)) ? { SKRouteTag: text(first(bindings.routeTag, bindings.route_tag)) } : {}),
   ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  ...(body ? { "Content-Length": String(Buffer.byteLength(body)) } : {}),
 });
 
 const requestJSON = async (url, init, timeoutMs) => {
