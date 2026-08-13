@@ -88,6 +88,10 @@ const services = {
     entryFile: "../elastic__kibana_7-17-26/bin/elastic-kibana-7-17-26.js",
     serviceModule: "../elastic__kibana_7-17-26/src/service.js",
   },
+  "f5-awaf": {
+    entryFile: "../f5__awaf/bin/f5-awaf.js",
+    serviceModule: "../f5__awaf/src/service.js",
+  },
   "feishu-group-robot": {
     entryFile: "../feishu__group-robot/bin/feishu-group-robot.js",
     serviceModule: "../feishu__group-robot/src/service.js",
@@ -311,6 +315,10 @@ const services = {
   "tencent-weixin-personal": {
     entryFile: "../tencent__weixin-personal/bin/tencent-weixin-personal.js",
     serviceModule: "../tencent__weixin-personal/src/service.js",
+  },
+  "zhizhangyi-mbs": {
+    entryFile: "../zhizhangyi__mbs/bin/zhizhangyi-mbs.js",
+    serviceModule: "../zhizhangyi__mbs/src/service.js",
   },
   "qianxin-caasm": {
     entryFile: "../qianxin__caasm_v1/bin/qianxin-caasm.js",

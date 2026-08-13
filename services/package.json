@@ -23,6 +23,7 @@
     "dptech-fw-v4-6-10": "bin/dptech-fw-v4-6-10.js",
     "dptech-umc-ads-v5-3-29": "bin/dptech-umc-ads-v5-3-29.js",
     "elastic-kibana-7-17-26": "bin/elastic-kibana-7-17-26.js",
+    "f5-awaf": "bin/f5-awaf.js",
     "feishu-group-robot": "bin/feishu-group-robot.js",
     "first-epss-v1": "bin/first-epss-v1.js",
     "fofa-network-space-mapper": "bin/fofa-network-space-mapper.js",
@@ -81,6 +82,7 @@
     "wangsu-label-ip": "bin/wangsu-label-ip.js",
     "wd-k01": "bin/wd-k01.js",
     "opencti": "bin/opencti.js",
+    "zhizhangyi-mbs": "bin/zhizhangyi-mbs.js",
     "qianxin-caasm": "bin/qianxin-caasm.js",
     "anyi-cloud-native-security": "bin/anyi-cloud-native-security.js"
   },
@@ -105,6 +107,7 @@
     "bin/dptech-fw-v4-6-10.js",
     "bin/dptech-umc-ads-v5-3-29.js",
     "bin/elastic-kibana-7-17-26.js",
+    "bin/f5-awaf.js",
     "bin/feishu-group-robot.js",
     "bin/first-epss-v1.js",
     "bin/fofa-network-space-mapper.js",
@@ -179,6 +182,7 @@
     "dptech__fw_v4-6-10",
     "dptech__umc-ads_v5-3-29",
     "elastic__kibana_7-17-26",
+    "f5__awaf",
     "feishu__group-robot",
     "first__epss-v1",
     "fortinet__fw",
@@ -242,7 +246,9 @@
     "scripts",
     "aliyun__waf3",
     "ailpha__platform",
-    "bin/octobus-tentacles.js"
+    "bin/octobus-tentacles.js",
+    "bin/zhizhangyi-mbs.js",
+    "zhizhangyi__mbs"
   ],
   "scripts": {
     "validate": "node scripts/validate-service-package.mjs",
