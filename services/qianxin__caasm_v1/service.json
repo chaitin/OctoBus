@@ -1,0 +1,69 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "qianxin-caasm",
+  "displayName": "QiAnXin CAASM",
+  "description": "奇安信网络资产攻击面管理系统 (CAASM) API wrapper — exposes asset, vulnerability, and admin queries as gRPC unary methods.",
+  "runtime": {
+    "mode": "on-demand"
+  },
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/caasm.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "AssetService/GetDevices": {
+          "name": "get-devices",
+          "description": "Query devices (hardware assets) from CAASM."
+        },
+        "AssetService/GetSoftware": {
+          "name": "get-software",
+          "description": "Query installed software from CAASM."
+        },
+        "AssetService/GetServices": {
+          "name": "get-services",
+          "description": "Query network services from CAASM. ⚠️ Very large table (15M+ rows) — keep limit small."
+        },
+        "AssetService/GetComponents": {
+          "name": "get-components",
+          "description": "Query software components (libraries, frameworks) from CAASM. ⚠️ Very large table (19M+ rows)."
+        },
+        "AssetService/GetWebsites": {
+          "name": "get-websites",
+          "description": "Query web applications / websites from CAASM."
+        },
+        "VulnerabilityService/GetSysVulnerabilities": {
+          "name": "get-sys-vulnerabilities",
+          "description": "Query system / software vulnerabilities from CAASM."
+        },
+        "VulnerabilityService/GetSysWeakPasswords": {
+          "name": "get-sys-weak-passwords",
+          "description": "Query system weak passwords from CAASM."
+        },
+        "VulnerabilityService/GetWebVulnerabilities": {
+          "name": "get-web-vulnerabilities",
+          "description": "Query web application vulnerabilities from CAASM."
+        },
+        "VulnerabilityService/GetWebWeakPasswords": {
+          "name": "get-web-weak-passwords",
+          "description": "Query web application weak passwords from CAASM."
+        },
+        "AdminService/GetUsers": {
+          "name": "get-users",
+          "description": "Query users with roles from CAASM admin API."
+        },
+        "AdminService/GetOrganizations": {
+          "name": "get-organizations",
+          "description": "Query organization tree from CAASM admin API."
+        },
+        "AdminService/GetRoles": {
+          "name": "get-roles",
+          "description": "Query roles from CAASM admin API."
+        }
+      }
+    }
+  }
+}

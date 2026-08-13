@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["host"],
+  "properties": {
+    "host": {
+      "type": "string",
+      "description": "F5 管理接口地址（IP 或域名）",
+      "examples": ["192.168.1.245", "f5-mgmt.example.com"]
+    },
+    "port": {
+      "type": "integer",
+      "default": 443,
+      "minimum": 1,
+      "maximum": 65535,
+      "description": "管理接口 HTTPS 端口，默认 443"
+    },
+    "verify_ssl": {
+      "type": "boolean",
+      "default": false,
+      "description": "是否验证 SSL 证书。F5 设备通常使用自签名证书，建议先设为 false；正式部署时替换为受信证书后再开启"
+    },
+    "default_policy_name": {
+      "type": "string",
+      "description": "默认 ASM 策略名称。BlockIP/UnblockIP 未指定 policy_name 时使用此值",
+      "examples": ["asm_policy_prod", "WAF_Policy_Default"]
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,21 @@
+{
+  "name": "zhizhangyi-mbs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "bin/zhizhangyi-mbs.js",
+    "config.schema.json",
+    "secret.schema.json",
+    "service.json",
+    "proto",
+    "src"
+  ],
+  "bin": {
+    "zhizhangyi-mbs": "bin/zhizhangyi-mbs.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.6.0",
+    "undici": "^7.16.0"
+  }
+}

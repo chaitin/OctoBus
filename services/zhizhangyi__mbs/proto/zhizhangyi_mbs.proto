@@ -1,0 +1,353 @@
+syntax = "proto3";
+
+package zhizhangyi.mbs;
+
+import "google/protobuf/struct.proto";
+
+// =============================================================================
+// MBS (Mobile Security Management Platform) User Management API
+// Vendor: 北京指掌易科技有限公司
+// Base URL: https://{host}:9074/uusafe/mos/thirdaccess/rest/opt/{version}/{operator}
+// Auth: MD5(appkey + param1 + param2 + ... + secretkey), 拼接不含 "+"
+// =============================================================================
+
+service UserManagement {
+  // 6.2.1 用户列表（分页/筛选）
+  rpc GetUsers(GetUsersRequest) returns (GetUsersResponse);
+
+  // 6.2.2 新增用户
+  rpc AddUser(AddUserRequest) returns (AddUserResponse);
+
+  // 6.2.3 编辑用户
+  rpc UpdUser(UpdUserRequest) returns (UpdUserResponse);
+
+  // 6.2.4 用户详情
+  rpc DetailUser(DetailUserRequest) returns (DetailUserResponse);
+
+  // 6.2.5 删除用户
+  rpc DelUsers(DelUsersRequest) returns (DelUsersResponse);
+
+  // 6.2.6 启停用户
+  rpc StateUsers(StateUsersRequest) returns (StateUsersResponse);
+
+  // 6.2.7 账号校验
+  rpc CheckLoginName(CheckLoginNameRequest) returns (CheckLoginNameResponse);
+
+  // 6.2.8 根据手机号获取用户
+  rpc GetUserByPhone(GetUserByPhoneRequest) returns (GetUserByPhoneResponse);
+
+  // 6.2.9 / 6.2.10 修改密码
+  rpc UpdUserPwd(UpdUserPwdRequest) returns (UpdUserPwdResponse);
+
+  // 6.2.11 强制下线
+  rpc ForceOffline(ForceOfflineRequest) returns (ForceOfflineResponse);
+
+  // 6.2.12 导入用户
+  rpc ImportUser(ImportUserRequest) returns (ImportUserResponse);
+}
+
+// =============================================================================
+// Common / Shared Messages
+// =============================================================================
+
+// 扩展字段键值对
+message ExAttrVo {
+  string attr_key = 1;
+  string attr_value = 2;
+}
+
+// 查询条件 map
+message GetUsersCondition {
+  string key_word = 1;   // 关键字（用户名/姓名/手机号/工号/邮箱）
+  string state = 2;      // 激活状态 -1未激活 0停用 1激活（逗号分隔多选）
+  string is_mdm = 3;     // 是否开启设备管控 0未开启 1开启（逗号分隔多选）
+  string dept_id = 4;    // 部门ID
+}
+
+// 删除/启停条件 map
+message BatchCondition {
+  string key_word = 1;
+  string status = 2;
+  string is_mdm = 3;
+  string dept_id = 4;
+}
+
+// 用户基本信息（列表项）
+message UserInfo {
+  string user_id = 1;
+  string user_name = 2;
+  string login_name = 3;
+  string phone_number = 4;
+  string email = 5;
+  string employee_number = 6;
+  string dept_id = 7;
+  string dept_name = 8;
+  int32 device_count = 9;
+  int32 is_mdm = 10;
+  int32 state = 11;
+  int32 is_admin = 12;
+  int32 user_source = 13;
+  int32 status = 14;
+  int32 weight = 15;
+  repeated ExAttrVo attrs = 16;
+  string dept_full_id = 17;
+  string dept_full_path = 18;
+  string job = 19;
+  string mobile = 20;
+  string address = 21;
+  string organization = 22;
+}
+
+// 用户详情
+message UserDetail {
+  string user_id = 1;
+  string user_name = 2;
+  string login_name = 3;
+  string dept_id = 4;
+  string dept_name = 5;
+  string phone_number = 6;
+  string job = 7;
+  string employee_number = 8;
+  string address = 9;
+  string mobile = 10;
+  string email = 11;
+  string organization = 12;
+  int32 is_mdm = 13;
+  int32 state = 14;
+  int32 weight = 15;
+  string icon_file_id = 16;
+  repeated ExAttrVo attrs = 17;
+}
+
+// =============================================================================
+// 6.2.1 GetUsers - 用户列表
+// =============================================================================
+message GetUsersRequest {
+  int32 index = 1;                  // 页号（0起始）
+  int32 size = 2;                   // 每页数量（默认10，最大5000）
+  int32 order_code = 3;             // 排序字段 0用户名 1姓名 2工号 3用户状态
+  int32 order_type = 4;             // 排序类型 0 asc 1 desc
+  GetUsersCondition condition = 5;  // 查询条件
+  string org_code = 6;              // 机构编码
+  string appkey = 7;                // 接入账号
+  string sign = 8;                  // MD5签名（自动计算）
+}
+
+message GetUsersResponse {
+  int32 code = 1;
+  string msg = 2;
+  GetUsersData data = 3;
+  string time_stamp = 4;
+}
+
+message GetUsersData {
+  int32 total = 1;
+  repeated UserInfo user_infos = 2;
+}
+
+// =============================================================================
+// 6.2.2 AddUser - 新增用户
+// =============================================================================
+message AddUserRequest {
+  string user_name = 1;             // 用户姓名（必填）
+  string login_name = 2;            // 登录名（必填）
+  string dept_id = 3;               // 部门ID（必填）
+  string password = 4;              // MBS要求的3DES加密后密码串（必填，由调用方提供）
+  string phone_number = 5;
+  string job = 6;
+  string employee_number = 7;
+  string address = 8;
+  string mobile = 9;
+  string email = 10;
+  string organization = 11;
+  int32 user_source = 12;           // 0本地 2第三方（必填）
+  int32 is_mdm = 13;                // 是否开启设备管理 0否 1是
+  int32 state = 14;                 // 1启用 0停用 -1未激活
+  int32 weight = 15;
+  repeated ExAttrVo attrs = 16;
+  string org_code = 17;
+  string appkey = 18;
+  string sign = 19;
+}
+
+message AddUserResponse {
+  int32 code = 1;
+  string msg = 2;
+  google.protobuf.Value data = 3;   // 通常为空对象
+}
+
+// =============================================================================
+// 6.2.3 UpdUser - 编辑用户
+// =============================================================================
+message UpdUserRequest {
+  string user_id = 1;               // 用户ID（必填）
+  string user_name = 2;             // 用户姓名（必填）
+  string login_name = 3;            // 登录名（不可修改账号）
+  string dept_id = 4;               // 部门ID（必填）
+  string phone_number = 5;
+  string job = 6;
+  string employee_number = 7;
+  string address = 8;
+  string mobile = 9;
+  string email = 10;
+  string organization = 11;
+  int32 is_mdm = 12;
+  int32 weight = 13;
+  repeated ExAttrVo attrs = 14;
+  string org_code = 15;
+  string appkey = 16;
+  string sign = 17;
+}
+
+message UpdUserResponse {
+  int32 code = 1;
+  string msg = 2;
+  google.protobuf.Value data = 3;
+}
+
+// =============================================================================
+// 6.2.4 DetailUser - 用户详情
+// =============================================================================
+message DetailUserRequest {
+  string user_id = 1;
+  string org_code = 2;
+  string appkey = 3;
+  string sign = 4;
+}
+
+message DetailUserResponse {
+  int32 code = 1;
+  string msg = 2;
+  UserDetail data = 3;
+}
+
+// =============================================================================
+// 6.2.5 DelUsers - 删除用户
+// =============================================================================
+message DelUsersRequest {
+  repeated string user_ids = 1;     // 用户ID列表
+  int32 type = 2;                   // 0指定ID删除 1指定条件删除
+  BatchCondition condition = 3;     // type=1时的查询条件
+  string org_code = 4;
+  string appkey = 5;
+  string sign = 6;
+}
+
+message DelUsersResponse {
+  int32 code = 1;
+  string msg = 2;
+  google.protobuf.Value data = 3;
+}
+
+// =============================================================================
+// 6.2.6 StateUsers - 启停用户
+// =============================================================================
+message StateUsersRequest {
+  repeated string user_ids = 1;
+  int32 type = 2;                   // 0指定ID 1指定条件
+  string state = 3;                 // 0停用 1启用
+  BatchCondition condition = 4;
+  string org_code = 5;
+  string appkey = 6;
+  string sign = 7;
+}
+
+message StateUsersResponse {
+  int32 code = 1;
+  string msg = 2;
+  google.protobuf.Value data = 3;
+}
+
+// =============================================================================
+// 6.2.7 CheckLoginName - 账号校验
+// =============================================================================
+message CheckLoginNameRequest {
+  string login_name = 1;
+  string org_code = 2;
+  string appkey = 3;
+  string sign = 4;
+}
+
+message CheckLoginNameResponse {
+  int32 code = 1;
+  string msg = 2;
+  google.protobuf.Value data = 3;
+}
+
+// =============================================================================
+// 6.2.8 GetUserByPhone - 根据手机号获取用户
+// =============================================================================
+message GetUserByPhoneRequest {
+  string phone = 1;
+  string org_code = 2;
+  string appkey = 3;
+  string sign = 4;
+}
+
+message GetUserByPhoneResponse {
+  int32 code = 1;
+  string msg = 2;
+  repeated PhoneUserInfo data = 3;
+}
+
+message PhoneUserInfo {
+  string user_id = 1;
+  string user_name = 2;
+  string login_name = 3;
+  string phone_number = 4;
+  string email = 5;
+}
+
+// =============================================================================
+// 6.2.9 / 6.2.10 UpdUserPwd - 修改密码
+// =============================================================================
+message UpdUserPwdRequest {
+  string user_id = 1;               // v1版本必填
+  string password = 2;              // MBS要求的3DES加密后新密码串（v1，由调用方提供）
+  string old_pwd = 3;               // MBS要求的3DES加密后原密码串（v2，由调用方提供）
+  string new_pwd = 4;               // MBS要求的3DES加密后新密码串（v2，由调用方提供）
+  string login_name = 5;            // v2版本必填
+  string version = 6;               // "v1" 管理员修改 / "v2" 用户自服务
+  string org_code = 7;
+  string appkey = 8;
+  string sign = 9;
+}
+
+message UpdUserPwdResponse {
+  int32 code = 1;
+  string msg = 2;
+  google.protobuf.Value data = 3;
+}
+
+// =============================================================================
+// 6.2.11 ForceOffline - 强制下线
+// =============================================================================
+message ForceOfflineRequest {
+  string user_id = 1;
+  string org_code = 2;
+  string appkey = 3;
+  string sign = 4;
+}
+
+message ForceOfflineResponse {
+  int32 code = 1;
+  string msg = 2;
+  google.protobuf.Value data = 3;
+}
+
+// =============================================================================
+// 6.2.12 ImportUser - 导入用户
+// =============================================================================
+message ImportUserRequest {
+  int32 lang = 1;                   // 0中文 1英文 2简体中文
+  string file_id = 2;               // 文件ID
+  string org_code = 3;
+  string appkey = 4;
+  string sign = 5;
+}
+
+message ImportUserResponse {
+  int32 code = 1;
+  string msg = 2;
+  google.protobuf.Value data = 3;
+}
