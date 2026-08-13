@@ -1,0 +1,186 @@
+syntax = "proto3";
+
+package Anyi_CloudNativeSecurity;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Anyi_CloudNativeSecurity";
+
+service Anyi_CloudNativeSecurity {
+  // 获取告警列表，支持分页和过滤
+  rpc ListWarnings(ListWarningsRequest) returns (ListWarningsResponse) {}
+
+  // 获取聚合告警列表，支持分页和过滤
+  rpc ListWarningGroups(ListWarningGroupsRequest) returns (ListWarningGroupsResponse) {}
+
+  // 告警处置：isolation 隔离、pause 暂停、stop 停止、kill 终止
+  rpc DisposeWarnings(DisposeWarningsRequest) returns (DisposeWarningsResponse) {}
+
+  // 聚合告警处置：isolation 隔离、pause 暂停、stop 停止、kill 终止
+  rpc DisposeWarningGroups(DisposeWarningGroupsRequest) returns (DisposeWarningGroupsResponse) {}
+
+  // 获取镜像漏洞列表
+  rpc ListVulnerabilities(ListVulnerabilitiesRequest) returns (ListVulnerabilitiesResponse) {}
+
+  // 获取主机列表
+  rpc ListHosts(ListHostsRequest) returns (ListHostsResponse) {}
+
+  // 获取容器列表
+  rpc ListContainers(ListContainersRequest) returns (ListContainersResponse) {}
+
+  // 获取集群列表
+  rpc ListClusters(ListClustersRequest) returns (ListClustersResponse) {}
+
+  // 容器控制操作：resume 恢复、start 启动、activate 激活、deactivate 停用
+  rpc ContainerControl(ContainerControlRequest) returns (ContainerControlResponse) {}
+
+  // 解除容器网络隔离
+  rpc UnblockNetwork(UnblockNetworkRequest) returns (UnblockNetworkResponse) {}
+}
+
+// --- ListWarnings ---
+
+message ListWarningsRequest {
+  google.protobuf.Struct filter = 1; // 过滤条件，透传至 DISS API body
+  int64 from = 2;  // 分页起始偏移，默认 0
+  int64 limit = 3; // 分页大小，默认 20
+}
+
+message ListWarningsResponse {
+  int64 code = 1;                // DISS 返回码，200 表示成功
+  string message = 2;            // DISS 返回消息
+  google.protobuf.Struct data = 3; // DISS 返回数据，含 items/total 等
+}
+
+// --- ListWarningGroups ---
+
+message ListWarningGroupsRequest {
+  google.protobuf.Struct filter = 1;
+  int64 from = 2;
+  int64 limit = 3;
+}
+
+message ListWarningGroupsResponse {
+  int64 code = 1;
+  string message = 2;
+  google.protobuf.Struct data = 3;
+}
+
+// --- DisposeWarnings ---
+
+message DisposeWarningsRequest {
+  string action = 1;                    // 处置方式：isolation / pause / stop / kill
+  string account = 2;                   // 租户，可选
+  repeated google.protobuf.Struct warnings = 3;   // 告警信息列表
+  repeated google.protobuf.Struct whitelist = 4;  // 白名单条目，可选
+}
+
+message DisposeWarningsResponse {
+  int64 code = 1;
+  string message = 2;
+  google.protobuf.Struct data = 3;
+}
+
+// --- DisposeWarningGroups ---
+
+message DisposeWarningGroupsRequest {
+  string action = 1;
+  string account = 2;
+  repeated google.protobuf.Struct warning_groups = 3;
+  repeated google.protobuf.Struct whitelist = 4;
+  bool ns_networkpolicy = 5; // 是否应用网络策略
+}
+
+message DisposeWarningGroupsResponse {
+  int64 code = 1;
+  string message = 2;
+  google.protobuf.Struct data = 3;
+}
+
+// --- ListVulnerabilities ---
+
+message ListVulnerabilitiesRequest {
+  google.protobuf.Struct filter = 1;
+  int64 from = 2;
+  int64 limit = 3;
+}
+
+message ListVulnerabilitiesResponse {
+  int64 code = 1;
+  string message = 2;
+  google.protobuf.Struct data = 3;
+}
+
+// --- ListHosts ---
+
+message ListHostsRequest {
+  google.protobuf.Struct filter = 1;
+  string user = 2; // DISS API 登录用户，默认 "admin"
+  int64 from = 3;
+  int64 limit = 4;
+}
+
+message ListHostsResponse {
+  int64 code = 1;
+  string message = 2;
+  google.protobuf.Struct data = 3;
+}
+
+// --- ListContainers ---
+
+message ListContainersRequest {
+  google.protobuf.Struct filter = 1;
+  int64 from = 2;
+  int64 limit = 3;
+}
+
+message ListContainersResponse {
+  int64 code = 1;
+  string message = 2;
+  google.protobuf.Struct data = 3;
+}
+
+// --- ListClusters ---
+
+message ListClustersRequest {
+  google.protobuf.Struct filter = 1;
+  int64 from = 2;
+  int64 limit = 3;
+}
+
+message ListClustersResponse {
+  int64 code = 1;
+  string message = 2;
+  google.protobuf.Struct data = 3;
+}
+
+// --- ContainerControl ---
+
+message ContainerControlRequest {
+  string action = 1;          // 操作：resume / start / activate / deactivate
+  string container_id = 2;    // 容器 ID
+  string container_name = 3;  // 容器名称，可选
+  string host_id = 4;         // 主机 ID，可选
+  string cluster_id = 5;      // 集群 ID，可选
+  string analysis = 6;        // 处置说明，可选
+}
+
+message ContainerControlResponse {
+  int64 code = 1;
+  string message = 2;
+  google.protobuf.Struct data = 3;
+}
+
+// --- UnblockNetwork ---
+
+message UnblockNetworkRequest {
+  string container_id = 1;    // 容器 ID
+  string host_id = 2;         // 主机 ID，可选
+  string cluster_id = 3;      // 集群 ID，可选
+}
+
+message UnblockNetworkResponse {
+  int64 code = 1;
+  string message = 2;
+  google.protobuf.Struct data = 3;
+}
