@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package Feishu_GroupRobot;
 
+import "google/protobuf/struct.proto";
+
 option go_package = "miner/grpc-service/Feishu_GroupRobot";
 
 // 飞书群机器人消息推送服务
@@ -12,6 +14,25 @@ service Feishu_GroupRobot {
   // HTTP 请求体格式: {"msg_type": "text", "content": {"text": "<message>"}}
   // 成功条件: HTTP 状态码位于 {200, 209, 210} 集合中
   rpc SendTextMessage(SendTextMessageRequest) returns (SendTextMessageResponse) {}
+
+  // Verify application credentials and obtain a sanitized token status.
+  rpc CheckConnectivity(EmptyRequest) returns (ConnectivityResponse) {}
+  // Read an approval definition. The response JSON is the Feishu data object.
+  rpc GetApprovalDefinition(ApprovalCodeRequest) returns (JsonResponse) {}
+  // List approval instance codes. Use page_token from the response JSON for subsequent pages.
+  rpc ListApprovalInstanceCodes(ListApprovalInstanceCodesRequest) returns (JsonResponse) {}
+  // Read an approval instance, optionally selecting locale and nested mutable-group fields.
+  rpc GetApprovalInstance(GetApprovalInstanceRequest) returns (JsonResponse) {}
+  // Create an approval instance. operation_id is sent as Feishu's idempotency UUID.
+  rpc CreateApprovalInstance(CreateApprovalInstanceRequest) returns (CreateApprovalInstanceResponse) {}
+  // Withdraw an approval instance as its submitter. operation_id is local correlation only.
+  rpc CancelApprovalInstance(CancelApprovalInstanceRequest) returns (MutationResponse) {}
+  // Send Feishu custom approval Bot template 1021. operation_id is Feishu's one-hour deduplication UUID.
+  rpc SendApprovalBotMessage(SendApprovalBotMessageRequest) returns (SendApprovalBotMessageResponse) {}
+  // Read a user and its department memberships.
+  rpc GetUser(GetUserRequest) returns (JsonResponse) {}
+  // Read a department, including leader IDs in the requested user ID type.
+  rpc GetDepartment(GetDepartmentRequest) returns (JsonResponse) {}
 }
 
 // 发送文本消息请求
@@ -31,4 +52,98 @@ message SendTextMessageResponse {
 
   // 兼容旧响应字段。当前实现为避免泄露上游内容固定返回空字符串。
   string http_body = 2;
+}
+
+message EmptyRequest {}
+
+message ConnectivityResponse {
+  bool reachable = 1;
+  string message = 2;
+  int64 token_expires_in_seconds = 3;
+}
+
+message JsonResponse {
+  google.protobuf.Struct data = 1;
+}
+
+message ApprovalCodeRequest {
+  string approval_code = 1;
+}
+
+message ListApprovalInstanceCodesRequest {
+  string approval_code = 1;
+  int64 start_time_ms = 2;
+  int64 end_time_ms = 3;
+  int32 page_size = 4;
+  string page_token = 5;
+}
+
+message GetApprovalInstanceRequest {
+  string instance_code = 1;
+  string user_id = 2;
+  string user_id_type = 3;
+  string locale = 4;
+  bool nested_mutable_group = 5;
+}
+
+message NodeUsers {
+  string key = 1;
+  repeated string user_ids = 2;
+}
+
+message CreateApprovalInstanceRequest {
+  string approval_code = 1;
+  string user_id = 2;
+  string open_id = 3;
+  string department_id = 4;
+  string form_json = 5;
+  repeated NodeUsers node_approvers = 6;
+  repeated NodeUsers node_cc_users = 7;
+  string operation_id = 8;
+  bool cancel_bot_notification = 9;
+}
+
+message CreateApprovalInstanceResponse {
+  string instance_code = 1;
+  string operation_id = 2;
+}
+
+message CancelApprovalInstanceRequest {
+  string approval_code = 1;
+  string instance_code = 2;
+  string user_id = 3;
+  string user_id_type = 4;
+  string operation_id = 5;
+}
+
+message MutationResponse {
+  bool submitted = 1;
+  string operation_id = 2;
+}
+
+message SendApprovalBotMessageRequest {
+  string recipient_user_id = 1;
+  string recipient_open_id = 2;
+  string operation_id = 3;
+  string title = 4;
+  string content = 5;
+  string detail_url = 6;
+  string locale = 7;
+}
+
+message SendApprovalBotMessageResponse {
+  string message_id = 1;
+  string operation_id = 2;
+}
+
+message GetUserRequest {
+  string user_id = 1;
+  string user_id_type = 2;
+  string department_id_type = 3;
+}
+
+message GetDepartmentRequest {
+  string department_id = 1;
+  string department_id_type = 2;
+  string user_id_type = 3;
 }

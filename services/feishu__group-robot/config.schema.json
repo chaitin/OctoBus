@@ -3,6 +3,17 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
+    "baseUrl": {
+      "type": "string",
+      "format": "uri",
+      "default": "https://open.feishu.cn",
+      "description": "Feishu Open Platform root URL used by approval and contact methods."
+    },
+    "allowInsecureHttp": {
+      "type": "boolean",
+      "default": false,
+      "description": "Allow HTTP for a controlled local Open Platform mock only. Never enable in production."
+    },
     "timeoutMs": {
       "type": "integer",
       "minimum": 1,
