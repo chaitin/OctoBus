@@ -1,8 +1,8 @@
 {
   "schema": "chaitin.octobus.service.v1",
   "name": "tencent-weixin-personal",
-  "displayName": "Tencent Weixin Personal",
-  "description": "Personal Weixin chat service through Tencent iLink Bot API, with QR login, long-poll receive, and text send support.",
+  "displayName": "Tencent Weixin iLink Bot",
+  "description": "Experimental Tencent iLink Bot API adapter with QR authorization, update polling, and text sending.",
   "runtime": {
     "mode": "long-running"
   },
@@ -31,33 +31,9 @@
           "name": "fetch-updates",
           "description": "Long-poll iLink getupdates once and return normalized messages."
         },
-        "Tencent_WeixinPersonal.Tencent_WeixinPersonal/StartReceiver": {
-          "name": "start-receiver",
-          "description": "Start background long-poll receive loop."
-        },
-        "Tencent_WeixinPersonal.Tencent_WeixinPersonal/StopReceiver": {
-          "name": "stop-receiver",
-          "description": "Stop background long-poll receive loop."
-        },
-        "Tencent_WeixinPersonal.Tencent_WeixinPersonal/GetReceiverStatus": {
-          "name": "get-receiver-status",
-          "description": "Return background receiver status and buffered message count."
-        },
-        "Tencent_WeixinPersonal.Tencent_WeixinPersonal/PollMessages": {
-          "name": "poll-messages",
-          "description": "Poll normalized Weixin messages buffered by the receiver."
-        },
-        "Tencent_WeixinPersonal.Tencent_WeixinPersonal/AckMessage": {
-          "name": "ack-message",
-          "description": "Acknowledge and remove buffered Weixin messages."
-        },
         "Tencent_WeixinPersonal.Tencent_WeixinPersonal/SendText": {
           "name": "send-text",
           "description": "Send a text message through Tencent iLink Bot API."
-        },
-        "Tencent_WeixinPersonal.Tencent_WeixinPersonal/NormalizeMessage": {
-          "name": "normalize-message",
-          "description": "Normalize one raw iLink Weixin message object."
         }
       }
     }

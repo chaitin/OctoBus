@@ -4,20 +4,12 @@ package Tencent_WeixinPersonal;
 
 option go_package = "miner/grpc-service/Tencent_WeixinPersonal";
 
-// Tencent_WeixinPersonal wraps personal Weixin chat messaging through Tencent iLink Bot API.
+// Tencent_WeixinPersonal wraps the experimental Tencent iLink Bot API.
 service Tencent_WeixinPersonal {
-  // Keep a real upstream-backed operation first so generic catalog smoke tests
-  // verify the complete OctoBus-to-iLink request chain.
   rpc SendText(SendTextRequest) returns (SendTextResponse) {}
   rpc StartLogin(StartLoginRequest) returns (StartLoginResponse) {}
   rpc WaitLogin(WaitLoginRequest) returns (WaitLoginResponse) {}
   rpc FetchUpdates(FetchUpdatesRequest) returns (FetchUpdatesResponse) {}
-  rpc StartReceiver(StartReceiverRequest) returns (ReceiverStatus) {}
-  rpc StopReceiver(StopReceiverRequest) returns (ReceiverStatus) {}
-  rpc GetReceiverStatus(GetReceiverStatusRequest) returns (ReceiverStatus) {}
-  rpc PollMessages(PollMessagesRequest) returns (PollMessagesResponse) {}
-  rpc AckMessage(AckMessageRequest) returns (AckMessageResponse) {}
-  rpc NormalizeMessage(NormalizeMessageRequest) returns (NormalizedMessage) {}
 }
 
 message StartLoginRequest {
@@ -32,7 +24,7 @@ message StartLoginResponse {
   string message = 4;
   int32 http_status = 5;
   string http_body = 6;
-  string qrcode_terminal = 7;
+  int32 expires_in_seconds = 7;
 }
 
 message WaitLoginRequest {
@@ -45,9 +37,7 @@ message WaitLoginResponse {
   bool connected = 1;
   bool already_connected = 2;
   string account_id = 3;
-  string user_id = 4;
-  string base_url = 5;
-  string token = 6;
+  reserved 4 to 6; // Credentials stay inside the service instance.
   string status = 7;
   string message = 8;
   int32 http_status = 9;
@@ -71,56 +61,6 @@ message FetchUpdatesResponse {
   string http_body = 8;
 }
 
-message StartReceiverRequest {
-  bool force_restart = 1;
-  string cursor = 2;
-}
-
-message StopReceiverRequest {}
-
-message GetReceiverStatusRequest {}
-
-message ReceiverStatus {
-  bool running = 1;
-  bool ready = 2;
-  string state = 3;
-  string account_id = 4;
-  string base_url = 5;
-  string cursor = 6;
-  string last_error = 7;
-  string started_at = 8;
-  string last_poll_at = 9;
-  string last_message_at = 10;
-  int32 queue_size = 11;
-  int32 dropped_messages = 12;
-  int32 poll_count = 13;
-}
-
-message PollMessagesRequest {
-  int32 max_messages = 1;
-  bool ack = 2;
-}
-
-message ReceivedMessage {
-  string local_id = 1;
-  string received_at = 2;
-  NormalizedMessage message = 3;
-}
-
-message PollMessagesResponse {
-  repeated ReceivedMessage messages = 1;
-  int32 queue_size = 2;
-}
-
-message AckMessageRequest {
-  repeated string local_id = 1;
-  bool all = 2;
-}
-
-message AckMessageResponse {
-  int32 acked = 1;
-  int32 queue_size = 2;
-}
 
 message SendTextRequest {
   string to_user_id = 1;
@@ -139,10 +79,6 @@ message SendTextResponse {
   string client_id = 5;
   int32 http_status = 6;
   string http_body = 7;
-}
-
-message NormalizeMessageRequest {
-  string raw_json = 1;
 }
 
 message NormalizedMessage {

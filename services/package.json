@@ -264,7 +264,6 @@
     "@alicloud/swas-open20200601": "^4.0.0",
     "@chaitin-ai/octobus-sdk": "^0.6.0",
     "commander": "^12.1.0",
-    "qrcode-terminal": "0.12.0",
     "undici": "^7.16.0"
   },
   "bundledDependencies": [
@@ -273,7 +272,6 @@
     "@alicloud/swas-open20200601",
     "@chaitin-ai/octobus-sdk",
     "commander",
-    "qrcode-terminal",
     "undici"
   ]
 }
