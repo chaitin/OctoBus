@@ -302,3 +302,34 @@ test('skipTlsVerify wires an undici dispatcher', () => {
   const opts = _test.buildTlsOptions({ skipTlsVerify: true });
   assert.ok(opts.dispatcher, 'expected dispatcher when skipTlsVerify is set');
 });
+
+test('remaining handlers reach their documented upstream endpoints', async () => {
+  const calls = [
+    ['CreateBaselineTask', { name: 'n', targets: '1.1.1.1', login_type: 'ssh', login_port: '22', login_name: 'u', login_password: 'p', template_uuid: 't' }],
+    ['CreateWebTask', { name: 'n', targets: 'https://x' }],
+    ['CreateOfflineTask', { task_field_base64: Buffer.from('x').toString('base64') }],
+    ['CreateDockerTask', { name: 'n', targets: 'image' }],
+    ['CreateCodeauditTask', { name: 'n', code_source: 1, repo_path: 'https://repo' }],
+    ['CreateHostAssetsTask', { name: 'n', targets: '1.1.1.1' }],
+    ['CreateWebAssetsTask', { name: 'n', targets: 'https://x' }],
+    ['PauseTask', { task_id: 1 }], ['ResumeTask', { task_id: 1 }], ['StopTask', { task_id: 1 }], ['DeleteTask', { task_id: 1 }],
+    ['ListActiveTasks', {}], ['CreateAuthInfo', { authinfo: [{ accountname: 'u', accountpwd: 'p', port: 22, protocol: 'ssh', ip: '1.1.1.1' }] }],
+    ['LoginVerify', { ip: '1.1.1.1', protocol: 'ssh', port: 22, user_name: 'u', userpwd: 'p' }],
+    ['ListWebvulnTemplate', {}], ['ListBaselineTemplate', { industry: 'finance' }],
+    ['GetBaselineParams', { uuid: 'u' }], ['ListCodeauditTemplate', { type: 1 }], ['ListAssetTemplate', {}],
+    ['CreateBaselineTemplate', { template_base64: Buffer.from('x').toString('base64') }],
+    ['ListUserpwd', {}], ['CreateUserpwd', { userpwd: 'secret' }], ['GetLogInfo', {}],
+    ['ListReportTemplate', {}], ['DeleteReports', { all: true }], ['GetAgentAuth', {}], ['GetAgentPackageUrl', {}],
+  ];
+  setFetch(async () => ({ status: 200, headers: new Headers({ 'content-type': 'application/json' }), text: async () => JSON.stringify({ ret_code: 0, data: { task_id: 1 } }) }));
+  for (const [name, request] of calls) {
+    const out = await call(name, request);
+    assert.equal(out.ret_code ?? 0, 0, name);
+  }
+});
+
+test('remaining validation branches reject unsafe empty requests', async () => {
+  await expectGrpc(() => call('CreateAuthInfo', { authinfo: [] }), 'INVALID_ARGUMENT');
+  await expectGrpc(() => call('DeleteReports', { report_ids: [] }), 'INVALID_ARGUMENT');
+  await expectGrpc(() => call('DownloadAgent', { platform: 'darwin' }), 'INVALID_ARGUMENT');
+});

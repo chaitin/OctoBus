@@ -1,0 +1,5 @@
+{
+  "method": "Nsfocus_RSAS_V60R04F04SP09.Nsfocus_RSAS_V60R04F04SP09/GetSystemStatus",
+  "request": {},
+  "expectUpstream": true
+}

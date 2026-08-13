@@ -779,8 +779,20 @@ const HANDLERS = {
 
 // Exported as { [fullMethodName]: (ctx) => Promise } — single-arg ctx signature
 // is required by the package validator.
+// The SDK invokes service handlers as (request, context), while older direct
+// callers used a single context argument. Support both shapes so runtime
+// configuration is never mistaken for the protobuf request.
+const handlerArgs = (requestOrContext = {}, maybeContext) => (
+  maybeContext === undefined
+    ? { request: requestFromContext(requestOrContext), context: requestOrContext }
+    : { request: normalizeRequest(requestOrContext), context: maybeContext ?? {} }
+);
+
 export const handlers = Object.fromEntries(
-  Object.entries(HANDLERS).map(([name, fn]) => [method(name), (ctx = {}) => fn(requestFromContext(ctx), ctx)]),
+  Object.entries(HANDLERS).map(([name, fn]) => [method(name), async (requestOrContext = {}, maybeContext) => {
+    const { request, context } = handlerArgs(requestOrContext, maybeContext);
+    return fn(request, context);
+  }]),
 );
 
 export const METHODS = Object.fromEntries(Object.keys(HANDLERS).map((name) => [name, method(name)]));
