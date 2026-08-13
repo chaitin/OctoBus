@@ -49,6 +49,7 @@ const gatewayState = {
   ws: null,
   heartbeatTimer: null,
   reconnectTimer: null,
+  awaitingHeartbeatAck: false,
   ctx: null,
   localMessageSeq: 0,
   connectionId: 0,
@@ -242,6 +243,14 @@ const writeTokenCache = (key, accessToken, expiresIn, nowMs = Date.now()) => {
   });
 };
 
+const deleteTokenCache = (ctx = {}) => {
+  const bindings = resolveCallContext(ctx).bindings || {};
+  const appId = resolveAppId(bindings);
+  const appSecret = resolveAppSecret(bindings);
+  if (!appId || !appSecret) return;
+  tokenCache.delete(tokenCacheKey(resolveTokenUrl(bindings), appId, appSecret));
+};
+
 const fetchAppAccessToken = async (ctx = {}, forceRefresh = false) => {
   const callCtx = resolveCallContext(ctx);
   const bindings = callCtx.bindings || {};
@@ -383,13 +392,20 @@ const enqueueGatewayMessage = async (payload) => {
 
 const fetchGatewayInfo = async (ctx = {}, accessToken) => {
   const baseUrl = resolveApiBaseUrl(resolveCallContext(ctx).bindings || {});
-  const response = await fetchWithTimeout(buildApiUrl(baseUrl, "gateway/bot"), {
-    method: "GET",
-    headers: {
-      authorization: `QQBot ${accessToken}`,
-      accept: "application/json, */*;q=0.8",
-    },
-  }, resolveTimeoutMs(ctx));
+  let response;
+  try {
+    response = await fetchWithTimeout(buildApiUrl(baseUrl, "gateway/bot"), {
+      method: "GET",
+      headers: {
+        authorization: `QQBot ${accessToken}`,
+        accept: "application/json, */*;q=0.8",
+      },
+    }, resolveTimeoutMs(ctx));
+  } catch (err) {
+    throw upstreamError("UNAVAILABLE", "qq bot gateway request failed", {
+      responseMessage: err?.cause?.message || err?.message || "fetch failed",
+    });
+  }
   const httpStatus = Number(response.status || 0);
   const httpBody = String((await response.text()) ?? "");
   const body = parseJsonBody(httpBody, "gateway response");
@@ -433,9 +449,27 @@ const identifyGateway = (accessToken) => {
   }));
 };
 
+const resumeGateway = (accessToken) => {
+  gatewayState.ws?.send(JSON.stringify({
+    op: 6,
+    d: {
+      token: `QQBot ${accessToken}`,
+      session_id: gatewayState.sessionId,
+      seq: gatewayState.seq,
+    },
+  }));
+};
+
 const sendHeartbeat = () => {
   if (!gatewayState.ws || gatewayState.ws.readyState !== WebSocket.OPEN) return;
+  if (gatewayState.awaitingHeartbeatAck) {
+    gatewayState.lastError = "gateway heartbeat acknowledgement timed out";
+    closeGatewaySocket();
+    scheduleGatewayReconnect();
+    return;
+  }
   gatewayState.ws.send(JSON.stringify({ op: 1, d: gatewayState.seq }));
+  gatewayState.awaitingHeartbeatAck = true;
 };
 
 const handleGatewayPayload = async (payload, accessToken) => {
@@ -446,15 +480,22 @@ const handleGatewayPayload = async (payload, accessToken) => {
     const interval = Number(payload.d?.heartbeat_interval || 45_000);
     if (gatewayState.heartbeatTimer) clearInterval(gatewayState.heartbeatTimer);
     gatewayState.heartbeatTimer = setInterval(sendHeartbeat, interval);
-    identifyGateway(accessToken);
+    gatewayState.awaitingHeartbeatAck = false;
+    if (gatewayState.sessionId && gatewayState.seq !== null) resumeGateway(accessToken);
+    else identifyGateway(accessToken);
     return;
   }
   if (payload.op === 11) {
+    gatewayState.awaitingHeartbeatAck = false;
     gatewayState.lastHeartbeatAckAt = new Date().toISOString();
     return;
   }
   if (payload.op === 7 || payload.op === 9) {
     gatewayState.lastError = payload.op === 7 ? "gateway requested reconnect" : "gateway invalid session";
+    if (payload.op === 9) {
+      gatewayState.sessionId = "";
+      gatewayState.seq = null;
+    }
     closeGatewaySocket();
     scheduleGatewayReconnect();
     return;
@@ -480,6 +521,7 @@ const connectGateway = async () => {
   gatewayState.state = "connecting";
   gatewayState.ready = false;
   gatewayState.lastError = "";
+  gatewayState.awaitingHeartbeatAck = false;
   clearGatewayTimers();
   closeGatewaySocket();
 
@@ -540,7 +582,13 @@ const startGateway = async (ctx = {}, forceRestart = false) => {
   gatewayState.ctx = callCtx;
   gatewayState.intents = resolveGatewayIntents(callCtx.bindings || {});
   gatewayState.seq = null;
-  await connectGateway();
+  try {
+    await connectGateway();
+  } catch (err) {
+    gatewayState.lastError = err?.message || String(err);
+    gatewayState.state = "reconnecting";
+    scheduleGatewayReconnect();
+  }
   return gatewayStatus();
 };
 
@@ -548,6 +596,7 @@ const stopGateway = async () => {
   gatewayState.running = false;
   gatewayState.ready = false;
   gatewayState.state = "stopped";
+  gatewayState.awaitingHeartbeatAck = false;
   clearGatewayTimers();
   closeGatewaySocket();
   return gatewayStatus();
@@ -626,7 +675,7 @@ const buildMessagePayload = (req = {}, options = {}) => {
 
 const buildApiUrl = (baseUrl, path) => new URL(path, `${baseUrl}/`).toString();
 
-const callOpenApi = async (ctx = {}, path, payload = {}) => {
+const callOpenApi = async (ctx = {}, path, payload = {}, retried = false) => {
   const callCtx = resolveCallContext(ctx);
   const baseUrl = resolveApiBaseUrl(callCtx.bindings || {});
   const accessToken = await resolveAccessToken(callCtx);
@@ -653,6 +702,11 @@ const callOpenApi = async (ctx = {}, path, payload = {}) => {
   const httpStatus = Number(response.status || 0);
   const httpBody = String((await response.text()) ?? "");
   const body = parseJsonBody(httpBody, "openapi response");
+  if (httpStatus === 401 && !retried && !resolveConfiguredAccessToken(callCtx.bindings || {})) {
+    deleteTokenCache(callCtx);
+    await fetchAppAccessToken(callCtx, true);
+    return callOpenApi(callCtx, path, payload, true);
+  }
   if (httpStatus < 200 || httpStatus >= 300) {
     throw upstreamError(mapHttpStatusToCode(httpStatus), `qq bot openapi http ${httpStatus}`, {
       httpStatus,
@@ -833,6 +887,7 @@ export const _test = {
   clearGatewayTimers,
   closeGatewaySocket,
   connectGateway,
+  deleteTokenCache,
   errorWithCode,
   enqueueGatewayMessage,
   eventData,
@@ -845,6 +900,7 @@ export const _test = {
   handleAckMessage,
   handleGetAccessToken,
   handleGetGatewayStatus,
+  handleGatewayPayload,
   handleNormalizeEvent,
   handlePollMessages,
   handleSendC2CMessage,
@@ -860,11 +916,14 @@ export const _test = {
   optionalInt32,
   optionalIntWithDefault,
   optionalUint32,
+  parseRuntimeFileArg,
+  parseRuntimeJsonArg,
   parseJsonBody,
   parsePayload,
   pollMessages,
   readTokenCache,
   registerHandlers,
+  resumeGateway,
   requireString,
   resolveAccessToken,
   resolveApiBaseUrl,
@@ -881,6 +940,7 @@ export const _test = {
   resolveTimeoutMs,
   resolveTokenUrl,
   startGateway,
+  sendHeartbeat,
   stopGateway,
   stringifyId,
   toBoolean,

@@ -1,0 +1,41 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "threatbook-hfish",
+  "displayName": "ThreatBook HFish Honeypot",
+  "description": "OctoBus package for ThreatBook HFish honeypot attack IPs, attack details, attack accounts, and system info APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/hfish.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "ThreatBook_HFISH.ThreatBook_HFISH/ListAttackIPs": {
+          "name": "list-attack-ips",
+          "description": "List HFish attack source IPs with pagination."
+        },
+        "ThreatBook_HFISH.ThreatBook_HFISH/ListAttackDetails": {
+          "name": "list-attack-details",
+          "description": "List HFish attack details with pagination."
+        },
+        "ThreatBook_HFISH.ThreatBook_HFISH/ListAttackAccounts": {
+          "name": "list-attack-accounts",
+          "description": "List HFish attack accounts with pagination."
+        },
+        "ThreatBook_HFISH.ThreatBook_HFISH/GetSystemInfo": {
+          "name": "get-system-info",
+          "description": "Get HFish honeypot system status."
+        }
+      }
+    }
+  }
+}

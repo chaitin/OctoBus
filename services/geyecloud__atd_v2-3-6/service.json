@@ -1,0 +1,77 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "geyecloud-atd",
+  "displayName": "geyecloud-ATD",
+  "description": "Read-only OctoBus adapter for geyecloud-ATD threat aggregation and network log query APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/geyecloud_atd.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "geyecloud.atd.v1.GEYECloudATD/AggregateThreatEvents": {
+          "name": "aggregate-threat-events",
+          "description": "Aggregate threat events by severity, kill chain, attack status, or class type."
+        },
+        "geyecloud.atd.v1.GEYECloudATD/GetNetworkLogTimeTrend": {
+          "name": "get-network-log-time-trend",
+          "description": "Query network log count trend over time."
+        },
+        "geyecloud.atd.v1.GEYECloudATD/GetNetworkLogDimensionStatistics": {
+          "name": "get-network-log-dimension-statistics",
+          "description": "Aggregate network logs by a selected dimension."
+        },
+        "geyecloud.atd.v1.GEYECloudATD/ListNetworkLogs": {
+          "name": "list-network-logs",
+          "description": "List network logs with time range, filters, sorting, and pagination."
+        },
+        "geyecloud.atd.v1.GEYECloudATD/GetNetworkLogDetail": {
+          "name": "get-network-log-detail",
+          "description": "Get one network log detail by detail ID and timestamp."
+        },
+        "geyecloud.atd.v1.GEYECloudATD/ListFileDetectionLogs": {
+          "name": "list-file-detection-logs",
+          "description": "List file detection logs with time range, filters, sorting, and pagination."
+        },
+        "geyecloud.atd.v1.GEYECloudATD/GetFileDetectionLogDetail": {
+          "name": "get-file-detection-log-detail",
+          "description": "Get one file detection log detail by UUID and timestamp."
+        },
+        "geyecloud.atd.v1.GEYECloudATD/GetFileDetectionSeverityStats": {
+          "name": "get-file-detection-severity-stats",
+          "description": "Query file detection severity counters."
+        },
+        "geyecloud.atd.v1.GEYECloudATD/ListSceneMonitors": {
+          "name": "list-scene-monitors",
+          "description": "List configured scene monitors."
+        },
+        "geyecloud.atd.v1.GEYECloudATD/SearchSceneMonitorEvents": {
+          "name": "search-scene-monitor-events",
+          "description": "Search events for one scene monitor."
+        },
+        "geyecloud.atd.v1.GEYECloudATD/GetSituationOverview": {
+          "name": "get-situation-overview",
+          "description": "Query common read-only situation overview dashboard sections."
+        },
+        "geyecloud.atd.v1.GEYECloudATD/SearchThreatEvents": {
+          "name": "search-threat-events",
+          "description": "Search threat events through the advanced search API."
+        },
+        "geyecloud.atd.v1.GEYECloudATD/GetThreatEventDetail": {
+          "name": "get-threat-event-detail",
+          "description": "Get one threat event detail by UUID and optional sensor/IP filters."
+        }
+      }
+    }
+  }
+}

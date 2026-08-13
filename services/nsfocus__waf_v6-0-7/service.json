@@ -1,0 +1,37 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "nsfocus-waf-v6-0-7",
+  "displayName": "NSFOCUS WAF 6.0.7",
+  "description": "OctoBus package for NSFOCUS Web Application Firewall L4 ACL block, blocked IP query, and unblock APIs calibrated against the V6.0.7.3 REST document.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/nsfocus_waf_v6_0_7.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "nsfocus.waf.v6.NSFOCUSWAFService/BlockIP": {
+          "name": "block-ip",
+          "description": "创建网络层访问控制（L4 ACL）策略封禁源 IP。"
+        },
+        "nsfocus.waf.v6.NSFOCUSWAFService/ListBlockedIPs": {
+          "name": "list-blocked-ips",
+          "description": "查询网络层访问控制策略，可按 IP 过滤。"
+        },
+        "nsfocus.waf.v6.NSFOCUSWAFService/UnblockIP": {
+          "name": "unblock-ip",
+          "description": "删除网络层访问控制策略以解封 IP。"
+        }
+      }
+    }
+  }
+}

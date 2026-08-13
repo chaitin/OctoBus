@@ -1,0 +1,153 @@
+syntax = "proto3";
+
+package ThreatBook_HFISH;
+
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/ThreatBook_HFISH";
+
+service ThreatBook_HFISH {
+  // 获取攻击来源 IP 列表，支持分页
+  rpc ListAttackIPs(ListAttackIPsRequest) returns (ListAttackIPsResponse) {}
+
+  // 获取攻击详情列表，支持分页
+  rpc ListAttackDetails(ListAttackDetailsRequest) returns (ListAttackDetailsResponse) {}
+
+  // 获取攻击 IP 使用的账号信息列表
+  rpc ListAttackAccounts(ListAttackAccountsRequest) returns (ListAttackAccountsResponse) {}
+
+  // 获取蜜罐系统运行状态信息
+  rpc GetSystemInfo(GetSystemInfoRequest) returns (GetSystemInfoResponse) {}
+}
+
+// ==================== ListAttackIPs ====================
+
+message ListAttackIPsRequest {
+  string api_key = 1; // API 访问凭证，必填
+  google.protobuf.Int64Value page = 2; // 页码，可选，默认 1
+  google.protobuf.Int64Value limit = 3; // 每页条数，可选，默认 20
+}
+
+message ListAttackIPsResponse {
+  int64 response_code = 1; // 响应码，0 表示成功
+  string verbose_msg = 2; // 响应消息
+  repeated AttackIPRecord data = 3; // 攻击 IP 列表
+}
+
+message AttackIPRecord {
+  string ip = 1; // 攻击者 IP
+  int64 attack_count = 2; // 攻击次数
+  string first_attack_time = 3; // 首次攻击时间
+  string last_attack_time = 4; // 最近攻击时间
+  repeated string attack_types = 5; // 攻击类型列表
+  string country = 6; // 国家
+  string province = 7; // 省份
+  string city = 8; // 城市
+  string group = 9; // 所属分组
+  string comment = 10; // 备注
+  int64 attack_chain_count = 11; // 攻击链数量
+  int64 port_count = 12; // 端口数量
+  int64 related_info_count = 13; // 关联信息数量
+}
+
+// ==================== ListAttackDetails ====================
+
+message ListAttackDetailsRequest {
+  string api_key = 1; // API 访问凭证，必填
+  google.protobuf.Int64Value page = 2; // 页码，可选，默认 1
+  google.protobuf.Int64Value limit = 3; // 每页条数，可选，默认 20
+  string ip = 4; // 按 IP 过滤，可选
+  string type = 5; // 按蜜罐类型过滤，可选
+}
+
+message ListAttackDetailsResponse {
+  int64 response_code = 1; // 响应码，0 表示成功
+  string verbose_msg = 2; // 响应消息
+  AttackDetailData data = 3; // 攻击详情数据
+}
+
+message AttackDetailData {
+  int64 total_num = 1; // 总记录数
+  int64 page_no = 2; // 当前页码
+  int64 page_size = 3; // 每页大小
+  int64 total_page = 4; // 总页数
+  repeated AttackDetailRecord detail_list = 5; // 攻击详情列表
+}
+
+message AttackDetailRecord {
+  int64 id = 1; // 记录 ID
+  string src_ip = 2; // 源 IP
+  string src_port = 3; // 源端口
+  string dest_ip = 4; // 目的 IP
+  string dest_port = 5; // 目的端口
+  string protocol = 6; // 协议
+  string type = 7; // 蜜罐类型
+  string app_name = 8; // 蜜罐名称
+  string client_name = 9; // 节点名称
+  string raw_data = 10; // 原始攻击载荷
+  string country = 11; // 国家
+  string province = 12; // 省份
+  string city = 13; // 城市
+  string create_time = 14; // 攻击时间
+  string attack_chain = 15; // 攻击链信息
+  string crawl_info = 16; // 扫描信息
+  string user_info = 17; // 账号信息
+}
+
+// ==================== ListAttackAccounts ====================
+
+message ListAttackAccountsRequest {
+  string api_key = 1; // API 访问凭证，必填
+  google.protobuf.Int64Value page = 2; // 页码，可选，默认 1
+  google.protobuf.Int64Value limit = 3; // 每页条数，可选，默认 20
+}
+
+message ListAttackAccountsResponse {
+  int64 response_code = 1; // 响应码，0 表示成功
+  string verbose_msg = 2; // 响应消息
+  repeated AttackAccountRecord data = 3; // 账号信息列表
+}
+
+message AttackAccountRecord {
+  int64 id = 1; // 记录 ID
+  string ip = 2; // 攻击者 IP
+  string account = 3; // 账号
+  string password = 4; // 密码
+  string type = 5; // 蜜罐类型
+  string create_time = 6; // 捕获时间
+}
+
+// ==================== GetSystemInfo ====================
+
+message GetSystemInfoRequest {
+  string api_key = 1; // API 访问凭证，必填
+}
+
+message GetSystemInfoResponse {
+  int64 response_code = 1; // 响应码，0 表示成功
+  string verbose_msg = 2; // 响应消息
+  SystemInfoData data = 3; // 系统状态数据
+}
+
+message SystemInfoData {
+  int64 total_honeypots = 1; // 蜜罐总数
+  int64 total_cardinal_honeypots = 2; // 主要蜜罐数
+  int64 total_online_honeypots = 3; // 在线蜜罐数
+  int64 total_offline_honeypots = 4; // 离线蜜罐数
+  map<string, int64> honeypot_self_cnt = 5; // 各类型蜜罐数量
+  repeated ClientInfo clients = 6; // 节点列表
+}
+
+message ClientInfo {
+  string name = 1; // 节点名称
+  string ip = 2; // 节点 IP
+  int64 create_time = 3; // 创建时间
+  repeated HoneypotInfo honeypots = 4; // 蜜罐列表
+}
+
+message HoneypotInfo {
+  string type = 1; // 蜜罐类型
+  string name = 2; // 蜜罐名称
+  int64 state = 3; // 状态：2=在线，3=离线
+}

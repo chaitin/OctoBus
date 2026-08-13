@@ -1,0 +1,151 @@
+syntax = "proto3";
+
+package Qihoo360_EPP;
+
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Qihoo360_EPP";
+
+service Qihoo360_EPP {
+  // 获取仪表盘概览信息（终端数量、病毒数量、漏洞数量等）
+  rpc GetDashboardInfo(GetDashboardInfoRequest) returns (GetDashboardInfoResponse) {}
+
+  // 查询终端列表
+  rpc ListTerminals(ListTerminalsRequest) returns (ListTerminalsResponse) {}
+
+  // 获取终端详情
+  rpc GetTerminalDetail(GetTerminalDetailRequest) returns (GetTerminalDetailResponse) {}
+
+  // 查询告警日志列表
+  rpc ListAlarms(ListAlarmsRequest) returns (ListAlarmsResponse) {}
+
+  // 查询病毒扫描统计
+  rpc GetVirusStats(GetVirusStatsRequest) returns (GetVirusStatsResponse) {}
+
+  // 查询漏洞修复统计
+  rpc GetLeakFixStats(GetLeakFixStatsRequest) returns (GetLeakFixStatsResponse) {}
+
+  // 查询终端硬件信息
+  rpc GetTerminalHardware(GetTerminalHardwareRequest) returns (GetTerminalHardwareResponse) {}
+}
+
+// ========== Dashboard ==========
+
+message GetDashboardInfoRequest {}
+
+message GetDashboardInfoResponse {
+  google.protobuf.Struct data = 1; // 仪表盘原始数据，透传
+}
+
+// ========== Terminal Management ==========
+
+message ListTerminalsRequest {
+  google.protobuf.Int64Value page = 1;     // 页码，默认 1
+  google.protobuf.Int64Value page_size = 2; // 每页条数，默认 20
+  string keyword = 3;                       // 搜索关键词（IP/主机名/MAC）
+  string group_id = 4;                      // 终端分组 ID
+  string status = 5;                        // 在线状态：online/offline
+}
+
+message TerminalInfo {
+  string id = 1;
+  string name = 2;
+  string ip = 3;
+  string mac = 4;
+  string os = 5;
+  string status = 6;          // 在线状态
+  string group_name = 7;      // 所属分组
+  string last_online_time = 8;
+  string antivirus_status = 9; // 杀毒软件状态
+}
+
+message ListTerminalsResponse {
+  repeated TerminalInfo terminals = 1;
+  int64 total = 2;
+}
+
+message GetTerminalDetailRequest {
+  string terminal_id = 1; // 终端 ID
+}
+
+message GetTerminalDetailResponse {
+  string id = 1;
+  string name = 2;
+  string ip = 3;
+  string mac = 4;
+  string os = 5;
+  string os_version = 6;
+  string status = 7;
+  string group_name = 8;
+  string last_online_time = 9;
+  string antivirus_version = 10;
+  string antivirus_status = 11;
+  string cpu = 12;
+  string memory = 13;
+  string disk = 14;
+  google.protobuf.Struct raw = 15; // 原始数据透传
+}
+
+// ========== Alarm Management ==========
+
+message ListAlarmsRequest {
+  google.protobuf.Int64Value page = 1;
+  google.protobuf.Int64Value page_size = 2;
+  string alarm_type = 3;    // 告警类型：virus/attack/vulnerability/abnormal_login
+  string start_time = 4;    // 开始时间
+  string end_time = 5;      // 结束时间
+  string severity = 6;      // 严重程度：high/medium/low
+}
+
+message AlarmInfo {
+  string id = 1;
+  string type = 2;
+  string severity = 3;
+  string title = 4;
+  string description = 5;
+  string terminal_name = 6;
+  string terminal_ip = 7;
+  string created_time = 8;
+  string status = 9;        // 处理状态
+}
+
+message ListAlarmsResponse {
+  repeated AlarmInfo alarms = 1;
+  int64 total = 2;
+  google.protobuf.Struct statistics = 3; // 各状态统计
+}
+
+// ========== Virus Management ==========
+
+message GetVirusStatsRequest {}
+
+message GetVirusStatsResponse {
+  google.protobuf.Struct data = 1; // 病毒统计数据，透传
+}
+
+// ========== Leak Fix Management ==========
+
+message GetLeakFixStatsRequest {}
+
+message GetLeakFixStatsResponse {
+  google.protobuf.Struct data = 1; // 漏洞统计数据，透传
+}
+
+// ========== Terminal Hardware ==========
+
+message GetTerminalHardwareRequest {
+  string terminal_id = 1;
+}
+
+message GetTerminalHardwareResponse {
+  string terminal_id = 1;
+  string cpu_model = 2;
+  string cpu_cores = 3;
+  string memory_size = 4;
+  string disk_size = 5;
+  string gpu_model = 6;
+  string motherboard = 7;
+  repeated string network_adapters = 8;
+  google.protobuf.Struct raw = 9;
+}

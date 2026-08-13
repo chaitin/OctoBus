@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["baseUrl"],
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "description": "CAASM server base URL, e.g. https://caasm.example.com"
+    },
+    "pathPrefix": {
+      "type": "string",
+      "default": "/caasm/v1/biz-service",
+      "description": "URL path prefix prepended to all API calls. Defaults to /caasm/v1/biz-service."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1000,
+      "default": 30000,
+      "description": "HTTP request timeout in milliseconds"
+    },
+    "insecureTls": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification. Set to true when connecting to servers with self-signed certificates."
+    }
+  }
+}

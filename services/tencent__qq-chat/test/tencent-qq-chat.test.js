@@ -180,6 +180,27 @@ test("SendGroupMessage uses configured access token and rich message JSON fields
   assert.equal(result.id, "group-msg-1");
 });
 
+test("OpenAPI refreshes a cached app token once after HTTP 401", async () => {
+  const calls = [];
+  setFetch(async (url, init) => {
+    calls.push({ url: String(url), init });
+    if (calls.length === 1) return response(200, JSON.stringify({ access_token: "stale-token", expires_in: 7200 }));
+    if (calls.length === 2) return response(401, JSON.stringify({ code: 401, message: "expired" }));
+    if (calls.length === 3) return response(200, JSON.stringify({ access_token: "fresh-token", expires_in: 7200 }));
+    return response(200, JSON.stringify({ id: "msg-refreshed", timestamp: 123 }));
+  });
+
+  const result = await rpcdef(buildCtx())[METHOD_SEND_C2C_MESSAGE_PATH]({
+    openid: "USER_OPENID",
+    content: "hello",
+  });
+
+  assert.equal(result.id, "msg-refreshed");
+  assert.equal(calls.length, 4);
+  assert.equal(calls[1].init.headers.authorization, "QQBot stale-token");
+  assert.equal(calls[3].init.headers.authorization, "QQBot fresh-token");
+});
+
 test("NormalizeEvent maps official C2C and group payloads", async () => {
   const c2cPayload = {
     id: "event-1",
@@ -411,6 +432,68 @@ test("Gateway ignores stale close events after reconnecting a newer socket", asy
   assert.equal(_test.gatewayState.reconnectCount, 0);
 });
 
+test("Gateway resumes a known session and reconnects after a missed heartbeat ack", async () => {
+  setFetch(async () => response(200, JSON.stringify({ url: "wss://api.sgroup.qq.com/websocket" })));
+
+  class FakeWebSocket {
+    static OPEN = 1;
+    static instances = [];
+    constructor() {
+      this.readyState = FakeWebSocket.OPEN;
+      this.listeners = new Map();
+      this.sent = [];
+      FakeWebSocket.instances.push(this);
+    }
+    addEventListener(name, callback) {
+      const listeners = this.listeners.get(name) || [];
+      listeners.push(callback);
+      this.listeners.set(name, listeners);
+    }
+    send(data) { this.sent.push(JSON.parse(data)); }
+    close() { this.readyState = 3; }
+  }
+  globalThis.WebSocket = FakeWebSocket;
+
+  const ctx = buildCtx({
+    secret: { accessToken: "gateway-token" },
+    config: { baseUrl: "https://api.sgroup.qq.com", gatewayReconnectMs: 100 },
+  });
+  _test.gatewayState.sessionId = "session-known";
+  _test.gatewayState.seq = 42;
+  await rpcdef(ctx)[METHOD_START_GATEWAY_PATH]({});
+  // startGateway intentionally starts a new session; populate resumable state before HELLO.
+  _test.gatewayState.sessionId = "session-known";
+  _test.gatewayState.seq = 42;
+  const socket = FakeWebSocket.instances[0];
+  await _test.gatewayState.ws.listeners.get("message")[0]({
+    data: JSON.stringify({ op: 10, d: { heartbeat_interval: 100000 } }),
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(socket.sent[0], {
+    op: 6,
+    d: { token: "QQBot gateway-token", session_id: "session-known", seq: 42 },
+  });
+
+  _test.sendHeartbeat();
+  assert.equal(_test.gatewayState.awaitingHeartbeatAck, true);
+  _test.sendHeartbeat();
+  assert.match(_test.gatewayState.lastError, /heartbeat acknowledgement timed out/);
+  assert.ok(_test.gatewayState.reconnectTimer);
+});
+
+test("Gateway startup failure is recoverable and maps network errors", async () => {
+  setFetch(async () => { throw new Error("socket unavailable"); });
+  const status = await rpcdef(buildCtx({
+    secret: { accessToken: "gateway-token" },
+    config: { gatewayReconnectMs: 100 },
+  }))[METHOD_START_GATEWAY_PATH]({});
+
+  assert.equal(status.running, true);
+  assert.equal(status.state, "reconnecting");
+  assert.match(status.last_error, /gateway request failed/);
+  assert.ok(_test.gatewayState.reconnectTimer);
+});
+
 test("SDK handlers read ctx.request", async () => {
   setFetch(async () => response(200, JSON.stringify({
     id: "msg-sdk",
@@ -474,4 +557,150 @@ test("helpers cover token cache, invalid JSON, and URL normalization", async () 
   _test.writeTokenCache(key, "cached", 7200, 1000);
   assert.equal(_test.readTokenCache(key, 1000), "cached");
   assert.equal(_test.readTokenCache(key, 7200 * 1000), "");
+});
+
+test("helpers validate configuration, payload variants, and error mappings", async () => {
+  assert.equal(_test.toBoolean("yes"), true);
+  assert.equal(_test.toBoolean("off"), false);
+  assert.equal(_test.toBoolean(2), true);
+  assert.equal(_test.toBoolean({ value: "true" }), true);
+  assert.equal(_test.optionalUint32("12.9"), 12);
+  assert.equal(_test.optionalUint32(-1), undefined);
+  assert.equal(_test.optionalInt32("-2.8"), -2);
+  assert.equal(_test.optionalInt32("bad"), undefined);
+  assert.equal(_test.resolveGatewayShardIndex({ gateway_shard_index: 0 }), 0);
+  assert.equal(_test.resolveGatewayShardCount({ gateway_shard_count: 0 }), 1);
+  assert.equal(_test.resolveMaxBufferedMessages({ max_buffered_messages: 2 }), 2);
+  assert.throws(() => _test.normalizeBaseUrl("ftp://host", "", "baseUrl"), /HTTP\/HTTPS/);
+  assert.throws(() => _test.normalizeBaseUrl("not a url", "", "baseUrl"), /HTTP\/HTTPS/);
+  assert.equal(_test.mapHttpStatusToCode(401), "UNAUTHENTICATED");
+  assert.equal(_test.mapHttpStatusToCode(403), "PERMISSION_DENIED");
+  assert.equal(_test.mapHttpStatusToCode(500), "UNAVAILABLE");
+  assert.equal(_test.mapErrorBodyToCode({ code: 11264 }), "PERMISSION_DENIED");
+  assert.equal(_test.mapErrorBodyToCode({ code: 123 }), "FAILED_PRECONDITION");
+  assert.equal(_test.mapErrorBodyToCode({}), "UNKNOWN");
+
+  assert.deepEqual(_test.buildMessagePayload({
+    msg_type: 2,
+    ark_json: '{"template_id":1}',
+    media_json: '{"file_info":"x"}',
+    message_reference_json: '{"message_id":"m"}',
+    is_wakeup: true,
+  }, { allowWakeup: true }), {
+    msg_type: 2,
+    ark: { template_id: 1 },
+    media: { file_info: "x" },
+    message_reference: { message_id: "m" },
+    is_wakeup: true,
+  });
+  assert.throws(() => _test.buildJsonObject("null", "ark_json"), /JSON object/);
+  await expectGrpcError(
+    () => _test.handleNormalizeEvent({ payload_json: "[]" }),
+    "INVALID_ARGUMENT",
+    grpcStatus.INVALID_ARGUMENT,
+  );
+});
+
+test("token, OpenAPI, gateway, and queue failures remain typed", async () => {
+  setFetch(async () => response(403, JSON.stringify({ code: 11264, message: "denied" })));
+  const tokenError = await expectGrpcError(
+    () => _test.fetchAppAccessToken(buildCtx(), true),
+    "PERMISSION_DENIED",
+    grpcStatus.PERMISSION_DENIED,
+  );
+  assert.equal(tokenError.responseCode, 11264);
+
+  setFetch(async () => response(200, "not-json"));
+  await expectGrpcError(
+    () => _test.callOpenApi(buildCtx({ secret: { accessToken: "token" } }), "/v2/users/u/messages", {}),
+    "UNKNOWN",
+    grpcStatus.UNKNOWN,
+  );
+
+  setFetch(async () => response(200, JSON.stringify({ code: 11263, message: "expired" })));
+  await expectGrpcError(
+    () => _test.callOpenApi(buildCtx({ secret: { accessToken: "token" } }), "/v2/users/u/messages", {}),
+    "UNAUTHENTICATED",
+    grpcStatus.UNAUTHENTICATED,
+  );
+
+  setFetch(async () => response(200, JSON.stringify({}))); 
+  await expectGrpcError(
+    () => _test.fetchGatewayInfo(buildCtx(), "token"),
+    "UNKNOWN",
+    grpcStatus.UNKNOWN,
+  );
+
+  _test.gatewayState.queue = [
+    { local_id: "1" }, { local_id: "2" }, { local_id: "3" },
+  ];
+  assert.equal(_test.pollMessages({ max_messages: 2, ack: true }).queue_size, 1);
+  assert.deepEqual(await _test.handleAckMessage({ all: true }), { acked: 1, queue_size: 0 });
+});
+
+test("Gateway protocol handles ACK, invalid sessions, ignored events, and bounded queues", async () => {
+  _test.gatewayState.running = true;
+  _test.gatewayState.awaitingHeartbeatAck = true;
+  await _test.handleGatewayPayload({ op: 11 }, "token");
+  assert.equal(_test.gatewayState.awaitingHeartbeatAck, false);
+  assert.ok(_test.gatewayState.lastHeartbeatAckAt);
+
+  _test.gatewayState.sessionId = "old-session";
+  _test.gatewayState.seq = 9;
+  await _test.handleGatewayPayload({ op: 9 }, "token");
+  assert.equal(_test.gatewayState.sessionId, "");
+  assert.equal(_test.gatewayState.seq, null);
+  assert.ok(_test.gatewayState.reconnectTimer);
+  _test.clearGatewayTimers();
+
+  await _test.handleGatewayPayload({ op: 42, t: "IGNORED" }, "token");
+  assert.equal(_test.gatewayState.lastEventType, "IGNORED");
+
+  _test.gatewayState.ctx = { bindings: { maxBufferedMessages: 1 } };
+  await _test.enqueueGatewayMessage({
+    t: "C2C_MESSAGE_CREATE",
+    d: { id: "one", content: "one", author: { user_openid: "u" } },
+  });
+  await _test.enqueueGatewayMessage({
+    t: "C2C_MESSAGE_CREATE",
+    d: { id: "two", content: "two", author: { user_openid: "u" } },
+  });
+  assert.equal(_test.gatewayState.queue.length, 1);
+  assert.equal(_test.gatewayState.droppedMessages, 1);
+});
+
+test("configured token bypasses refresh and transport failures stay unavailable", async () => {
+  let calls = 0;
+  setFetch(async () => {
+    calls += 1;
+    if (calls === 1) return response(401, JSON.stringify({ code: 401 }));
+    throw new Error("must not retry configured token");
+  });
+  await expectGrpcError(
+    () => _test.callOpenApi(buildCtx({ secret: { accessToken: "fixed" } }), "/v2/users/u/messages", {}),
+    "UNAUTHENTICATED",
+    grpcStatus.UNAUTHENTICATED,
+  );
+  assert.equal(calls, 1);
+
+  setFetch(async () => { throw new Error("network down"); });
+  await expectGrpcError(
+    () => _test.fetchAppAccessToken(buildCtx(), true),
+    "UNAVAILABLE",
+    grpcStatus.UNAVAILABLE,
+  );
+  await expectGrpcError(
+    () => _test.callOpenApi(buildCtx({ secret: { accessToken: "fixed" } }), "/v2/users/u/messages", {}),
+    "UNAVAILABLE",
+    grpcStatus.UNAVAILABLE,
+  );
+});
+
+test("runtime auto-start ignores normal commands and disabled configuration", async () => {
+  assert.equal(await _test.maybeAutoStartGatewayFromCli(["help"]), false);
+  assert.equal(await _test.maybeAutoStartGatewayFromCli(["--runtime", "serve", "--config-json", "{}"]), false);
+  assert.deepEqual(_test.parseRuntimeJsonArg(["--config-json", '{"a":1}'], "--config-json"), { a: 1 });
+  assert.deepEqual(_test.parseRuntimeJsonArg(['--config-json={"a":2}'], "--config-json"), { a: 2 });
+  assert.equal(_test.parseRuntimeJsonArg([], "--config-json"), undefined);
+  assert.equal(_test.parseRuntimeFileArg([], "--config"), undefined);
 });
