@@ -3,6 +3,13 @@
   "type": "object",
   "additionalProperties": true,
   "properties": {
+    "baseUrl": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https?://",
+      "default": "https://otx.alienvault.com/api/v1",
+      "description": "AlienVault OTX API base URL. Override only for compatible gateways or testing."
+    },
     "timeoutMs": {
       "type": "integer",
       "minimum": 1,

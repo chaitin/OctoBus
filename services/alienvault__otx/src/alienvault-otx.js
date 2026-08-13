@@ -80,8 +80,18 @@ const resolveCallContext = (ctx = {}) => ({
 const resolveTimeoutMs = (ctx = {}, bindings = {}) =>
   firstDefined(ctx.limits?.timeoutMs, bindings.timeoutMs, DEFAULT_TIMEOUT_MS);
 
+const resolveBaseUrl = (bindings = {}) => {
+  const raw = String(bindings.baseUrl || API_BASE).trim();
+  let url;
+  try { url = new URL(raw); } catch { throw errorWithCode('INVALID_ARGUMENT', 'baseUrl must be a valid URL'); }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    throw errorWithCode('INVALID_ARGUMENT', 'baseUrl must use http or https');
+  }
+  return raw.replace(/\/+$/, '');
+};
+
 const callOTX = async (path, { meta, bindings, timeoutMs }) => {
-  const url = `${API_BASE}${path}`;
+  const url = `${resolveBaseUrl(bindings)}${path}`;
   logInfo(meta, `GET:start`, { url });
   try {
     const result = await fetchJson(url, { method: 'GET' }, { bindings, timeoutMs });
@@ -144,5 +154,5 @@ export const handlers = {
 
 export const _test = {
   errorWithCode, firstDefined, hasOwn, logInfo, logError, makeRuntime,
-  mapHttpError, parseJson, resolveCallContext, resolveTimeoutMs, unwrapString,
+  mapHttpError, parseJson, resolveBaseUrl, resolveCallContext, resolveTimeoutMs, unwrapString,
 };

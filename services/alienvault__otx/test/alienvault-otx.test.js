@@ -197,6 +197,12 @@ test('resolveCallContext merges bindings correctly', () => {
   assert.equal(c.bindings.c, 3);
 });
 
+test('base URL accepts HTTP gateways, removes trailing slash and rejects unsafe schemes', () => {
+  assert.equal(_test.resolveBaseUrl({ baseUrl: 'http://127.0.0.1:1234/' }), 'http://127.0.0.1:1234');
+  assert.throws(() => _test.resolveBaseUrl({ baseUrl: 'file:///etc/passwd' }), /INVALID_ARGUMENT/);
+  assert.throws(() => _test.resolveBaseUrl({ baseUrl: 'not a URL' }), /INVALID_ARGUMENT/);
+});
+
 test('makeRuntime handles null request', async () => {
   await expectGrpcError(() => _test.makeRuntime({}).runCheckIP(), 'INVALID_ARGUMENT');
 });
