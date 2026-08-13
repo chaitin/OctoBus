@@ -115,7 +115,8 @@ export const createMockContext = (overrides = {}) => {
       secret: overrides.secret || {},
       limits: { timeoutMs: 12_000, ...(overrides.limits || {}) },
       meta: overrides.meta || {},
-      req: overrides.req || {},
+      ...(Object.prototype.hasOwnProperty.call(overrides, 'req') ? { req: overrides.req } : {}),
+      request: overrides.request,
       clientFactory: () => client,
     },
   };

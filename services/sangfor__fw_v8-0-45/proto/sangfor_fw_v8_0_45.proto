@@ -16,18 +16,18 @@ service Sangfor_FW_V8045 {
 
 message LoginRequest {
   google.protobuf.StringValue name = 1;
-  google.protobuf.StringValue password = 2;
+  google.protobuf.StringValue password = 2 [deprecated = true];
 }
 
 message LoginResponse {
   int32 code = 1;
   string message = 2;
-  string token = 3;
-  google.protobuf.Value data = 4;
+  string token = 3 [deprecated = true];
+  google.protobuf.Value data = 4 [deprecated = true];
 }
 
 message BlockIPRequest {
-  string token = 1;
+  string token = 1 [deprecated = true];
   repeated string addresses = 2;
   google.protobuf.StringValue description = 3;
 }
@@ -39,7 +39,7 @@ message BlockIPResponse {
 }
 
 message UnblockIPRequest {
-  string token = 1;
+  string token = 1 [deprecated = true];
   repeated string addresses = 2;
 }
 
@@ -50,7 +50,7 @@ message UnblockIPResponse {
 }
 
 message LogoutRequest {
-  string token = 1;
+  string token = 1 [deprecated = true];
 }
 
 message LogoutResponse {

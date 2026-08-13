@@ -1,0 +1,211 @@
+syntax = "proto3";
+package dsensor;
+
+import "google/protobuf/struct.proto";
+option go_package = "miner/grpc-service/dsensor";
+
+// ========== Shared Response ==========
+message dsensor_response {
+  int32 http_status = 1;
+  string raw_body = 2;
+  google.protobuf.Value raw_json = 3;
+  string msg = 4;
+  google.protobuf.Value data = 5;
+}
+
+// ========== 1. Agent List ==========
+service dsensor_agent_list {
+  rpc query_dsensor_agent_list(query_dsensor_agent_list_request) returns (dsensor_response) {}
+}
+message query_dsensor_agent_list_request {}
+
+// ========== 2. Agent Detail ==========
+service dsensor_agent_detail {
+  rpc query_dsensor_agent_detail(query_dsensor_agent_detail_request) returns (dsensor_response) {}
+}
+message query_dsensor_agent_detail_request {
+  string sn = 1;
+}
+
+// ========== 3. Agent Delete ==========
+service dsensor_agent_delete {
+  rpc query_dsensor_agent_delete(query_dsensor_agent_delete_request) returns (dsensor_response) {}
+}
+message query_dsensor_agent_delete_request {
+  repeated string sns = 1;
+}
+
+// ========== 4. Agent Upgrade ==========
+service dsensor_agent_upgrade {
+  rpc query_dsensor_agent_upgrade(query_dsensor_agent_upgrade_request) returns (dsensor_response) {}
+}
+message query_dsensor_agent_upgrade_request {
+  repeated string sns = 1;
+}
+
+// ========== 5. Agent Change Type ==========
+service dsensor_agent_change_type {
+  rpc query_dsensor_agent_change_type(query_dsensor_agent_change_type_request) returns (dsensor_response) {}
+}
+message query_dsensor_agent_change_type_request {
+  repeated string sns = 1;
+  string mode = 2;
+  string business_group = 3;
+  string name = 4;
+  bool ping = 5;
+  bool arp = 6;
+}
+
+// ========== 6. Agent Clear Service ==========
+service dsensor_agent_clear_service {
+  rpc query_dsensor_agent_clear_service(query_dsensor_agent_clear_service_request) returns (dsensor_response) {}
+}
+message query_dsensor_agent_clear_service_request {
+  repeated string sns = 1;
+}
+
+// ========== 7. Agent Portmap Update ==========
+service dsensor_agent_portmap_update {
+  rpc query_dsensor_agent_portmap_update(query_dsensor_agent_portmap_update_request) returns (dsensor_response) {}
+}
+message query_dsensor_agent_portmap_update_request {
+  google.protobuf.Value port_maps = 1;
+}
+
+// ========== 8. Agent Scan Update ==========
+service dsensor_agent_scan_update {
+  rpc query_dsensor_agent_scan_update(query_dsensor_agent_scan_update_request) returns (dsensor_response) {}
+}
+message query_dsensor_agent_scan_update_request {
+  google.protobuf.Value port_maps = 1;
+}
+
+// ========== 9. Event List ==========
+service dsensor_event_list {
+  rpc query_dsensor_event_list(query_dsensor_event_list_request) returns (dsensor_response) {}
+}
+message query_dsensor_event_list_request {}
+
+// ========== 10. Event Detail ==========
+service dsensor_event_detail {
+  rpc query_dsensor_event_detail(query_dsensor_event_detail_request) returns (dsensor_response) {}
+}
+message query_dsensor_event_detail_request {
+  string connection_id = 1;
+}
+
+// ========== 11. Scanner List ==========
+service dsensor_scanner_list {
+  rpc query_dsensor_scanner_list(query_dsensor_scanner_list_request) returns (dsensor_response) {}
+}
+message query_dsensor_scanner_list_request {}
+
+// ========== 12. Scanner Detail ==========
+service dsensor_scanner_detail {
+  rpc query_dsensor_scanner_detail(query_dsensor_scanner_detail_request) returns (dsensor_response) {}
+}
+message query_dsensor_scanner_detail_request {
+  string id = 1;
+  bool enable_preview = 2;
+}
+
+// ========== 13. Portrait List ==========
+service dsensor_portrait_list {
+  rpc query_dsensor_portrait_list(query_dsensor_portrait_list_request) returns (dsensor_response) {}
+}
+message query_dsensor_portrait_list_request {}
+
+// ========== 14. Alarm List ==========
+service dsensor_alarm_list {
+  rpc query_dsensor_alarm_list(query_dsensor_alarm_list_request) returns (dsensor_response) {}
+}
+message query_dsensor_alarm_list_request {
+  repeated int32 status = 1;
+  string id_order = 2;
+  string last_alarm_time_order = 3;
+  string risk_level_order = 4;
+  string status_order = 5;
+}
+
+// ========== 15. Audit List ==========
+service dsensor_audit_list {
+  rpc query_dsensor_audit_list(query_dsensor_audit_list_request) returns (dsensor_response) {}
+}
+message query_dsensor_audit_list_request {}
+
+// ========== 16. CPU/Memory Stat ==========
+service dsensor_cpumem_stat {
+  rpc query_dsensor_cpumem_stat(query_dsensor_cpumem_stat_request) returns (dsensor_response) {}
+}
+message query_dsensor_cpumem_stat_request {}
+
+// ========== 17. Disk Stat ==========
+service dsensor_disk_stat {
+  rpc query_dsensor_disk_stat(query_dsensor_disk_stat_request) returns (dsensor_response) {}
+}
+message query_dsensor_disk_stat_request {}
+
+// ========== 18. User List ==========
+service dsensor_user_list {
+  rpc query_dsensor_user_list(query_dsensor_user_list_request) returns (dsensor_response) {}
+}
+message query_dsensor_user_list_request {}
+
+// ========== 19. Honeynet List ==========
+service dsensor_honeynet_list {
+  rpc query_dsensor_honeynet_list(query_dsensor_honeynet_list_request) returns (dsensor_response) {}
+}
+message query_dsensor_honeynet_list_request {}
+
+// ========== 20. Honeynet Create ==========
+service dsensor_honeynet_create {
+  rpc query_dsensor_honeynet_create(query_dsensor_honeynet_create_request) returns (dsensor_response) {}
+}
+message query_dsensor_honeynet_create_request {
+  string display_name = 1;
+  string name = 2;
+}
+
+// ========== 21. Honeypot List ==========
+service dsensor_honeypot_list {
+  rpc query_dsensor_honeypot_list(query_dsensor_honeypot_list_request) returns (dsensor_response) {}
+}
+message query_dsensor_honeypot_list_request {}
+
+// ========== 22. Honeypot Create ==========
+service dsensor_honeypot_create {
+  rpc query_dsensor_honeypot_create(query_dsensor_honeypot_create_request) returns (dsensor_response) {}
+}
+message query_dsensor_honeypot_create_request {
+  string nid = 1;
+  string display_name = 2;
+  string image = 3;
+  string image_id = 4;
+  google.protobuf.Value preset = 5;
+  string node = 6;
+}
+
+// ========== 23. Honeypot Delete ==========
+service dsensor_honeypot_delete {
+  rpc query_dsensor_honeypot_delete(query_dsensor_honeypot_delete_request) returns (dsensor_response) {}
+}
+message query_dsensor_honeypot_delete_request {
+  string cid = 1;
+}
+
+// ========== 24. Honeypot Reset ==========
+service dsensor_honeypot_reset {
+  rpc query_dsensor_honeypot_reset(query_dsensor_honeypot_reset_request) returns (dsensor_response) {}
+}
+message query_dsensor_honeypot_reset_request {
+  string cid = 1;
+  google.protobuf.Value preset = 2;
+}
+
+// ========== 25. Honeypot Upgrade ==========
+service dsensor_honeypot_upgrade {
+  rpc query_dsensor_honeypot_upgrade(query_dsensor_honeypot_upgrade_request) returns (dsensor_response) {}
+}
+message query_dsensor_honeypot_upgrade_request {
+  repeated string cids = 1;
+}

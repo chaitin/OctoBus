@@ -128,7 +128,10 @@ test('BatchBlockIPs sends IPv4 then IPv6 payloads with expected bodies', async (
   assert.equal(calls[0].init.headers['x-extra'], 'demo');
   assert.equal(calls[0].init.headers['x-engine-instance'], 'inst');
   assert.equal(calls[0].init.headers['x-request-id'], 'req');
-  assert.equal(calls[0].init.insecureSkipVerify, true);
+  assert.equal(Object.hasOwn(calls[0].init, 'skipTlsVerify'), false);
+  assert.equal(Object.hasOwn(calls[0].init, 'tlsInsecureSkipVerify'), false);
+  assert.equal(Object.hasOwn(calls[0].init, 'insecureSkipVerify'), false);
+  assert.ok(calls[0].init.dispatcher);
   assert.equal(JSON.parse(calls[0].init.body).mafcustomv4wblist.GroupStr, 'group-a');
   assert.equal(JSON.parse(calls[0].init.body).mafcustomv4wblist.IPStart, '1.1.1.1');
   assert.equal(JSON.parse(calls[1].init.body).mafcustomv6wblist.IP, '2001:db8::1');
@@ -305,8 +308,12 @@ test('SDK handlers use config and secret fields', async () => {
   assert.equal(res.success_ip_count, 1);
   assert.equal(captured.url, `https://eds.example${DPTECH_IPV4_PATH}`);
   assert.equal(captured.init.headers.Authorization, 'Basic YXBpLXVzZXI6YXBpLXBhc3M=');
-  assert.equal(captured.init.timeoutMs, DEFAULT_TIMEOUT_MS);
-  assert.equal(captured.init.tlsInsecureSkipVerify, true);
+  assert.equal(Object.hasOwn(captured.init, 'timeoutMs'), false);
+  assert.ok(captured.init.signal instanceof AbortSignal);
+  assert.equal(Object.hasOwn(captured.init, 'skipTlsVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'tlsInsecureSkipVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'insecureSkipVerify'), false);
+  assert.ok(captured.init.dispatcher);
 
   globalThis.fetch = async () => response(200, JSON.stringify({ msg: 'not exist' }));
   const unblock = await handlers[METHOD_UNBLOCK_FULL]({

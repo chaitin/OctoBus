@@ -59,6 +59,11 @@ const buildCtx = (overrides = {}) => ({
   req: overrides.req || {},
 });
 
+const callHandler = (method, request = {}, ctx = {}) => {
+  const handler = handlers[method];
+  return handler({ ...ctx, request });
+};
+
 const expectGrpcError = async (fn, legacyCode, checker = () => {}) => {
   let caught;
   try {
@@ -100,22 +105,22 @@ test('service exports handlers and rpcdef paths', () => {
 
 test('validates required bindings and aliases', async () => {
   await expectGrpcError(
-    () => handlers[METHOD_ADD_PRECISE_BLACK_FULL]({ ip: '1.1.1.1', valid_duration: 60, ban_reason: 1 }, buildCtx({ config: { host: '' } })),
+    () => callHandler(METHOD_ADD_PRECISE_BLACK_FULL, { ip: '1.1.1.1', valid_duration: 60, ban_reason: 1 }, buildCtx({ config: { host: '' } })),
     'FAILED_PRECONDITION',
     (err) => assert.match(err.message, /host/),
   );
   await expectGrpcError(
-    () => handlers[METHOD_ADD_PRECISE_BLACK_FULL]({ ip: '1.1.1.1', valid_duration: 60, ban_reason: 1 }, buildCtx({ config: { uuid: '' } })),
+    () => callHandler(METHOD_ADD_PRECISE_BLACK_FULL, { ip: '1.1.1.1', valid_duration: 60, ban_reason: 1 }, buildCtx({ config: { uuid: '' } })),
     'FAILED_PRECONDITION',
     (err) => assert.match(err.message, /uuid/),
   );
   await expectGrpcError(
-    () => handlers[METHOD_ADD_PRECISE_BLACK_FULL]({ ip: '1.1.1.1', valid_duration: 60, ban_reason: 1 }, buildCtx({ secret: { block_secret_id: '' } })),
+    () => callHandler(METHOD_ADD_PRECISE_BLACK_FULL, { ip: '1.1.1.1', valid_duration: 60, ban_reason: 1 }, buildCtx({ secret: { block_secret_id: '' } })),
     'FAILED_PRECONDITION',
     (err) => assert.match(err.message, /block_secret_id/),
   );
   await expectGrpcError(
-    () => handlers[METHOD_DELETE_PRECISE_BLACK_FULL]({ ip: '1.1.1.1' }, buildCtx({ secret: { unblock_secret_key: '' } })),
+    () => callHandler(METHOD_DELETE_PRECISE_BLACK_FULL, { ip: '1.1.1.1' }, buildCtx({ secret: { unblock_secret_key: '' } })),
     'FAILED_PRECONDITION',
     (err) => assert.match(err.message, /unblock_secret_key/),
   );
@@ -142,8 +147,8 @@ test('validates required bindings and aliases', async () => {
 });
 
 test('validates request fields with legacy messages', async () => {
-  const addPrecise = (req) => handlers[METHOD_ADD_PRECISE_BLACK_FULL](req, buildCtx());
-  const addGlobal = (req) => handlers[METHOD_ADD_GLOBAL_BLACK_FULL](req, buildCtx());
+  const addPrecise = (req) => callHandler(METHOD_ADD_PRECISE_BLACK_FULL, req, buildCtx());
+  const addGlobal = (req) => callHandler(METHOD_ADD_GLOBAL_BLACK_FULL, req, buildCtx());
 
   await expectGrpcError(() => addPrecise({ ip: null, valid_duration: 60, ban_reason: 1 }), 'INVALID_ARGUMENT', (err) => assert.match(err.message, /non-empty string/));
   await expectGrpcError(() => addPrecise({ ip: '', valid_duration: 60, ban_reason: 1 }), 'INVALID_ARGUMENT', (err) => assert.match(err.message, /cannot be empty/));
@@ -167,7 +172,7 @@ test('AddPreciseBlack signs and sends default payload', async () => {
     return response(200, { err: null, msg: 'ok', data: { added: true } });
   });
 
-  const result = await handlers[METHOD_ADD_PRECISE_BLACK_FULL](
+  const result = await callHandler(METHOD_ADD_PRECISE_BLACK_FULL,
     { ip: ' 1.2.3.4 ', validDuration: { value: '60' }, banReason: { value: '5' } },
     buildCtx({ bindings: { timeoutMs: 25, skipTlsVerify: 'yes' } }),
   );
@@ -177,8 +182,10 @@ test('AddPreciseBlack signs and sends default payload', async () => {
   const expectedSig = _test.signPayload(captured.url, unsigned, 'block-key');
   assert.equal(captured.url, 'https://tsec.example/cgi-bin/device/external_block_api');
   assert.equal(captured.init.method, 'POST');
-  assert.equal(captured.init.timeoutMs, 25);
-  assert.equal(captured.init.skipTlsVerify, true);
+  assert.ok(captured.init.signal instanceof AbortSignal);
+  assert.equal(captured.init.timeoutMs, undefined);
+  assert.equal(captured.init.dispatcher, _test.insecureTlsDispatcher);
+  assert.equal(captured.init.skipTlsVerify, undefined);
   assert.equal(captured.init.headers['Content-Type'], 'application/json');
   assert.equal(captured.init.headers['X-Custom'], 'trace');
   assert.equal(captured.init.headers['x-engine-instance'], 'inst-1');
@@ -209,8 +216,8 @@ test('DeletePreciseBlack sends custom rule and parses fallback responses', async
     return response(200, payloads.length === 1 ? '' : 'plain text');
   });
 
-  const empty = await handlers[METHOD_DELETE_PRECISE_BLACK_FULL]({ ip: '2.2.2.2', field: 'src', operator: 'equal' }, buildCtx());
-  const text = await handlers[METHOD_DELETE_PRECISE_BLACK_FULL]({ ip: '3.3.3.3' }, buildCtx());
+  const empty = await callHandler(METHOD_DELETE_PRECISE_BLACK_FULL, { ip: '2.2.2.2', field: 'src', operator: 'equal' }, buildCtx());
+  const text = await callHandler(METHOD_DELETE_PRECISE_BLACK_FULL, { ip: '3.3.3.3' }, buildCtx());
 
   assert.deepEqual(empty, { err: null, msg: '', data: null });
   assert.deepEqual(text, { err: null, msg: 'plain text', data: null });
@@ -235,8 +242,8 @@ test('AddGlobalBlack accepts status 200 and 208, then rejects bad global respons
     return response(200, bodies.shift());
   });
 
-  const ok = await handlers[METHOD_ADD_GLOBAL_BLACK_FULL]({ ipSrc: '4.4.4.4', ipDst: '5.5.5.5', validDuration: -1, banReason: 1, threshold: 0 }, buildCtx());
-  const exists = await handlers[METHOD_ADD_GLOBAL_BLACK_FULL]({ ip_src: '4.4.4.4', ip_dst: '', valid_duration: 60, ban_reason: 2 }, buildCtx());
+  const ok = await callHandler(METHOD_ADD_GLOBAL_BLACK_FULL, { ipSrc: '4.4.4.4', ipDst: '5.5.5.5', validDuration: -1, banReason: 1, threshold: 0 }, buildCtx());
+  const exists = await callHandler(METHOD_ADD_GLOBAL_BLACK_FULL, { ip_src: '4.4.4.4', ip_dst: '', valid_duration: 60, ban_reason: 2 }, buildCtx());
 
   assert.deepEqual(ok.data.structValue.fields.added, { boolValue: true });
   assert.deepEqual(exists.err, { stringValue: 'exists' });
@@ -246,9 +253,9 @@ test('AddGlobalBlack accepts status 200 and 208, then rejects bad global respons
   assert.equal(payloads[0].threshold, 0);
   assert.equal(payloads[1].threshold, 100);
 
-  await expectGrpcError(() => handlers[METHOD_ADD_GLOBAL_BLACK_FULL]({ ip_src: '4.4.4.4', valid_duration: 60, ban_reason: 2 }, buildCtx()), 'FAILED_PRECONDITION', (err) => assert.match(err.message, /status_code/));
-  await expectGrpcError(() => handlers[METHOD_ADD_GLOBAL_BLACK_FULL]({ ip_src: '4.4.4.4', valid_duration: 60, ban_reason: 2 }, buildCtx()), 'UNKNOWN', (err) => assert.match(err.message, /empty response/));
-  await expectGrpcError(() => handlers[METHOD_ADD_GLOBAL_BLACK_FULL]({ ip_src: '4.4.4.4', valid_duration: 60, ban_reason: 2 }, buildCtx()), 'UNKNOWN', (err) => assert.match(err.message, /invalid JSON/));
+  await expectGrpcError(() => callHandler(METHOD_ADD_GLOBAL_BLACK_FULL, { ip_src: '4.4.4.4', valid_duration: 60, ban_reason: 2 }, buildCtx()), 'FAILED_PRECONDITION', (err) => assert.match(err.message, /status_code/));
+  await expectGrpcError(() => callHandler(METHOD_ADD_GLOBAL_BLACK_FULL, { ip_src: '4.4.4.4', valid_duration: 60, ban_reason: 2 }, buildCtx()), 'UNKNOWN', (err) => assert.match(err.message, /empty response/));
+  await expectGrpcError(() => callHandler(METHOD_ADD_GLOBAL_BLACK_FULL, { ip_src: '4.4.4.4', valid_duration: 60, ban_reason: 2 }, buildCtx()), 'UNKNOWN', (err) => assert.match(err.message, /invalid JSON/));
 });
 
 test('DeleteGlobalBlack accepts manual-unblock status and maps response errors', async () => {
@@ -264,15 +271,15 @@ test('DeleteGlobalBlack accepts manual-unblock status and maps response errors',
   ];
   setFetch(async () => response(200, bodies.shift()));
 
-  const ok = await handlers[METHOD_DELETE_GLOBAL_BLACK_FULL]({ ipSrc: '6.6.6.6', ipDst: '7.7.7.7' }, buildCtx());
-  const manual = await handlers[METHOD_DELETE_GLOBAL_BLACK_FULL]({ ip_src: '6.6.6.6' }, buildCtx());
+  const ok = await callHandler(METHOD_DELETE_GLOBAL_BLACK_FULL, { ipSrc: '6.6.6.6', ipDst: '7.7.7.7' }, buildCtx());
+  const manual = await callHandler(METHOD_DELETE_GLOBAL_BLACK_FULL, { ip_src: '6.6.6.6' }, buildCtx());
 
   assert.deepEqual(ok.data.structValue.fields.removed, { boolValue: true });
   assert.deepEqual(manual.data.structValue.fields.removed, { boolValue: false });
   assert.ok(logs.some((entry) => String(entry[0]).includes('DeleteGlobalBlack:manual-unblock')));
-  await expectGrpcError(() => handlers[METHOD_DELETE_GLOBAL_BLACK_FULL]({ ip_src: '6.6.6.6' }, buildCtx()), 'FAILED_PRECONDITION', (err) => assert.match(err.message, /status_code/));
-  await expectGrpcError(() => handlers[METHOD_DELETE_GLOBAL_BLACK_FULL]({ ip_src: '6.6.6.6' }, buildCtx()), 'UNKNOWN', (err) => assert.match(err.message, /invalid JSON/));
-  await expectGrpcError(() => handlers[METHOD_DELETE_GLOBAL_BLACK_FULL]({ ip_src: '6.6.6.6' }, buildCtx()), 'UNKNOWN', (err) => assert.match(err.message, /empty response/));
+  await expectGrpcError(() => callHandler(METHOD_DELETE_GLOBAL_BLACK_FULL, { ip_src: '6.6.6.6' }, buildCtx()), 'FAILED_PRECONDITION', (err) => assert.match(err.message, /status_code/));
+  await expectGrpcError(() => callHandler(METHOD_DELETE_GLOBAL_BLACK_FULL, { ip_src: '6.6.6.6' }, buildCtx()), 'UNKNOWN', (err) => assert.match(err.message, /invalid JSON/));
+  await expectGrpcError(() => callHandler(METHOD_DELETE_GLOBAL_BLACK_FULL, { ip_src: '6.6.6.6' }, buildCtx()), 'UNKNOWN', (err) => assert.match(err.message, /empty response/));
 });
 
 test('maps transport and HTTP status failures', async () => {
@@ -280,14 +287,14 @@ test('maps transport and HTTP status failures', async () => {
     throw Object.assign(new Error('outer'), { cause: new Error('connect ECONNREFUSED') });
   });
   await expectGrpcError(
-    () => handlers[METHOD_DELETE_PRECISE_BLACK_FULL]({ ip: '8.8.8.8' }, buildCtx()),
+    () => callHandler(METHOD_DELETE_PRECISE_BLACK_FULL, { ip: '8.8.8.8' }, buildCtx()),
     'UNAVAILABLE',
     (err) => assert.match(err.message, /ECONNREFUSED/),
   );
 
   setFetch(async () => response(500, 'server failed'));
   await expectGrpcError(
-    () => handlers[METHOD_ADD_PRECISE_BLACK_FULL]({ ip: '8.8.4.4', valid_duration: 60, ban_reason: 1 }, buildCtx()),
+    () => callHandler(METHOD_ADD_PRECISE_BLACK_FULL, { ip: '8.8.4.4', valid_duration: 60, ban_reason: 1 }, buildCtx()),
     'UNAVAILABLE',
     (err) => assert.match(err.message, /http 500/),
   );
@@ -323,7 +330,7 @@ test('helper functions cover normalization, signing, TLS, and logging branches',
   assert.equal(_test.resolveTimeoutMs({ bindings: { timeoutMs: '-1' }, limits: { timeoutMs: 20 } }), 20);
   assert.equal(_test.resolveTimeoutMs({ bindings: {}, limits: { timeoutMs: 0 } }), 5000);
   assert.deepEqual(_test.buildTlsOptions({}), {});
-  assert.deepEqual(_test.buildTlsOptions({ tlsInsecureSkipVerify: true }), { insecureSkipVerify: true, tlsInsecureSkipVerify: true, skipTlsVerify: true });
+  assert.equal(_test.buildTlsOptions({ tlsInsecureSkipVerify: true }).dispatcher, _test.insecureTlsDispatcher);
   assert.deepEqual(_test.buildHeaders({ bindings: { headers: null }, meta: {} }), {
     'Content-Type': 'application/json',
     'x-engine-instance': 'unknown',
@@ -396,11 +403,11 @@ test('mock upstream handles precise and global blacklist lifecycle', async () =>
   const server = await createMockServer();
   try {
     const ctx = buildCtx({ config: { host: server.url } });
-    const preciseAdd = await handlers[METHOD_ADD_PRECISE_BLACK_FULL]({ ip: '10.0.0.1', valid_duration: 60, ban_reason: 1 }, ctx);
-    const preciseDelete = await handlers[METHOD_DELETE_PRECISE_BLACK_FULL]({ ip: '10.0.0.1' }, ctx);
-    const globalAdd = await handlers[METHOD_ADD_GLOBAL_BLACK_FULL]({ ip_src: '10.0.0.2', valid_duration: 60, ban_reason: 2 }, ctx);
-    const globalDelete = await handlers[METHOD_DELETE_GLOBAL_BLACK_FULL]({ ip_src: '10.0.0.2' }, ctx);
-    const globalDeleteAgain = await handlers[METHOD_DELETE_GLOBAL_BLACK_FULL]({ ip_src: '10.0.0.2' }, ctx);
+    const preciseAdd = await callHandler(METHOD_ADD_PRECISE_BLACK_FULL, { ip: '10.0.0.1', valid_duration: 60, ban_reason: 1 }, ctx);
+    const preciseDelete = await callHandler(METHOD_DELETE_PRECISE_BLACK_FULL, { ip: '10.0.0.1' }, ctx);
+    const globalAdd = await callHandler(METHOD_ADD_GLOBAL_BLACK_FULL, { ip_src: '10.0.0.2', valid_duration: 60, ban_reason: 2 }, ctx);
+    const globalDelete = await callHandler(METHOD_DELETE_GLOBAL_BLACK_FULL, { ip_src: '10.0.0.2' }, ctx);
+    const globalDeleteAgain = await callHandler(METHOD_DELETE_GLOBAL_BLACK_FULL, { ip_src: '10.0.0.2' }, ctx);
 
     assert.deepEqual(preciseAdd.data.structValue.fields.added, { boolValue: true });
     assert.deepEqual(preciseDelete.data.structValue.fields.removed, { boolValue: true });

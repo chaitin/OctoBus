@@ -71,6 +71,11 @@ const buildCtx = (overrides = {}) => ({
   },
 });
 
+const callHandler = (method, request = {}, ctx = {}) => {
+  const handler = handlers[method];
+  return handler({ ...ctx, request });
+};
+
 const expectGrpcError = async (fn, legacyCode, checker = () => {}) => {
   let caught;
   try {
@@ -147,7 +152,7 @@ test('resolveCredential supports request, config, secret, aliases, extra, and SH
 
   const credential = _test.resolveCredential(callCtx.req, callCtx.bindings);
   assert.equal(credential.baseUrl, 'https://qiming.example');
-  assert.equal(credential.username, 'request-user');
+  assert.equal(credential.username, 'binding-user');
   assert.equal(credential.passwordSha, expectedSha);
   assert.equal(credential.skipTls, true);
   assert.deepEqual(credential.extra, {
@@ -165,7 +170,13 @@ test('resolveCredential supports request, config, secret, aliases, extra, and SH
       username: 'demo',
       password_sha256: 'ABCDEF',
     },
-  }, {});
+  }, {
+    baseUrl: 'http://binding.example',
+    username: 'binding-demo',
+    password_sha256: 'ABCDEF',
+  });
+  assert.equal(supplied.baseUrl, 'http://binding.example');
+  assert.equal(supplied.username, 'binding-demo');
   assert.equal(supplied.passwordSha, 'abcdef');
   assert.equal(_test.ensurePasswordSha(supplied), 'abcdef');
 });
@@ -213,8 +224,8 @@ test('credential validation, primitive helpers, and defaults cover edge cases', 
     unblockReason: 'u',
   });
   assert.throws(() => _test.resolveCredential({}, {}), /base_url\/restBaseUrl is required/);
-  assert.throws(() => _test.resolveCredential({ credential: { base_url: 'http://x' } }, {}), /username is required/);
-  assert.throws(() => _test.resolveCredential({ credential: { base_url: 'http://x', username: 'u' } }, {}), /password is required/);
+  assert.throws(() => _test.resolveCredential({ credential: { base_url: 'http://x' } }, { baseUrl: 'http://x' }), /username is required/);
+  assert.throws(() => _test.resolveCredential({ credential: { base_url: 'http://x', username: 'u' } }, { baseUrl: 'http://x', username: 'u' }), /password is required/);
   assert.deepEqual(_test.buildAuthHeaders({ A: 'b' }, { authorization: 'Bearer t', sid: 'sid' }), {
     A: 'b',
     Authorization: 'Bearer t',
@@ -294,12 +305,14 @@ test('executeBlock performs login, address object creation, blacklist add, and l
   });
 
   const result = await _test.executeBlock(buildCtx({
+    config: { baseUrl: 'http://example.com/', username: 'demo' },
+    secret: { password: 'PlainPassword123' },
     req: {
       ip_list: ['1.1.1.1'],
       credential: {
         base_url: 'http://example.com/',
-        username: 'demo',
-        password: 'PlainPassword123',
+        username: 'request-demo',
+        password: 'RequestPassword123',
         skip_tls_verify: { value: true },
         extra: { loginDomain: 'default' },
       },
@@ -311,15 +324,17 @@ test('executeBlock performs login, address object creation, blacklist add, and l
   assert.deepEqual(result, {
     status: 'OPERATION_STATUS_SUCCESS',
     blocked_ips: ['1.1.1.1'],
-    authorization: 'Bearer token',
-    sid: 'mock',
+    authorization: '',
+    sid: '',
   });
   assert.deepEqual(calls.map((call) => new URL(call.url).pathname), [PATH_LOGIN, PATH_ADDRESS_OBJECT, PATH_BLOCK, PATH_LOGOUT]);
   assert.equal(calls[0].body.password, expectedSha);
   assert.equal(calls[0].body.password_sha256, expectedSha);
   assert.equal(calls[0].body.loginDomain, 'default');
-  assert.equal(calls[0].init.timeoutMs, 2000);
-  assert.equal(calls[0].init.skipTlsVerify, true);
+  assert.ok(calls[0].init.signal instanceof AbortSignal);
+  assert.equal('timeoutMs' in calls[0].init, false);
+  assert.ok(calls[0].init.dispatcher);
+  assert.equal('skipTlsVerify' in calls[0].init, false);
   assert.equal(calls[0].init.headers['X-Binding'], 'binding');
   assert.equal(calls[1].init.headers.Authorization, 'Bearer token');
   assert.equal(calls[1].init.headers.authorization, 'Bearer token');
@@ -341,7 +356,7 @@ test('executeBlock supports disabled address objects and template overrides thro
     return responses.shift();
   });
 
-  const result = await handlers[METHOD_BLOCK_FULL]({
+  const result = await callHandler(METHOD_BLOCK_FULL, {
     ipList: { values: ['2.2.2.2'] },
     address_object: { disabled: true },
     blacklist: {
@@ -356,7 +371,7 @@ test('executeBlock supports disabled address objects and template overrides thro
     logout: false,
   }, buildCtx());
 
-  assert.equal(result.sid, 'sid-2');
+  assert.equal(result.sid, '');
   assert.deepEqual(result.blocked_ips, ['2.2.2.2']);
   assert.deepEqual(calls.map((call) => new URL(call.url).pathname), [PATH_LOGIN, PATH_BLOCK]);
   assert.equal(calls[1].body.action, 'deny');
@@ -377,6 +392,8 @@ test('executeUnblock performs login, delete, and skips logout when requested', a
   });
 
   const result = await _test.executeUnblock(buildCtx({
+    config: { baseUrl: 'http://example.com', username: 'demo' },
+    secret: { passwordSha256: suppliedSha },
     req: {
       ips: '3.3.3.3',
       ip_list: undefined,
@@ -395,6 +412,8 @@ test('executeUnblock performs login, delete, and skips logout when requested', a
   }));
 
   assert.deepEqual(result.unblocked_ips, ['3.3.3.3']);
+  assert.equal(result.authorization, '');
+  assert.equal(result.sid, '');
   assert.deepEqual(calls.map((call) => new URL(call.url).pathname), [PATH_LOGIN, PATH_UNBLOCK]);
   assert.equal(calls[0].body.password, suppliedSha.toLowerCase());
   assert.equal(calls[0].body.password_sha256, suppliedSha.toLowerCase());
@@ -536,23 +555,21 @@ test('logout failures are logged and do not fail the main operation', async () =
 test('mock upstream handles block and unblock lifecycle', async () => {
   const server = await createMockServer();
   try {
-    const blockResult = await handlers[METHOD_BLOCK_FULL]({
+    const blockResult = await callHandler(METHOD_BLOCK_FULL, {
       ip_list: ['192.0.2.10'],
-      credential: { base_url: server.url, username: 'demo', password: 'secret' },
       blacklist: { name: 'mock-list', reason: 'integration' },
-    }, { meta: { instanceId: 'inst', requestId: 'req' } });
+    }, { config: { baseUrl: server.url, username: 'demo' }, secret: { password: 'secret' }, meta: { instanceId: 'inst', requestId: 'req' } });
     assert.equal(blockResult.status, 'OPERATION_STATUS_SUCCESS');
-    assert.equal(blockResult.sid, 'mock-session');
+    assert.equal(blockResult.sid, '');
 
     const statusAfterBlock = await fetch(`${server.url}/__status`).then((res) => res.json());
     assert.deepEqual(statusAfterBlock.blocked, ['192.0.2.10']);
     assert.deepEqual(statusAfterBlock.objects, ['addr-192.0.2.10']);
 
-    const unblockResult = await handlers[METHOD_UNBLOCK_FULL]({
+    const unblockResult = await callHandler(METHOD_UNBLOCK_FULL, {
       ip_list: ['192.0.2.10'],
-      credential: { base_url: server.url, username: 'demo', password: 'secret' },
       blacklist: { name: 'mock-list' },
-    }, {});
+    }, { config: { baseUrl: server.url, username: 'demo' }, secret: { password: 'secret' } });
     assert.equal(unblockResult.status, 'OPERATION_STATUS_SUCCESS');
     assert.deepEqual(unblockResult.unblocked_ips, ['192.0.2.10']);
 

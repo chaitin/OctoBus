@@ -52,7 +52,7 @@ const mergedBindings = (ctx = {}) => ({
 
 const resolveCallContext = (ctx = {}) => {
   const bindings = mergedBindings(ctx);
-  const request = ctx.req ?? ctx.request ?? {};
+  const request = ctx.request ?? ctx.req ?? {};
   const target = firstDefined(request.target, request.upstream_target, bindings.target, bindings.upstreamTarget, bindings.upstream_target);
   const method = firstDefined(request.method, request.upstream_method, bindings.method, bindings.upstreamMethod, bindings.upstream_method);
   const timeoutMs = firstDefined(ctx.limits?.timeoutMs, request.timeoutMs, request.timeout_ms, bindings.timeoutMs, bindings.timeout_ms);
@@ -70,6 +70,8 @@ const resolveCallContext = (ctx = {}) => {
   return {
     req,
     limits,
+    ...(hasOwn(ctx, 'proxy') ? { proxy: ctx.proxy } : {}),
+    ...(hasOwn(ctx, 'toGrpc') ? { toGrpc: ctx.toGrpc } : {}),
   };
 };
 
@@ -89,12 +91,13 @@ const normalizeTimeoutMs = (raw) => {
   return Number.isFinite(timeout) && timeout > 0 ? timeout : DEFAULT_TIMEOUT_MS;
 };
 
-const getProxyToGrpc = () => {
-  const toGrpc = globalThis.proxy?.toGrpc;
+const getProxyToGrpc = (ctx = {}) => {
+  const proxy = ctx.proxy;
+  const toGrpc = proxy?.toGrpc ?? ctx.toGrpc;
   if (typeof toGrpc !== 'function') {
-    throw errorWithCode('FAILED_PRECONDITION', 'global proxy.toGrpc is required');
+    throw errorWithCode('FAILED_PRECONDITION', 'ctx.proxy.toGrpc is required');
   }
-  return toGrpc.bind(globalThis.proxy);
+  return proxy && proxy.toGrpc === toGrpc ? toGrpc.bind(proxy) : toGrpc.bind(ctx);
 };
 
 const isValidationMode = (ctx) => {
@@ -105,7 +108,7 @@ const isValidationMode = (ctx) => {
 
 const buildProxyAction = (ctx) => {
   const req = ctx.req || {};
-  const toGrpc = getProxyToGrpc();
+  const toGrpc = getProxyToGrpc(ctx);
 
   if (isValidationMode(ctx)) {
     return toGrpc({

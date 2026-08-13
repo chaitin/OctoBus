@@ -2,12 +2,25 @@
 
 OctoBus service package for ThreatBook CloudAPI V3 IP reputation and domain query APIs.
 
+Service name: `threatbook-cloudapi-v3`.
+
+Runtime: long-running Node.js service using `@chaitin-ai/octobus-sdk`.
+
 ## Import
 
 Service root: `services/threatbook__cloudapi_v3`.
 
 ```bash
-octobus service import --id threatbook-cloudapi-v3 ./services//threatbook__cloudapi_v3
+octobus service import --id threatbook-cloudapi-v3 ./services/threatbook__cloudapi_v3
+```
+
+## Instance
+
+```bash
+octobus instance create threatbook-cloudapi \
+  --service threatbook-cloudapi-v3 \
+  --config-json '{"threatbook_domain":"https://api.threatbook.cn","timeoutMs":1500}' \
+  --secret-json '{"threatbook_apikey":"<redacted>"}'
 ```
 
 ## Package Layout
@@ -35,8 +48,44 @@ Secrets:
 
 ## RPC Methods
 
-- `ThreatBook_CloudAPI_V3.ThreatBook_CloudAPI_V3/IpReputation`
-- `ThreatBook_CloudAPI_V3.ThreatBook_CloudAPI_V3/DomainQuery`
+### IpReputation
+
+Full method:
+
+```text
+ThreatBook_CloudAPI_V3.ThreatBook_CloudAPI_V3/IpReputation
+```
+
+Request:
+
+```json
+{
+  "resource": "8.8.8.8",
+  "lang": "zh"
+}
+```
+
+Calls `GET {threatbook_domain}/1.1.1/scene/ip_reputation` with `apikey`, `lang`, and `resource`.
+
+### DomainQuery
+
+Full method:
+
+```text
+ThreatBook_CloudAPI_V3.ThreatBook_CloudAPI_V3/DomainQuery
+```
+
+Request:
+
+```json
+{
+  "resource": "example.com",
+  "lang": "zh",
+  "exclude": "cas"
+}
+```
+
+Calls `GET {threatbook_domain}/1.1.1/domain/query` with `apikey`, `lang`, `resource`, and `exclude`.
 
 ## Behavior
 
@@ -45,7 +94,7 @@ Secrets:
 - `lang` defaults to `zh`.
 - `DomainQuery.exclude` defaults to `cas`.
 - Success requires HTTP `200` and ThreatBook `response_code == 0`.
-- Successful RPC responses return `http_status`, `raw_body`, and parsed `raw_json`.
+- Successful RPC responses return `http_status`. `raw_body` is intentionally empty and `raw_json` is not populated to avoid retaining upstream payloads that may contain sensitive data.
 
 Errors preserve the legacy structured JSON message convention:
 
@@ -55,12 +104,37 @@ Errors preserve the legacy structured JSON message convention:
 - HTTP `5xx`, network errors, and response read errors: `UNAVAILABLE`.
 - Invalid JSON or missing `response_code`: `UNKNOWN`.
 - HTTP `200` with `response_code != 0`: `FAILED_PRECONDITION`.
+- Error messages include empty `raw_body`, `raw_body_length`, and redacted upstream `verbose_msg` when available.
+
+## Call Examples
+
+Connect RPC through OctoBus:
+
+```bash
+curl -X POST \
+  http://127.0.0.1:9000/capsets/threat-intel/connect/threatbook-cloudapi/ThreatBook_CloudAPI_V3.ThreatBook_CloudAPI_V3/IpReputation \
+  -H 'Content-Type: application/json' \
+  -d '{"resource":"8.8.8.8"}'
+```
+
+Runtime CLI:
+
+```bash
+OCTOBUS_SERVICE_CONTEXT='{"config":{"threatbook_domain":"https://api.threatbook.cn"},"secret":{"threatbook_apikey":"<redacted>"}}' \
+node threatbook__cloudapi_v3/bin/threatbook-cloudapi-v3.js ip-reputation --data-json '{"resource":"8.8.8.8"}'
+```
+
+## Limitations
+
+- API keys must come from instance secrets; request fields named `apikey` or `apiKey` are ignored.
+- Queried IPs/domains are sent to ThreatBook and may consume quota.
+- Upstream response bodies are not returned or logged by the package.
+- Use a non-production API key and benign indicators for validation evidence.
 
 ## Validation
 
 ```bash
 cd services
 npm run validate -- --service-dir threatbook__cloudapi_v3
-npm test -- --service-dir threatbook__cloudapi_v3 --coverage
-npm run pack:check
+npm test -- --service-dir threatbook__cloudapi_v3
 ```

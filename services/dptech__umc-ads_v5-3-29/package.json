@@ -7,6 +7,7 @@
     "dptech-umc-ads-v5-3-29": "bin/dptech-umc-ads-v5-3-29.js"
   },
   "dependencies": {
-    "@chaitin-ai/octobus-sdk": "^0.5.0"
+    "@chaitin-ai/octobus-sdk": "^0.6.0",
+    "undici": "^7.16.0"
   }
 }

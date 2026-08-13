@@ -5,7 +5,7 @@
   "properties": {
     "host": {
       "type": "string",
-      "description": "Huawei RESTCONF HTTPS base URL, for example https://203.0.113.10:8447. Request.host takes precedence."
+      "description": "Huawei RESTCONF HTTPS base URL, for example https://203.0.113.10:8447."
     },
     "device_name": {
       "type": "string",
@@ -25,11 +25,13 @@
     },
     "user": {
       "type": "string",
-      "description": "RESTCONF username. Prefer secret.user for persistent credentials."
+      "deprecated": true,
+      "description": "Deprecated RESTCONF username fallback. Prefer secret.user or secret.username."
     },
     "username": {
       "type": "string",
-      "description": "Alias for user."
+      "deprecated": true,
+      "description": "Deprecated alias for user. Prefer secret.user or secret.username."
     },
     "timeoutMs": {
       "type": "integer",

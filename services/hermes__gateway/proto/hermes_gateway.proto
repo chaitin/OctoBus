@@ -1,0 +1,158 @@
+syntax = "proto3";
+
+package hermes.v1;
+
+service HermesGateway {
+  rpc HealthCheck(HealthCheckRequest) returns (HermesHttpResponse);
+  rpc SendWebhook(SendWebhookRequest) returns (HermesHttpResponse);
+  rpc GetGatewayStatus(EmptyRequest) returns (HermesCliResponse);
+  rpc GetComponentStatus(EmptyRequest) returns (HermesCliResponse);
+  rpc ListSendTargets(EmptyRequest) returns (HermesCliResponse);
+  rpc ListWebhookSubscriptions(EmptyRequest) returns (HermesCliResponse);
+  rpc ListCronJobs(EmptyRequest) returns (HermesCliResponse);
+  rpc ListPlugins(EmptyRequest) returns (HermesCliResponse);
+  rpc ListMcpServers(EmptyRequest) returns (HermesCliResponse);
+  rpc TestMcpServer(NamedResourceRequest) returns (HermesCliResponse);
+  rpc ListSkills(ListSkillsRequest) returns (HermesCliResponse);
+  rpc ListTools(ListToolsRequest) returns (HermesCliResponse);
+  rpc EnableTools(ToolsMutationRequest) returns (HermesCliResponse);
+  rpc DisableTools(ToolsMutationRequest) returns (HermesCliResponse);
+  rpc GetMemoryStatus(EmptyRequest) returns (HermesCliResponse);
+  rpc ConfigCheck(EmptyRequest) returns (HermesCliResponse);
+  rpc Doctor(DoctorRequest) returns (HermesCliResponse);
+  rpc SecurityAudit(EmptyRequest) returns (HermesCliResponse);
+  rpc CreateWebhookSubscription(CreateWebhookSubscriptionRequest) returns (HermesCliResponse);
+  rpc TestWebhookSubscription(TestWebhookSubscriptionRequest) returns (HermesCliResponse);
+  rpc RemoveWebhookSubscription(NamedResourceRequest) returns (HermesCliResponse);
+  rpc CreateCronJob(CreateCronJobRequest) returns (HermesCliResponse);
+  rpc PauseCronJob(NamedResourceRequest) returns (HermesCliResponse);
+  rpc ResumeCronJob(NamedResourceRequest) returns (HermesCliResponse);
+  rpc RunCronJob(NamedResourceRequest) returns (HermesCliResponse);
+  rpc RemoveCronJob(NamedResourceRequest) returns (HermesCliResponse);
+  rpc EnablePlugin(NamedResourceRequest) returns (HermesCliResponse);
+  rpc DisablePlugin(NamedResourceRequest) returns (HermesCliResponse);
+  rpc ListSessions(ListSessionsRequest) returns (HermesCliResponse);
+  rpc GetSessionsStats(EmptyRequest) returns (HermesCliResponse);
+  rpc GetLogs(GetLogsRequest) returns (HermesCliResponse);
+  rpc SendMessage(SendMessageRequest) returns (HermesCliResponse);
+}
+
+message EmptyRequest {}
+
+message HealthCheckRequest {}
+
+message SendWebhookRequest {
+  string path = 1;
+  string payload_json = 2 [json_name = "payloadJson"];
+  map<string, string> headers = 3;
+  string idempotency_key = 4 [json_name = "idempotencyKey"];
+  string correlation_id = 5 [json_name = "correlationId"];
+  int32 timeout_ms = 6 [json_name = "timeoutMs"];
+  string hmac_secret = 7 [json_name = "hmacSecret"];
+  string hmac_secret_name = 8 [json_name = "hmacSecretName"];
+}
+
+message HermesHttpResponse {
+  bool ok = 1;
+  int32 status_code = 2 [json_name = "statusCode"];
+  string status_text = 3 [json_name = "statusText"];
+  string request_method = 4 [json_name = "requestMethod"];
+  string request_url = 5 [json_name = "requestUrl"];
+  string request_headers_json = 6 [json_name = "requestHeadersJson"];
+  string request_body = 7 [json_name = "requestBody"];
+  string response_headers_json = 8 [json_name = "responseHeadersJson"];
+  string response_body = 9 [json_name = "responseBody"];
+  string evidence = 10;
+}
+
+message GetLogsRequest {
+  string log_name = 1 [json_name = "logName"];
+  int32 lines = 2;
+  string since = 3;
+  string level = 4;
+  string component = 5;
+  int32 timeout_ms = 6 [json_name = "timeoutMs"];
+}
+
+message SendMessageRequest {
+  string target = 1;
+  string message = 2;
+  string subject = 3;
+  int32 timeout_ms = 4 [json_name = "timeoutMs"];
+}
+
+message NamedResourceRequest {
+  string name = 1;
+  int32 timeout_ms = 2 [json_name = "timeoutMs"];
+}
+
+message ListSkillsRequest {
+  string source = 1;
+  bool enabled_only = 2 [json_name = "enabledOnly"];
+  int32 timeout_ms = 3 [json_name = "timeoutMs"];
+}
+
+message ListToolsRequest {
+  string platform = 1;
+  int32 timeout_ms = 2 [json_name = "timeoutMs"];
+}
+
+message ToolsMutationRequest {
+  string platform = 1;
+  repeated string names = 2;
+  int32 timeout_ms = 3 [json_name = "timeoutMs"];
+}
+
+message DoctorRequest {
+  bool fix = 1;
+  string ack = 2;
+  int32 timeout_ms = 3 [json_name = "timeoutMs"];
+}
+
+message CreateWebhookSubscriptionRequest {
+  string name = 1;
+  string prompt = 2;
+  string events = 3;
+  string description = 4;
+  string skills = 5;
+  string deliver = 6;
+  string deliver_chat_id = 7 [json_name = "deliverChatId"];
+  string secret = 8;
+  bool deliver_only = 9 [json_name = "deliverOnly"];
+  int32 timeout_ms = 10 [json_name = "timeoutMs"];
+  string secret_name = 11 [json_name = "secretName"];
+}
+
+message TestWebhookSubscriptionRequest {
+  string name = 1;
+  string payload_json = 2 [json_name = "payloadJson"];
+  int32 timeout_ms = 3 [json_name = "timeoutMs"];
+}
+
+message CreateCronJobRequest {
+  string schedule = 1;
+  string prompt = 2;
+  string name = 3;
+  string deliver = 4;
+  int32 repeat = 5;
+  repeated string skills = 6;
+  string script = 7;
+  bool no_agent = 8 [json_name = "noAgent"];
+  string workdir = 9;
+  int32 timeout_ms = 10 [json_name = "timeoutMs"];
+}
+
+message ListSessionsRequest {
+  string source = 1;
+  int32 limit = 2;
+  int32 timeout_ms = 3 [json_name = "timeoutMs"];
+}
+
+message HermesCliResponse {
+  bool ok = 1;
+  int32 exit_code = 2 [json_name = "exitCode"];
+  string command = 3;
+  string stdout = 4;
+  string stderr = 5;
+  string evidence = 6;
+}

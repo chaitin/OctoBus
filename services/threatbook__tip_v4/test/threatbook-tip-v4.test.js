@@ -25,6 +25,12 @@ const setFetch = (impl) => {
   globalThis.fetch = impl;
 };
 
+const abortingFetch = (message = 'request aborted') => (_url, init) => new Promise((resolve, reject) => {
+  const abort = () => reject(new Error(message));
+  if (init.signal?.aborted) abort();
+  else init.signal?.addEventListener('abort', abort, { once: true });
+});
+
 const buildCtx = (overrides = {}) => ({
   config: {
     threatbook_domain: 'https://api.threatbook.cn',
@@ -41,6 +47,11 @@ const buildCtx = (overrides = {}) => ({
   meta: { instance_id: 'inst', request_id: 'req', ...(overrides.meta || {}) },
   req: overrides.req || {},
 });
+
+const callHandler = (method, request = {}, ctx = {}) => {
+  const handler = handlers[method];
+  return handler({ ...ctx, request });
+};
 
 const expectGrpcError = async (fn, legacyCode, checker = () => {}) => {
   let caught;
@@ -75,22 +86,22 @@ test('service exports handler and rpcdef path', () => {
 
 test('validates required bindings and ip', async () => {
   await expectGrpcError(
-    () => handlers[METHOD_QUERY_IP_REPUTATION_FULL]({ ip: '8.8.8.8' }, buildCtx({ config: { threatbook_domain: '' } })),
+    () => callHandler(METHOD_QUERY_IP_REPUTATION_FULL, { ip: '8.8.8.8' }, buildCtx({ config: { threatbook_domain: '' } })),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /threatbook_domain/),
   );
   await expectGrpcError(
-    () => handlers[METHOD_QUERY_IP_REPUTATION_FULL]({ ip: '8.8.8.8' }, buildCtx({ secret: { threatbook_apikey: '' } })),
+    () => callHandler(METHOD_QUERY_IP_REPUTATION_FULL, { ip: '8.8.8.8' }, buildCtx({ secret: { threatbook_apikey: '' } })),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /threatbook_apikey/),
   );
   await expectGrpcError(
-    () => handlers[METHOD_QUERY_IP_REPUTATION_FULL]({}, buildCtx()),
+    () => callHandler(METHOD_QUERY_IP_REPUTATION_FULL, {}, buildCtx()),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /ip is required/),
   );
   await expectGrpcError(
-    () => handlers[METHOD_QUERY_IP_REPUTATION_FULL]({ ip: { value: '   ' } }, buildCtx()),
+    () => callHandler(METHOD_QUERY_IP_REPUTATION_FULL, { ip: { value: '   ' } }, buildCtx()),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /ip is required/),
   );
@@ -107,7 +118,7 @@ test('QueryIPReputation sends request and returns raw HTTP body on success', asy
     });
   });
 
-  const result = await handlers[METHOD_QUERY_IP_REPUTATION_FULL](
+  const result = await callHandler(METHOD_QUERY_IP_REPUTATION_FULL,
     { ip: { value: ' 8.8.8.8 ' } },
     buildCtx({ bindings: { skipTlsVerify: true } }),
   );
@@ -118,20 +129,21 @@ test('QueryIPReputation sends request and returns raw HTTP body on success', asy
   assert.equal(url.searchParams.get('resource'), '8.8.8.8');
   assert.equal(url.searchParams.get('lang'), 'zh');
   assert.equal(captured.init.method, 'GET');
-  assert.equal(captured.init.timeoutMs, 10_000);
-  assert.equal(captured.init.skipTlsVerify, true);
-  assert.equal(captured.init.tlsInsecureSkipVerify, true);
-  assert.equal(captured.init.insecureSkipVerify, true);
+  assert.ok(captured.init.signal instanceof AbortSignal);
+  assert.equal(captured.init.timeoutMs, undefined);
+  assert.equal(captured.init.dispatcher, _test.insecureTlsDispatcher);
+  assert.equal(captured.init.skipTlsVerify, undefined);
+  assert.equal(captured.init.tlsInsecureSkipVerify, undefined);
+  assert.equal(captured.init.insecureSkipVerify, undefined);
   assert.equal(result.http_status, 200);
-  assert.match(result.http_body, /"response_code":0/);
+  assert.equal(result.http_body, '');
 });
 
 test('HTTP 200 with business response_code failure stays gRPC OK', async () => {
   setFetch(async () => response(200, { response_code: 1001, verbose_msg: 'IP not found', data: [] }));
-  const result = await handlers[METHOD_QUERY_IP_REPUTATION_FULL]({ resource: '1.1.1.1' }, buildCtx());
+  const result = await callHandler(METHOD_QUERY_IP_REPUTATION_FULL, { resource: '1.1.1.1' }, buildCtx());
   assert.equal(result.http_status, 200);
-  assert.match(result.http_body, /"response_code":1001/);
-  assert.match(result.http_body, /IP not found/);
+  assert.equal(result.http_body, '');
 });
 
 test('supports aliases and IPv6 query encoding', async () => {
@@ -141,7 +153,7 @@ test('supports aliases and IPv6 query encoding', async () => {
     return response(200, { response_code: 0, data: [] });
   });
 
-  await handlers[METHOD_QUERY_IP_REPUTATION_FULL](
+  await callHandler(METHOD_QUERY_IP_REPUTATION_FULL,
     { ip: '2001:4860:4860::8888' },
     buildCtx({
       config: { threatbook_domain: undefined, baseUrl: ' http://mock.local/ ' },
@@ -158,14 +170,15 @@ test('supports aliases and IPv6 query encoding', async () => {
 });
 
 test('maps HTTP and network failures with response details', async () => {
-  for (const [status, legacyCode] of [[401, 'PERMISSION_DENIED'], [403, 'PERMISSION_DENIED'], [400, 'FAILED_PRECONDITION'], [404, 'FAILED_PRECONDITION'], [500, 'UNAVAILABLE'], [502, 'UNAVAILABLE']]) {
+  for (const [status, legacyCode] of [[401, 'PERMISSION_DENIED'], [403, 'PERMISSION_DENIED'], [400, 'FAILED_PRECONDITION'], [404, 'FAILED_PRECONDITION'], [429, 'FAILED_PRECONDITION'], [500, 'UNAVAILABLE'], [502, 'UNAVAILABLE']]) {
     setFetch(async () => response(status, { response_code: -1, verbose_msg: `status ${status}` }));
     await expectGrpcError(
-      () => handlers[METHOD_QUERY_IP_REPUTATION_FULL]({ ip: '8.8.8.8' }, buildCtx()),
+      () => callHandler(METHOD_QUERY_IP_REPUTATION_FULL, { ip: '8.8.8.8' }, buildCtx()),
       legacyCode,
       (err) => {
         assert.equal(err.response.http_status, status);
-        assert.match(err.response.http_body, new RegExp(`status ${status}`));
+        assert.equal(err.response.http_body, '');
+        assert.ok(err.response.http_body_length > 0);
       },
     );
   }
@@ -174,11 +187,12 @@ test('maps HTTP and network failures with response details', async () => {
     throw Object.assign(new Error('network error'), { cause: new Error('connection refused') });
   });
   await expectGrpcError(
-    () => handlers[METHOD_QUERY_IP_REPUTATION_FULL]({ ip: '8.8.8.8' }, buildCtx()),
+    () => callHandler(METHOD_QUERY_IP_REPUTATION_FULL, { ip: '8.8.8.8' }, buildCtx()),
     'UNAVAILABLE',
     (err) => {
       assert.equal(err.response.http_status, 0);
-      assert.match(err.response.http_body, /connection refused/);
+      assert.equal(err.response.http_body, '');
+      assert.ok(err.response.http_body_length > 0);
     },
   );
 
@@ -189,11 +203,24 @@ test('maps HTTP and network failures with response details', async () => {
     },
   }));
   await expectGrpcError(
-    () => handlers[METHOD_QUERY_IP_REPUTATION_FULL]({ ip: '8.8.8.8' }, buildCtx()),
+    () => callHandler(METHOD_QUERY_IP_REPUTATION_FULL, { ip: '8.8.8.8' }, buildCtx()),
     'UNAVAILABLE',
     (err) => {
       assert.equal(err.response.http_status, 0);
-      assert.match(err.response.http_body, /read failed/);
+      assert.equal(err.response.http_body, '');
+      assert.ok(err.response.http_body_length > 0);
+    },
+  );
+
+  setFetch(abortingFetch('timeout waiting for test_api_key'));
+  await expectGrpcError(
+    () => callHandler(METHOD_QUERY_IP_REPUTATION_FULL, { ip: '8.8.8.8' }, buildCtx({ limits: { timeoutMs: 1 } })),
+    'UNAVAILABLE',
+    (err) => {
+      assert.equal(err.response.http_status, 0);
+      assert.equal(err.response.http_body, '');
+      assert.ok(err.response.http_body_length > 0);
+      assert.doesNotMatch(String(err.response.http_body_length), /test_api_key/);
     },
   );
 });
@@ -202,6 +229,35 @@ test('rpcdef falls back to context request', async () => {
   setFetch(async () => response(200, { response_code: 0, data: [] }));
   const result = await rpcdef(buildCtx({ req: { ip: '9.9.9.9' } }))[METHOD_QUERY_IP_REPUTATION_PATH]();
   assert.equal(result.http_status, 200);
+});
+
+test('request cannot override API key and logs redact query secret', async () => {
+  const logs = [];
+  let capturedUrl;
+  console.log = (...args) => logs.push(args.map((arg) => String(arg)).join(' '));
+  setFetch(async (url) => {
+    capturedUrl = String(url);
+    return response(500, `apikey=test_api_key`);
+  });
+
+  await expectGrpcError(
+    () => callHandler(METHOD_QUERY_IP_REPUTATION_FULL, {
+      ip: '8.8.8.8',
+      threatbook_apikey: 'request_key',
+      apikey: 'request_key',
+      apiKey: 'request_key',
+    }, buildCtx()),
+    'UNAVAILABLE',
+    (err) => {
+      assert.match(err.message, /upstream http 500/);
+      assert.doesNotMatch(err.message, /test_api_key|request_key/);
+    },
+  );
+
+  const url = new URL(capturedUrl);
+  assert.equal(url.searchParams.get('apikey'), 'test_api_key');
+  assert.doesNotMatch(logs.join('\n'), /test_api_key|request_key/);
+  assert.match(logs.join('\n'), /apikey=\*\*\*/);
 });
 
 test('helper functions cover normalization, mapping, logging, and direct fetch branches', async () => {
@@ -226,13 +282,11 @@ test('helper functions cover normalization, mapping, logging, and direct fetch b
   assert.equal(_test.resolveTimeoutMs({ limits: { timeoutMs: 'bad' }, bindings: { timeoutMs: 15 } }), 1500);
   assert.equal(_test.resolveTimeoutMs({ limits: {}, bindings: { timeoutMs: 15 } }), 15);
   assert.deepEqual(_test.buildTlsOptions({}), {});
-  assert.deepEqual(_test.buildTlsOptions({ insecureSkipVerify: true }), {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  });
+  assert.equal(_test.buildTlsOptions({ insecureSkipVerify: true }).dispatcher, _test.insecureTlsDispatcher);
   assert.equal(_test.requireIp({ resource: { value: '1.1.1.1' } }), '1.1.1.1');
   assert.equal(_test.encodeQueryPairs({ a: 'x y', b: '', c: null, d: 0 }), 'a=x%20y&d=0');
+  assert.equal(_test.redactUrlSensitiveQuery('https://x.test/p?apikey=k&token=t&x=1'), 'https://x.test/p?apikey=***&token=***&x=1');
+  assert.equal(_test.sanitizeSensitiveText('apikey=k&token=t body secret', ['secret']), 'apikey=***&token=*** body ***');
   assert.equal(_test.buildQueryUrl('https://api.local', { a: 'b' }), 'https://api.local/tip_api/v4/ip?a=b');
   assert.equal(_test.mapHttpStatusToCode(401), 'PERMISSION_DENIED');
   assert.equal(_test.mapHttpStatusToCode(400), 'FAILED_PRECONDITION');
@@ -258,21 +312,21 @@ test('mock upstream handles success, business failure, auth, and server errors',
   const server = await createMockServer();
   try {
     const ctx = buildCtx({ config: { threatbook_domain: server.url } });
-    const ok = await handlers[METHOD_QUERY_IP_REPUTATION_FULL]({ ip: '8.8.8.8' }, ctx);
-    const biz = await handlers[METHOD_QUERY_IP_REPUTATION_FULL]({ ip: '1.1.1.1' }, ctx);
+    const ok = await callHandler(METHOD_QUERY_IP_REPUTATION_FULL, { ip: '8.8.8.8' }, ctx);
+    const biz = await callHandler(METHOD_QUERY_IP_REPUTATION_FULL, { ip: '1.1.1.1' }, ctx);
     assert.equal(ok.http_status, 200);
-    assert.match(ok.http_body, /malicious/);
+    assert.equal(ok.http_body, '');
     assert.equal(biz.http_status, 200);
-    assert.match(biz.http_body, /IP not found/);
+    assert.equal(biz.http_body, '');
     assert.equal(server.requests[0].path, '/tip_api/v4/ip');
     assert.equal(server.requests[0].query.lang, 'zh');
 
     await expectGrpcError(
-      () => handlers[METHOD_QUERY_IP_REPUTATION_FULL]({ ip: '8.8.8.8' }, buildCtx({ config: { threatbook_domain: server.url }, secret: { threatbook_apikey: 'invalid_key' } })),
+      () => callHandler(METHOD_QUERY_IP_REPUTATION_FULL, { ip: '8.8.8.8' }, buildCtx({ config: { threatbook_domain: server.url }, secret: { threatbook_apikey: 'invalid_key' } })),
       'PERMISSION_DENIED',
     );
     await expectGrpcError(
-      () => handlers[METHOD_QUERY_IP_REPUTATION_FULL]({ ip: '500.500.500.500' }, ctx),
+      () => callHandler(METHOD_QUERY_IP_REPUTATION_FULL, { ip: '500.500.500.500' }, ctx),
       'UNAVAILABLE',
     );
   } finally {

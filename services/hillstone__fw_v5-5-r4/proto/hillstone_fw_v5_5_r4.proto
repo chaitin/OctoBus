@@ -20,25 +20,25 @@ service HILLSTONE_FW_V55R4 {
 
 message HttpResponse {
   int32 http_status = 1; // 下游 Hillstone HTTP 实际状态码；仅在 gRPC OK 场景中返回。
-  string http_body = 2; // 下游 Hillstone HTTP 原始响应文本；空响应体时为空字符串。
+  string http_body = 2 [deprecated = true]; // Deprecated: 登录响应和错误详情不再返回原始响应文本。
 }
 
 message LoginRequest {
   string host = 1; // Hillstone 管理地址，必须包含协议、主机和端口，例如 https://203.0.113.10:8443。
-  string user_name = 2; // 登录请求体中的 userName 字段，表示管理台账号。
-  string password = 3; // 登录请求体中的 password 字段；应由调用方预先完成 Base64 编码，本服务原样透传。
+  string user_name = 2 [deprecated = true]; // Deprecated: 使用 instance config/secret 中的用户名。
+  string password = 3 [deprecated = true]; // Deprecated: 使用 instance secret 中的 password。
   string if_vsys_id = 4; // 登录请求体中的 ifVsysId 字段；为空时服务端默认使用 "0"。
   string vr_id = 5; // 登录请求体中的 vrId 字段；为空时服务端默认使用 "1"。
   string lang = 6; // 登录请求体中的 lang 字段；为空时服务端默认使用 "zh_CN"。
 }
 
 message CookieContext {
-  string fromrootvsys = 1; // Hillstone Cookie 字段 fromrootvsys，后续认证请求需原样透传。
-  string role = 2; // Hillstone Cookie 字段 role，后续认证请求需原样透传。
-  string vsys_id = 3; // Hillstone Cookie 字段 vsysId，后续认证请求需原样透传。
-  string token = 4; // Hillstone Cookie 字段 token，后续认证请求需原样透传。
-  string username = 5; // Hillstone Cookie 字段 username，后续认证请求需原样透传。
-  string lang = 6; // Hillstone Cookie 字段 lang；为空时服务端默认使用 "zh_CN"。
+  string fromrootvsys = 1 [deprecated = true]; // Deprecated: session cookie is cached internally after Login.
+  string role = 2 [deprecated = true]; // Deprecated: session cookie is cached internally after Login.
+  string vsys_id = 3 [deprecated = true]; // Deprecated: session cookie is cached internally after Login.
+  string token = 4 [deprecated = true]; // Deprecated: session cookie is cached internally after Login.
+  string username = 5 [deprecated = true]; // Deprecated: session cookie is cached internally after Login.
+  string lang = 6 [deprecated = true]; // Deprecated: session cookie is cached internally after Login.
 }
 
 message AddressBookIP {
@@ -72,19 +72,19 @@ message AddressBook {
 
 message CreateAddressGroupRequest {
   string host = 1; // Hillstone 管理地址，必须包含协议、主机和端口。
-  CookieContext cookie = 2; // 后续认证请求使用的完整 Hillstone Cookie 字段集合。
+  CookieContext cookie = 2 [deprecated = true]; // Deprecated: use cached session from Login.
   repeated AddressBook address_books = 3; // 需要创建的地址组数组，按 HTTP 接口要求序列化为 JSON 文本数组。
 }
 
 message UpdateAddressGroupRequest {
   string host = 1; // Hillstone 管理地址，必须包含协议、主机和端口。
-  CookieContext cookie = 2; // 后续认证请求使用的完整 Hillstone Cookie 字段集合。
+  CookieContext cookie = 2 [deprecated = true]; // Deprecated: use cached session from Login.
   repeated AddressBook address_books = 3; // 需要更新的地址组数组，按 HTTP 接口要求序列化为 JSON 文本数组。
 }
 
 message QueryAddressGroupRequest {
   string host = 1; // Hillstone 管理地址，必须包含协议、主机和端口。
-  CookieContext cookie = 2; // 后续认证请求使用的完整 Hillstone Cookie 字段集合。
+  CookieContext cookie = 2 [deprecated = true]; // Deprecated: use cached session from Login.
   string name = 3; // 查询条件中的地址组名称，对应 query.conditions[0].value。
   int32 start = 4; // 查询条件中的 start 分页起始值；默认 0。
   int32 limit = 5; // 查询条件中的 limit 分页大小；小于等于 0 时默认 50。

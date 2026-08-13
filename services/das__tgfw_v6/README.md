@@ -5,8 +5,16 @@ This package preserves legacy gRPC package and method names where applicable.
 Import it into OctoBus with:
 
 ```bash
-octobus service import --id das-tgfw-v6 ./services//das__tgfw_v6
+octobus service import --id das-tgfw-v6 ./services/das__tgfw_v6
 ```
+
+## Service Metadata
+
+- Vendor/product/version: DAS TGFW V6 blacklist REST API.
+- Service name: `das-tgfw-v6`.
+- Service dir: `services/das__tgfw_v6`.
+- Runtime mode: `long-running`.
+- Runtime inspect: `node bin/das-tgfw-v6.js --runtime inspect --json`.
 
 ## Package Files
 
@@ -42,9 +50,9 @@ Use `secret.api_token`, `secret.apiToken`, or `secret.token` for the downstream 
 
 ## RPC Methods
 
-- `DAS_TGFW_V6.DAS_TGFW_V6/query_blacklist`
-- `DAS_TGFW_V6.DAS_TGFW_V6/add_blacklist`
-- `DAS_TGFW_V6.DAS_TGFW_V6/delete_blacklist`
+- `DAS_TGFW_V6.DAS_TGFW_V6/query_blacklist` - read, queries blacklist entries.
+- `DAS_TGFW_V6.DAS_TGFW_V6/add_blacklist` - write, adds one blacklist entry.
+- `DAS_TGFW_V6.DAS_TGFW_V6/delete_blacklist` - write, deletes one blacklist entry by ID.
 
 ## Behavior Notes
 
@@ -57,6 +65,24 @@ Use `secret.api_token`, `secret.apiToken`, or `secret.token` for the downstream 
 - HTTP 4xx maps to `FAILED_PRECONDITION`.
 - HTTP 5xx and network failures map to `UNAVAILABLE`.
 - Add and delete require a 2xx response with `msg == "success"` when the response body is JSON.
+- `timeoutMs` is enforced with `AbortController`; `skipTlsVerify` uses a per-request undici dispatcher and does not change global TLS settings.
+- Error details and response fields expose sanitized status/body summaries only and must not include `AuthorizationToken` or the configured token.
+- Known limitation: the add/delete RPCs are intentionally narrow blacklist operations, not a generic REST proxy.
+
+## OctoBus Usage
+
+```bash
+octobus service import --id das-tgfw-v6 ./services/das__tgfw_v6
+octobus instance create das-tgfw --service das-tgfw-v6 \
+  --config-json '{"host":"https://tgfw.example:8443","timeoutMs":1500,"skipTlsVerify":false}' \
+  --secret-json '{"api_token":"REDACTED"}'
+octobus capset create tgfw-blacklist
+octobus capset add-instance tgfw-blacklist das-tgfw
+
+curl -X POST http://127.0.0.1:9000/capsets/tgfw-blacklist/connect/das-tgfw/DAS_TGFW_V6.DAS_TGFW_V6/query_blacklist \
+  -H 'Content-Type: application/json' \
+  -d '{"page":1,"size":20,"is_ip6":false}'
+```
 
 ## Local Checks
 

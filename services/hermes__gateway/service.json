@@ -1,0 +1,153 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "hermes-gateway",
+  "displayName": "Hermes Gateway",
+  "description": "OctoBus package for Hermes gateway health, webhooks, messaging, diagnostics, and read-only operations.",
+  "runtime": {
+    "mode": "on-demand"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/hermes_gateway.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "hermes.v1.HermesGateway/HealthCheck": {
+          "name": "health-check",
+          "description": "Call the configured Hermes health endpoint."
+        },
+        "hermes.v1.HermesGateway/SendWebhook": {
+          "name": "send-webhook",
+          "description": "POST a JSON webhook payload to an allowed Hermes path."
+        },
+        "hermes.v1.HermesGateway/GetGatewayStatus": {
+          "name": "get-gateway-status",
+          "description": "Run hermes gateway status."
+        },
+        "hermes.v1.HermesGateway/GetComponentStatus": {
+          "name": "get-component-status",
+          "description": "Run hermes status --all."
+        },
+        "hermes.v1.HermesGateway/ListSendTargets": {
+          "name": "list-send-targets",
+          "description": "List Hermes messaging targets."
+        },
+        "hermes.v1.HermesGateway/ListWebhookSubscriptions": {
+          "name": "list-webhook-subscriptions",
+          "description": "List Hermes dynamic webhook subscriptions."
+        },
+        "hermes.v1.HermesGateway/ListCronJobs": {
+          "name": "list-cron-jobs",
+          "description": "List Hermes cron jobs."
+        },
+        "hermes.v1.HermesGateway/ListPlugins": {
+          "name": "list-plugins",
+          "description": "List user Hermes plugins."
+        },
+        "hermes.v1.HermesGateway/ListMcpServers": {
+          "name": "list-mcp-servers",
+          "description": "List configured Hermes MCP servers."
+        },
+        "hermes.v1.HermesGateway/GetSessionsStats": {
+          "name": "get-sessions-stats",
+          "description": "Show Hermes session store statistics."
+        },
+        "hermes.v1.HermesGateway/GetLogs": {
+          "name": "get-logs",
+          "description": "Read bounded Hermes logs."
+        },
+        "hermes.v1.HermesGateway/SendMessage": {
+          "name": "send-message",
+          "description": "Send a message through Hermes to an allowed target."
+        },
+        "hermes.v1.HermesGateway/TestMcpServer": {
+          "name": "test-mcp-server",
+          "description": "Test a configured Hermes MCP server."
+        },
+        "hermes.v1.HermesGateway/ListSkills": {
+          "name": "list-skills",
+          "description": "List Hermes skills."
+        },
+        "hermes.v1.HermesGateway/ListTools": {
+          "name": "list-tools",
+          "description": "List Hermes toolsets for a platform."
+        },
+        "hermes.v1.HermesGateway/EnableTools": {
+          "name": "enable-tools",
+          "description": "Enable Hermes toolsets for a platform."
+        },
+        "hermes.v1.HermesGateway/DisableTools": {
+          "name": "disable-tools",
+          "description": "Disable Hermes toolsets for a platform."
+        },
+        "hermes.v1.HermesGateway/GetMemoryStatus": {
+          "name": "get-memory-status",
+          "description": "Show Hermes memory provider status."
+        },
+        "hermes.v1.HermesGateway/ConfigCheck": {
+          "name": "config-check",
+          "description": "Run hermes config check."
+        },
+        "hermes.v1.HermesGateway/Doctor": {
+          "name": "doctor",
+          "description": "Run hermes doctor."
+        },
+        "hermes.v1.HermesGateway/SecurityAudit": {
+          "name": "security-audit",
+          "description": "Run hermes security audit."
+        },
+        "hermes.v1.HermesGateway/CreateWebhookSubscription": {
+          "name": "create-webhook-subscription",
+          "description": "Create a Hermes dynamic webhook subscription."
+        },
+        "hermes.v1.HermesGateway/TestWebhookSubscription": {
+          "name": "test-webhook-subscription",
+          "description": "Test a Hermes dynamic webhook subscription."
+        },
+        "hermes.v1.HermesGateway/RemoveWebhookSubscription": {
+          "name": "remove-webhook-subscription",
+          "description": "Remove a Hermes dynamic webhook subscription."
+        },
+        "hermes.v1.HermesGateway/CreateCronJob": {
+          "name": "create-cron-job",
+          "description": "Create a Hermes cron job."
+        },
+        "hermes.v1.HermesGateway/PauseCronJob": {
+          "name": "pause-cron-job",
+          "description": "Pause a Hermes cron job."
+        },
+        "hermes.v1.HermesGateway/ResumeCronJob": {
+          "name": "resume-cron-job",
+          "description": "Resume a Hermes cron job."
+        },
+        "hermes.v1.HermesGateway/RunCronJob": {
+          "name": "run-cron-job",
+          "description": "Run a Hermes cron job on next scheduler tick."
+        },
+        "hermes.v1.HermesGateway/RemoveCronJob": {
+          "name": "remove-cron-job",
+          "description": "Remove a Hermes cron job."
+        },
+        "hermes.v1.HermesGateway/EnablePlugin": {
+          "name": "enable-plugin",
+          "description": "Enable a Hermes plugin."
+        },
+        "hermes.v1.HermesGateway/DisablePlugin": {
+          "name": "disable-plugin",
+          "description": "Disable a Hermes plugin."
+        },
+        "hermes.v1.HermesGateway/ListSessions": {
+          "name": "list-sessions",
+          "description": "List Hermes sessions."
+        }
+      }
+    }
+  }
+}

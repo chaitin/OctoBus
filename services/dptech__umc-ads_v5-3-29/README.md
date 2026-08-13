@@ -5,8 +5,16 @@ This package preserves legacy gRPC package and method names where applicable.
 Import it into OctoBus with:
 
 ```bash
-octobus service import --id dptech-umc-ads-v5-3-29 ./services//dptech__umc-ads_v5-3-29
+octobus service import --id dptech-umc-ads-v5-3-29 ./services/dptech__umc-ads_v5-3-29
 ```
+
+## Service Metadata
+
+- Vendor/product/version: DPtech UMC ADS V5.3.29 REST API.
+- Service name: `dptech-umc-ads-v5-3-29`.
+- Service dir: `services/dptech__umc-ads_v5-3-29`.
+- Runtime mode: `long-running`.
+- Runtime inspect: `node bin/dptech-umc-ads-v5-3-29.js --runtime inspect --json`.
 
 ## Package Files
 
@@ -17,7 +25,7 @@ octobus service import --id dptech-umc-ads-v5-3-29 ./services//dptech__umc-ads_v
 - `src/dptech-umc-ads-v5-3-29.js`: DPtech UMC ADS REST proxy implementation.
 - `src/service.js`: OctoBus SDK `defineService` wrapper.
 - `bin/dptech-umc-ads-v5-3-29.js`: service-local executable entrypoint.
-- `test/dptech-umc-ads-v5-3-29.test.js`: node:test coverage for login caching, request mapping, token resolution, validation, error classification, and SDK handler invocation.
+- `test/dptech-umc-ads-v5-3-29.test.js`: node:test coverage for login caching, request mapping, secret handling, validation, error classification, and SDK handler invocation.
 - `test/mock_upstream.js`: optional local DPtech UMC ADS HTTP mock.
 
 ## Configuration
@@ -46,20 +54,37 @@ Use `secret.password`, `secret.pass`, or `secret.secret` for the login secret ke
 
 ## RPC Methods
 
-- `DPtech_UMC_ADS_v5329.DPtech_UMC_ADS_v5329/Login`
-- `DPtech_UMC_ADS_v5329.DPtech_UMC_ADS_v5329/QueryBlacklist`
-- `DPtech_UMC_ADS_v5329.DPtech_UMC_ADS_v5329/AddBlacklist`
-- `DPtech_UMC_ADS_v5329.DPtech_UMC_ADS_v5329/DeleteBlacklist`
+- `DPtech_UMC_ADS_v5329.DPtech_UMC_ADS_v5329/Login` - write/session setup, authenticates and caches a token internally.
+- `DPtech_UMC_ADS_v5329.DPtech_UMC_ADS_v5329/QueryBlacklist` - read, queries blacklist records.
+- `DPtech_UMC_ADS_v5329.DPtech_UMC_ADS_v5329/AddBlacklist` - write, adds blacklist IPs.
+- `DPtech_UMC_ADS_v5329.DPtech_UMC_ADS_v5329/DeleteBlacklist` - write, removes blacklist IPs.
 
 ## Behavior Notes
 
-- `Login` calls the UMC token API with `userName` and `secretKey`, then caches a successful token per OctoBus instance and host.
-- `QueryBlacklist`, `AddBlacklist`, and `DeleteBlacklist` use a request `token` when provided, otherwise they require a prior successful `Login`.
-- Upstream HTTP responses, including non-2xx statuses, are returned as gRPC OK payloads with `http_status`, `raw_body`, and `raw_json` when parsable.
+- `Login` calls the UMC token API with `userName` and `secretKey`, then caches a successful token per OctoBus instance and host. The login response intentionally leaves raw fields empty because the upstream body contains the token.
+- `QueryBlacklist`, `AddBlacklist`, and `DeleteBlacklist` require a prior successful `Login`; deprecated request token fields are ignored.
+- Non-login upstream HTTP responses, including non-2xx statuses, are returned as gRPC OK payloads with `http_status`; legacy `raw_body` and `raw_json` fields are intentionally empty to avoid leaking token-bearing upstream bodies.
 - Network failures and local validation errors return gRPC errors.
 - Add/delete requests accept 1 to 100 IPv4 or IPv6 addresses. CIDR and address ranges are rejected.
 - Add requests generate `strategyName`, `protectionName`, and the fixed DPtech strategy fields used by the legacy service.
 - Cached tokens are cleared when an upstream business RPC returns HTTP 401 or 403.
+- `timeoutMs` is enforced with `AbortController`; `skipTlsVerify` uses a per-request undici dispatcher and does not change global TLS settings.
+- Known limitation: the business RPCs depend on instance-local cached login state, so callers should call `Login` before query/add/delete after runtime restart.
+
+## OctoBus Usage
+
+```bash
+octobus service import --id dptech-umc-ads-v5-3-29 ./services/dptech__umc-ads_v5-3-29
+octobus instance create dptech-umc-ads --service dptech-umc-ads-v5-3-29 \
+  --config-json '{"host":"https://ads.example:8443","user":"api-user","timeoutMs":5000,"skipTlsVerify":false}' \
+  --secret-json '{"password":"REDACTED"}'
+octobus capset create ads-blacklist
+octobus capset add-instance ads-blacklist dptech-umc-ads
+
+curl -X POST http://127.0.0.1:9000/capsets/ads-blacklist/connect/dptech-umc-ads/DPtech_UMC_ADS_v5329.DPtech_UMC_ADS_v5329/Login \
+  -H 'Content-Type: application/json' \
+  -d '{}'
+```
 
 ## Local Checks
 

@@ -1,0 +1,110 @@
+syntax = "proto3";
+
+package nsfocus.ngfw.v60_9900;
+
+import "google/protobuf/struct.proto";
+
+service NSFOCUSNGFWService {
+  rpc GetSystemStatus(GetSystemStatusRequest) returns (GetSystemStatusResponse) {}
+  rpc ListSecurityLogs(ListSecurityLogsRequest) returns (ListSecurityLogsResponse) {}
+  rpc ListSecurityPolicies(ListSecurityPoliciesRequest) returns (ListSecurityPoliciesResponse) {}
+  rpc ListSecurityPolicyAddressObjects(ListSecurityPolicyAddressObjectsRequest) returns (ListSecurityPolicyAddressObjectsResponse) {}
+  rpc CreateNodeObject(CreateNodeObjectRequest) returns (MutationResponse) {}
+  rpc DeleteNodeObject(DeleteObjectRequest) returns (MutationResponse) {}
+  rpc BlockIP(BlockIPRequest) returns (BlockIPResponse) {}
+  rpc UnblockIP(UnblockIPRequest) returns (UnblockIPResponse) {}
+  rpc CreateIPv6AddressGroup(CreateIPv6AddressGroupRequest) returns (MutationResponse) {}
+  rpc DeleteIPv6AddressGroup(DeleteObjectRequest) returns (MutationResponse) {}
+  rpc AddIPv6ToGroup(AddIPv6ToGroupRequest) returns (BlockIPResponse) {}
+  rpc RemoveIPv6FromGroup(RemoveIPv6FromGroupRequest) returns (UnblockIPResponse) {}
+}
+
+message GetSystemStatusRequest {}
+
+message GetSystemStatusResponse {
+  string product_ver = 1;
+  string engine = 2;
+  string device_hash = 3;
+  string device_type = 4;
+  string license = 5;
+  int64 cpu_usage = 6;
+  int64 mem_usage = 7;
+  google.protobuf.Struct raw = 8;
+}
+
+message ListSecurityLogsRequest {}
+
+message ListSecurityLogsResponse {
+  repeated google.protobuf.Struct logs = 1;
+  google.protobuf.Struct raw = 2;
+}
+
+message ListSecurityPoliciesRequest {
+  string ip_version = 1;
+}
+
+message ListSecurityPoliciesResponse {
+  repeated google.protobuf.Struct policies = 1;
+  google.protobuf.Struct raw = 2;
+}
+
+message ListSecurityPolicyAddressObjectsRequest {
+  string ip_version = 1;
+  string rule_id = 2;
+}
+
+message ListSecurityPolicyAddressObjectsResponse {
+  repeated google.protobuf.Struct objects = 1;
+  google.protobuf.Struct raw = 2;
+}
+
+message CreateNodeObjectRequest {
+  string name = 1;
+}
+
+message DeleteObjectRequest {
+  string id = 1;
+}
+
+message MutationResponse {
+  string status = 1;
+  string err_msg = 2;
+  int64 err_code = 3;
+  string id = 4;
+  string name = 5;
+  google.protobuf.Value raw = 6;
+}
+
+message BlockIPRequest {
+  repeated string ips = 1;
+  string policy_name = 2;
+}
+
+message BlockIPResponse {
+  repeated MutationResponse node_results = 1;
+  MutationResponse policy_result = 2;
+}
+
+message UnblockIPRequest {
+  string policy_id = 1;
+  repeated string node_ids = 2;
+}
+
+message UnblockIPResponse {
+  MutationResponse policy_result = 1;
+  repeated MutationResponse node_results = 2;
+}
+
+message CreateIPv6AddressGroupRequest {
+  string name = 1;
+}
+
+message AddIPv6ToGroupRequest {
+  repeated string ips = 1;
+  string group = 2;
+}
+
+message RemoveIPv6FromGroupRequest {
+  repeated string ips = 1;
+  string group = 2;
+}

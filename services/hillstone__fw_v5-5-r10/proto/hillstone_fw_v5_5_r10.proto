@@ -47,11 +47,11 @@ message LoginRequest {
   // host is the Hillstone management base URL and must include scheme, host and port.
   string host = 1;
 
-  // username is sent as the userName field in the upstream login JSON body.
-  string username = 2;
+  // Deprecated: configure username on the instance config or secret instead.
+  string username = 2 [deprecated = true];
 
-  // password is sent as the password field in the upstream login JSON body without additional encoding.
-  string password = 3;
+  // Deprecated: configure password on the instance secret instead.
+  string password = 3 [deprecated = true];
 }
 
 // AddressBookIP describes a single IP item in a Hillstone address-group payload.

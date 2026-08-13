@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as grpc from "@grpc/grpc-js";
 import { afterEach, describe, expect, it } from "vitest";
-import { defineService, runService } from "../src/index.js";
+import { defineService, getMetadataValue, mergeConfigSecret, normalizeContext, runService } from "../src/index.js";
 import { loadServicePackage } from "../src/proto-loader.js";
 
 const fixturesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
@@ -104,6 +104,44 @@ describe("HandlerContext", () => {
 
     expect(seen.config).toEqual({ label: "inline" });
     expect(seen.secret).toEqual({ apiToken: "inline" });
+  });
+
+  it("normalizes plain SDK context objects", () => {
+    const normalized = normalizeContext({
+      req: { legacy: true },
+      request: { sdk: true },
+      config: { baseUrl: "https://api.local" },
+      secret: { token: "secret-token" },
+      metadata: { requestId: "req-1" },
+      bindings: { retained: true },
+    });
+
+    expect(normalized.request).toEqual({ sdk: true });
+    expect(normalized.config).toEqual({ baseUrl: "https://api.local" });
+    expect(normalized.secret).toEqual({ token: "secret-token" });
+    expect(normalized.metadata).toEqual({ requestId: "req-1" });
+    expect(normalized.bindings).toEqual({ retained: true });
+    expect(mergeConfigSecret(normalized)).toEqual({ baseUrl: "https://api.local", token: "secret-token" });
+    expect(getMetadataValue(normalized, "requestId")).toBe("req-1");
+  });
+
+  it("falls back to legacy req and clears non-plain config, secret, and metadata", () => {
+    const metadata = new grpc.Metadata();
+    metadata.set("authorization", "Bearer token");
+    const normalized = normalizeContext({
+      req: { legacy: true },
+      config: ["not", "plain"],
+      secret: null,
+      metadata,
+    });
+
+    expect(normalized.request).toEqual({ legacy: true });
+    expect(normalized.config).toEqual({});
+    expect(normalized.secret).toEqual({});
+    expect(normalized.metadata).toEqual({});
+    expect(getMetadataValue({
+      getMetadata: (key: string) => (key === "authorization" ? "Bearer token" : undefined),
+    }, "authorization")).toBe("Bearer token");
   });
 });
 

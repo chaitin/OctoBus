@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package OWASP_DependencyTrack_SCA_V5;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
+
+option go_package = "miner/grpc-service/OWASP_DependencyTrack_SCA_V5";
+
+service OWASP_DependencyTrack_SCA_V5 {
+  // List Dependency-Track projects with common paging and name filters.
+  rpc ListProjects(ListProjectsRequest) returns (ListResponse) {}
+
+  // Create or update a project using Dependency-Track's project API.
+  rpc CreateProject(CreateProjectRequest) returns (ObjectResponse) {}
+
+  // Get current project metrics.
+  rpc GetProjectMetrics(GetProjectMetricsRequest) returns (ObjectResponse) {}
+
+  // Upload a CycloneDX BOM as base64 JSON payload.
+  rpc UploadBom(UploadBomRequest) returns (ObjectResponse) {}
+
+  // List findings for a project UUID.
+  rpc ListFindings(ListFindingsRequest) returns (ListResponse) {}
+}
+
+message ListProjectsRequest {
+  google.protobuf.Int64Value limit = 1;
+  google.protobuf.Int64Value offset = 2;
+  string name = 3;
+  bool exclude_inactive = 4;
+  bool only_root = 5;
+  string not_assigned_to_team_with_uuid = 6;
+  string classifier = 7;
+  string tag = 8;
+}
+
+message CreateProjectRequest {
+  string name = 1;
+  string version = 2;
+  string classifier = 3;
+  string parent_uuid = 4;
+  repeated string tags = 5;
+  bool active = 6;
+  string description = 7;
+}
+
+message GetProjectMetricsRequest {
+  string project_uuid = 1;
+}
+
+message UploadBomRequest {
+  string project_uuid = 1;
+  string project_name = 2;
+  string project_version = 3;
+  bool auto_create = 4;
+  string bom = 5;
+}
+
+message ListFindingsRequest {
+  string project_uuid = 1;
+  google.protobuf.BoolValue suppressed = 2;
+  string source = 3;
+  google.protobuf.Int64Value limit = 6;
+  google.protobuf.Int64Value offset = 7;
+}
+
+message ListResponse {
+  int32 http_status = 1;
+  string raw_body = 2;
+  int64 count = 3;
+  repeated google.protobuf.Value results = 4;
+  google.protobuf.Value raw_json = 5;
+}
+
+message ObjectResponse {
+  int32 http_status = 1;
+  string raw_body = 2;
+  google.protobuf.Value raw_json = 3;
+}

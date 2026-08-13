@@ -33,6 +33,11 @@ const buildCtx = (overrides = {}) => ({
   req: overrides.req || {},
 });
 
+const callHandler = (method, request = {}, ctx = {}) => {
+  const handler = handlers[method];
+  return handler({ ...ctx, request });
+};
+
 const responseOf = (status, body) => ({
   ok: status >= 200 && status < 300,
   status,
@@ -84,13 +89,13 @@ test('mock upstream supports block and unblock workflow', async () => {
   const host = await mock.start();
   try {
     const ctx = buildCtx({ bindings: { host, skipTlsVerify: true } });
-    const block = await handlers[METHOD_BLOCK_IP_FULL]({ ip: '1.1.1.1', comment: 'c', type: 1, timeout: 60, time_type: 60, color: 0 }, ctx);
+    const block = await callHandler(METHOD_BLOCK_IP_FULL, { ip: '1.1.1.1', comment: 'c', type: 1, timeout: 60, time_type: 60, color: 0 }, ctx);
     assert.equal(block.success, true);
     assert.equal(block.msg_type, 'success');
-    assert.match(block.login_raw_json, /mock-token/);
-    assert.match(block.logout_raw_text, /ok/);
+    assert.equal(block.login_raw_json, '');
+    assert.equal(block.logout_raw_text, '[redacted]');
 
-    const unblock = await handlers[METHOD_UNBLOCK_IP_FULL]({ ip: '1.1.1.1', color: 0, type: 1 }, ctx);
+    const unblock = await callHandler(METHOD_UNBLOCK_IP_FULL, { ip: '1.1.1.1', color: 0, type: 1 }, ctx);
     assert.equal(unblock.success, true);
     assert.equal(unblock.computed_ip, '1.1.1.1/32');
     assert.equal(unblock.computed_id, '1.1.1.1/32;0;1');
@@ -109,10 +114,12 @@ test('BlockIP sends expected payload, headers, and TLS options', async () => {
     return responseOf(200, JSON.stringify({ ok: true }));
   });
 
-  const res = await handlers[METHOD_BLOCK_IP_FULL]({ IP: '2.2.2.2', type: '1', timeout: '30', timeType: '60', remark: 'r', color: '1' }, buildCtx({ bindings: { tlsInsecureSkipVerify: true } }));
+  const res = await callHandler(METHOD_BLOCK_IP_FULL, { IP: '2.2.2.2', type: '1', timeout: '30', timeType: '60', remark: 'r', color: '1' }, buildCtx({ bindings: { tlsInsecureSkipVerify: true } }));
   assert.equal(res.success, true);
   assert.equal(calls[0].init.headers['x-env'], 'test');
-  assert.equal(calls[0].init.tlsInsecureSkipVerify, true);
+  assert.ok(calls[0].init.signal instanceof AbortSignal);
+  assert.equal(calls[0].init.dispatcher, _test.insecureTlsDispatcher);
+  assert.equal(calls[0].init.tlsInsecureSkipVerify, undefined);
   assert.equal(calls[1].init.headers.authorization, 'Bearer tok');
   assert.deepEqual(calls[1].body, {
     color: 1,
@@ -130,7 +137,7 @@ test('UnblockIP computes masked ID and preserves request aliases', async () => {
     return responseOf(200, '');
   });
 
-  const res = await handlers[METHOD_UNBLOCK_IP_FULL]({ address: '3.3.3.3/24', type: 1, color: 1 }, buildCtx());
+  const res = await callHandler(METHOD_UNBLOCK_IP_FULL, { address: '3.3.3.3/24', type: 1, color: 1 }, buildCtx());
   assert.equal(res.success, true);
   assert.equal(res.computed_ip, '3.3.3.3/24');
   assert.equal(res.computed_id, '3.3.3.3/24;1;1');
@@ -147,9 +154,9 @@ test('idempotent semantic success messages are preserved', async () => {
     if (String(url).endsWith('/api/cms/user/logout')) return responseOf(200, '');
     return responseOf(200, JSON.stringify({ msgType: 'error', msg: '多播地址' }));
   });
-  const block = await handlers[METHOD_BLOCK_IP_FULL]({ ip: '4.4.4.4' }, buildCtx());
+  const block = await callHandler(METHOD_BLOCK_IP_FULL, { ip: '4.4.4.4' }, buildCtx());
   assert.equal(block.success, true);
-  const unblock = await handlers[METHOD_UNBLOCK_IP_FULL]({ ip: '4.4.4.4' }, buildCtx());
+  const unblock = await callHandler(METHOD_UNBLOCK_IP_FULL, { ip: '4.4.4.4' }, buildCtx());
   assert.equal(unblock.success, true);
 
   setFetch(async (url) => {
@@ -157,7 +164,7 @@ test('idempotent semantic success messages are preserved', async () => {
     if (String(url).endsWith('/api/cms/user/logout')) return responseOf(200, '');
     return responseOf(200, JSON.stringify({ msgType: 'error', msg: '已存在: 4.4.4.4' }));
   });
-  const exists = await handlers[METHOD_BLOCK_IP_FULL]({ ip: '4.4.4.4' }, buildCtx());
+  const exists = await callHandler(METHOD_BLOCK_IP_FULL, { ip: '4.4.4.4' }, buildCtx());
   assert.equal(exists.success, true);
 });
 
@@ -170,9 +177,9 @@ test('logout failure is recorded but does not override success', async () => {
     return responseOf(500, 'server error');
   });
 
-  const res = await handlers[METHOD_BLOCK_IP_FULL]({ ip: '1.1.1.1' }, buildCtx());
+  const res = await callHandler(METHOD_BLOCK_IP_FULL, { ip: '1.1.1.1' }, buildCtx());
   assert.equal(res.success, true);
-  assert.match(res.logout_raw_text, /UNAVAILABLE: upstream http 500/);
+  assert.equal(res.logout_raw_text, '[redacted]');
   assert.ok(logs.some((line) => line.includes('success":false')));
 });
 
@@ -194,51 +201,51 @@ test('rpcdef merges context request and handler request', async () => {
 });
 
 test('validation and upstream errors map to gRPC errors', async () => {
-  await expectGrpcError(() => handlers[METHOD_BLOCK_IP_FULL]({ ip: '1.1.1.1' }, buildCtx({ bindings: { host: '' } })), 'INVALID_ARGUMENT');
-  await expectGrpcError(() => handlers[METHOD_BLOCK_IP_FULL]({ ip: '1.1.1.1' }, buildCtx({ bindings: { user: '', username: '' } })), 'INVALID_ARGUMENT');
-  await expectGrpcError(() => handlers[METHOD_BLOCK_IP_FULL]({ ip: '1.1.1.1' }, buildCtx({ bindings: { password: '' } })), 'INVALID_ARGUMENT');
-  await expectGrpcError(() => handlers[METHOD_BLOCK_IP_FULL]({ ip: '' }, buildCtx()), 'INVALID_ARGUMENT');
-  await expectGrpcError(() => handlers[METHOD_BLOCK_IP_FULL]({ ip: '999.1.1.1' }, buildCtx()), 'INVALID_ARGUMENT');
-  await expectGrpcError(() => handlers[METHOD_UNBLOCK_IP_FULL]({ ip: '1.1.1.1/33' }, buildCtx()), 'INVALID_ARGUMENT');
-  await expectGrpcError(() => handlers[METHOD_UNBLOCK_IP_FULL]({ ip: '1.1.1.1/x' }, buildCtx()), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => callHandler(METHOD_BLOCK_IP_FULL, { ip: '1.1.1.1' }, buildCtx({ bindings: { host: '' } })), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => callHandler(METHOD_BLOCK_IP_FULL, { ip: '1.1.1.1' }, buildCtx({ bindings: { user: '', username: '' } })), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => callHandler(METHOD_BLOCK_IP_FULL, { ip: '1.1.1.1' }, buildCtx({ bindings: { password: '' } })), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => callHandler(METHOD_BLOCK_IP_FULL, { ip: '' }, buildCtx()), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => callHandler(METHOD_BLOCK_IP_FULL, { ip: '999.1.1.1' }, buildCtx()), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => callHandler(METHOD_UNBLOCK_IP_FULL, { ip: '1.1.1.1/33' }, buildCtx()), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => callHandler(METHOD_UNBLOCK_IP_FULL, { ip: '1.1.1.1/x' }, buildCtx()), 'INVALID_ARGUMENT');
 
   setFetch(async () => responseOf(200, JSON.stringify({ error: 'missing credentials' })));
-  await expectGrpcError(() => handlers[METHOD_BLOCK_IP_FULL]({ ip: '1.1.1.1' }, buildCtx()), 'FAILED_PRECONDITION', (err) => assert.match(err.message, /用户登录失败/));
+  await expectGrpcError(() => callHandler(METHOD_BLOCK_IP_FULL, { ip: '1.1.1.1' }, buildCtx()), 'FAILED_PRECONDITION', (err) => assert.match(err.message, /用户登录失败/));
 
   setFetch(async (url) => {
     if (String(url).endsWith('/api/cms/user/login')) return responseOf(200, JSON.stringify({ token: {} }));
     return responseOf(200, '');
   });
-  await expectGrpcError(() => handlers[METHOD_BLOCK_IP_FULL]({ ip: '1.1.1.1' }, buildCtx()), 'FAILED_PRECONDITION');
+  await expectGrpcError(() => callHandler(METHOD_BLOCK_IP_FULL, { ip: '1.1.1.1' }, buildCtx()), 'FAILED_PRECONDITION');
 
   setFetch(async () => responseOf(403, 'forbidden'));
-  await expectGrpcError(() => handlers[METHOD_BLOCK_IP_FULL]({ ip: '1.1.1.1' }, buildCtx()), 'PERMISSION_DENIED');
+  await expectGrpcError(() => callHandler(METHOD_BLOCK_IP_FULL, { ip: '1.1.1.1' }, buildCtx()), 'PERMISSION_DENIED');
 
   setFetch(async () => responseOf(404, 'not found'));
-  await expectGrpcError(() => handlers[METHOD_BLOCK_IP_FULL]({ ip: '1.1.1.1' }, buildCtx()), 'FAILED_PRECONDITION');
+  await expectGrpcError(() => callHandler(METHOD_BLOCK_IP_FULL, { ip: '1.1.1.1' }, buildCtx()), 'FAILED_PRECONDITION');
 
   setFetch(async () => responseOf(500, 'broken'));
-  await expectGrpcError(() => handlers[METHOD_BLOCK_IP_FULL]({ ip: '1.1.1.1' }, buildCtx()), 'UNAVAILABLE');
+  await expectGrpcError(() => callHandler(METHOD_BLOCK_IP_FULL, { ip: '1.1.1.1' }, buildCtx()), 'UNAVAILABLE');
 
   setFetch(async () => responseOf(200, ''));
-  await expectGrpcError(() => handlers[METHOD_BLOCK_IP_FULL]({ ip: '1.1.1.1' }, buildCtx()), 'UNKNOWN');
+  await expectGrpcError(() => callHandler(METHOD_BLOCK_IP_FULL, { ip: '1.1.1.1' }, buildCtx()), 'UNKNOWN');
 
   setFetch(async () => responseOf(200, 'not-json'));
-  await expectGrpcError(() => handlers[METHOD_BLOCK_IP_FULL]({ ip: '1.1.1.1' }, buildCtx()), 'UNKNOWN');
+  await expectGrpcError(() => callHandler(METHOD_BLOCK_IP_FULL, { ip: '1.1.1.1' }, buildCtx()), 'UNKNOWN');
 
   setFetch(async () => { throw Object.assign(new Error('outer'), { cause: new Error('timeout') }); });
-  await expectGrpcError(() => handlers[METHOD_BLOCK_IP_FULL]({ ip: '1.1.1.1' }, buildCtx()), 'UNAVAILABLE', (err) => assert.match(err.message, /timeout/));
+  await expectGrpcError(() => callHandler(METHOD_BLOCK_IP_FULL, { ip: '1.1.1.1' }, buildCtx()), 'UNAVAILABLE', (err) => assert.match(err.message, /timeout/));
 
   setFetch(async () => { throw 'boom'; });
-  await expectGrpcError(() => handlers[METHOD_BLOCK_IP_FULL]({ ip: '1.1.1.1' }, buildCtx()), 'UNAVAILABLE', (err) => assert.match(err.message, /fetch failed/));
+  await expectGrpcError(() => callHandler(METHOD_BLOCK_IP_FULL, { ip: '1.1.1.1' }, buildCtx()), 'UNAVAILABLE', (err) => assert.match(err.message, /fetch failed/));
 
   setFetch(async (url) => {
     if (String(url).endsWith('/api/cms/user/login')) return responseOf(200, JSON.stringify({ token: { access_token: 'tok' } }));
     if (String(url).endsWith('/api/cms/user/logout')) return responseOf(200, '');
     return responseOf(200, JSON.stringify({ msgType: 'error', msg: 'bad request' }));
   });
-  await expectGrpcError(() => handlers[METHOD_BLOCK_IP_FULL]({ ip: '1.1.1.1' }, buildCtx()), 'FAILED_PRECONDITION', (err) => assert.match(err.message, /bad request/));
-  await expectGrpcError(() => handlers[METHOD_UNBLOCK_IP_FULL]({ ip: '1.1.1.1' }, buildCtx()), 'FAILED_PRECONDITION', (err) => assert.match(err.message, /bad request/));
+  await expectGrpcError(() => callHandler(METHOD_BLOCK_IP_FULL, { ip: '1.1.1.1' }, buildCtx()), 'FAILED_PRECONDITION', (err) => assert.match(err.message, /bad request/));
+  await expectGrpcError(() => callHandler(METHOD_UNBLOCK_IP_FULL, { ip: '1.1.1.1' }, buildCtx()), 'FAILED_PRECONDITION', (err) => assert.match(err.message, /bad request/));
 });
 
 test('action failure still attempts logout and logs logout failure', async () => {
@@ -252,7 +259,7 @@ test('action failure still attempts logout and logs logout failure', async () =>
     return responseOf(500, 'logout failed');
   });
 
-  await expectGrpcError(() => handlers[METHOD_BLOCK_IP_FULL]({ ip: '1.1.1.1' }, buildCtx()), 'FAILED_PRECONDITION');
+  await expectGrpcError(() => callHandler(METHOD_BLOCK_IP_FULL, { ip: '1.1.1.1' }, buildCtx()), 'FAILED_PRECONDITION');
   assert.equal(logoutCalled, true);
   assert.ok(logs.some((line) => line.includes('logout failed')));
 });
@@ -328,9 +335,9 @@ test('helper functions cover parsing, validation, and branch behavior', () => {
   assert.equal(_test.resolveTimeoutMs(_test.resolveCallContext(buildCtx({ limits: { timeoutMs: 33 }, bindings: { timeoutMs: undefined } }))), 33);
   assert.equal(_test.resolveTimeoutMs(_test.resolveCallContext(buildCtx({ limits: { timeoutMs: undefined }, bindings: { timeoutMs: 25 } }))), 25);
   assert.equal(_test.resolveTimeoutMs(_test.resolveCallContext(buildCtx({ limits: { timeoutMs: -1 }, bindings: { timeoutMs: 25 } }))), 1500);
-  assert.deepEqual(_test.buildTlsOptions({ insecureSkipVerify: 'yes' }), { skipTlsVerify: true, tlsInsecureSkipVerify: true, insecureSkipVerify: true });
-  assert.deepEqual(_test.buildTlsOptions({ tlsInsecureSkipVerify: true }), { skipTlsVerify: true, tlsInsecureSkipVerify: true, insecureSkipVerify: true });
-  assert.deepEqual(_test.buildTlsOptions({ skipTlsVerify: 1 }), { skipTlsVerify: true, tlsInsecureSkipVerify: true, insecureSkipVerify: true });
+  assert.equal(_test.buildTlsOptions({ insecureSkipVerify: 'yes' }).dispatcher, _test.insecureTlsDispatcher);
+  assert.equal(_test.buildTlsOptions({ tlsInsecureSkipVerify: true }).dispatcher, _test.insecureTlsDispatcher);
+  assert.equal(_test.buildTlsOptions({ skipTlsVerify: 1 }).dispatcher, _test.insecureTlsDispatcher);
   assert.deepEqual(_test.buildTlsOptions({ skipTlsVerify: false }), {});
   assert.deepEqual(_test.sanitizeHeaders({ a: 1, b: { value: false }, '': 'skip' }), { a: '1', b: 'false' });
   assert.deepEqual(_test.sanitizeHeaders(null), {});

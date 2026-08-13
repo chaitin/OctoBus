@@ -1,4 +1,5 @@
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const METHOD_QUERY_IP_REPUTATION_PATH = '/ThreatBook_NGTIP_V5.ThreatBook_NGTIP_V5/QueryIPReputation';
 export const METHOD_QUERY_IP_REPUTATION_FULL = 'ThreatBook_NGTIP_V5.ThreatBook_NGTIP_V5/QueryIPReputation';
@@ -48,6 +49,16 @@ const toTrimmedString = (value) => {
   return String(raw).trim();
 };
 
+const redactSensitive = (value, sensitiveValues = []) => {
+  let out = String(value ?? '');
+  for (const sensitive of sensitiveValues || []) {
+    const raw = toTrimmedString(sensitive);
+    if (!raw) continue;
+    out = out.split(raw).join('<redacted>');
+  }
+  return out;
+};
+
 const normalizeBaseUrl = (value) => {
   const raw = toTrimmedString(value);
   if (!/^https?:\/\//i.test(raw)) return '';
@@ -95,14 +106,18 @@ const resolveTimeoutMs = (ctx = {}) => {
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;
 };
 
+const insecureTlsDispatcher = new Agent({ connect: { rejectUnauthorized: false } });
+
 const buildTlsOptions = (bindings = {}) => {
   const enabled = Boolean(bindings.skipTlsVerify || bindings.tlsInsecureSkipVerify || bindings.insecureSkipVerify);
   if (!enabled) return {};
-  return {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  };
+  return { dispatcher: insecureTlsDispatcher };
+};
+
+const makeTimeoutSignal = (timeoutMs) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  return { signal: controller.signal, clear: () => clearTimeout(timeoutId) };
 };
 
 const requireDomain = (ctx = {}) => {
@@ -182,6 +197,19 @@ const encodeQueryPairs = (query = {}) => {
 
 const buildQueryUrl = (domain, path, query) => `${domain}${path}?${encodeQueryPairs(query)}`;
 
+const redactUrlForLog = (url, bindings = {}) => {
+  const sensitiveValues = [resolveApiKey(bindings), resolveSalt(bindings)];
+  try {
+    const parsed = new URL(String(url));
+    for (const key of ['apikey', 'apiKey', 'token', 'salt']) {
+      if (parsed.searchParams.has(key)) parsed.searchParams.set(key, '<redacted>');
+    }
+    return redactSensitive(parsed.toString(), sensitiveValues);
+  } catch {
+    return redactSensitive(url, sensitiveValues);
+  }
+};
+
 const attachResponse = (err, response) => {
   err.response = response;
   return err;
@@ -190,28 +218,31 @@ const attachResponse = (err, response) => {
 const fetchWithStatus = async (url, ctx = {}) => {
   const bindings = ctx.bindings || {};
   const timeoutMs = resolveTimeoutMs(ctx);
+  const timeout = makeTimeoutSignal(timeoutMs);
   let res;
   try {
     res = await fetch(url, {
       method: 'GET',
-      timeoutMs,
+      signal: timeout.signal,
       ...buildTlsOptions(bindings),
     });
   } catch (err) {
     const errMsg = err?.cause?.message || err?.message || 'fetch failed';
-    logFlow(ctx, 'fetch:error', { url, error: errMsg });
+    logFlow(ctx, 'fetch:error', { url: redactUrlForLog(url, bindings), error: redactSensitive(errMsg, [resolveApiKey(bindings), resolveSalt(bindings)]) });
     return { httpStatus: 0, httpBody: errMsg };
+  } finally {
+    timeout.clear();
   }
   let httpBody;
   try {
     httpBody = await res.text();
   } catch (err) {
     const errMsg = err?.message || 'response read failed';
-    logFlow(ctx, 'fetch:read-error', { url, httpStatus: res.status, error: errMsg });
+    logFlow(ctx, 'fetch:read-error', { url: redactUrlForLog(url, bindings), httpStatus: res.status, error: redactSensitive(errMsg, [resolveApiKey(bindings), resolveSalt(bindings)]) });
     return { httpStatus: 0, httpBody: errMsg };
   }
   const httpStatus = Number(res.status || 0);
-  logFlow(ctx, 'fetch:response', { url, httpStatus, bodyLength: httpBody?.length || 0 });
+  logFlow(ctx, 'fetch:response', { url: redactUrlForLog(url, bindings), httpStatus, bodyLength: httpBody?.length || 0 });
   return { httpStatus, httpBody: String(httpBody ?? '') };
 };
 
@@ -240,10 +271,11 @@ const handleHttpResponse = (httpStatus, httpBody, ctx, action) => {
     return { response_code: parsed.responseCode, verbose_msg: parsed.verboseMsg, data: parsed.data };
   }
   const code = mapHttpStatusToCode(httpStatus);
-  throw attachResponse(errorWithCode(code, `upstream http ${httpStatus}: ${httpBody}`), {
+  throw attachResponse(errorWithCode(code, `upstream http ${httpStatus}`), {
     response_code: 0,
     verbose_msg: `upstream http ${httpStatus}`,
     data: '',
+    http_body_length: String(httpBody ?? '').length,
   });
 };
 
@@ -360,6 +392,11 @@ const adaptHandler = (fn) => (reqOrSdkArg, ctx) => {
     const { request: req, ...rest } = reqOrSdkArg;
     return fn(req ?? {}, rest);
   }
+  if (reqOrSdkArg && typeof reqOrSdkArg === 'object' && (
+    'req' in reqOrSdkArg || 'config' in reqOrSdkArg || 'secret' in reqOrSdkArg || 'bindings' in reqOrSdkArg
+  )) {
+    return fn(reqOrSdkArg.req ?? {}, reqOrSdkArg);
+  }
   return fn(reqOrSdkArg, {});
 };
 
@@ -391,11 +428,15 @@ export const _test = {
   handleQueryIPReputation,
   handleQueryVulnerability,
   hasOwn,
+  insecureTlsDispatcher,
   logFlow,
+  makeTimeoutSignal,
   mapHttpStatusToCode,
   mergedBindings,
   normalizeBaseUrl,
   parseNgTipResponse,
+  redactSensitive,
+  redactUrlForLog,
   requireApiKey,
   requireDomain,
   requireResource,

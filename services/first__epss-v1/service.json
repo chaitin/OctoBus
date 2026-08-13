@@ -1,1 +1,15 @@
-{"schema":"chaitin.octobus.service.v1","name":"first-epss-v1","displayName":"FIRST EPSS v1","description":"FIRST Exploit Prediction Scoring System API wrapper — exploitation probability and percentile for CVEs","runtime":{"mode":"on-demand"},"proto":{"roots":["proto"],"files":["proto/epss.proto"]},"configSchema":"config.schema.json"}
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "first-epss-v1",
+  "displayName": "FIRST EPSS v1",
+  "description": "FIRST Exploit Prediction Scoring System API wrapper - exploitation probability and percentile for CVEs.",
+  "runtime": {
+    "mode": "on-demand"
+  },
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/epss.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json"
+}

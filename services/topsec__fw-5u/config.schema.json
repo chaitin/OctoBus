@@ -17,11 +17,11 @@
     },
     "user": {
       "type": "string",
-      "description": "Optional default login username."
+      "description": "Deprecated compatibility fallback for login username. Prefer secret.username."
     },
     "username": {
       "type": "string",
-      "description": "Alias for user."
+      "description": "Deprecated compatibility fallback for login username. Prefer secret.username."
     },
     "timeoutMs": {
       "type": "integer",

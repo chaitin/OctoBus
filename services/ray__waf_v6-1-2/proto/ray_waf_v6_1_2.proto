@@ -14,13 +14,13 @@ service RAY_WAF_V612 {
 message LoginRequest {
   string host = 1;
   string user = 2;
-  string password = 3;
+  string password = 3 [deprecated = true];
 }
 
 message LoginResponse {
   bool success = 1;
   string success_raw = 2;
-  string random = 3;
+  string random = 3 [deprecated = true];
   string adminid = 4;
   string pwd_comp = 5;
   string pwd_lasttime = 6;
@@ -29,13 +29,13 @@ message LoginResponse {
   string redirecturl = 9;
   string reminder = 10;
   string userauth = 11;
-  string raw_json = 12;
+  string raw_json = 12 [deprecated = true];
 }
 
 message QueryBlacklistRequest {
   string host = 1;
   string user = 2;
-  string random = 3;
+  string random = 3 [deprecated = true];
 }
 
 message QueryBlacklistResponse {
@@ -60,7 +60,7 @@ message BlacklistRecord {
 message BlockIPRequest {
   string host = 1;
   string user = 2;
-  string random = 3;
+  string random = 3 [deprecated = true];
   string ip = 4;
   string ids = 5;
   string type = 6;
@@ -83,7 +83,7 @@ message BlockIPResponse {
 message UnblockIPRequest {
   string host = 1;
   string user = 2;
-  string random = 3;
+  string random = 3 [deprecated = true];
   string ids = 4;
 }
 

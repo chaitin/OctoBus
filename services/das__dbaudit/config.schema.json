@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "description": "DBAudit platform base URL, for example https://demodbauditor.das-security.cn."
+    },
+    "base_url": {
+      "type": "string",
+      "description": "Alias for baseUrl."
+    },
+    "endpoint": {
+      "type": "string",
+      "description": "Alias for baseUrl."
+    },
+    "apiVersion": {
+      "type": "string",
+      "default": "2.0",
+      "description": "DBAudit OpenAPI version."
+    },
+    "api_version": {
+      "type": "string",
+      "description": "Alias for apiVersion."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "timeout_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Alias for timeoutMs."
+    }
+  }
+}

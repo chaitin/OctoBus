@@ -15,8 +15,8 @@ service QIANXIN_FW_SecGate3600_HTTP_X {
 
 message LoginRequest {
   string host = 1;
-  string user = 2;
-  string password = 3;
+  string user = 2 [deprecated = true];
+  string password = 3 [deprecated = true];
   google.protobuf.StringValue txt_language = 4;
   google.protobuf.StringValue login_type = 5;
   google.protobuf.StringValue client = 6;
@@ -25,7 +25,7 @@ message LoginRequest {
 
 message BlacklistMutationRequest {
   string host = 1;
-  string uuid = 2;
+  string uuid = 2 [deprecated = true];
   string ip = 3;
   google.protobuf.StringValue mask = 4;
   google.protobuf.StringValue description = 5;
@@ -34,7 +34,7 @@ message BlacklistMutationRequest {
 
 message BlacklistUndoRequest {
   string host = 1;
-  string uuid = 2;
+  string uuid = 2 [deprecated = true];
   string ip = 3;
   google.protobuf.StringValue mask = 4;
   google.protobuf.StringValue description = 5;
@@ -43,10 +43,10 @@ message BlacklistUndoRequest {
 
 message DeviceHttpResponse {
   int32 status_code = 1;
-  repeated HttpHeader headers = 2;
-  string raw_body = 3;
+  repeated HttpHeader headers = 2 [deprecated = true];
+  string raw_body = 3 [deprecated = true];
   google.protobuf.Struct body_json = 4;
-  string effective_url = 5;
+  string effective_url = 5 [deprecated = true];
 }
 
 message HttpHeader {

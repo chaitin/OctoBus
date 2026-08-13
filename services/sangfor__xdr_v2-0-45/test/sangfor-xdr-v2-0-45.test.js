@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import { createCipheriv, createHash } from "node:crypto";
 import fs from "node:fs";
-import { createServer } from "node:http";
-import { once } from "node:events";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -23,6 +21,7 @@ import {
 } from "../src/sangfor-xdr-v2-0-45.js";
 import { service } from "../src/service.js";
 import { _test as signerInternals, decodeAuthCode, signRequest } from "../src/signer.js";
+import { createXdrMockServer, mockResponse } from "./mock_upstream.js";
 
 const serviceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -163,15 +162,6 @@ const makeContext = (overrides = {}) => ({
   },
 });
 
-const mockResponse = (status, body) => ({
-  ok: status >= 200 && status < 300,
-  status,
-  headers: {
-    get: () => "application/json",
-  },
-  text: async () => (typeof body === "string" ? body : JSON.stringify(body)),
-});
-
 const expectGrpcCode = async (fn, code) => {
   await assert.rejects(async () => fn(), (error) => {
     assert.ok(error instanceof GrpcError);
@@ -299,33 +289,16 @@ test("XDR client rejects invalid successful JSON and accepts success-code varian
 });
 
 test("XDR client uses the default undici transport with and without an insecure dispatcher", async () => {
-  const requests = [];
-  const server = createServer((request, response) => {
-    let body = "";
-    request.setEncoding("utf8");
-    request.on("data", (chunk) => {
-      body += chunk;
-    });
-    request.on("end", () => {
-      requests.push({ method: request.method, url: request.url, body });
-      response.setHeader("content-type", "application/json");
-      response.end(JSON.stringify({ code: "Success", data: { ok: true } }));
-    });
-  });
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
-  const address = server.address();
-  const baseUrl = `http://127.0.0.1:${address.port}`;
+  const mock = await createXdrMockServer();
   try {
-    const secureClient = createXdrClient(makeContext({ config: { baseUrl, headers: null } }));
-    const insecureClient = createXdrClient(makeContext({ config: { baseUrl, skipTlsVerify: true } }));
+    const secureClient = createXdrClient(makeContext({ config: { baseUrl: mock.baseUrl, headers: null } }));
+    const insecureClient = createXdrClient(makeContext({ config: { baseUrl: mock.baseUrl, skipTlsVerify: true } }));
     assert.equal((await secureClient.get("health")).data.ok, true);
     assert.equal((await insecureClient.post("/search", { page: 1 })).data.ok, true);
   } finally {
-    server.close();
-    await once(server, "close");
+    await mock.close();
   }
-  assert.deepEqual(requests, [
+  assert.deepEqual(mock.requests, [
     { method: "GET", url: "/health", body: "" },
     { method: "POST", url: "/search", body: "{\"page\":1}" },
   ]);
@@ -380,7 +353,7 @@ test("SearchIncidents maps common filters and lets typed fields override extra f
   });
   assert.equal(result.total, 2);
   assert.deepEqual(result.data.item, [{ id: "one" }]);
-  assert.equal(result.raw_json.code, "Success");
+  assert.equal(result.raw_json, undefined);
 });
 
 test("SearchAlerts maps alert-specific filters", async () => {
@@ -487,7 +460,7 @@ test("GetAlertContext requires UUID and returns structured alert proof", async (
     path: "/api/xdr/v1/alerts/alert-1/proof",
   });
   assert.deepEqual(result.data, { proofType: "network", sourceIp: "1.1.1.1" });
-  assert.equal(result.raw_json.code, "Success");
+  assert.equal(result.raw_json, undefined);
 });
 
 test("GetIncidentContext fetches proof and all entity groups by default", async () => {
@@ -618,6 +591,6 @@ test("handler mapping helpers cover empty values and response fallbacks", () => 
     page: 0,
     page_size: 0,
     data: null,
-    raw_json: {},
+    raw_json: undefined,
   });
 });

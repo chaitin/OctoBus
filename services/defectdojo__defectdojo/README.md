@@ -2,6 +2,10 @@
 
 OctoBus service for DefectDojo API v2.
 
+- Service name: `defectdojo`
+- Service dir: `defectdojo__defectdojo`
+- Runtime mode: `long-running`
+
 The implementation focuses on commonly used DefectDojo API v2 calls that are easy to validate against a local Docker deployment:
 
 - `ListProducts`
@@ -49,14 +53,14 @@ Example instance config:
 
 ## API Mapping
 
-- `ListProducts` -> `GET /api/v2/products/`
-- `ListEngagements` -> `GET /api/v2/engagements/`
-- `ListFindings` -> `GET /api/v2/findings/`
-- `GetFinding` -> `GET /api/v2/findings/{id}/`
-- `ImportScan` -> `POST /api/v2/import-scan/`
-- `ReimportScan` -> `POST /api/v2/reimport-scan/`
+- `ListProducts` -> read-only `GET /api/v2/products/`
+- `ListEngagements` -> read-only `GET /api/v2/engagements/`
+- `ListFindings` -> read-only `GET /api/v2/findings/`
+- `GetFinding` -> read-only `GET /api/v2/findings/{id}/`
+- `ImportScan` -> write `POST /api/v2/import-scan/`
+- `ReimportScan` -> write `POST /api/v2/reimport-scan/`
 
-List responses preserve the raw upstream JSON and also expose the common Django REST Framework pagination fields `count`, `next`, `previous`, and `results`.
+List responses expose the common Django REST Framework pagination fields `count`, `next`, `previous`, and `results`. `raw_json` is intentionally empty; complete upstream raw response bodies are not returned.
 
 `ImportScan` and `ReimportScan` send `multipart/form-data`. The scan report is provided as `file_name` plus `file_content`; the service does not read local filesystem paths.
 
@@ -178,7 +182,7 @@ npm test -- --service-dir defectdojo__defectdojo
 npm run pack:check
 ```
 
-The service can also be imported into a local OctoBus daemon with source suffix `//defectdojo__defectdojo`, then attached to a capset and called through Connect RPC.
+The service can also be imported into a local OctoBus daemon with source path `./services/defectdojo__defectdojo`, then attached to a capset and called through Connect RPC, for example `POST /capsets/defectdojo-read/connect/defectdojo-test/DefectDojo.DefectDojo/ListProducts`.
 
 ## Known Limitations
 
@@ -187,3 +191,4 @@ The service can also be imported into a local OctoBus daemon with source suffix 
 - `file_content` is treated as request text and sent directly as the multipart file body. Binary report uploads are not specially encoded.
 - The service intentionally does not read local file paths from requests.
 - `skipTlsVerify`, `tlsInsecureSkipVerify`, and `insecureSkipVerify` are rejected with `INVALID_ARGUMENT` because Node.js native `fetch` does not support those TLS-skip options.
+- Errors return HTTP status and body length only; they do not return the API key, Authorization header, or complete upstream raw body.

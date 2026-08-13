@@ -1,6 +1,23 @@
-export type { HandlerContext } from "./context.js";
+export type { HandlerContext, NormalizedContext } from "./context.js";
+export { getMetadataValue, mergeConfigSecret, normalizeContext } from "./context.js";
 export { GrpcError, grpcError } from "./grpc-error.js";
-export { grpcInvalidArgumentError, grpcNotFoundError, grpcPermissionDeniedError, grpcUnauthenticatedError, grpcUnavailableError } from "./errors.js";
+export {
+  grpcCodeFor,
+  grpcInvalidArgumentError,
+  grpcNotFoundError,
+  grpcPermissionDeniedError,
+  grpcUnauthenticatedError,
+  grpcUnavailableError,
+  httpStatusError,
+  mapHttpStatusToCode,
+  missingSecretError,
+  redactSensitive,
+  safeErrorSummary,
+  serviceError,
+} from "./errors.js";
+export type { ResponseLike, SafeErrorSummary, SafeErrorSummaryOptions, ServiceErrorCode } from "./errors.js";
+export { assertOkResponse, createTlsDispatcher, fetchWithTimeout, normalizeTimeoutMs, readResponseJson, readResponseText } from "./http.js";
+export type { FetchWithTimeoutOptions, ResponseWithText } from "./http.js";
 export { defineService } from "./service.js";
 export type { AnyServiceHandler, BidiStreamingServiceHandler, ClientStreamingServiceHandler, DefineServiceConfig, ServerStreamingServiceHandler, ServiceDefinition, ServiceHandler } from "./service.js";
 export { runService, runServiceMain, runSdkCli } from "./cli.js";

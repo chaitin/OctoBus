@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":true,"properties":{"apiBase":{"type":"string","description":"D-Sensor API base URL."},"baseUrl":{"type":"string"},"endpoint":{"type":"string"},"timeoutMs":{"type":"integer","default":30000},"skipTlsVerify":{"type":"boolean","default":true}}}

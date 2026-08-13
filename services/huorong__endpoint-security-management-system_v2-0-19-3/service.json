@@ -1,0 +1,61 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "huorong-endpoint-security-management-system-v2-0-19-3",
+  "displayName": "火绒终端安全管理系统 V2.0.19.3",
+  "description": "火绒终端安全管理系统 V2.0.19.3 的 OctoBus 适配器，支持分组、终端、风险、病毒事件和终端任务接口。",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/huorong_endpoint_security_management_system_v2_0_19_3.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "huorong.endpoint_security_management_system.v2_0_19_3.HuorongEndpointSecurityManagementSystem/ListGroups": {
+          "name": "list-groups",
+          "description": "查询火绒终端分组。"
+        },
+        "huorong.endpoint_security_management_system.v2_0_19_3.HuorongEndpointSecurityManagementSystem/ListOnlineMacs": {
+          "name": "list-online-macs",
+          "description": "查询在线终端 MAC 地址。"
+        },
+        "huorong.endpoint_security_management_system.v2_0_19_3.HuorongEndpointSecurityManagementSystem/ListClients": {
+          "name": "list-clients",
+          "description": "查询火绒终端基础信息。"
+        },
+        "huorong.endpoint_security_management_system.v2_0_19_3.HuorongEndpointSecurityManagementSystem/GetClientDetails": {
+          "name": "get-client-details",
+          "description": "按终端唯一标识或 MAC 地址查询终端详情。"
+        },
+        "huorong.endpoint_security_management_system.v2_0_19_3.HuorongEndpointSecurityManagementSystem/ListHighRiskClients": {
+          "name": "list-high-risk-clients",
+          "description": "查询存在高危漏洞未修复的终端。"
+        },
+        "huorong.endpoint_security_management_system.v2_0_19_3.HuorongEndpointSecurityManagementSystem/ListVirusEvents": {
+          "name": "list-virus-events",
+          "description": "按终端、分组或全部终端统计病毒事件。"
+        },
+        "huorong.endpoint_security_management_system.v2_0_19_3.HuorongEndpointSecurityManagementSystem/CreateScanTask": {
+          "name": "create-scan-task",
+          "description": "创建终端查杀扫描任务。"
+        },
+        "huorong.endpoint_security_management_system.v2_0_19_3.HuorongEndpointSecurityManagementSystem/CreateIsolationTask": {
+          "name": "create-isolation-task",
+          "description": "创建终端网络隔离或取消隔离任务。"
+        },
+        "huorong.endpoint_security_management_system.v2_0_19_3.HuorongEndpointSecurityManagementSystem/SendNotification": {
+          "name": "send-notification",
+          "description": "向终端发送通知任务。"
+        }
+      }
+    }
+  }
+}

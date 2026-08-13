@@ -1,23 +1,27 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "additionalProperties": true,
+  "additionalProperties": false,
   "properties": {
     "webhook": {
       "type": "string",
-      "description": "Slack Incoming Webhook URL (https://hooks.slack.com/services/T.../B.../xxxx)."
+      "deprecated": true,
+      "description": "Deprecated fallback for the Slack Incoming Webhook URL. Prefer secret.webhook."
     },
     "webhook_url": {
       "type": "string",
-      "description": "Alias for webhook."
+      "deprecated": true,
+      "description": "Deprecated fallback alias for webhook. Prefer secret.webhook."
     },
     "webhookUrl": {
       "type": "string",
-      "description": "Alias for webhook."
+      "deprecated": true,
+      "description": "Deprecated fallback alias for webhook. Prefer secret.webhook."
     },
     "url": {
       "type": "string",
-      "description": "Alias for webhook."
+      "deprecated": true,
+      "description": "Deprecated fallback alias for webhook. Prefer secret.webhook."
     },
     "timeoutMs": {
       "type": "integer",

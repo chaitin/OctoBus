@@ -5,7 +5,7 @@ This package preserves legacy gRPC package and method names where applicable.
 Import it into OctoBus with:
 
 ```bash
-octobus service import --id fortinet-waf ./services//fortinet__waf
+octobus service import --id fortinet-waf ./services/fortinet__waf
 ```
 
 ## Package Files
@@ -57,7 +57,7 @@ Use `password` for the Fortinet WAF API password. The service sends the base64 e
 - `ListIPListMembers` requires an array response and maps each member's `id`, `type`, `iPv4IPv6`, `severity`, `triggerPolicy`, and `status`.
 - `UnblockIP` succeeds only when the upstream response object has `affected: 1`.
 - HTTP 401 and 403 map to `PERMISSION_DENIED`; other 4xx statuses map to `FAILED_PRECONDITION`; 5xx and network failures map to `UNAVAILABLE`.
-- Non-JSON or unexpected response shapes map to `UNKNOWN` and preserve raw response details in the error payload.
+- Non-JSON or unexpected response shapes map to `UNKNOWN`; error payloads keep `raw_body` empty and expose only `raw_body_length`.
 
 ## Local Checks
 
@@ -67,3 +67,29 @@ npm run validate -- --service-dir fortinet__waf
 npm test -- --service-dir fortinet__waf --coverage
 npm run pack:check
 ```
+
+## Service Contract
+
+- Service name: `fortinet-waf`
+- Service dir: `services/fortinet__waf`
+- Runtime mode: `long-running`
+- Config: `host` is required; `username`, `timeoutMs`, `skipTlsVerify`, and `headers` are optional. `restBaseUrl`, `baseUrl`, and `endpoint` are accepted host aliases.
+- Secret: `password` is required; `username` or `user` may be supplied in secret instead of config.
+- RPC read/write properties:
+  - `CheckOnline`: read, checks the WAF status endpoint.
+  - `BlockIP`: write, adds one IP list member.
+  - `ListIPListMembers`: read, lists configured IP list members.
+  - `UnblockIP`: write, deletes one IP list member by member ID.
+
+OctoBus example:
+
+```bash
+octobus service import --id fortinet-waf ./services/fortinet__waf
+octobus instance create fortinet-waf fortinet-waf-demo --config config.json --secret secret.json
+octobus capset create security-devices
+octobus capset add-instance security-devices fortinet-waf-demo
+```
+
+Connect path example: `/capsets/security-devices/connect/fortinet-waf-demo/Fortinet_WAF.Fortinet_WAF/CheckOnline`.
+
+Known limitations: the service intentionally does not return upstream raw bodies or credentials. `skipTlsVerify` is only for private/self-signed deployments and is applied with a per-request dispatcher.

@@ -15,10 +15,14 @@ OctoBus 的 service package 契约是 npm-compatible package 契约。OctoBus �
 `octobus service import` 支持以下来源：
 
 - public / private npm registry package，使用 `npm:` 前缀。
-- local package directory。
-- local `.tgz` / `.tar.gz` tarball。
-- local `.zip` archive。
+- package directory。
+- `.tgz` / `.tar.gz` tarball。
+- `.zip` archive。
 - HTTPS Git repository URL。
+
+目录和本地 archive 的读取位置由 CLI 的 source transfer mode 决定。默认 `--source-mode auto` 下，只要 `SOURCE` 是 CLI 客户端存在的本地目录、本地 `.tgz` / `.tar.gz` / `.zip`，或 `npm:` 后跟客户端存在的本地路径，CLI 就上传 source；否则保持 daemon-side import，由 daemon 按自己的文件系统或网络访问能力解析 source。`--source-mode remote` 强制 daemon-side 解析；`--source-mode upload` 强制客户端上传并在本地校验失败时不发起 admin 请求。
+
+`127.0.0.1`、`localhost`、Docker 端口映射、SSH tunnel、kubectl port-forward 或反向代理都不能作为共享文件系统的依据。即使 admin address 是 loopback，默认 `auto` 仍只根据客户端本地 source 是否存在且类型受支持决定是否上传。
 
 示例：
 
@@ -73,6 +77,10 @@ HTTPS Git repo       -> git archive to source dir -> npm pack -> npm-packed .tgz
 ```
 
 local directory 和 HTTPS Git source 会按 `--build=auto|always|never` 决定是否先安装 dev dependencies 并执行构建；最终保存的 artifact 仍是 `npm pack` 产物。tarball 和 zip source 被视为已经发布的 artifact，不重新构建。
+
+客户端上传的目录和 `npm:` local directory 在 daemon staging 中按 local directory 规则处理，可以按 build policy 构建并最终保存为 `npm pack` 产物。客户端上传的 `.tgz` / `.tar.gz` / `.zip` 按 local archive 规则处理，视为已发布 artifact，不重新构建；对上传 archive 使用 `--build=always` 会失败。
+
+上传来源写入 SQLite 的 `package_source` 时使用 `client-upload:<basename>`，可附加 `//service-root` 或 recursive import 发现到的 service root，例如 `client-upload:platform-services//gitlab-wrapper`。OctoBus 不把客户端绝对路径或 daemon 上传临时路径写入 SQLite、admin API 响应或 CLI 输出。
 
 OctoBus 对 package artifact 计算 sha256，并把 hash 写入 SQLite。
 
@@ -297,7 +305,7 @@ OctoBus 本身只要求 service root 是 source 中可解析的相对路径；�
 ```json
 {
   "dependencies": {
-    "@chaitin-ai/octobus-sdk": "^0.5.0"
+    "@chaitin-ai/octobus-sdk": "^0.6.0"
   }
 }
 ```
@@ -322,9 +330,9 @@ octobus service import --build=auto|always|never ...
 - `always`：即使 `bin` target 已存在，也执行构建。
 - `never`：不执行构建；`bin` target 必须已经存在。
 
-构建只适用于 local directory 和 HTTPS Git source。npm registry package、local tarball 和 local zip 被视为已经发布的 artifact；对这些来源传 `--build=always` 会失败。
+构建只适用于 local directory、客户端上传目录或 `npm:` local directory，以及 HTTPS Git source。npm registry package、local tarball、local zip 和客户端上传 archive 被视为已经发布的 artifact；对这些来源传 `--build=always` 会失败。
 
-local directory 和 HTTPS Git source 的处理规则：
+local directory、客户端上传目录和 HTTPS Git source 的处理规则：
 
 - 若 `--build=never`，`bin` target 必须已存在，然后执行 `npm pack`。
 - 若 `--build=auto` 且 `bin` target 已存在，按 built package 处理并执行 `npm pack`。
@@ -357,7 +365,7 @@ OctoBus 只在 import 阶段准备 runtime dependencies。
 - 否则执行 `npm install --omit=dev`。
 - 若传入 `--offline`，追加 `--offline`。
 
-local directory 和 HTTPS Git source 若声明了 `file:` dependencies，OctoBus 会在 source/build 目录安装依赖，并把得到的 `node_modules` 携带到 runtime dir。这样 package 可以依赖包内 tarball，例如：
+local directory、客户端上传目录和 HTTPS Git source 若声明了 `file:` dependencies，OctoBus 会在 source/build 目录安装依赖，并把得到的 `node_modules` 携带到 runtime dir。这样 package 可以依赖包内 tarball，例如：
 
 ```json
 {
@@ -380,7 +388,7 @@ local directory 和 HTTPS Git source 若声明了 `file:` dependencies，OctoBus
 ```json
 {
   "dependencies": {
-    "@chaitin-ai/octobus-sdk": "^0.5.0"
+    "@chaitin-ai/octobus-sdk": "^0.6.0"
   }
 }
 ```

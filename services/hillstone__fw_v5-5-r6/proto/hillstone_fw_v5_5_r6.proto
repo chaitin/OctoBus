@@ -12,12 +12,12 @@ service HILLSTONE_FW_V55R6 {
 }
 
 message HillstoneCookies {
-  string fromrootvsys = 1;
-  string role = 2;
-  string vsysId = 3;
-  string token = 4;
-  string username = 5;
-  string lang = 6;
+  string fromrootvsys = 1 [deprecated = true];
+  string role = 2 [deprecated = true];
+  string vsysId = 3 [deprecated = true];
+  string token = 4 [deprecated = true];
+  string username = 5 [deprecated = true];
+  string lang = 6 [deprecated = true];
 }
 
 message IpEntry {
@@ -37,21 +37,21 @@ message LoginRequest {
 
 message LoginResponse {
   int32 http_status = 1;
-  string http_body = 2;
+  string http_body = 2 [deprecated = true];
 }
 
 message CreateAddrGroupRequest {
-  HillstoneCookies cookies = 1;
+  HillstoneCookies cookies = 1 [deprecated = true];
   repeated AddrGroup addr_groups = 2;
 }
 
 message UpdateAddrGroupRequest {
-  HillstoneCookies cookies = 1;
+  HillstoneCookies cookies = 1 [deprecated = true];
   repeated AddrGroup addr_groups = 2;
 }
 
 message QueryAddrGroupRequest {
-  HillstoneCookies cookies = 1;
+  HillstoneCookies cookies = 1 [deprecated = true];
   string name = 2;
   int32 limit = 3;
 }

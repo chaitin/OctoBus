@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "additionalProperties": true,
+  "additionalProperties": false,
   "properties": {
     "host": {
       "type": "string",
@@ -29,15 +29,18 @@
     },
     "token": {
       "type": "string",
-      "description": "Fortinet REST API token. Prefer secret.token for new instances."
+      "deprecated": true,
+      "description": "Deprecated compatibility fallback for the Fortinet REST API token. New instances must use secret.token."
     },
     "accessToken": {
       "type": "string",
-      "description": "Alias for token. Prefer secret.accessToken for new instances."
+      "deprecated": true,
+      "description": "Deprecated compatibility fallback alias for token. New instances must use secret.accessToken."
     },
     "access_token": {
       "type": "string",
-      "description": "Alias for token. Prefer secret.access_token for new instances."
+      "deprecated": true,
+      "description": "Deprecated compatibility fallback alias for token. New instances must use secret.access_token."
     },
     "is_vdom": {
       "type": "boolean",

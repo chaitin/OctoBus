@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package Volcengine_Cloud_Firewall;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Volcengine_Cloud_Firewall";
+
+service Volcengine_Cloud_Firewall {
+  rpc DescribeAddressBook(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc DescribeControlPolicy(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc DescribeControlPolicyByRuleId(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc DescribeControlPolicyPriorUsed(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc DescribeVpcFirewallList(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc DescribeVpcFirewallAclRuleList(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc DescribeVpcFirewallAclRulePriorUsed(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc DescribeNatFirewallList(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc DescribeNatFirewallControlPolicy(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc DescribeNatFirewallControlPolicyPriorityUsed(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc DescribeDnsControlPolicy(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc DescribeVpcs(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc DescribeAclBackup(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetPolicyAnalyzeOverview(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetPolicyAnalyzeResult(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetPolicyAnalyzeDetail(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc GetPolicyCheckResult(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc QueryUserAlarmConfig(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc DescribeTransitRouterResourcesList(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc DescribeVpcFirewallRoutePolicyList(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc AssetList(VolcengineRequest) returns (VolcengineResponse) {}
+  rpc InvokeReadOnlyAction(InvokeReadOnlyActionRequest) returns (VolcengineResponse) {}
+}
+
+message VolcengineRequest {
+  google.protobuf.Struct payload = 1;
+}
+
+message InvokeReadOnlyActionRequest {
+  string action = 1;
+  string service_code = 2;
+  string version = 3;
+  string method = 4;
+  string endpoint = 5;
+  google.protobuf.Struct payload = 6;
+}
+
+message VolcengineResponse {
+  google.protobuf.Value response = 1;
+}

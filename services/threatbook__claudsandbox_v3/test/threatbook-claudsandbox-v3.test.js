@@ -151,8 +151,10 @@ test('UploadFile sends multipart form and maps uploaded file data', async () => 
 
   assert.equal(captured.url, 'https://api.threatbook.cn/v3/file/upload');
   assert.equal(captured.init.method, 'POST');
-  assert.equal(captured.init.timeoutMs, 25);
-  assert.equal(captured.init.skipTlsVerify, true);
+  assert.ok(captured.init.signal instanceof AbortSignal);
+  assert.equal(captured.init.timeoutMs, undefined);
+  assert.equal(captured.init.dispatcher, _test.insecureTlsDispatcher);
+  assert.equal(captured.init.skipTlsVerify, undefined);
   assert.equal(captured.init.body.get('apikey'), 'test_api_key');
   assert.equal(captured.init.body.get('sandbox_type'), 'win7_sp1_enx86_office2013');
   assert.equal(captured.init.body.get('run_time'), '60');
@@ -295,6 +297,34 @@ test('supports SDK context-only handler invocation and aliases', async () => {
   assert.equal(result.multiengines.threat_level, 'clean');
 });
 
+test('request fields cannot override secret and structured errors redact api key', async () => {
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url: String(url), init };
+    return response(200, {
+      response_code: 1400,
+      verbose_msg: 'upstream echoed test_api_key',
+    });
+  });
+
+  await expectGrpcError(
+    () => handlers[METHOD_UPLOAD_FILE_FULL]({
+      file_bytes_base64: Buffer.from('secret check').toString('base64'),
+      file_name: 'secret.bin',
+      apikey: 'request_supplied_key',
+      apiKey: 'request_supplied_key',
+    }, buildCtx()),
+    'FAILED_PRECONDITION',
+    (err) => {
+      assert.equal(captured.init.body.get('apikey'), 'test_api_key');
+      assert.equal(captured.url, 'https://api.threatbook.cn/v3/file/upload');
+      assert.doesNotMatch(err.message, /test_api_key/);
+      assert.doesNotMatch(err.message, /request_supplied_key/);
+      assert.equal(parseStructuredError(err).verbose_msg, 'upstream echoed <redacted>');
+    },
+  );
+});
+
 test('supports mock upstream round trip for all methods', async () => {
   const server = await createMockServer();
   try {
@@ -331,11 +361,32 @@ test('supports mock upstream round trip for all methods', async () => {
 });
 
 test('maps HTTP, business, JSON, response_code, network, and read failures', async () => {
+  setFetch(async () => response(401, { response_code: 1100, verbose_msg: 'apikey required' }));
+  await expectGrpcError(
+    () => handlers[METHOD_GET_MULTI_ENGINES_REPORT_FULL]({ resource: 'a'.repeat(64) }, buildCtx()),
+    'UNAUTHENTICATED',
+    (err) => assert.equal(parseStructuredError(err).http_status, 401),
+  );
+
   setFetch(async () => response(403, { response_code: 1101, verbose_msg: 'invalid apikey' }));
   await expectGrpcError(
     () => handlers[METHOD_GET_MULTI_ENGINES_REPORT_FULL]({ resource: 'a'.repeat(64) }, buildCtx()),
     'PERMISSION_DENIED',
     (err) => assert.equal(parseStructuredError(err).http_status, 403),
+  );
+
+  setFetch(async () => response(404, { response_code: 1204, verbose_msg: 'not found' }));
+  await expectGrpcError(
+    () => handlers[METHOD_GET_MULTI_ENGINES_REPORT_FULL]({ resource: 'a'.repeat(64) }, buildCtx()),
+    'FAILED_PRECONDITION',
+    (err) => assert.equal(parseStructuredError(err).reason, 'upstream http 404'),
+  );
+
+  setFetch(async () => response(429, { response_code: 1429, verbose_msg: 'rate limited' }));
+  await expectGrpcError(
+    () => handlers[METHOD_GET_MULTI_ENGINES_REPORT_FULL]({ resource: 'a'.repeat(64) }, buildCtx()),
+    'FAILED_PRECONDITION',
+    (err) => assert.equal(parseStructuredError(err).http_status, 429),
   );
 
   setFetch(async () => response(500, { message: 'internal' }));
@@ -385,6 +436,22 @@ test('maps HTTP, business, JSON, response_code, network, and read failures', asy
     () => handlers[METHOD_GET_MULTI_ENGINES_REPORT_FULL]({ resource: 'a'.repeat(64) }, buildCtx()),
     'UNAVAILABLE',
     (err) => assert.equal(parseStructuredError(err).reason, 'read failed'),
+  );
+});
+
+test('all report and upload RPCs expose upstream failure paths', async () => {
+  setFetch(async () => response(500, { message: 'upload down' }));
+  await expectGrpcError(
+    () => handlers[METHOD_UPLOAD_FILE_FULL]({ file_bytes_base64: 'YQ==' }, buildCtx()),
+    'UNAVAILABLE',
+    (err) => assert.equal(parseStructuredError(err).http_status, 500),
+  );
+
+  setFetch(async () => response(429, { response_code: 1429, verbose_msg: 'rate limited' }));
+  await expectGrpcError(
+    () => handlers[METHOD_GET_FILE_REPORT_FULL]({ resource: 'a'.repeat(64), sandbox_type: 'win7_sp1_enx86_office2013' }, buildCtx()),
+    'FAILED_PRECONDITION',
+    (err) => assert.equal(parseStructuredError(err).http_status, 429),
   );
 });
 
