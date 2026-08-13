@@ -592,7 +592,7 @@ test('helper functions', () => {
   assert.equal(_test.toTrimmedString(null), '');
   assert.equal(_test.resolveGateway({}), 'accessone-global.ctapi.ctyun.cn');
   assert.equal(_test.resolveGateway({ ctyun_gateway: 'custom.host:443' }), 'custom.host:443');
-  assert.equal(_test.resolveGateway({ gateway: 'https://gw.host/' }), 'gw.host');
+  assert.equal(_test.resolveGateway({ gateway: 'https://gw.host/' }), 'https://gw.host');
   assert.equal(_test.resolveAk({}), '');
   assert.equal(_test.resolveAk({ ctyun_ak: 'my_ak' }), 'my_ak');
   assert.equal(_test.resolveAk({ ak: 'alias_ak' }), 'alias_ak');

@@ -1,12 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "additionalProperties": true,
+  "additionalProperties": false,
   "properties": {
     "ctyun_gateway": {
       "type": "string",
+      "format": "uri",
+      "pattern": "^https?://",
       "description": "天翼云 CTAPI 网关地址，默认 accessone-global.ctapi.ctyun.cn。",
-      "default": "accessone-global.ctapi.ctyun.cn"
+      "default": "https://accessone-global.ctapi.ctyun.cn"
     },
     "gateway": {
       "type": "string",

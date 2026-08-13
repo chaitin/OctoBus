@@ -117,7 +117,13 @@ const uuid = () => crypto.randomUUID();
 // ── Resolve from bindings ──
 const resolveGateway = (bindings = {}) => {
   const g = toTrimmedString(firstDefined(bindings.ctyun_gateway, bindings.gateway)) || DEFAULT_GATEWAY;
-  return g.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  return g.replace(/\/+$/, '');
+};
+
+const gatewayUrl = (gateway, path) => {
+  if (/^https?:\/\//.test(gateway)) return `${gateway}${path}`;
+  const scheme = /^(127\.0\.0\.1|localhost)(:\d+)?$/.test(gateway) ? 'http' : 'https';
+  return `${scheme}://${gateway}${path}`;
 };
 
 const resolveAk = (bindings = {}) => toTrimmedString(firstDefined(bindings.ctyun_ak, bindings.ak));
@@ -234,8 +240,7 @@ const signedPost = async (gateway, path, bodyObj, ak, sk, ctx) => {
   const timeoutMs = resolveTimeoutMs(ctx);
   const skipTlsVerify = shouldSkipTlsVerify(mergedBindings(ctx));
 
-  const scheme = /^(127\.0\.0\.1|localhost)(:\d+)?$/.test(gateway) ? 'http' : 'https';
-  const url = `${scheme}://${gateway}${path}`;
+  const url = gatewayUrl(gateway, path);
   const init = {
     method: 'POST',
     headers: {
@@ -287,8 +292,7 @@ const signedGet = async (gateway, path, queryParams, ak, sk, ctx) => {
   const timeoutMs = resolveTimeoutMs(ctx);
   const skipTlsVerify = shouldSkipTlsVerify(mergedBindings(ctx));
 
-  const scheme = /^(127\.0\.0\.1|localhost)(:\d+)?$/.test(gateway) ? 'http' : 'https';
-  let url = `${scheme}://${gateway}${path}`;
+  let url = gatewayUrl(gateway, path);
   if (canonicalQueryString) {
     url += `?${canonicalQueryString}`;
   }

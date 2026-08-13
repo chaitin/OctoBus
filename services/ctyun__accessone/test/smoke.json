@@ -1,0 +1,5 @@
+{
+  "method": "Ctyun_AccessOne.Ctyun_AccessOne/QueryResourcePackages",
+  "request": {},
+  "expectUpstream": true
+}
