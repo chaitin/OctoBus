@@ -1,58 +1,72 @@
+import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { test } from "node:test";
-import { deepStrictEqual } from "node:assert";
+import test from "node:test";
+import { GrpcError, grpcStatus } from "@chaitin-ai/octobus-sdk";
+import { _test, extractCveDetails, handlers, lookupCve, searchCves } from "../src/nist-nvd-v2.js";
+import { service } from "../src/service.js";
 
-async function waitPort(port, ms = 5000) {
-  const start = Date.now();
-  while (Date.now() - start < ms) {
-    try { await fetch(`http://127.0.0.1:${port}/`); return; } catch (e) { await new Promise(r => setTimeout(r, 100)); }
+const port = 19001;
+const config = { nvdBaseUrl: `http://127.0.0.1:${port}/`, timeoutMs: 1_000 };
+let mock;
+
+async function waitForMock() {
+  for (let attempts = 0; attempts < 50; attempts += 1) {
+    try { if ((await fetch(`http://127.0.0.1:${port}/health`)).status === 204) return; } catch {}
+    await new Promise((resolve) => setTimeout(resolve, 20));
   }
+  throw new Error("mock upstream did not start");
 }
 
-async function invoke(port, method, body) {
-  const r = await fetch(`http://127.0.0.1:${port}/capsets/test/connect/nist-nvd-v2-test/nist.nvd.v2.NvdService/${method}`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-  });
-  return r.json();
+async function expectsGrpcError(fn, code) {
+  await assert.rejects(fn, (error) => error instanceof GrpcError && error.code === code);
 }
 
-const NVD_PORT = 19001;
-let mockProcess;
-
-test("nist__nvd-v2 — LookupCve returns full CVE record", async (t) => {
-  mockProcess = spawn("node", ["test/mock_upstream.js"], {
-    cwd: new URL(".", import.meta.url).pathname.replace(/\/test\/$/, ""),
-    env: { ...process.env, HTTP_PORT: String(NVD_PORT) },
-    stdio: "pipe",
-  });
-  await waitPort(NVD_PORT);
-
-  const r = await invoke(9000, "LookupCve", { cveId: "CVE-2021-44228" });
-  deepStrictEqual(r.code, undefined, `unexpected error: ${JSON.stringify(r)}`);
-  deepStrictEqual(r.cveId, "CVE-2021-44228");
-  deepStrictEqual(r.cvssV31Score, 10);
-  deepStrictEqual(r.severity, "CRITICAL");
-  deepStrictEqual(r.cweIds.length >= 2, true);
-  deepStrictEqual(r.references.length >= 1, true);
-  deepStrictEqual(r.affectedProducts.length >= 1, true);
+test("setup mock upstream", async () => {
+  mock = spawn("node", ["test/mock_upstream.js"], { cwd: new URL("..", import.meta.url), env: { ...process.env, HTTP_PORT: String(port) } });
+  await waitForMock();
 });
 
-test("nist__nvd-v2 — LookupCve returns empty result for unknown CVE", async (t) => {
-  const r = await invoke(9000, "LookupCve", { cveId: "CVE-0000-0000" });
-  deepStrictEqual(r.code, "invalid_argument", "should return INVALID_ARGUMENT for missing CVE");
+test("LookupCve returns the complete protobuf-safe record", async () => {
+  const result = await lookupCve(config, {}, "cve-2021-44228");
+  assert.equal(result.cveId, "CVE-2021-44228");
+  assert.equal(result.severity, "CRITICAL");
+  assert.equal(result.cvssV31Score, 10);
+  assert.deepEqual(result.cweIds, ["CWE-20", "CWE-400"]);
+  assert.equal(result.affectedProducts[0].vendor, "apache");
 });
 
-test("nist__nvd-v2 — SearchCves returns results", async (t) => {
-  const r = await invoke(9000, "SearchCves", { keyword: "log4j", limit: 5 });
-  deepStrictEqual(r.code, undefined);
-  deepStrictEqual(r.total, 1);
-  deepStrictEqual(r.data.length, 1);
-  deepStrictEqual(r.data[0].cveId, "CVE-2021-44228");
+test("LookupCve validates input and maps absence to NOT_FOUND", async () => {
+  await expectsGrpcError(() => lookupCve(config, {}, "not-a-cve"), grpcStatus.INVALID_ARGUMENT);
+  await expectsGrpcError(() => lookupCve(config, {}, "CVE-0000-0000"), grpcStatus.NOT_FOUND);
 });
 
-test("nist__nvd-v2 — LookupCve rejects empty cveId", async (t) => {
-  const r = await invoke(9000, "LookupCve", {});
-  deepStrictEqual(r.code, "invalid_argument");
+test("SearchCves supports every request field and retries transient upstream errors", async () => {
+  const result = await searchCves(config, { nvdApiKey: "test-key" }, { keyword: "RETRY", severity: "high", skip: 0, limit: 99, pubStartDate: "2024-01-01T00:00:00.000", pubEndDate: "2024-12-31T00:00:00.000" });
+  assert.equal(result.total, 0);
+  await expectsGrpcError(() => searchCves(config, {}, { severity: "bad" }), grpcStatus.INVALID_ARGUMENT);
+  await expectsGrpcError(() => searchCves(config, {}, { limit: 0 }), grpcStatus.INVALID_ARGUMENT);
 });
 
-test("cleanup", () => { if (mockProcess) { mockProcess.kill(); } });
+test("SearchCves returns records, and handlers use ctx request/config/secret", async () => {
+  const result = await handlers["nist.nvd.v2.NvdService/SearchCves"]({ config, secret: {}, request: { keyword: "log4j", limit: 5 } });
+  assert.equal(result.total, 1);
+  assert.equal(result.data[0].cveId, "CVE-2021-44228");
+  assert.equal(typeof service.handlers["nist.nvd.v2.NvdService/LookupCve"], "function");
+});
+
+test("HTTP errors and invalid base URLs have deterministic gRPC mappings", async () => {
+  await expectsGrpcError(() => searchCves(config, {}, { keyword: "AUTH_FAIL" }), grpcStatus.PERMISSION_DENIED);
+  await expectsGrpcError(() => searchCves(config, {}, { keyword: "INVALID" }), grpcStatus.INVALID_ARGUMENT);
+  await expectsGrpcError(() => lookupCve({ nvdBaseUrl: "file:///tmp/nvd" }, {}, "CVE-2021-44228"), grpcStatus.INVALID_ARGUMENT);
+  await expectsGrpcError(() => lookupCve({ nvdBaseUrl: "http://127.0.0.1:1/", timeoutMs: 10 }, {}, "CVE-2021-44228"), grpcStatus.UNAVAILABLE);
+});
+
+test("CVE extraction falls back through NVD metric versions", () => {
+  assert.equal(extractCveDetails({ id: "CVE-2025-0001", metrics: { cvssMetricV30: [{ cvssData: { baseScore: 8.1, baseSeverity: "HIGH" } }] } }).severity, "HIGH");
+  assert.equal(extractCveDetails({ id: "CVE-2025-0002", metrics: { cvssMetricV2: [{ cvssData: { baseScore: 5 } }] } }).severity, "MEDIUM");
+  assert.equal(_test.timeoutMs(-1), 30_000);
+  assert.equal(_test.timeoutMs(999_999), 120_000);
+  assert.equal(_test.appendQuery("https://example.test/api", { value: "a b" }).searchParams.get("value"), "a b");
+});
+
+test("cleanup", () => mock?.kill());

@@ -125,7 +125,8 @@
     "qianxin-skyeye-v3-0-14-0": "bin/qianxin-skyeye-v3-0-14-0.js",
     "tencent-ssl": "bin/tencent-ssl.js",
     "reportedip": "bin/reportedip.js",
-    "tencent-bh": "bin/tencent-bh.js"
+    "tencent-bh": "bin/tencent-bh.js",
+    "nist-nvd-v2": "bin/nist-nvd-v2.js"
   },
   "files": [
     "bin/huawei-ccm.js",
@@ -371,7 +372,9 @@
     "tencent__ssl",
     "bin/tencent-ssl.js",
     "tencent__bh",
-    "bin/tencent-bh.js"
+    "bin/tencent-bh.js",
+    "nist__nvd-v2",
+    "bin/nist-nvd-v2.js"
   ],
   "scripts": {
     "validate": "node scripts/validate-service-package.mjs",

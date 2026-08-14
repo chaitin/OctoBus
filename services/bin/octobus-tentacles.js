@@ -494,6 +494,10 @@ const services = {
     entryFile: "../tencent__bh/bin/tencent-bh.js",
     serviceModule: "../tencent__bh/src/service.js",
   },
+  "nist-nvd-v2": {
+    entryFile: "../nist__nvd-v2/bin/nist-nvd-v2.js",
+    serviceModule: "../nist__nvd-v2/src/service.js",
+  },
 };
 
 const serviceNames = Object.keys(services);
