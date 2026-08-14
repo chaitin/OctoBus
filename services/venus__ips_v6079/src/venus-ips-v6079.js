@@ -242,8 +242,7 @@ const buildEnv = (ctx = {}) => {
   const bindings = callCtx.bindings || {};
   const baseUrl = normalizeBaseUrl(pickFirstString([bindings.baseUrl, bindings.restBaseUrl, bindings.host, bindings.base_url]));
   if (!baseUrl) throw errorWithCode('FAILED_PRECONDITION', 'bindings.baseUrl/restBaseUrl must be a valid http(s) URL');
-  const deviceType = pickFirstString([bindings.deviceType, bindings.device_type]);
-  if (!deviceType) throw errorWithCode('FAILED_PRECONDITION', 'deviceType is required');
+  const deviceType = pickFirstString([bindings.deviceType, bindings.device_type]) || 'api';
   const token = pickFirstString([bindings.token, bindings.authorization]);
   const username = pickFirstString([bindings.username, bindings.user]);
   const rawPassword = pickFirstString([bindings.password]);

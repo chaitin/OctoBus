@@ -26,6 +26,7 @@
     },
     "deviceType": {
       "type": "string",
+      "default": "api",
       "description": "Device-Type request header identifying the caller platform, such as SOC, IDS, WAF, or CSP."
     },
     "device_type": {

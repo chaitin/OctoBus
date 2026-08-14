@@ -1,0 +1,7 @@
+{
+  "method": "Venus_IPSV6079.IPSV6079Service/GetLicense",
+  "request": {
+    "requestId": "l2-smoke"
+  },
+  "expectUpstream": true
+}

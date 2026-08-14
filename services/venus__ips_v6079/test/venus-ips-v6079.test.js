@@ -414,7 +414,9 @@ test('all named JSON endpoint handlers use the expected REST method and path', a
 
 test('validation and upstream errors map to gRPC errors', async () => {
   await expectGrpcError(() => invoke(METHOD_REQUEST_FULL, { method: 'GET', path: '/api/v3/license' }, buildCtx({ bindings: { baseUrl: 'ips.example.com' } })), 'FAILED_PRECONDITION');
-  await expectGrpcError(() => invoke(METHOD_REQUEST_FULL, { method: 'GET', path: '/api/v3/license' }, buildCtx({ bindings: { deviceType: '' } })), 'FAILED_PRECONDITION');
+  await expectGrpcError(() => invoke(METHOD_REQUEST_FULL, { method: 'GET', path: '/api/v3/license' }, buildCtx({
+    bindings: { username: '', password: '' }, secret: {},
+  })), 'FAILED_PRECONDITION');
   await expectGrpcError(() => invoke(METHOD_REQUEST_FULL, { path: '/api/v3/license' }, buildCtx()), 'INVALID_ARGUMENT');
   await expectGrpcError(() => invoke(METHOD_REQUEST_FULL, { method: 'TRACE', path: '/api/v3/license' }, buildCtx()), 'INVALID_ARGUMENT');
   await expectGrpcError(() => invoke(METHOD_REQUEST_FULL, { method: 'GET', path: '/v1/license' }, buildCtx()), 'INVALID_ARGUMENT');
@@ -484,6 +486,10 @@ test('helper functions cover request parsing and configuration behavior', () => 
     secret: { passwordSha256: PASSWORD_SHA256 },
     bindings: { username: 'binding-user' },
   }).passwordSha256, PASSWORD_SHA256);
+  assert.equal(_test.buildEnv({
+    config: { baseUrl: 'https://config.example' },
+    secret: { token: TOKEN },
+  }).deviceType, 'api');
 });
 
 test('HTTP transport enforces manual redirects, timeout, TLS policy, and response limits', async () => {
