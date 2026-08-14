@@ -5,6 +5,7 @@ import test from 'node:test';
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
 import {
+  LOGIN_PATH,
   METHOD_ADD_BLOCK_POLICY_FULL,
   METHOD_ADD_WHITE_POLICY_FULL,
   METHOD_BATCH_ADD_BLOCK_POLICY_FULL,
@@ -87,6 +88,11 @@ const setFetch = (impl) => {
   globalThis.fetch = impl;
 };
 
+const invoke = (method, request = {}, ctx = {}) => handlers[method]({
+  ...ctx,
+  request,
+});
+
 const expectGrpcError = async (fn, legacyCode, checker = () => {}) => {
   let caught;
   try {
@@ -101,6 +107,7 @@ const expectGrpcError = async (fn, legacyCode, checker = () => {}) => {
     FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
     INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT,
     PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED,
+    RESOURCE_EXHAUSTED: grpcStatus.RESOURCE_EXHAUSTED,
     UNAUTHENTICATED: grpcStatus.UNAUTHENTICATED,
     UNAVAILABLE: grpcStatus.UNAVAILABLE,
     UNKNOWN: grpcStatus.UNKNOWN,
@@ -182,39 +189,39 @@ test('mock upstream supports login, named methods, generic requests, binary expo
   try {
     const ctx = buildCtx({ bindings: { baseUrl: host } });
 
-    const login = await handlers[METHOD_LOGIN_FULL]({}, ctx);
+    const login = await invoke(METHOD_LOGIN_FULL, {}, ctx);
     assert.equal(login.authenticated, true);
     assert.match(login.authorization, /^mock-ips-token-/);
 
-    const license = await handlers[METHOD_GET_LICENSE_FULL]({ request_id: 'lic-1' }, ctx);
+    const license = await invoke(METHOD_GET_LICENSE_FULL, { request_id: 'lic-1' }, ctx);
     assert.equal(JSON.parse(license.json_body).data.license_list[0].name, 'feature');
     assert.equal(license.request_id, 'lic-1');
 
-    const importedLicense = await handlers[METHOD_IMPORT_LICENSE_FULL]({ json_body: '{"license":"abc"}' }, ctx);
+    const importedLicense = await invoke(METHOD_IMPORT_LICENSE_FULL, { json_body: '{"license":"abc"}' }, ctx);
     assert.equal(JSON.parse(importedLicense.json_body).data.imported, 'abc');
 
-    const resource = await handlers[METHOD_GET_SYSTEM_RESOURCE_INFO_FULL]({}, ctx);
+    const resource = await invoke(METHOD_GET_SYSTEM_RESOURCE_INFO_FULL, {}, ctx);
     assert.equal(JSON.parse(resource.json_body).data[0].cpu_usage, '10');
 
-    const status = await handlers[METHOD_GET_SOFTWARE_STATUS_FULL]({}, ctx);
+    const status = await invoke(METHOD_GET_SOFTWARE_STATUS_FULL, {}, ctx);
     assert.equal(JSON.parse(status.json_body).data.version, 'V6079');
 
-    const operation = await handlers[METHOD_SYSTEM_OPERATE_FULL]({ json_body: '{"operation":2}' }, ctx);
+    const operation = await invoke(METHOD_SYSTEM_OPERATE_FULL, { json_body: '{"operation":2}' }, ctx);
     assert.equal(JSON.parse(operation.json_body).data.operation, 2);
 
-    const addBlock = await handlers[METHOD_ADD_BLOCK_POLICY_FULL]({ json_body: '{"type":2,"block_content":"evil.example","end_time":60}' }, ctx);
+    const addBlock = await invoke(METHOD_ADD_BLOCK_POLICY_FULL, { json_body: '{"type":2,"block_content":"evil.example","end_time":60}' }, ctx);
     assert.equal(JSON.parse(addBlock.json_body).data.id, 'block-1_2');
-    const batchBlock = await handlers[METHOD_BATCH_ADD_BLOCK_POLICY_FULL]({ json_body: '[{"type":3,"block_content":"http://bad","end_time":0}]' }, ctx);
+    const batchBlock = await invoke(METHOD_BATCH_ADD_BLOCK_POLICY_FULL, { json_body: '[{"type":3,"block_content":"http://bad","end_time":0}]' }, ctx);
     assert.deepEqual(JSON.parse(batchBlock.json_body).data.ids, ['block-2_3']);
-    const listBlock = await handlers[METHOD_LIST_BLOCK_POLICY_FULL]({ query: { type: '2', page_num: '1' } }, ctx);
+    const listBlock = await invoke(METHOD_LIST_BLOCK_POLICY_FULL, { query: { type: '2', page_num: '1' } }, ctx);
     assert.equal(JSON.parse(listBlock.json_body).data.block_policy.length, 2);
 
-    const addWhite = await handlers[METHOD_ADD_WHITE_POLICY_FULL]({ json_body: '{"type":4,"enable":1,"src_ip":"192.0.2.1"}' }, ctx);
+    const addWhite = await invoke(METHOD_ADD_WHITE_POLICY_FULL, { json_body: '{"type":4,"enable":1,"src_ip":"192.0.2.1"}' }, ctx);
     assert.equal(JSON.parse(addWhite.json_body).data.id, 'white-1_4');
-    const listWhite = await handlers[METHOD_LIST_WHITE_POLICY_FULL]({}, ctx);
+    const listWhite = await invoke(METHOD_LIST_WHITE_POLICY_FULL, {}, ctx);
     assert.equal(JSON.parse(listWhite.json_body).data.white_policy.length, 1);
 
-    const generic = await handlers[METHOD_REQUEST_FULL]({
+    const generic = await invoke(METHOD_REQUEST_FULL, {
       method: 'POST',
       path: '/api/v3/echo',
       query: { q: 'ioc' },
@@ -227,13 +234,13 @@ test('mock upstream supports login, named methods, generic requests, binary expo
     assert.deepEqual(JSON.parse(generic.json_body).data, { query: { q: 'ioc' }, body: { value: 7 } });
     assert.equal(mock.requests.find((item) => item.path === '/api/v3/echo').headers['content-type'], 'application/json;charset=utf-8');
 
-    const backup = await handlers[METHOD_EXPORT_BACKUP_FULL]({ request_id: 'backup-1' }, ctx);
+    const backup = await invoke(METHOD_EXPORT_BACKUP_FULL, { request_id: 'backup-1' }, ctx);
     assert.equal(backup.status_code, 200);
     assert.equal(backup.json_body, '');
     assert.equal(Buffer.from(backup.raw_body_base64, 'base64').toString('utf8'), 'backup-bytes');
     assert.equal(backup.request_id, 'backup-1');
 
-    const importedBackup = await handlers[METHOD_IMPORT_BACKUP_FULL]({
+    const importedBackup = await invoke(METHOD_IMPORT_BACKUP_FULL, {
       file_name: 'backup.tgz',
       file_base64: Buffer.from('backup-bytes').toString('base64'),
       request_id: 'import-backup-1',
@@ -258,7 +265,7 @@ test('login hashes raw password and sends required device type header', async ()
     return responseOf(200, JSON.stringify({ code: 0, msg: 'success', data: { ok: true } }));
   });
 
-  const result = await handlers[METHOD_REQUEST_FULL]({ method: 'GET', path: '/api/v3/license' }, buildCtx());
+  const result = await invoke(METHOD_REQUEST_FULL, { method: 'GET', path: '/api/v3/license' }, buildCtx());
   assert.equal(result.status_code, 200);
   assert.equal(calls.length, 2);
 });
@@ -271,7 +278,7 @@ test('pre-issued token skips login and supports custom Authorization prefix', as
     return responseOf(200, JSON.stringify({ code: 0, msg: 'success' }));
   });
 
-  const result = await handlers[METHOD_REQUEST_FULL]({ method: 'GET', path: '/api/v3/license' }, buildCtx({
+  const result = await invoke(METHOD_REQUEST_FULL, { method: 'GET', path: '/api/v3/license' }, buildCtx({
     bindings: { username: '', password: '', authHeaderPrefix: 'JWT' },
     secret: { token: TOKEN },
   }));
@@ -285,10 +292,10 @@ test('401 clears cached token, logs in again, and retries once', async () => {
   const host = await mock.start();
   try {
     const ctx = buildCtx({ bindings: { baseUrl: host } });
-    const first = await handlers[METHOD_GET_LICENSE_FULL]({}, ctx);
+    const first = await invoke(METHOD_GET_LICENSE_FULL, {}, ctx);
     assert.equal(JSON.parse(first.json_body).code, 0);
     mock.expireNextRequest();
-    const second = await handlers[METHOD_GET_LICENSE_FULL]({}, ctx);
+    const second = await invoke(METHOD_GET_LICENSE_FULL, {}, ctx);
     assert.equal(JSON.parse(second.json_body).code, 0);
     assert.equal(mock.loginCount, 2);
   } finally {
@@ -331,7 +338,7 @@ test('concurrent requests share one login for the same instance', async () => {
   try {
     const ctx = buildCtx({ bindings: { baseUrl: host }, meta: { instance_id: 'ips-concurrent-login' } });
 
-    const results = await Promise.all(Array.from({ length: 5 }, () => handlers[METHOD_GET_LICENSE_FULL]({}, ctx)));
+    const results = await Promise.all(Array.from({ length: 5 }, () => invoke(METHOD_GET_LICENSE_FULL, {}, ctx)));
 
     for (const result of results) assert.equal(JSON.parse(result.json_body).code, 0);
     assert.equal(mock.loginCount, 1);
@@ -356,10 +363,10 @@ test('concurrent expired-token retries share one refresh login', async () => {
   });
 
   const ctx = buildCtx({ meta: { instance_id: 'ips-concurrent-refresh' } });
-  await handlers[METHOD_GET_LICENSE_FULL]({}, ctx);
+  await invoke(METHOD_GET_LICENSE_FULL, {}, ctx);
   expireToken = true;
 
-  const results = await Promise.all(Array.from({ length: 3 }, () => handlers[METHOD_GET_LICENSE_FULL]({}, ctx)));
+  const results = await Promise.all(Array.from({ length: 3 }, () => invoke(METHOD_GET_LICENSE_FULL, {}, ctx)));
 
   for (const result of results) assert.equal(JSON.parse(result.json_body).code, 0);
   assert.equal(loginCount, 2);
@@ -375,7 +382,7 @@ test('login failure errors do not include sensitive upstream fields', async () =
   })));
 
   await expectGrpcError(
-    () => handlers[METHOD_LOGIN_FULL]({}, buildCtx({ meta: { instance_id: 'ips-login-sanitize' } })),
+    () => invoke(METHOD_LOGIN_FULL, {}, buildCtx({ meta: { instance_id: 'ips-login-sanitize' } })),
     'UNAUTHENTICATED',
     (err) => {
       assert.match(err.message, /bad credentials/);
@@ -395,7 +402,7 @@ test('all named JSON endpoint handlers use the expected REST method and path', a
 
   for (const [method, expectedMethod, expectedPath, req] of jsonEndpointCases) {
     calls.length = 0;
-    const result = await handlers[method](req, buildCtx({
+    const result = await invoke(method, req, buildCtx({
       secret: { token: TOKEN },
       meta: { instance_id: `endpoint-${method.split('/').at(-1)}` },
     }));
@@ -406,25 +413,30 @@ test('all named JSON endpoint handlers use the expected REST method and path', a
 });
 
 test('validation and upstream errors map to gRPC errors', async () => {
-  await expectGrpcError(() => handlers[METHOD_REQUEST_FULL]({ method: 'GET', path: '/api/v3/license' }, buildCtx({ bindings: { baseUrl: 'ips.example.com' } })), 'FAILED_PRECONDITION');
-  await expectGrpcError(() => handlers[METHOD_REQUEST_FULL]({ method: 'GET', path: '/api/v3/license' }, buildCtx({ bindings: { deviceType: '' } })), 'FAILED_PRECONDITION');
-  await expectGrpcError(() => handlers[METHOD_REQUEST_FULL]({ path: '/api/v3/license' }, buildCtx()), 'INVALID_ARGUMENT');
-  await expectGrpcError(() => handlers[METHOD_REQUEST_FULL]({ method: 'TRACE', path: '/api/v3/license' }, buildCtx()), 'INVALID_ARGUMENT');
-  await expectGrpcError(() => handlers[METHOD_REQUEST_FULL]({ method: 'GET', path: '/v1/license' }, buildCtx()), 'INVALID_ARGUMENT');
-  await expectGrpcError(() => handlers[METHOD_REQUEST_FULL]({ method: 'POST', path: '/api/v3/license', json_body: '{' }, buildCtx()), 'INVALID_ARGUMENT');
-  await expectGrpcError(() => handlers[METHOD_IMPORT_BACKUP_FULL]({ file_name: '', file_base64: '' }, buildCtx()), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => invoke(METHOD_REQUEST_FULL, { method: 'GET', path: '/api/v3/license' }, buildCtx({ bindings: { baseUrl: 'ips.example.com' } })), 'FAILED_PRECONDITION');
+  await expectGrpcError(() => invoke(METHOD_REQUEST_FULL, { method: 'GET', path: '/api/v3/license' }, buildCtx({ bindings: { deviceType: '' } })), 'FAILED_PRECONDITION');
+  await expectGrpcError(() => invoke(METHOD_REQUEST_FULL, { path: '/api/v3/license' }, buildCtx()), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => invoke(METHOD_REQUEST_FULL, { method: 'TRACE', path: '/api/v3/license' }, buildCtx()), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => invoke(METHOD_REQUEST_FULL, { method: 'GET', path: '/v1/license' }, buildCtx()), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => invoke(METHOD_REQUEST_FULL, { method: 'POST', path: '/api/v3/license', json_body: '{' }, buildCtx()), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => invoke(METHOD_IMPORT_BACKUP_FULL, { file_name: '', file_base64: '' }, buildCtx()), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => invoke(METHOD_IMPORT_BACKUP_FULL, { file_name: 'backup.tgz', file_base64: '***' }, buildCtx()), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => invoke(METHOD_IMPORT_BACKUP_FULL, {
+    file_name: 'backup.tgz',
+    file_base64: Buffer.alloc((16 * 1024 * 1024) + 1).toString('base64'),
+  }, buildCtx()), 'RESOURCE_EXHAUSTED');
 
   setFetch(async () => responseOf(200, JSON.stringify({ code: 401, msg: 'bad login' })));
-  await expectGrpcError(() => handlers[METHOD_REQUEST_FULL]({ method: 'GET', path: '/api/v3/license' }, buildCtx()), 'UNAUTHENTICATED');
+  await expectGrpcError(() => invoke(METHOD_REQUEST_FULL, { method: 'GET', path: '/api/v3/license' }, buildCtx()), 'UNAUTHENTICATED');
 
   setFetch(async () => responseOf(403, 'forbidden'));
-  await expectGrpcError(() => handlers[METHOD_REQUEST_FULL]({ method: 'GET', path: '/api/v3/license' }, buildCtx({ secret: { token: TOKEN } })), 'PERMISSION_DENIED');
+  await expectGrpcError(() => invoke(METHOD_REQUEST_FULL, { method: 'GET', path: '/api/v3/license' }, buildCtx({ secret: { token: TOKEN } })), 'PERMISSION_DENIED');
 
   setFetch(async () => responseOf(500, 'broken'));
-  await expectGrpcError(() => handlers[METHOD_REQUEST_FULL]({ method: 'GET', path: '/api/v3/license' }, buildCtx({ secret: { token: TOKEN } })), 'UNAVAILABLE');
+  await expectGrpcError(() => invoke(METHOD_REQUEST_FULL, { method: 'GET', path: '/api/v3/license' }, buildCtx({ secret: { token: TOKEN } })), 'UNAVAILABLE');
 
   setFetch(async () => { throw Object.assign(new Error('outer'), { cause: new Error('timeout') }); });
-  await expectGrpcError(() => handlers[METHOD_REQUEST_FULL]({ method: 'GET', path: '/api/v3/license' }, buildCtx({ secret: { token: TOKEN } })), 'UNAVAILABLE', (err) => assert.match(err.message, /timeout/));
+  await expectGrpcError(() => invoke(METHOD_REQUEST_FULL, { method: 'GET', path: '/api/v3/license' }, buildCtx({ secret: { token: TOKEN } })), 'UNAVAILABLE', (err) => assert.match(err.message, /timeout/));
 });
 
 test('service definition handlers accept SDK HandlerContext', async () => {
@@ -457,6 +469,9 @@ test('helper functions cover request parsing and configuration behavior', () => 
   assert.equal(_test.sha256Hex(PASSWORD), PASSWORD_SHA256);
   assert.equal(_test.normalizeBaseUrl(' https://ips.example.com/ '), 'https://ips.example.com');
   assert.equal(_test.normalizeBaseUrl('ips.example.com'), '');
+  assert.equal(_test.normalizeBaseUrl('https://user:password@ips.example.com'), '');
+  assert.equal(_test.normalizeBaseUrl('https://ips.example.com?token=secret'), '');
+  assert.equal(_test.normalizeBaseUrl('ftp://ips.example.com'), '');
   assert.deepEqual(_test.parseJsonBody(''), {});
   assert.deepEqual(_test.parseJsonBody('{"a":1}'), { a: 1 });
   assert.equal(_test.requestIdOf({ requestId: 123 }), '123');
@@ -469,4 +484,88 @@ test('helper functions cover request parsing and configuration behavior', () => 
     secret: { passwordSha256: PASSWORD_SHA256 },
     bindings: { username: 'binding-user' },
   }).passwordSha256, PASSWORD_SHA256);
+});
+
+test('HTTP transport enforces manual redirects, timeout, TLS policy, and response limits', async () => {
+  const seen = [];
+  setFetch(async (_url, init) => {
+    seen.push(init);
+    return {
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      arrayBuffer: async () => Buffer.from('{"ok":true}'),
+    };
+  });
+  const result = await invoke(METHOD_REQUEST_FULL, {
+    method: 'GET',
+    path: '/api/v3/license',
+  }, buildCtx({
+    bindings: { skipTlsVerify: true, timeoutMs: 1234 },
+    secret: { token: TOKEN },
+  }));
+  assert.equal(JSON.parse(result.json_body).ok, true);
+  assert.equal(seen[0].redirect, 'manual');
+  assert.ok(seen[0].signal instanceof AbortSignal);
+  assert.ok(seen[0].dispatcher);
+
+  setFetch(async () => responseOf(200, 'too large', { 'content-length': '11' }));
+  await expectGrpcError(() => invoke(METHOD_REQUEST_FULL, {
+    method: 'GET', path: '/api/v3/license',
+  }, buildCtx({ bindings: { maxResponseBytes: 10 }, secret: { token: TOKEN } })), 'RESOURCE_EXHAUSTED');
+
+  setFetch(async () => ({
+    ...responseOf(200, ''),
+    arrayBuffer: async () => Buffer.from('eleven bytes'),
+  }));
+  await expectGrpcError(() => invoke(METHOD_REQUEST_FULL, {
+    method: 'GET', path: '/api/v3/license',
+  }, buildCtx({ bindings: { maxResponseBytes: 10 }, secret: { token: TOKEN } })), 'RESOURCE_EXHAUSTED');
+});
+
+test('upstream HTTP errors are mapped without leaking response bodies', async () => {
+  setFetch(async () => responseOf(400, 'password=secret-value'));
+  await expectGrpcError(() => invoke(METHOD_REQUEST_FULL, {
+    method: 'GET', path: '/api/v3/license',
+  }, buildCtx({ secret: { token: TOKEN } })), 'FAILED_PRECONDITION', (err) => {
+    assert.doesNotMatch(err.message, /secret-value/);
+    assert.match(err.message, /HTTP 400/);
+  });
+});
+
+test('session cache is bounded and evicts least recently used instances', async () => {
+  let loginCount = 0;
+  setFetch(async (url) => {
+    if (String(url).endsWith(LOGIN_PATH)) {
+      loginCount += 1;
+      return responseOf(200, JSON.stringify({ code: 0, data: { authorization: `token-${loginCount}` } }));
+    }
+    return responseOf(200, '{}', { 'content-type': 'application/json' });
+  });
+  for (let index = 0; index < 130; index += 1) {
+    await invoke(METHOD_HEALTH_CHECK_FULL, {}, buildCtx({ meta: { instance_id: `cache-${index}` } }));
+  }
+  assert.equal(_test.sessionCacheSize(), 128);
+});
+
+test('backup import retries once after an expired session and sanitizes failures', async () => {
+  let loginCount = 0;
+  let importCount = 0;
+  setFetch(async (url) => {
+    if (String(url).endsWith(LOGIN_PATH)) {
+      loginCount += 1;
+      return responseOf(200, JSON.stringify({ code: 0, data: { authorization: `token-${loginCount}` } }));
+    }
+    importCount += 1;
+    if (importCount === 1) return responseOf(401, 'expired');
+    return responseOf(500, 'internal-secret');
+  });
+  await expectGrpcError(() => invoke(METHOD_IMPORT_BACKUP_FULL, {
+    file_name: 'backup.tgz',
+    file_base64: Buffer.from('backup').toString('base64'),
+  }, buildCtx({ meta: { instance_id: 'backup-retry' } })), 'UNAVAILABLE', (err) => {
+    assert.doesNotMatch(err.message, /internal-secret/);
+  });
+  assert.equal(loginCount, 2);
+  assert.equal(importCount, 2);
 });

@@ -1,9 +1,11 @@
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
-import http from 'node:http';
-import https from 'node:https';
 
-import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import {
+  GrpcError,
+  grpcStatus,
+} from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const METHOD_HEALTH_CHECK_FULL = 'Venus_IPSV6079.IPSV6079Service/HealthCheck';
 export const METHOD_LOGIN_FULL = 'Venus_IPSV6079.IPSV6079Service/Login';
@@ -54,9 +56,13 @@ export const METHOD_DELETE_WHITE_POLICY_FULL = 'Venus_IPSV6079.IPSV6079Service/D
 export const LOGIN_PATH = '/api/v3/login';
 export const DEFAULT_TIMEOUT_MS = 8000;
 export const DEFAULT_AUTH_HEADER_PREFIX = 'Bearer';
+export const DEFAULT_MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
+export const MAX_BACKUP_UPLOAD_BYTES = 16 * 1024 * 1024;
+export const MAX_SESSION_CACHE_ENTRIES = 128;
 
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 const SESSION_CACHE = new Map();
+let insecureDispatcher;
 
 const JSON_ENDPOINTS = {
   [METHOD_GET_LICENSE_FULL]: { method: 'GET', path: '/api/v3/license' },
@@ -105,6 +111,7 @@ const grpcCodeFor = (code) => ({
   FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
   INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT,
   PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED,
+  RESOURCE_EXHAUSTED: grpcStatus.RESOURCE_EXHAUSTED,
   UNAUTHENTICATED: grpcStatus.UNAUTHENTICATED,
   UNAVAILABLE: grpcStatus.UNAVAILABLE,
   UNKNOWN: grpcStatus.UNKNOWN,
@@ -194,15 +201,24 @@ const resolveCallContext = (ctx = {}) => ({
 const normalizeBaseUrl = (rawUrl) => {
   const value = pickFirstString([rawUrl]);
   if (!value) return '';
-  const trimmed = value.replace(/\/+$/, '');
-  if (!/^https?:\/\//i.test(trimmed)) return '';
-  return trimmed;
+  try {
+    const url = new URL(value);
+    if (!['http:', 'https:'].includes(url.protocol)
+      || url.username || url.password || url.search || url.hash) return '';
+    return url.origin;
+  } catch {
+    return '';
+  }
 };
 
 const resolveTimeoutMs = (ctx = {}) => optionalPositiveNumber(ctx.bindings?.timeoutMs)
   ?? optionalPositiveNumber(ctx.bindings?.timeout_ms)
   ?? optionalPositiveNumber(ctx.limits?.timeoutMs)
   ?? DEFAULT_TIMEOUT_MS;
+
+const resolveMaxResponseBytes = (ctx = {}) => optionalPositiveNumber(ctx.bindings?.maxResponseBytes)
+  ?? optionalPositiveNumber(ctx.bindings?.max_response_bytes)
+  ?? DEFAULT_MAX_RESPONSE_BYTES;
 
 const buildSessionKey = (ctx, env) => [
   pickFirstString([
@@ -244,6 +260,7 @@ const buildEnv = (ctx = {}) => {
     token,
     authHeaderPrefix: pickFirstString([bindings.authHeaderPrefix, bindings.auth_header_prefix]) || DEFAULT_AUTH_HEADER_PREFIX,
     timeoutMs: resolveTimeoutMs(callCtx),
+    maxResponseBytes: resolveMaxResponseBytes(callCtx),
     headers: sanitizeHeaders(bindings.headers),
     skipTlsVerify: pickBoolean(bindings.skipTlsVerify) || pickBoolean(bindings.tlsInsecureSkipVerify) || false,
   };
@@ -317,35 +334,6 @@ const applyAuthHeaders = (headers, env, token) => {
   headers['Device-Type'] = env.deviceType;
 };
 
-const fetchWithInsecureTls = (url, options = {}) => new Promise((resolve, reject) => {
-  const target = url instanceof URL ? url : new URL(String(url));
-  const client = target.protocol === 'https:' ? https : http;
-  const req = client.request(target, {
-    method: options.method,
-    headers: options.headers,
-    rejectUnauthorized: target.protocol === 'https:' ? false : undefined,
-    timeout: options.timeoutMs,
-  }, (res) => {
-    const chunks = [];
-    res.on('data', (chunk) => chunks.push(chunk));
-    res.on('end', () => {
-      const body = Buffer.concat(chunks);
-      const status = res.statusCode || 0;
-      resolve({
-        ok: status >= 200 && status < 300,
-        status,
-        headers: responseHeaders(res.headers),
-        text: async () => body.toString('utf8'),
-        arrayBuffer: async () => body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
-      });
-    });
-  });
-  req.on('timeout', () => req.destroy(new Error('request timed out')));
-  req.on('error', reject);
-  if (options.body !== undefined) req.write(options.body);
-  req.end();
-});
-
 const doFetch = async (env, options) => {
   const headers = {
     ...(options.body instanceof FormData ? {} : { 'content-type': 'application/json' }),
@@ -356,21 +344,37 @@ const doFetch = async (env, options) => {
   const fetchOptions = {
     method: options.method,
     headers,
-    timeoutMs: env.timeoutMs,
+    redirect: 'manual',
+    signal: AbortSignal.timeout(env.timeoutMs),
   };
   if (options.body !== undefined) fetchOptions.body = options.body;
+  if (env.skipTlsVerify) {
+    insecureDispatcher ??= new Agent({ connect: { rejectUnauthorized: false } });
+    fetchOptions.dispatcher = insecureDispatcher;
+  }
   try {
-    if (env.skipTlsVerify && options.url?.protocol === 'https:') {
-      return await fetchWithInsecureTls(options.url, fetchOptions);
-    }
     return await fetch(options.url, fetchOptions);
   } catch (err) {
     throw errorWithCode('UNAVAILABLE', `${options.action || 'request'} failed: ${err?.cause?.message || err?.message || 'fetch failed'}`);
   }
 };
 
-const parseJsonResponse = async (response, action) => {
-  const text = await response.text();
+const readBoundedBuffer = async (response, env) => {
+  const declared = Number(response.headers?.get?.('content-length'));
+  if (Number.isFinite(declared) && declared > env.maxResponseBytes) {
+    throw errorWithCode('RESOURCE_EXHAUSTED', 'upstream response exceeds configured size limit');
+  }
+  const bytes = typeof response.arrayBuffer === 'function'
+    ? Buffer.from(await response.arrayBuffer())
+    : Buffer.from(await response.text(), 'utf8');
+  if (bytes.length > env.maxResponseBytes) {
+    throw errorWithCode('RESOURCE_EXHAUSTED', 'upstream response exceeds configured size limit');
+  }
+  return bytes;
+};
+
+const parseJsonResponse = async (response, action, env) => {
+  const text = (await readBoundedBuffer(response, env)).toString('utf8');
   if (!text.trim()) return {};
   try {
     return JSON.parse(text);
@@ -379,24 +383,18 @@ const parseJsonResponse = async (response, action) => {
   }
 };
 
-const readRestResponse = async (response, requestId = '') => {
+const readRestResponse = async (response, env, requestId = '') => {
   const headers = headersToObject(response.headers);
   const contentType = headers['content-type'] || headers['Content-Type'] || '';
+  const body = await readBoundedBuffer(response, env);
   if (isJsonContentType(contentType)) {
-    const text = await response.text();
     return {
       status_code: response.status,
       headers,
-      json_body: text || 'null',
+      json_body: body.toString('utf8') || 'null',
       raw_body_base64: '',
       request_id: requestId,
     };
-  }
-  let body;
-  if (typeof response.arrayBuffer === 'function') {
-    body = Buffer.from(await response.arrayBuffer());
-  } else {
-    body = Buffer.from(await response.text(), 'utf8');
   }
   return {
     status_code: response.status,
@@ -431,11 +429,26 @@ const safeLoginFailureMessage = (json = {}) => {
   return message || (code ? `code ${code}` : 'unknown error');
 };
 
-const getSession = (env) => SESSION_CACHE.get(env.sessionKey);
+const getSession = (env) => {
+  const session = SESSION_CACHE.get(env.sessionKey);
+  if (session) {
+    SESSION_CACHE.delete(env.sessionKey);
+    SESSION_CACHE.set(env.sessionKey, session);
+  }
+  return session;
+};
+
+const setSession = (key, session) => {
+  SESSION_CACHE.delete(key);
+  SESSION_CACHE.set(key, session);
+  while (SESSION_CACHE.size > MAX_SESSION_CACHE_ENTRIES) {
+    SESSION_CACHE.delete(SESSION_CACHE.keys().next().value);
+  }
+};
 
 const setSessionToken = (env, token) => {
   if (!env.sessionKey || !token) return;
-  SESSION_CACHE.set(env.sessionKey, { token });
+  setSession(env.sessionKey, { token });
 };
 
 const login = async (env) => {
@@ -447,7 +460,7 @@ const login = async (env) => {
     action: 'login',
     body: JSON.stringify({ username: env.username, password: env.passwordSha256 }),
   });
-  const json = await parseJsonResponse(response, 'login');
+  const json = await parseJsonResponse(response, 'login', env);
   if (!response.ok || (json.code !== undefined && Number(json.code) !== 0)) {
     throw errorWithCode('UNAUTHENTICATED', `login failed: ${safeLoginFailureMessage(json)}`);
   }
@@ -464,7 +477,7 @@ const getAuthToken = async (env) => {
   if (session?.loginPromise) return session.loginPromise;
 
   const loginPromise = login(env).then((result) => result.authorization);
-  SESSION_CACHE.set(env.sessionKey, { loginPromise });
+  setSession(env.sessionKey, { loginPromise });
   try {
     return await loginPromise;
   } finally {
@@ -509,14 +522,14 @@ const executeRestRequest = async (env, req = {}, { retry = true } = {}) => {
   });
   if ((response.status === 401 || response.status === 403) && retry && !env.token) {
     clearSession(env, token);
-    await response.text();
+    await readBoundedBuffer(response, env);
     return executeRestRequest(env, req, { retry: false });
   }
   if (!response.ok) {
-    const text = await response.text();
-    throw errorWithCode(mapHttpStatus(response.status), `request upstream http ${response.status}: ${text}`);
+    await readBoundedBuffer(response, env);
+    throw errorWithCode(mapHttpStatus(response.status), `request upstream returned HTTP ${response.status}`);
   }
-  return readRestResponse(response, requestIdOf(req));
+  return readRestResponse(response, env, requestIdOf(req));
 };
 
 const endpointPath = (endpoint, req = {}) => {
@@ -572,11 +585,17 @@ const executeBackupImport = async (env, req = {}, { retry = true } = {}) => {
   const fileBase64 = pickFirstString([req.file_base64, req.fileBase64]);
   if (!fileName) throw errorWithCode('INVALID_ARGUMENT', 'file_name is required');
   if (!fileBase64) throw errorWithCode('INVALID_ARGUMENT', 'file_base64 is required');
-  let bytes;
-  try {
-    bytes = Buffer.from(fileBase64, 'base64');
-  } catch {
+  const compactBase64 = fileBase64.replace(/\s+/g, '');
+  if (compactBase64.length > Math.ceil(MAX_BACKUP_UPLOAD_BYTES / 3) * 4) {
+    throw errorWithCode('RESOURCE_EXHAUSTED', 'backup file exceeds the 16 MiB upload limit');
+  }
+  const bytes = Buffer.from(compactBase64, 'base64');
+  const canonical = (value) => value.replace(/=+$/, '');
+  if (canonical(bytes.toString('base64')) !== canonical(compactBase64)) {
     throw errorWithCode('INVALID_ARGUMENT', 'file_base64 must be valid base64');
+  }
+  if (bytes.length > MAX_BACKUP_UPLOAD_BYTES) {
+    throw errorWithCode('RESOURCE_EXHAUSTED', 'backup file exceeds the 16 MiB upload limit');
   }
   const form = new FormData();
   form.append('filename', new Blob([bytes]), fileName);
@@ -590,14 +609,14 @@ const executeBackupImport = async (env, req = {}, { retry = true } = {}) => {
   });
   if ((response.status === 401 || response.status === 403) && retry && !env.token) {
     clearSession(env, token);
-    await response.text();
+    await readBoundedBuffer(response, env);
     return executeBackupImport(env, req, { retry: false });
   }
   if (!response.ok) {
-    const text = await response.text();
-    throw errorWithCode(mapHttpStatus(response.status), `backup import upstream http ${response.status}: ${text}`);
+    await readBoundedBuffer(response, env);
+    throw errorWithCode(mapHttpStatus(response.status), `backup import upstream returned HTTP ${response.status}`);
   }
-  const rest = await readRestResponse(response, requestIdOf(req));
+  const rest = await readRestResponse(response, env, requestIdOf(req));
   return {
     json_body: rest.json_body,
     request_id: rest.request_id,
@@ -605,10 +624,15 @@ const executeBackupImport = async (env, req = {}, { retry = true } = {}) => {
 };
 
 const envFor = (ctx = {}) => buildEnv(ctx);
-
-const runWithEnv = (req = {}, ctx = {}, executor) => executor(envFor(ctx), req);
-
-const makeJsonHandler = (methodFull) => (req = {}, ctx = {}) => runWithEnv(req, ctx, (env) => executeJsonEndpoint(env, req, JSON_ENDPOINTS[methodFull]));
+const requestFor = (ctx = {}) => ctx.request ?? ctx.req ?? {};
+const runWithEnv = (ctx = {}, executor) => {
+  const req = requestFor(ctx);
+  return executor(envFor(ctx), req);
+};
+const makeHandler = (executor) => (ctx = {}) => runWithEnv(ctx, executor);
+const makeJsonHandler = (methodFull) => makeHandler(
+  (env, req) => executeJsonEndpoint(env, req, JSON_ENDPOINTS[methodFull]),
+);
 
 const fullToPath = (methodFull) => `/${methodFull}`;
 
@@ -634,11 +658,11 @@ export function rpcdef(ctx = {}) {
 }
 
 export const handlers = {
-  [METHOD_HEALTH_CHECK_FULL]: (req, ctx = {}) => runWithEnv(req, ctx, (env) => executeHealthCheck(env)),
-  [METHOD_LOGIN_FULL]: (req, ctx = {}) => runWithEnv(req, ctx, (env) => executeLogin(env)),
-  [METHOD_REQUEST_FULL]: (req, ctx = {}) => runWithEnv(req, ctx, (env) => executeRestRequest(env, req)),
-  [METHOD_EXPORT_BACKUP_FULL]: (req, ctx = {}) => runWithEnv(req, ctx, (env) => executeBackupExport(env, req)),
-  [METHOD_IMPORT_BACKUP_FULL]: (req, ctx = {}) => runWithEnv(req, ctx, (env) => executeBackupImport(env, req)),
+  [METHOD_HEALTH_CHECK_FULL]: makeHandler((env) => executeHealthCheck(env)),
+  [METHOD_LOGIN_FULL]: makeHandler((env) => executeLogin(env)),
+  [METHOD_REQUEST_FULL]: makeHandler((env, req) => executeRestRequest(env, req)),
+  [METHOD_EXPORT_BACKUP_FULL]: makeHandler((env, req) => executeBackupExport(env, req)),
+  [METHOD_IMPORT_BACKUP_FULL]: makeHandler((env, req) => executeBackupImport(env, req)),
   ...Object.fromEntries(Object.keys(JSON_ENDPOINTS).map((method) => [method, makeJsonHandler(method)])),
 };
 
@@ -666,5 +690,6 @@ export const _test = {
   parseJsonBody,
   requestIdOf,
   sanitizeHeaders,
+  sessionCacheSize: () => SESSION_CACHE.size,
   sha256Hex,
 };

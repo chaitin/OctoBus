@@ -5,6 +5,7 @@
   "properties": {
     "baseUrl": {
       "type": "string",
+      "format": "uri",
       "description": "IPSV6079 REST base URL, for example https://192.0.2.10."
     },
     "restBaseUrl": {
@@ -41,6 +42,12 @@
       "minimum": 1,
       "default": 8000,
       "description": "HTTP timeout in milliseconds."
+    },
+    "maxResponseBytes": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 4194304,
+      "description": "Maximum accepted upstream response body size in bytes."
     },
     "skipTlsVerify": {
       "type": "boolean",
