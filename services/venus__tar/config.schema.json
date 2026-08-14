@@ -5,6 +5,7 @@
   "properties": {
     "baseUrl": {
       "type": "string",
+      "format": "uri",
       "description": "Venus TAR REST base URL."
     },
     "restBaseUrl": {
@@ -46,6 +47,12 @@
       "minimum": 1,
       "default": 8000,
       "description": "HTTP timeout in milliseconds."
+    },
+    "maxResponseBytes": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 4194304,
+      "description": "Maximum accepted upstream response body size in bytes."
     },
     "skipTlsVerify": {
       "type": "boolean",

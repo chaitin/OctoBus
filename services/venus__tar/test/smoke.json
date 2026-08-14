@@ -1,0 +1,8 @@
+{
+  "method": "Venus_TAR.TARService/ListAssets",
+  "request": {
+    "jsonBody": "{}",
+    "requestId": "l2-smoke"
+  },
+  "expectUpstream": true
+}

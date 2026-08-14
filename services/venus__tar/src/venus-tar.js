@@ -1,21 +1,8 @@
 import { Buffer } from 'node:buffer';
-import http from 'node:http';
-import https from 'node:https';
+import { createHash } from 'node:crypto';
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
-
-export const METHOD_HEALTH_CHECK_PATH = '/Venus_TAR.TARService/HealthCheck';
-export const METHOD_LOGIN_PATH = '/Venus_TAR.TARService/Login';
-export const METHOD_LOGOUT_PATH = '/Venus_TAR.TARService/Logout';
-export const METHOD_GET_CURRENT_USER_PATH = '/Venus_TAR.TARService/GetCurrentUser';
-export const METHOD_REQUEST_PATH = '/Venus_TAR.TARService/Request';
-export const METHOD_GET_DASHBOARD_OVERVIEW_PATH = '/Venus_TAR.TARService/GetDashboardOverview';
-export const METHOD_GET_ALARM_TOTAL_PATH = '/Venus_TAR.TARService/GetAlarmTotal';
-export const METHOD_LIST_EVENT_LOGS_PATH = '/Venus_TAR.TARService/ListEventLogs';
-export const METHOD_LIST_ASSETS_PATH = '/Venus_TAR.TARService/ListAssets';
-export const METHOD_GET_ASSET_BY_ID_PATH = '/Venus_TAR.TARService/GetAssetById';
-export const METHOD_GET_PCAP_DETAIL_PATH = '/Venus_TAR.TARService/GetPcapDetail';
-export const METHOD_TRACK_PCAP_FLOW_PATH = '/Venus_TAR.TARService/TrackPcapFlow';
+import { Agent } from 'undici';
 
 export const METHOD_HEALTH_CHECK_FULL = 'Venus_TAR.TARService/HealthCheck';
 export const METHOD_LOGIN_FULL = 'Venus_TAR.TARService/Login';
@@ -37,6 +24,8 @@ export const CURRENT_USER_PATH = '/user/info';
 export const DEFAULT_TIMEOUT_MS = 8000;
 export const DEFAULT_FORM_STATE = '1';
 export const DEFAULT_API_PREFIX = '/tar';
+export const DEFAULT_MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
+export const MAX_SESSION_CACHE_ENTRIES = 128;
 
 const CORE_ENDPOINTS = {
   [METHOD_GET_DASHBOARD_OVERVIEW_FULL]: { method: 'POST', path: '/dashboard/overview' },
@@ -49,12 +38,14 @@ const CORE_ENDPOINTS = {
 };
 
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
-const ENV_CACHE = new WeakMap();
+const SESSION_CACHE = new Map();
+let insecureDispatcher;
 
 const grpcCodeFor = (code) => ({
   FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
   INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT,
   PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED,
+  RESOURCE_EXHAUSTED: grpcStatus.RESOURCE_EXHAUSTED,
   UNAUTHENTICATED: grpcStatus.UNAUTHENTICATED,
   UNAVAILABLE: grpcStatus.UNAVAILABLE,
   UNKNOWN: grpcStatus.UNKNOWN,
@@ -153,9 +144,14 @@ const resolveCallContext = (ctx = {}) => ({
 const normalizeBaseUrl = (rawUrl) => {
   const value = pickFirstString([rawUrl]);
   if (!value) return '';
-  const trimmed = value.replace(/\/+$/, '');
-  if (!/^https?:\/\//i.test(trimmed)) return '';
-  return trimmed;
+  try {
+    const url = new URL(value);
+    if (!['http:', 'https:'].includes(url.protocol)
+      || url.username || url.password || url.search || url.hash) return '';
+    return url.origin;
+  } catch {
+    return '';
+  }
 };
 
 const normalizeApiPrefix = (rawPrefix) => {
@@ -174,6 +170,17 @@ const resolveTimeoutMs = (ctx = {}) => optionalPositiveNumber(ctx.bindings?.time
   ?? optionalPositiveNumber(ctx.limits?.timeoutMs)
   ?? DEFAULT_TIMEOUT_MS;
 
+const resolveMaxResponseBytes = (ctx = {}) => optionalPositiveNumber(ctx.bindings?.maxResponseBytes)
+  ?? DEFAULT_MAX_RESPONSE_BYTES;
+
+const buildSessionKey = (ctx, env) => [
+  pickFirstString([ctx.instanceId, ctx.instance_id, ctx.meta?.instance_id, ctx.meta?.instanceId]) || 'default-instance',
+  env.baseUrl,
+  env.apiPrefix,
+  env.username || '',
+  createHash('sha256').update(env.password || '').digest('hex'),
+].join('\u001f');
+
 const buildEnv = (ctx = {}) => {
   const callCtx = resolveCallContext(ctx);
   const bindings = callCtx.bindings || {};
@@ -186,7 +193,7 @@ const buildEnv = (ctx = {}) => {
   if (!token && !cookie && (!username || !password)) {
     throw errorWithCode('FAILED_PRECONDITION', 'token/cookie or username/password is required');
   }
-  return {
+  const env = {
     baseUrl,
     username,
     password,
@@ -197,10 +204,11 @@ const buildEnv = (ctx = {}) => {
     checkCode: pickFirstString([bindings.checkCode]),
     codeKey: pickFirstString([bindings.codeKey]),
     timeoutMs: resolveTimeoutMs(callCtx),
+    maxResponseBytes: resolveMaxResponseBytes(callCtx),
     headers: sanitizeHeaders(bindings.headers),
     skipTlsVerify: pickFirstBoolean([bindings.skipTlsVerify, bindings.tlsInsecureSkipVerify]) || false,
-    session: { token: '', cookie: '' },
   };
+  return { ...env, sessionKey: buildSessionKey(callCtx, env) };
 };
 
 const requestIdOf = (req = {}) => pickFirstString([req.request_id, req.requestId]) || '';
@@ -233,6 +241,25 @@ const extractCookie = (headers) => {
   if (!setCookie) return '';
   return setCookie.split(';')[0] || '';
 };
+
+const getSession = (env) => {
+  const session = SESSION_CACHE.get(env.sessionKey);
+  if (session) {
+    SESSION_CACHE.delete(env.sessionKey);
+    SESSION_CACHE.set(env.sessionKey, session);
+  }
+  return session;
+};
+
+const setSession = (key, session) => {
+  SESSION_CACHE.delete(key);
+  SESSION_CACHE.set(key, session);
+  while (SESSION_CACHE.size > MAX_SESSION_CACHE_ENTRIES) {
+    SESSION_CACHE.delete(SESSION_CACHE.keys().next().value);
+  }
+};
+
+const clearSessionCache = () => SESSION_CACHE.clear();
 
 const isJsonContentType = (contentType) => String(contentType || '').toLowerCase().includes('json');
 
@@ -281,47 +308,6 @@ const applyAuthHeaders = (headers, auth = {}) => {
   if (auth.cookie) headers.Cookie = auth.cookie;
 };
 
-const responseHeaders = (headers = {}) => {
-  const normalized = {};
-  for (const [key, value] of Object.entries(headers)) {
-    normalized[String(key).toLowerCase()] = Array.isArray(value) ? value.join(', ') : String(value ?? '');
-  }
-  return {
-    get: (key) => normalized[String(key).toLowerCase()] || '',
-    forEach: (fn) => {
-      for (const [key, value] of Object.entries(normalized)) fn(value, key);
-    },
-  };
-};
-
-const fetchWithInsecureTls = (url, options = {}) => new Promise((resolve, reject) => {
-  const target = url instanceof URL ? url : new URL(String(url));
-  const client = target.protocol === 'https:' ? https : http;
-  const req = client.request(target, {
-    method: options.method,
-    headers: options.headers,
-    rejectUnauthorized: target.protocol === 'https:' ? false : undefined,
-    timeout: options.timeoutMs,
-  }, (res) => {
-    const chunks = [];
-    res.on('data', (chunk) => chunks.push(chunk));
-    res.on('end', () => {
-      const body = Buffer.concat(chunks);
-      const status = res.statusCode || 0;
-      resolve({
-        ok: status >= 200 && status < 300,
-        status,
-        headers: responseHeaders(res.headers),
-        text: async () => body.toString('utf8'),
-      });
-    });
-  });
-  req.on('timeout', () => req.destroy(new Error('request timed out')));
-  req.on('error', reject);
-  if (options.body !== undefined) req.write(options.body);
-  req.end();
-});
-
 const doFetch = async (env, options) => {
   const headers = {
     'content-type': 'application/json',
@@ -332,31 +318,43 @@ const doFetch = async (env, options) => {
   const fetchOptions = {
     method: options.method,
     headers,
-    timeoutMs: env.timeoutMs,
+    redirect: 'manual',
+    signal: AbortSignal.timeout(env.timeoutMs),
   };
   if (options.body !== undefined) fetchOptions.body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
   if (env.skipTlsVerify) {
-    fetchOptions.insecureSkipVerify = true;
-    fetchOptions.tlsInsecureSkipVerify = true;
+    insecureDispatcher ??= new Agent({ connect: { rejectUnauthorized: false } });
+    fetchOptions.dispatcher = insecureDispatcher;
   }
   try {
-    if (env.skipTlsVerify && options.url?.protocol === 'https:') {
-      return await fetchWithInsecureTls(options.url, fetchOptions);
-    }
     return await fetch(options.url, fetchOptions);
   } catch (err) {
     throw errorWithCode('UNAVAILABLE', `${options.action || 'request'} failed: ${err?.cause?.message || err?.message || 'fetch failed'}`);
   }
 };
 
-const readRestResponse = async (response, requestId = '') => {
+const readBoundedBuffer = async (response, env) => {
+  const declared = Number(response.headers?.get?.('content-length'));
+  if (Number.isFinite(declared) && declared > env.maxResponseBytes) {
+    throw errorWithCode('RESOURCE_EXHAUSTED', 'upstream response exceeds configured size limit');
+  }
+  const bytes = typeof response.arrayBuffer === 'function'
+    ? Buffer.from(await response.arrayBuffer())
+    : Buffer.from(await response.text(), 'utf8');
+  if (bytes.length > env.maxResponseBytes) {
+    throw errorWithCode('RESOURCE_EXHAUSTED', 'upstream response exceeds configured size limit');
+  }
+  return bytes;
+};
+
+const readRestResponse = async (response, env, requestId = '') => {
   const headers = headersToObject(response.headers);
-  const text = await response.text();
+  const body = await readBoundedBuffer(response, env);
   if (isJsonContentType(headers['content-type'])) {
     return {
       status_code: response.status,
       headers,
-      json_body: text || 'null',
+      json_body: body.toString('utf8') || 'null',
       raw_body_base64: '',
       request_id: requestId,
     };
@@ -365,22 +363,22 @@ const readRestResponse = async (response, requestId = '') => {
     status_code: response.status,
     headers,
     json_body: '',
-    raw_body_base64: Buffer.from(text).toString('base64'),
+    raw_body_base64: body.toString('base64'),
     request_id: requestId,
   };
 };
 
-const ensureOk = async (response, action) => {
+const ensureOk = async (response, env, action) => {
   if (response.ok) return;
-  const text = await response.text();
-  throw errorWithCode(mapHttpStatus(response.status), `${action} upstream http ${response.status}: ${text}`);
+  await readBoundedBuffer(response, env);
+  throw errorWithCode(mapHttpStatus(response.status), `${action} upstream returned HTTP ${response.status}`);
 };
 
 const requestJson = async (env, { method = 'GET', path, query, body, auth, headers, action = 'request', apiPrefix = true }) => {
   const url = apiPrefix ? buildApiUrl(env, path, query) : buildUrl(env, path, query);
   const response = await doFetch(env, { url, method, body, auth, headers, action });
-  await ensureOk(response, action);
-  const text = await response.text();
+  await ensureOk(response, env, action);
+  const text = (await readBoundedBuffer(response, env)).toString('utf8');
   if (!text.trim()) return {};
   try {
     return JSON.parse(text);
@@ -415,9 +413,9 @@ const login = async (env, req = {}) => {
       codeKey,
     },
   });
-  await ensureOk(response, 'login');
+  await ensureOk(response, env, 'login');
   const cookie = extractCookie(response.headers);
-  const text = await response.text();
+  const text = (await readBoundedBuffer(response, env)).toString('utf8');
   let json = {};
   if (text.trim()) {
     try {
@@ -428,22 +426,32 @@ const login = async (env, req = {}) => {
   }
   const code = json.code ?? json.result;
   if (code !== undefined && String(code) !== '0' && String(code).toLowerCase() !== 'success') {
-    throw errorWithCode('UNAUTHENTICATED', `login failed: ${text}`);
+    const message = pickFirstString([json.msg, json.message]);
+    throw errorWithCode('UNAUTHENTICATED', `login failed${message ? `: ${message}` : ''}`);
   }
   const token = extractToken(json);
   if (!token && !cookie) throw errorWithCode('UNAUTHENTICATED', 'login did not return token or cookie');
-  env.session = { token: token || '', cookie };
+  setSession(env.sessionKey, { token: token || '', cookie });
   return { token: token || '', cookie, message: pickString(json.msg) || pickString(json.message) || 'login ok' };
 };
 
 const getAuth = async (env, req = {}) => {
   if (env.token || env.cookie) return { token: env.token || '', cookie: env.cookie || '' };
-  if (env.session?.token || env.session?.cookie) return env.session;
-  return login(env, req);
+  const session = getSession(env);
+  if (session?.token || session?.cookie) return session;
+  if (session?.loginPromise) return session.loginPromise;
+  const loginPromise = login(env, req);
+  setSession(env.sessionKey, { loginPromise });
+  try {
+    return await loginPromise;
+  } finally {
+    const current = getSession(env);
+    if (current?.loginPromise === loginPromise) SESSION_CACHE.delete(env.sessionKey);
+  }
 };
 
 const clearSession = (env) => {
-  env.session = { token: '', cookie: '' };
+  if (!env.token && !env.cookie) SESSION_CACHE.delete(env.sessionKey);
 };
 
 const executeRestRequest = async (env, req = {}, { retry = true } = {}) => {
@@ -465,14 +473,14 @@ const executeRestRequest = async (env, req = {}, { retry = true } = {}) => {
   });
   if ((response.status === 401 || response.status === 403) && retry && !env.token && !env.cookie) {
     clearSession(env);
-    await response.text();
+    await readBoundedBuffer(response, env);
     return executeRestRequest(env, req, { retry: false });
   }
   if (!response.ok) {
-    const text = await response.text();
-    throw errorWithCode(mapHttpStatus(response.status), `request upstream http ${response.status}: ${text}`);
+    await readBoundedBuffer(response, env);
+    throw errorWithCode(mapHttpStatus(response.status), `request upstream returned HTTP ${response.status}`);
   }
-  return readRestResponse(response, requestIdOf(req));
+  return readRestResponse(response, env, requestIdOf(req));
 };
 
 const executeJsonEndpoint = async (env, req = {}, endpoint) => {
@@ -516,49 +524,22 @@ const executeLogout = async (env) => {
 
 const executeCurrentUser = async (env, req = {}) => executeJsonEndpoint(env, req, { method: 'GET', path: CURRENT_USER_PATH });
 
-const cachedEnvFor = (ctx = {}) => {
-  if (!ctx || typeof ctx !== 'object') return buildEnv(ctx);
-  const cached = ENV_CACHE.get(ctx);
-  if (cached) return cached;
-  const env = buildEnv(ctx);
-  ENV_CACHE.set(ctx, env);
-  return env;
+const requestFor = (ctx = {}) => ctx.request ?? ctx.req ?? {};
+const runWithEnv = (ctx = {}, executor) => {
+  const req = requestFor(ctx);
+  return executor(buildEnv(ctx), req);
 };
-
-const runWithEnv = (req = {}, ctx = {}, executor) => executor(cachedEnvFor(ctx), req);
-
-const makeJsonHandler = (methodFull) => (req = {}, ctx = {}) => runWithEnv(req, ctx, (env) => executeJsonEndpoint(env, req, CORE_ENDPOINTS[methodFull]));
-
-export function rpcdef(ctx = {}) {
-  const callCtx = resolveCallContext(ctx);
-  let cachedEnv;
-  const resolveEnv = () => {
-    if (!cachedEnv) cachedEnv = buildEnv(callCtx);
-    return cachedEnv;
-  };
-  const getReq = (incoming) => ({ ...(callCtx.req || {}), ...(incoming || {}) });
-  return {
-    [METHOD_HEALTH_CHECK_PATH]: async (req) => executeHealthCheck(resolveEnv(), getReq(req)),
-    [METHOD_LOGIN_PATH]: async (req) => executeLogin(resolveEnv(), getReq(req)),
-    [METHOD_LOGOUT_PATH]: async (req) => executeLogout(resolveEnv(), getReq(req)),
-    [METHOD_GET_CURRENT_USER_PATH]: async (req) => executeCurrentUser(resolveEnv(), getReq(req)),
-    [METHOD_REQUEST_PATH]: async (req) => executeRestRequest(resolveEnv(), getReq(req)),
-    [METHOD_GET_DASHBOARD_OVERVIEW_PATH]: async (req) => executeJsonEndpoint(resolveEnv(), getReq(req), CORE_ENDPOINTS[METHOD_GET_DASHBOARD_OVERVIEW_FULL]),
-    [METHOD_GET_ALARM_TOTAL_PATH]: async (req) => executeJsonEndpoint(resolveEnv(), getReq(req), CORE_ENDPOINTS[METHOD_GET_ALARM_TOTAL_FULL]),
-    [METHOD_LIST_EVENT_LOGS_PATH]: async (req) => executeJsonEndpoint(resolveEnv(), getReq(req), CORE_ENDPOINTS[METHOD_LIST_EVENT_LOGS_FULL]),
-    [METHOD_LIST_ASSETS_PATH]: async (req) => executeJsonEndpoint(resolveEnv(), getReq(req), CORE_ENDPOINTS[METHOD_LIST_ASSETS_FULL]),
-    [METHOD_GET_ASSET_BY_ID_PATH]: async (req) => executeJsonEndpoint(resolveEnv(), getReq(req), CORE_ENDPOINTS[METHOD_GET_ASSET_BY_ID_FULL]),
-    [METHOD_GET_PCAP_DETAIL_PATH]: async (req) => executeJsonEndpoint(resolveEnv(), getReq(req), CORE_ENDPOINTS[METHOD_GET_PCAP_DETAIL_FULL]),
-    [METHOD_TRACK_PCAP_FLOW_PATH]: async (req) => executeJsonEndpoint(resolveEnv(), getReq(req), CORE_ENDPOINTS[METHOD_TRACK_PCAP_FLOW_FULL]),
-  };
-}
+const makeHandler = (executor) => (ctx = {}) => runWithEnv(ctx, executor);
+const makeJsonHandler = (methodFull) => makeHandler(
+  (env, req) => executeJsonEndpoint(env, req, CORE_ENDPOINTS[methodFull]),
+);
 
 export const handlers = {
-  [METHOD_HEALTH_CHECK_FULL]: (req, ctx = {}) => runWithEnv(req, ctx, (env) => executeHealthCheck(env)),
-  [METHOD_LOGIN_FULL]: (req, ctx = {}) => runWithEnv(req, ctx, (env) => executeLogin(env, req)),
-  [METHOD_LOGOUT_FULL]: (req, ctx = {}) => runWithEnv(req, ctx, (env) => executeLogout(env)),
-  [METHOD_GET_CURRENT_USER_FULL]: (req, ctx = {}) => runWithEnv(req, ctx, (env) => executeCurrentUser(env, req)),
-  [METHOD_REQUEST_FULL]: (req, ctx = {}) => runWithEnv(req, ctx, (env) => executeRestRequest(env, req)),
+  [METHOD_HEALTH_CHECK_FULL]: makeHandler((env) => executeHealthCheck(env)),
+  [METHOD_LOGIN_FULL]: makeHandler((env, req) => executeLogin(env, req)),
+  [METHOD_LOGOUT_FULL]: makeHandler((env) => executeLogout(env)),
+  [METHOD_GET_CURRENT_USER_FULL]: makeHandler((env, req) => executeCurrentUser(env, req)),
+  [METHOD_REQUEST_FULL]: makeHandler((env, req) => executeRestRequest(env, req)),
   [METHOD_GET_DASHBOARD_OVERVIEW_FULL]: makeJsonHandler(METHOD_GET_DASHBOARD_OVERVIEW_FULL),
   [METHOD_GET_ALARM_TOTAL_FULL]: makeJsonHandler(METHOD_GET_ALARM_TOTAL_FULL),
   [METHOD_LIST_EVENT_LOGS_FULL]: makeJsonHandler(METHOD_LIST_EVENT_LOGS_FULL),
@@ -571,9 +552,9 @@ export const handlers = {
 export const _test = {
   buildEnv,
   buildApiUrl,
-  cachedEnvFor,
   buildUrl,
   clearSession,
+  clearSessionCache,
   doFetch,
   errorWithCode,
   executeCurrentUser,
@@ -605,6 +586,7 @@ export const _test = {
   resolveCallContext,
   resolveTimeoutMs,
   sanitizeHeaders,
+  sessionCacheSize: () => SESSION_CACHE.size,
   stringifyJson,
   unwrapScalar,
 };
