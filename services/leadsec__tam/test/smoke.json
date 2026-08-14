@@ -1,0 +1,9 @@
+{
+  "method": "Leadsec_TAM.LeadsecTAMService/AddBlacklist",
+  "request": {
+    "ipList": ["192.0.2.10"],
+    "remark": "OctoBus smoke",
+    "requestId": "smoke-request"
+  },
+  "expectUpstream": true
+}
