@@ -30,9 +30,6 @@ jobs:
 
       - name: Install system dependencies
         run: |
-          # The hosted runner includes this optional third-party source.  It is
-          # unrelated to the gate, and its mirror can be briefly inconsistent.
-          sudo rm -f /etc/apt/sources.list.d/google-chrome.list
           sudo apt-get update
           sudo apt-get install -y protobuf-compiler
 
