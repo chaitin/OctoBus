@@ -575,3 +575,161 @@ test('requestWithDefaults merges bindings with request overrides', async () => {
   const defaultsOnly = mod._test.requestWithDefaults(bindings, {});
   assert.equal(defaultsOnly.machine_id, 'default-machine');
 });
+
+test('camelCase filters and false values are preserved', async () => {
+  const mod = await importModule();
+  mod._test.clearJwtCache();
+  const saved = global.fetch;
+  let requestUrl = '';
+  mockFetch(async (url) => {
+    if (url.includes('/v1/watchers/login')) return new Response(JSON.stringify({ token: 'jwt' }), { status: 200 });
+    requestUrl = url;
+    return new Response('[]', { status: 200 });
+  });
+  await invokeRpc(mod, METHOD_LIST_ALERTS, { hasActiveDecision: false, decisionType: 'ban' }, { bindings: { endpoint: 'http://localhost:18080', machineId: 'm', password: 'p' } });
+  assert.match(requestUrl, /has_active_decision=false/);
+  assert.match(requestUrl, /decision_type=ban/);
+  await invokeRpc(mod, METHOD_LIST_DECISIONS, { scenariosContaining: 'ssh', scenariosNotContaining: 'http' }, { bindings: { endpoint: 'http://localhost:18080', apiKey: 'key' } });
+  assert.match(requestUrl, /scenarios_containing=ssh/);
+  assert.match(requestUrl, /scenarios_not_containing=http/);
+  restoreFetch(saved);
+});
+
+test('rejects unsafe endpoint forms and clamps timeout', async () => {
+  const mod = await importModule();
+  for (const endpoint of ['file:///tmp/socket', 'https://user:pass@example.test', 'not a url']) {
+    assert.throws(() => mod._test.getEndpoint({ endpoint }), { code: 3 });
+  }
+  assert.equal(mod._test.getTimeout({ limits: { timeoutMs: 999999 } }), 120000);
+  assert.equal(mod._test.getTimeout({ limits: { timeoutMs: -1 } }), 5000);
+  assert.equal(mod._test.getTimeout({ bindings: { timeoutMs: 1234 } }), 1234);
+});
+
+test('TLS override only creates a dispatcher for HTTPS', async () => {
+  const mod = await importModule();
+  assert.deepEqual(mod._test.buildTlsOptions(false, 'https://example.test'), {});
+  assert.deepEqual(mod._test.buildTlsOptions(true, 'http://example.test'), {});
+  assert.ok(mod._test.buildTlsOptions(true, 'https://example.test').dispatcher);
+});
+
+test('response reader rejects oversized, invalid JSON and accepts empty bodies', async () => {
+  const mod = await importModule();
+  await assert.rejects(() => mod._test.readResponse(new Response('', { headers: { 'content-length': String(11 * 1024 * 1024) } })), { code: 8 });
+  await assert.rejects(() => mod._test.readResponse(new Response('not-json')), { code: 14 });
+  assert.equal(await mod._test.readResponse(new Response('  ')), null);
+  assert.deepEqual(await mod._test.readResponse(new Response('{"ok":true}')), { ok: true });
+});
+
+test('network failures, timeouts and missing login tokens are sanitized', async () => {
+  const mod = await importModule();
+  const saved = global.fetch;
+  mod._test.clearJwtCache();
+  mockFetch(async () => { throw new Error('secret=https://user:pass@example.test'); });
+  await assert.rejects(() => invokeRpc(mod, METHOD_LIST_ALERTS, {}, { bindings: { endpoint: 'http://localhost:18080', machineId: 'm1', password: 'p' } }), { code: 14 });
+
+  mod._test.clearJwtCache();
+  mockFetch(async () => new Response('{}', { status: 200 }));
+  await assert.rejects(() => invokeRpc(mod, METHOD_LIST_ALERTS, {}, { bindings: { endpoint: 'http://localhost:18080', machineId: 'm2', password: 'p' } }), { code: 16 });
+
+  mod._test.clearJwtCache();
+  mockFetch((_url, opts) => new Promise((_resolve, reject) => opts.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })))));
+  await assert.rejects(() => invokeRpc(mod, METHOD_LIST_ALERTS, {}, { limits: { timeoutMs: 1 }, bindings: { endpoint: 'http://localhost:18080', machineId: 'm3', password: 'p' } }), { code: 4 });
+  restoreFetch(saved);
+});
+
+test('BlockIP reports successful mutation even when follow-up read fails', async () => {
+  const mod = await importModule();
+  mod._test.clearJwtCache();
+  const saved = global.fetch;
+  mockFetch(async (url, opts) => {
+    if (url.includes('/v1/watchers/login')) return new Response(JSON.stringify({ token: 'jwt' }), { status: 200 });
+    if (opts.method === 'POST') return new Response('[42]', { status: 200 });
+    return new Response('{"message":"temporary"}', { status: 503 });
+  });
+  const result = await invokeRpc(mod, METHOD_BLOCK_IP, { targetIp: '192.0.2.1' }, { bindings: { endpoint: 'http://localhost:18080', machineId: 'm', password: 'p' } });
+  assert.deepEqual(result, { alert_id: 42, uuid: '', decision: {} });
+  restoreFetch(saved);
+});
+
+test('BlockIP handles empty create response and UnblockIP range/other scopes', async () => {
+  const mod = await importModule();
+  mod._test.clearJwtCache();
+  const saved = global.fetch;
+  let urls = [];
+  mockFetch(async (url, opts) => {
+    if (url.includes('/v1/watchers/login')) return new Response(JSON.stringify({ token: 'jwt' }), { status: 200 });
+    urls.push(url);
+    if (opts.method === 'POST') return new Response('null', { status: 200 });
+    return new Response('{"nbDeleted":"1"}', { status: 200 });
+  });
+  assert.equal((await invokeRpc(mod, METHOD_BLOCK_IP, { target_ip: '192.0.2.1' }, { bindings: { endpoint: 'http://localhost:18080', machineId: 'm', password: 'p' } })).alert_id, 0);
+  await invokeRpc(mod, METHOD_UNBLOCK_IP, { target_ip: '192.0.2.0/24', scope: 'range' }, { bindings: { endpoint: 'http://localhost:18080', machineId: 'm', password: 'p' } });
+  await invokeRpc(mod, METHOD_UNBLOCK_IP, { target_ip: 'example', scope: 'user' }, { bindings: { endpoint: 'http://localhost:18080', machineId: 'm', password: 'p' } });
+  assert.ok(urls.some((url) => url.includes('range=192.0.2.0%2F24')));
+  assert.ok(urls.some((url) => url.includes('scope=user') && url.includes('value=example')));
+  restoreFetch(saved);
+});
+
+test('SDK handler uses the single-context ABI', async () => {
+  const mod = await importModule();
+  const saved = global.fetch;
+  mockFetch(async () => new Response('[]', { status: 200 }));
+  const result = await mod.handlers[mod.METHOD_LIST_DECISIONS_FULL]({ request: {}, bindings: { endpoint: 'http://localhost:18080', apiKey: 'key' } });
+  assert.deepEqual(result, { decisions: [] });
+  restoreFetch(saved);
+});
+
+test('HTTP status mapping covers authorization and generic client errors', async () => {
+  const mod = await importModule();
+  assert.equal(mod._test.mapHttpStatus(403, {}).code, 7);
+  assert.equal(mod._test.mapHttpStatus(404, {}).code, 9);
+  assert.equal(mod._test.mapHttpStatus(418, {}).code, 9);
+  assert.equal(mod._test.mapHttpStatus(200, {}), null);
+});
+
+test('JWT cache reuses a valid token and refreshes an expired token', async () => {
+  const mod = await importModule();
+  const saved = global.fetch;
+  mod._test.clearJwtCache();
+  let calls = 0;
+  const token = (exp) => `x.${Buffer.from(JSON.stringify({ exp })).toString('base64url')}.x`;
+  mockFetch(async () => { calls++; return new Response(JSON.stringify({ token: token(Math.floor(Date.now() / 1000) + 3600) }), { status: 200 }); });
+  const first = await mod._test.getJwtToken('http://localhost', 'cache-user', 'p', 1000, false);
+  assert.equal(await mod._test.getJwtToken('http://localhost', 'cache-user', 'p', 1000, false), first);
+  assert.equal(calls, 1);
+  mod._test.clearJwtCache();
+  mockFetch(async () => { calls++; return new Response(JSON.stringify({ token: token(1) }), { status: 200 }); });
+  await mod._test.getJwtToken('http://localhost', 'expired-user', 'p', 1000, false);
+  await mod._test.getJwtToken('http://localhost', 'expired-user', 'p', 1000, false);
+  assert.equal(calls, 3);
+  restoreFetch(saved);
+});
+
+test('direct request helper covers auth validation, redirects and API timeouts', async () => {
+  const mod = await importModule();
+  const args = { bindings: {}, timeout: 5, skipTls: false };
+  await assert.rejects(() => mod._test.crowdsecFetch('http://localhost', '/x', { ...args, authType: 'apiKey', req: {} }), { code: 3 });
+  const saved = global.fetch;
+  mockFetch(async () => new Response('', { status: 302 }));
+  await assert.rejects(() => mod._test.crowdsecFetch('http://localhost', '/x', { ...args, authType: 'apiKey', req: { api_key: 'k' } }), { code: 2 });
+  mockFetch((_url, opts) => new Promise((_resolve, reject) => {
+    opts.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+  }));
+  await assert.rejects(() => mod._test.crowdsecFetch('http://localhost', '/x', { ...args, authType: 'apiKey', req: { api_key: 'k' } }), { code: 4 });
+  mockFetch(async () => { throw new Error('credential=hidden'); });
+  const error = await mod._test.crowdsecFetch('http://localhost', '/x', { ...args, authType: 'apiKey', req: { api_key: 'k' } }).catch((err) => err);
+  assert.equal(error.code, 14);
+  assert.doesNotMatch(error.message, /credential=hidden/);
+  restoreFetch(saved);
+});
+
+test('response mappers tolerate sparse upstream objects', async () => {
+  const mod = await importModule();
+  assert.deepEqual(mod._test.mapAlert(null), {});
+  const alert = mod._test.mapAlert({ events: [null, {}], decisions: [null, {}], meta: [{}], source: {} });
+  assert.equal(alert.id, 0);
+  assert.equal(alert.events.length, 2);
+  assert.equal(alert.decisions.length, 2);
+  assert.equal(alert.source.latitude, 0);
+  assert.equal(mod._test.mapDecision({ simulated: true }).simulated, true);
+});

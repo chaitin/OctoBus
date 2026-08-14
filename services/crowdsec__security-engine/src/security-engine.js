@@ -3,8 +3,11 @@
 // Secret: machineId + password (JWT auth), apiKey (Bouncer API Key auth)
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 const DEFAULT_TIMEOUT_MS = 5000;
+const MAX_TIMEOUT_MS = 120000;
+const MAX_RESPONSE_BYTES = 10 * 1024 * 1024;
 const DEFAULT_BLOCK_DURATION = '4h';
 const DEFAULT_DECISION_TYPE = 'ban';
 const DEFAULT_SCOPE = 'ip';
@@ -33,6 +36,7 @@ const grpcCodeFor = (code) => ({
   UNAUTHENTICATED: grpcStatus.UNAUTHENTICATED,
   UNAVAILABLE: grpcStatus.UNAVAILABLE,
   DEADLINE_EXCEEDED: grpcStatus.DEADLINE_EXCEEDED,
+  RESOURCE_EXHAUSTED: grpcStatus.RESOURCE_EXHAUSTED,
 })[code] ?? grpcStatus.UNKNOWN;
 
 const errorWithCode = (code, message) => {
@@ -95,10 +99,19 @@ const mergeCtx = (base, inner) => {
 const getEndpoint = (bindings) => {
   const ep = bindings.endpoint || bindings.restBaseUrl || bindings.baseUrl;
   if (!ep) throw errorWithCode('INVALID_ARGUMENT', 'endpoint is required in config');
-  return ep.replace(/\/+$/, '');
+  try {
+    const parsed = new URL(String(ep));
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) throw new Error('unsafe URL');
+    return parsed.toString().replace(/\/+$/, '');
+  } catch {
+    throw errorWithCode('INVALID_ARGUMENT', 'endpoint must be an HTTP(S) URL without embedded credentials');
+  }
 };
 
-const getTimeout = (ctx) => ctx?.limits?.timeoutMs || DEFAULT_TIMEOUT_MS;
+const getTimeout = (ctx) => {
+  const value = Number(firstDefined(ctx?.limits?.timeoutMs, ctx?.bindings?.timeoutMs, DEFAULT_TIMEOUT_MS));
+  return Number.isFinite(value) && value > 0 ? Math.min(Math.floor(value), MAX_TIMEOUT_MS) : DEFAULT_TIMEOUT_MS;
+};
 
 const getSkipTlsVerify = (bindings) => Boolean(bindings.skipTlsVerify || bindings.tlsInsecureSkipVerify);
 
@@ -116,7 +129,23 @@ const requestWithDefaults = (bindings, req = {}) => {
 
 // OctoBus runtime wraps global.fetch and recognizes these TLS skip options;
 // they are NOT silently ignored as with bare Node.js native fetch (undici).
-const buildTlsOptions = (skipTls) => skipTls ? { insecureSkipVerify: true, tlsInsecureSkipVerify: true } : {};
+let insecureDispatcher;
+const buildTlsOptions = (skipTls, url = '') => {
+  if (!skipTls || !String(url).startsWith('https:')) return {};
+  insecureDispatcher ??= new Agent({ connect: { rejectUnauthorized: false } });
+  return { dispatcher: insecureDispatcher };
+};
+
+const readResponse = async (res) => {
+  const declaredLength = Number(res.headers?.get?.('content-length') || 0);
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_RESPONSE_BYTES) {
+    throw errorWithCode('RESOURCE_EXHAUSTED', 'upstream response is too large');
+  }
+  const text = await res.text();
+  if (Buffer.byteLength(text) > MAX_RESPONSE_BYTES) throw errorWithCode('RESOURCE_EXHAUSTED', 'upstream response is too large');
+  if (!text.trim()) return null;
+  try { return JSON.parse(text); } catch { throw errorWithCode('UNAVAILABLE', 'upstream returned invalid JSON'); }
+};
 
 // ── JWT auth ───────────────────────────────────────────────────────────────
 
@@ -143,21 +172,19 @@ const getJwtToken = async (endpoint, machineId, password, timeout, skipTls) => {
       headers: { 'Content-Type': 'application/json', 'User-Agent': 'crowdsec-octobus/v1.0' },
       body: loginBody,
       signal: controller.signal,
-      ...buildTlsOptions(skipTls),
+      redirect: 'error',
+      ...buildTlsOptions(skipTls, url),
     });
     clearTimeout(timer);
-    const resBody = await res.text();
+    const data = await readResponse(res);
 
     if (!res.ok) {
-      let body = {};
-      try { body = JSON.parse(resBody); } catch { /* not JSON, use empty */ }
-      const mapped = mapHttpStatus(res.status, body);
+      const mapped = mapHttpStatus(res.status, data);
       if (mapped) throw mapped;
       throw errorWithCode('UNAUTHENTICATED', `login failed: ${res.status}`);
     }
 
-    const data = JSON.parse(resBody);
-    const token = data.token;
+    const token = data?.token;
     if (!token) throw errorWithCode('UNAUTHENTICATED', 'login response missing token');
 
     let expiresAt = now + 3600_000;
@@ -172,7 +199,7 @@ const getJwtToken = async (endpoint, machineId, password, timeout, skipTls) => {
     clearTimeout(timer);
     if (err instanceof GrpcError) throw err;
     if (err.name === 'AbortError') throw errorWithCode('DEADLINE_EXCEEDED', 'login request timed out');
-    throw errorWithCode('UNAVAILABLE', `login network error: ${err.message}`);
+    throw errorWithCode('UNAVAILABLE', 'login upstream unavailable');
   }
 };
 
@@ -207,7 +234,7 @@ const crowdsecFetch = async (endpoint, path, { method = 'GET', query, body, auth
     headers['X-Api-Key'] = req.api_key;
   }
 
-  const fetchOpts = { method, headers, signal: undefined };
+  const fetchOpts = { method, headers, signal: undefined, redirect: 'error' };
   headers['User-Agent'] = 'crowdsec-octobus/v1.0';
   if (body) {
     headers['Content-Type'] = 'application/json';
@@ -219,12 +246,9 @@ const crowdsecFetch = async (endpoint, path, { method = 'GET', query, body, auth
   const timer = setTimeout(() => controller.abort(), timeout);
 
   try {
-    const res = await fetch(url, { ...fetchOpts, ...buildTlsOptions(skipTls) });
+    const res = await fetch(url, { ...fetchOpts, ...buildTlsOptions(skipTls, url) });
     clearTimeout(timer);
-
-    const contentType = res.headers.get('content-type') || '';
-    const isJson = contentType.includes('application/json');
-    const data = isJson ? await res.json() : null;
+    const data = await readResponse(res);
 
     if (!res.ok) {
       const mapped = mapHttpStatus(res.status, data);
@@ -237,7 +261,7 @@ const crowdsecFetch = async (endpoint, path, { method = 'GET', query, body, auth
     clearTimeout(timer);
     if (err instanceof GrpcError) throw err;
     if (err.name === 'AbortError') throw errorWithCode('DEADLINE_EXCEEDED', 'request timed out');
-    throw errorWithCode('UNAVAILABLE', `network error: ${err.message}`);
+    throw errorWithCode('UNAVAILABLE', 'upstream unavailable');
   }
 };
 
@@ -324,18 +348,13 @@ export function rpcdef(ctx) {
     [METHOD_LIST_ALERTS]: async () => {
       const req = requestWithDefaults(bindings, ctx.req);
       const query = {};
-      if (ctx.req?.scope) query.scope = ctx.req.scope;
-      if (ctx.req?.value) query.value = ctx.req.value;
-      if (ctx.req?.scenario) query.scenario = ctx.req.scenario;
-      if (ctx.req?.ip) query.ip = ctx.req.ip;
-      if (ctx.req?.range) query.range = ctx.req.range;
-      if (ctx.req?.since) query.since = ctx.req.since;
-      if (ctx.req?.until) query.until = ctx.req.until;
+      for (const name of ['scope', 'value', 'scenario', 'ip', 'range', 'since', 'until', 'origin']) if (ctx.req?.[name]) query[name] = ctx.req[name];
       if (ctx.req?.simulated !== undefined && ctx.req?.simulated !== null) query.simulated = String(ctx.req.simulated);
-      if (getReqField(ctx.req, "has_active_decision", "hasActiveDecision") !== undefined && getReqField(ctx.req, "has_active_decision", "hasActiveDecision") !== null) query.has_active_decision = String(ctx.req.has_active_decision);
-      if (getReqField(ctx.req, "decision_type", "decisionType")) query.decision_type = ctx.req.decision_type;
+      const hasActiveDecision = getReqField(ctx.req, 'has_active_decision', 'hasActiveDecision');
+      if (hasActiveDecision !== undefined && hasActiveDecision !== null) query.has_active_decision = String(hasActiveDecision);
+      const decisionType = getReqField(ctx.req, 'decision_type', 'decisionType');
+      if (decisionType) query.decision_type = decisionType;
       if (ctx.req?.limit) query.limit = String(ctx.req.limit);
-      if (ctx.req?.origin) query.origin = ctx.req.origin;
 
       const data = await doFetch('/v1/alerts', { method: 'GET', query, authType: 'jwt', req, bindings });
       const alerts = Array.isArray(data) ? data : [];
@@ -364,8 +383,10 @@ export function rpcdef(ctx) {
       if (ctx.req?.range) query.range = ctx.req.range;
       if (ctx.req?.contains !== undefined && ctx.req?.contains !== null) query.contains = String(ctx.req.contains);
       if (ctx.req?.origins) query.origins = ctx.req.origins;
-      if (getReqField(ctx.req, "scenarios_containing", "scenariosContaining")) query.scenarios_containing = ctx.req.scenarios_containing;
-      if (getReqField(ctx.req, "scenarios_not_containing", "scenariosNotContaining")) query.scenarios_not_containing = ctx.req.scenarios_not_containing;
+      const scenariosContaining = getReqField(ctx.req, 'scenarios_containing', 'scenariosContaining');
+      const scenariosNotContaining = getReqField(ctx.req, 'scenarios_not_containing', 'scenariosNotContaining');
+      if (scenariosContaining) query.scenarios_containing = scenariosContaining;
+      if (scenariosNotContaining) query.scenarios_not_containing = scenariosNotContaining;
 
       const data = await doFetch('/v1/decisions', { method: 'GET', query, authType, req, bindings });
       const decisions = Array.isArray(data) ? data : [];
@@ -427,8 +448,15 @@ export function rpcdef(ctx) {
       const alertId = parseInt(alertIdStr, 10) || 0;
 
       // Fetch the full alert to get uuid and decision details
-      const fullAlert = await doFetch(`/v1/alerts/${alertId}`, { method: 'GET', authType: 'jwt', req, bindings });
-      const firstDecision = (fullAlert?.decisions && fullAlert.decisions[0]) ? mapDecision(fullAlert.decisions[0]) : {};
+      let fullAlert;
+      try {
+        fullAlert = await doFetch(`/v1/alerts/${alertId}`, { method: 'GET', authType: 'jwt', req, bindings });
+      } catch {
+        // The mutation has already succeeded. Returning its stable identifier avoids
+        // encouraging a retry that could create a duplicate decision.
+        return { alert_id: alertId, uuid: '', decision: {} };
+      }
+      const firstDecision = fullAlert?.decisions?.[0] ? mapDecision(fullAlert.decisions[0]) : {};
       return {
         alert_id: alertId,
         uuid: fullAlert?.uuid || '',
@@ -507,6 +535,9 @@ export const handlers = {
 
 export const _test = {
   buildTlsOptions,
+  getEndpoint,
+  getTimeout,
+  readResponse,
   errorWithCode,
   getReqField,
   mergedBindings,
@@ -515,6 +546,9 @@ export const _test = {
   rpcdef,
   mapAlert,
   mapDecision,
+  mapHttpStatus,
+  crowdsecFetch,
+  getJwtToken,
   requestWithDefaults,
   clearJwtCache: () => jwtCacheMap.clear(),
 };
