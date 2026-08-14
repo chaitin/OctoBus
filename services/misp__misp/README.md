@@ -27,7 +27,7 @@ Uses API key authentication via `Authorization` header. Obtain your API key from
 |-------|---------|-------------|
 | `endpoint` | (required) | MISP instance base URL, e.g. `https://misp.example.com` |
 | `timeoutMs` | `10000` | HTTP request timeout (ms) |
-| `skipTlsVerify` | `false` | Skip TLS verification for private instances |
+| `skipTlsVerify` | `false` | Skip TLS verification for a trusted private instance; this uses an isolated per-service TLS dispatcher |
 
 ### Secret (sensitive fields)
 
@@ -42,7 +42,7 @@ Both `snake_case` (`api_key`) and `camelCase` (`apiKey`) field names are accepte
 ## Import
 
 ```bash
-octobus service import --id misp ./services//misp__misp
+octobus service import --id misp ./services/misp__misp
 ```
 
 ## RPC Methods
@@ -89,7 +89,7 @@ octobus service import --id misp ./services//misp__misp
 |-----------|------|----------|-------------|
 | `info` | string | Yes | Event description |
 | `date` | string | No | Event date (default: today) |
-| `threat_level_id` | int64 | No | 1=Low, 2=Medium, 3=High, 4=Critical |
+| `threat_level_id` | int64 | No | 1=High, 2=Medium, 3=Low, 4=Undefined |
 | `analysis` | int64 | No | 0=Initial, 1=Ongoing, 2=Completed |
 | `published` | bool | No | Publish status |
 | `distribution` | int64 | No | 0=Your org, 1=Community, 2=Connected, 3=All |

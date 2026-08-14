@@ -66,7 +66,7 @@ message EventRecord {
   string date = 3;
   // 发布状态
   bool published = 4;
-  // 威胁等级：1=低, 2=中, 3=高, 4=致命
+  // 威胁等级：1=High, 2=Medium, 3=Low, 4=Undefined
   int32 threat_level_id = 5;
   // 分析阶段：0=初始, 1=进行中, 2=已完成
   int32 analysis = 6;
@@ -103,7 +103,7 @@ message CreateEventRequest {
   string info = 1;
   // 事件日期，默认当天
   string date = 2;
-  // 威胁等级：1=低, 2=中, 3=高, 4=致命
+  // 威胁等级：1=High, 2=Medium, 3=Low, 4=Undefined
   google.protobuf.Int64Value threat_level_id = 3;
   // 分析阶段：0=初始, 1=进行中, 2=已完成
   google.protobuf.Int64Value analysis = 4;

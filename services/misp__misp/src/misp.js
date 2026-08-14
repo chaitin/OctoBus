@@ -4,11 +4,19 @@
 // Endpoint: configurable (https://misp-instance.example.com)
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 // ── Constants ──────────────────────────────────────────────
 
 const SERVICE_NAME = 'MISP';
 const DEFAULT_TIMEOUT_MS = 10000;
+
+let insecureTlsDispatcher;
+
+const getInsecureTlsDispatcher = () => {
+  insecureTlsDispatcher ??= new Agent({ connect: { rejectUnauthorized: false } });
+  return insecureTlsDispatcher;
+};
 
 // ── Method paths ───────────────────────────────────────────
 
@@ -33,6 +41,7 @@ const grpcCodeFor = (code) => ({
   FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
   PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED,
   UNAUTHENTICATED: grpcStatus.UNAUTHENTICATED,
+  NOT_FOUND: grpcStatus.NOT_FOUND,
   UNAVAILABLE: grpcStatus.UNAVAILABLE,
   DEADLINE_EXCEEDED: grpcStatus.DEADLINE_EXCEEDED,
   UNKNOWN: grpcStatus.UNKNOWN,
@@ -148,7 +157,25 @@ const resolveCredentials = (bindings = {}) => {
 const resolveEndpoint = (bindings = {}) => {
   const endpoint = toTrimmedString(firstDefined(bindings.endpoint));
   if (!endpoint) throw errorWithCode('FAILED_PRECONDITION', 'binding "endpoint" is required but not configured');
+  let parsed;
+  try {
+    parsed = new URL(endpoint);
+  } catch {
+    throw errorWithCode('FAILED_PRECONDITION', 'binding "endpoint" must be a valid HTTP(S) URL');
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) {
+    throw errorWithCode('FAILED_PRECONDITION', 'binding "endpoint" must be an HTTP(S) URL without embedded credentials');
+  }
   return endpoint.replace(/\/+$/, '');
+};
+
+const isTimeoutError = (err) => {
+  const seen = new Set();
+  for (let current = err; current && !seen.has(current); current = current.cause) {
+    seen.add(current);
+    if (current.name === 'TimeoutError' || current.name === 'AbortError' || current.code === 'UND_ERR_CONNECT_TIMEOUT') return true;
+  }
+  return false;
 };
 
 // ── API call ────────────────────────────────────────────────
@@ -176,29 +203,11 @@ const callMisp = async (ctx, method, path, body, queryParams) => {
     'x-request-id': meta.request_id || meta.requestId || 'unknown',
   };
 
-  // OctoBus runtime wraps globalThis.fetch and recognizes these TLS skip options.
-  // In bare Node.js (undici), these options are silently ignored, so TLS skip
-  // relies on the OctoBus daemon setting NODE_TLS_REJECT_UNAUTHORIZED=0 before
-  // process startup.
   const skipVerify = toBoolean(bindings.skipTlsVerify) || toBoolean(bindings.tlsInsecureSkipVerify);
-  const tlsOptions = skipVerify ? { insecureSkipVerify: true, tlsInsecureSkipVerify: true } : {};
-
-  // TLS skip must be configured at the process level (e.g. OctoBus daemon sets
-  // NODE_TLS_REJECT_UNAUTHORIZED=0 before spawning the subprocess), NOT by
-  // mutating process.env inside the handler. Mutating process.env is a global,
-  // irreversible side effect that disables TLS verification for the entire
-  // Node.js process — affecting all services, handlers, and even third-party
-  // library HTTPS calls. If different instances have different skipTlsVerify
-  // configs, one instance's skip would break another's security.
-  if (skipVerify && process.env.NODE_TLS_REJECT_UNAUTHORIZED !== '0') {
-    const inst = meta.instance_id || meta.instanceId || 'unknown';
-    console.warn(
-      `[${SERVICE_NAME}][TLS] skipTlsVerify=true but NODE_TLS_REJECT_UNAUTHORIZED is not set. ` +
-      `TLS certificate verification will NOT be skipped. ` +
-      `Set NODE_TLS_REJECT_UNAUTHORIZED=0 at process startup (e.g. via OctoBus daemon config) or export it before running. ` +
-      `[inst=${inst}]`,
-    );
-  }
+  // Node's fetch uses undici and supports its dispatcher extension. Keeping the
+  // insecure dispatcher local to this service avoids changing process-wide TLS
+  // policy or weakening requests issued by other service packages.
+  const tlsOptions = skipVerify ? { dispatcher: getInsecureTlsDispatcher() } : {};
 
   logFlow(meta, method + ':start', { path, body: body ? '(body)' : undefined });
 
@@ -212,8 +221,7 @@ const callMisp = async (ctx, method, path, body, queryParams) => {
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (err) {
-    const isTimeout = err?.name === 'TimeoutError' || err?.name === 'AbortError';
-    if (isTimeout) {
+    if (isTimeoutError(err)) {
       logFlow(meta, method + ':timeout', { timeoutMs });
       throw errorWithCode('DEADLINE_EXCEEDED', 'timeout after ' + timeoutMs + 'ms');
     }
@@ -222,33 +230,37 @@ const callMisp = async (ctx, method, path, body, queryParams) => {
     throw errorWithCode('UNAVAILABLE', 'upstream error: ' + reason);
   }
 
-  const text = await res.text();
-
-  // Log upstream response body server-side only (may contain sensitive data).
-  const logUpstreamBody = (status) => {
-    try { console.error(`[${SERVICE_NAME}] upstream http ${status}: ${String(text).slice(0, 500)}`); } catch { /* ignore */ }
-  };
+  let text;
+  try {
+    text = await res.text();
+  } catch (err) {
+    if (isTimeoutError(err)) {
+      throw errorWithCode('DEADLINE_EXCEEDED', 'timeout after ' + timeoutMs + 'ms');
+    }
+    throw errorWithCode('UNAVAILABLE', 'failed to read upstream response');
+  }
 
   if (res.status === 401) {
-    logUpstreamBody(res.status);
     logFlow(meta, method + ':unauthenticated', { status: res.status });
     throw errorWithCode('UNAUTHENTICATED', 'upstream returned ' + res.status);
   }
 
   if (res.status === 403) {
-    logUpstreamBody(res.status);
     logFlow(meta, method + ':auth-error', { status: res.status });
     throw errorWithCode('PERMISSION_DENIED', 'upstream returned ' + res.status);
   }
 
+  if (res.status === 404) {
+    logFlow(meta, method + ':not-found', { status: res.status });
+    throw errorWithCode('NOT_FOUND', 'upstream returned ' + res.status);
+  }
+
   if (res.status >= 400 && res.status < 500) {
-    logUpstreamBody(res.status);
     logFlow(meta, method + ':client-error', { status: res.status });
     throw errorWithCode('FAILED_PRECONDITION', 'upstream returned ' + res.status);
   }
 
   if (res.status >= 500) {
-    logUpstreamBody(res.status);
     logFlow(meta, method + ':server-error', { status: res.status });
     throw errorWithCode('UNAVAILABLE', 'upstream returned ' + res.status);
   }
@@ -266,9 +278,8 @@ const callMisp = async (ctx, method, path, body, queryParams) => {
 
   // MISP API error
   if (json?.errors && Object.keys(json.errors).length > 0) {
-    const msg = JSON.stringify(json.errors);
-    logFlow(meta, method + ':api-error', { errors: json.errors });
-    throw errorWithCode('FAILED_PRECONDITION', 'MISP API error: ' + msg);
+    logFlow(meta, method + ':api-error', { hasErrors: true });
+    throw errorWithCode('FAILED_PRECONDITION', 'MISP API returned an error');
   }
 
   logFlow(meta, method + ':done', {});
@@ -489,6 +500,8 @@ export const _test = {
   resolveCredentials,
   resolveEndpoint,
   resolveTimeoutMs,
+  isTimeoutError,
+  getInsecureTlsDispatcher,
   toBoolean,
   toInt64,
   toTrimmedString,

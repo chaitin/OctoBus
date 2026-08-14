@@ -433,14 +433,6 @@ const services = {
     entryFile: "../dbappsecurity__mingyu-waf/bin/dbappsecurity-mingyu-waf.js",
     serviceModule: "../dbappsecurity__mingyu-waf/src/service.js",
   },
-  "tencent-bh": {
-    entryFile: "../tencent__bh/bin/tencent-bh.js",
-    serviceModule: "../tencent__bh/src/service.js",
-  },
-  "alibaba-sas": {
-    entryFile: "../alibaba__sas/bin/alibaba-sas.js",
-    serviceModule: "../alibaba__sas/src/service.js",
-  },
   "misp": {
     entryFile: "../misp__misp/bin/misp.js",
     serviceModule: "../misp__misp/src/service.js",

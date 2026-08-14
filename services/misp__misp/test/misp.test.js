@@ -50,6 +50,30 @@ test('internal helpers work correctly', async () => {
   assert.equal(_test.firstDefined(undefined, 'a'), 'a');
 });
 
+test('internal helpers cover scalar, structured, and merged bindings', async () => {
+  const { _test } = await import('../src/misp.js');
+  assert.equal(_test.toInt64(''), null);
+  assert.equal(_test.toInt64('not-an-int'), null);
+  assert.equal(_test.toInt64(3.5), null);
+  assert.equal(_test.toInt64('42'), 42);
+  assert.equal(_test.toBoolean(null), false);
+  assert.equal(_test.toBoolean(0), false);
+  assert.equal(_test.toBoolean(1), true);
+  assert.equal(_test.toBoolean('yes'), true);
+  assert.equal(_test.toBoolean('no'), false);
+  assert.equal(_test.toBoolean('unexpected'), true);
+  assert.deepEqual(_test.toValue([undefined, 'x']), { listValue: { values: [{ stringValue: 'x' }] } });
+  assert.deepEqual(_test.toValue({ empty: null, flag: true }), {
+    structValue: { fields: { empty: { nullValue: 'NULL_VALUE' }, flag: { boolValue: true } } },
+  });
+  assert.deepEqual(_test.mergedBindings({ config: { a: 1 }, secret: { a: 2, b: 2 }, bindings: { a: 3 } }), { a: 3, b: 2 });
+  assert.equal(_test.resolveTimeoutMs({ timeoutMs: 20 }, { timeoutMs: 30 }), 20);
+  assert.equal(_test.resolveTimeoutMs({}, { timeoutMs: 30 }), 30);
+  assert.equal(_test.resolveTimeoutMs({}, {}), 10000);
+  assert.equal(_test.isTimeoutError({ cause: { code: 'UND_ERR_CONNECT_TIMEOUT' } }), true);
+  assert.equal(_test.isTimeoutError(new Error('not a timeout')), false);
+});
+
 // ── Credential resolution ─────────────────────────────────
 
 test('resolveCredentials validates api_key', async () => {
@@ -66,6 +90,9 @@ test('resolveEndpoint validates endpoint', async () => {
   assert.equal(_test.resolveEndpoint({ endpoint: 'https://misp.local' }), 'https://misp.local');
   assert.equal(_test.resolveEndpoint({ endpoint: 'https://misp.local/' }), 'https://misp.local');
   assert.throws(() => _test.resolveEndpoint({}), /endpoint/);
+  assert.throws(() => _test.resolveEndpoint({ endpoint: 'not-a-url' }), /HTTP\(S\)/);
+  assert.throws(() => _test.resolveEndpoint({ endpoint: 'file:///tmp/misp' }), /HTTP\(S\)/);
+  assert.throws(() => _test.resolveEndpoint({ endpoint: 'https://user:pass@misp.local' }), /without embedded credentials/);
 });
 
 // ── SearchEvents ──────────────────────────────────────────
@@ -111,6 +138,23 @@ test('SearchEvents with tags and metadata', async () => {
   assert.equal(captured.metadata, '1');
 });
 
+test('SearchEvents sends every optional filter when provided', async () => {
+  let captured;
+  setFetch(async (_url, init) => {
+    captured = JSON.parse(init.body);
+    return { ok: true, status: 200, headers: new Map(), text: async () => JSON.stringify({ response: [] }) };
+  });
+  const handler = await loadHandler({
+    value: 'ioc', type: ['domain'], category: ['Network activity'], tags: ['tlp:amber'], not_tags: ['tlp:red'],
+    org: 'ACME', from: '2026-01-01', to: '2026-01-02', last: '1d', limit: { value: 2 }, page: { value: 3 },
+    metadata: true, with_attachments: true,
+  }, searchEventsPath);
+  await handler();
+  assert.equal(captured.org, 'ACME');
+  assert.equal(captured.withAttachments, '1');
+  assert.equal(captured.page, '3');
+});
+
 test('SearchEvents handles empty response', async () => {
   mockUpstream({ response: [] });
   const handler = await loadHandler({}, searchEventsPath);
@@ -153,6 +197,17 @@ test('GetEvent fetches event details', async () => {
   assert.equal(res.attributes[0].value, '5.6.7.8');
 });
 
+test('GetEvent URL-encodes event_id', async () => {
+  let captured;
+  setFetch(async (url) => {
+    captured = url;
+    return { ok: true, status: 200, headers: new Map(), text: async () => JSON.stringify({ Event: {} }) };
+  });
+  const handler = await loadHandler({ event_id: '../other?x=1' }, getEventPath);
+  await handler();
+  assert.ok(captured.endsWith('/events/..%2Fother%3Fx%3D1'));
+});
+
 // ── CreateEvent ──────────────────────────────────────────
 
 test('CreateEvent requires info', async () => {
@@ -179,6 +234,17 @@ test('CreateEvent sends correct payload', async () => {
   assert.equal(res.event.info, 'new event');
 });
 
+test('CreateEvent includes every optional field', async () => {
+  let captured;
+  setFetch(async (_url, init) => {
+    captured = JSON.parse(init.body);
+    return { ok: true, status: 200, headers: new Map(), text: async () => JSON.stringify({ Event: {} }) };
+  });
+  const handler = await loadHandler({ info: 'event', date: '2026-01-01', threat_level_id: { value: 1 }, analysis: { value: 2 }, published: true, distribution: { value: 3 } }, createEventPath);
+  await handler();
+  assert.deepEqual(captured.Event, { info: 'event', date: '2026-01-01', threat_level_id: 1, analysis: 2, published: 1, distribution: 3 });
+});
+
 // ── SearchAttributes ──────────────────────────────────────
 
 test('SearchAttributes sends correct request', async () => {
@@ -202,6 +268,22 @@ test('SearchAttributes handles empty result', async () => {
   mockUpstream({ response: [] });
   const handler = await loadHandler({}, searchAttributesPath);
   assert.deepEqual((await handler()).items, []);
+});
+
+test('SearchAttributes sends every optional filter when provided', async () => {
+  let captured;
+  setFetch(async (_url, init) => {
+    captured = JSON.parse(init.body);
+    return { ok: true, status: 200, headers: new Map(), text: async () => JSON.stringify({ response: [] }) };
+  });
+  const handler = await loadHandler({
+    value: 'ioc', type: ['domain'], category: ['Network activity'], tags: ['tlp:amber'], not_tags: ['tlp:red'], event_id: '42',
+    from: '2026-01-01', to: '2026-01-02', last: '1d', limit: { value: 2 }, page: { value: 3 }, include_event: true, to_ids: true,
+  }, searchAttributesPath);
+  await handler();
+  assert.equal(captured.includeEventUuid, '1');
+  assert.equal(captured.to_ids, '1');
+  assert.equal(captured.page, '3');
 });
 
 // ── AddAttribute ─────────────────────────────────────────
@@ -232,6 +314,28 @@ test('AddAttribute sends correct payload', async () => {
   assert.equal(captured.Attribute.value, '1.2.3.4');
   assert.equal(captured.Attribute.type, 'ip-src');
   assert.equal(res.attribute.type, 'ip-src');
+});
+
+test('AddAttribute URL-encodes event_id', async () => {
+  let captured;
+  setFetch(async (url) => {
+    captured = url;
+    return { ok: true, status: 200, headers: new Map(), text: async () => JSON.stringify({ Attribute: {} }) };
+  });
+  const handler = await loadHandler({ event_id: '../other?x=1', value: '1.2.3.4', type: 'ip-src' }, addAttributePath);
+  await handler();
+  assert.ok(captured.endsWith('/attributes/add/..%2Fother%3Fx%3D1'));
+});
+
+test('AddAttribute includes every optional field', async () => {
+  let captured;
+  setFetch(async (_url, init) => {
+    captured = JSON.parse(init.body);
+    return { ok: true, status: 200, headers: new Map(), text: async () => JSON.stringify({ Attribute: {} }) };
+  });
+  const handler = await loadHandler({ event_id: '1', value: 'ioc', type: 'domain', category: 'Network activity', to_ids: true, distribution: { value: 2 }, comment: 'note' }, addAttributePath);
+  await handler();
+  assert.deepEqual(captured.Attribute, { value: 'ioc', type: 'domain', category: 'Network activity', to_ids: 1, distribution: 2, comment: 'note' });
 });
 
 // ── SearchTags ───────────────────────────────────────────
@@ -269,6 +373,14 @@ test('HTTP error codes mapped correctly', async () => {
   const h403 = await loadHandler({ event_id: '1' }, getEventPath);
   await assert.rejects(() => h403(), /PERMISSION_DENIED/);
 
+  setFetch(async () => ({ ok: false, status: 404, headers: new Map(), text: async () => 'Not found' }));
+  const h404 = await loadHandler({ event_id: '1' }, getEventPath);
+  await assert.rejects(() => h404(), /NOT_FOUND/);
+
+  setFetch(async () => ({ ok: false, status: 429, headers: new Map(), text: async () => 'Rate limited' }));
+  const h429 = await loadHandler({ event_id: '1' }, getEventPath);
+  await assert.rejects(() => h429(), /FAILED_PRECONDITION/);
+
   setFetch(async () => ({ ok: false, status: 500, headers: new Map(), text: async () => 'Error' }));
   const h500 = await loadHandler({ event_id: '1' }, getEventPath);
   await assert.rejects(() => h500(), /UNAVAILABLE/);
@@ -287,6 +399,11 @@ test('HTTP error codes mapped correctly', async () => {
 });
 
 test('HTTP error messages do not leak upstream body', async () => {
+  const messages = [];
+  const originalLog = console.log;
+  const originalError = console.error;
+  console.log = (...args) => messages.push(args.join(' '));
+  console.error = (...args) => messages.push(args.join(' '));
   setFetch(async () => ({ ok: false, status: 401, headers: new Map(), text: async () => 'secret-token-leaked' }));
   const h = await loadHandler({ event_id: '1' }, getEventPath);
   try {
@@ -295,7 +412,11 @@ test('HTTP error messages do not leak upstream body', async () => {
   } catch (e) {
     assert.ok(/UNAUTHENTICATED/.test(e.message));
     assert.ok(!e.message.includes('secret-token-leaked'), 'error message should not contain upstream body');
+  } finally {
+    console.log = originalLog;
+    console.error = originalError;
   }
+  assert.ok(messages.every((message) => !message.includes('secret-token-leaked')), 'logs should not contain upstream body');
 });
 
 test('MISP API errors handled', async () => {
@@ -308,6 +429,30 @@ test('Non-JSON and empty body handled', async () => {
   setFetch(async () => ({ ok: true, status: 200, headers: new Map(), text: async () => '' }));
   const h = await loadHandler({}, searchEventsPath);
   await assert.rejects(() => h(), /UNKNOWN: empty response/);
+  setFetch(async () => ({ ok: true, status: 200, headers: new Map(), text: async () => 'not-json' }));
+  const invalidJson = await loadHandler({}, searchEventsPath);
+  await assert.rejects(() => invalidJson(), /response is not valid JSON/);
+});
+
+test('response body read failures map to timeout and unavailable errors', async () => {
+  setFetch(async () => ({ ok: true, status: 200, headers: new Map(), text: async () => { const err = new Error('timeout'); err.name = 'AbortError'; throw err; } }));
+  const timeout = await loadHandler({}, searchEventsPath);
+  await assert.rejects(() => timeout(), /DEADLINE_EXCEEDED/);
+  setFetch(async () => ({ ok: true, status: 200, headers: new Map(), text: async () => { throw new Error('read failed'); } }));
+  const unavailable = await loadHandler({}, searchEventsPath);
+  await assert.rejects(() => unavailable(), /UNAVAILABLE/);
+});
+
+test('callMisp encodes query parameters and honors alias TLS configuration', async () => {
+  const { _test } = await import('../src/misp.js');
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url, init };
+    return { ok: true, status: 200, headers: new Map(), text: async () => JSON.stringify({}) };
+  });
+  await _test.callMisp(buildCtx({}, { bindings: { tlsInsecureSkipVerify: 'yes' } }), 'GET', '/events', undefined, { name: 'a b', omit: '', enabled: true });
+  assert.ok(captured.url.endsWith('/events?name=a%20b&enabled=true'));
+  assert.ok(captured.init.dispatcher);
 });
 
 // ── SDK handlers ──────────────────────────────────────────
@@ -327,6 +472,38 @@ test('SDK handlers accept single-arg (ctx) style from OctoBus SDK', async () => 
     secret: { api_key: 'sdk-key' },
   });
   assert.equal(res.items[0].info, 'from-sdk');
+});
+
+test('every exposed SDK handler accepts the single-context ABI', async () => {
+  setFetch(async (url) => {
+    let body = { response: [] };
+    if (url.includes('/events/')) body = { Event: {} };
+    else if (url.includes('/events/add')) body = { Event: {} };
+    else if (url.includes('/attributes/add')) body = { Attribute: {} };
+    else if (url.includes('/tags/search')) body = [];
+    return { ok: true, status: 200, headers: new Map(), text: async () => JSON.stringify(body) };
+  });
+  const { handlers } = await import('../src/misp.js');
+  const ctx = (request) => ({ request, config: { endpoint: 'https://custom.misp.local' }, secret: { api_key: 'sdk-key' } });
+  await handlers['MISP.MISP/SearchEvents'](ctx({}));
+  await handlers['MISP.MISP/GetEvent'](ctx({ event_id: '1' }));
+  await handlers['MISP.MISP/CreateEvent'](ctx({ info: 'event' }));
+  await handlers['MISP.MISP/SearchAttributes'](ctx({}));
+  await handlers['MISP.MISP/AddAttribute'](ctx({ event_id: '1', value: '1.2.3.4', type: 'ip-src' }));
+  await handlers['MISP.MISP/SearchTags'](ctx({ name: 'tlp' }));
+});
+
+test('skipTlsVerify uses an undici dispatcher instead of unsupported fetch options', async () => {
+  let captured;
+  setFetch(async (_url, init) => {
+    captured = init;
+    return { ok: true, status: 200, headers: new Map(), text: async () => JSON.stringify({ response: [] }) };
+  });
+  const handler = await loadHandler({}, searchEventsPath, { bindings: { skipTlsVerify: true } });
+  await handler();
+  assert.ok(captured.dispatcher, 'an isolated TLS dispatcher should be supplied');
+  assert.equal(captured.insecureSkipVerify, undefined);
+  assert.equal(captured.tlsInsecureSkipVerify, undefined);
 });
 
 test('Missing credentials fails gracefully', async () => {
