@@ -81,8 +81,12 @@ test('Login hashes and encrypts credentials without sending plaintext', async ()
 });
 
 test('Login accepts config endpoint and secret credentials', async () => {
-  const result = await handlers[RPC.login]({ request: {}, config: { endpoint: baseUrl }, secret: { username: 'admin', password: 'secret' } });
+  const result = await handlers[RPC.login]({ request: { host: '' }, config: { host: '', endpoint: baseUrl }, secret: { username: 'admin', password: 'secret' } });
   assert.equal(result.session.token, 'token-value');
+  const hostResult = await handlers[RPC.login]({ request: { host: '' }, config: { host: baseUrl }, secret: { username: 'admin', password: 'secret' } });
+  assert.equal(hostResult.session.token, 'token-value');
+  const aliasResult = await handlers[RPC.login]({ request: {}, config: { restBaseUrl: baseUrl }, secret: { username: 'admin', password: 'secret' } });
+  assert.equal(aliasResult.session.token, 'token-value');
 });
 
 test('ListClients sends pagination and maps every client field', async () => {

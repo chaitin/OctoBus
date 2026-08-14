@@ -38,7 +38,8 @@ const text = (value) => value == null ? '' : String(value);
 const pick = (object, ...names) => names.map((name) => object?.[name]).find((value) => value != null);
 
 const endpoint = (request, ctx) => {
-  const raw = pick(request, 'host') ?? pick(ctx.config, 'host', 'endpoint', 'restBaseUrl');
+  const raw = [request?.host, ctx.config?.host, ctx.config?.endpoint, ctx.config?.restBaseUrl]
+    .find((value) => String(value ?? '').trim() !== '');
   let url;
   try { url = new URL(required(raw, 'host')); } catch {
     throw fail(grpcStatus.INVALID_ARGUMENT, 'host must be an absolute http/https URL');
