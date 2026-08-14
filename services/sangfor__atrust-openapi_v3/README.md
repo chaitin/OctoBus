@@ -66,7 +66,6 @@ Recommended capset:
 
 - Use a read-mostly capset such as `sangfor-atrust-openapi-v3-query` for inventory, identity, application, online-user, and device queries.
 - Expose `KickoutUsers` only in a restricted response capset because it terminates active user sessions.
-- Keep `RawRequest` out of broad agent capsets unless the caller is trusted to choose paths and payloads safely.
 
 ## Methods
 
@@ -85,7 +84,6 @@ Recommended capset:
 - `QueryUserDirectory`: `GET /api/v1/userDirectory/query`
 - `ListDevices`: `POST /api/v1/device/queryAll`
 - `QueryDevice`: `GET /api/v1/device/query`
-- `RawRequest`: signed GET/POST request to an allowlisted `/api/v1/*` or `/api/v3/*` path
 
 ## Risk Boundary
 
