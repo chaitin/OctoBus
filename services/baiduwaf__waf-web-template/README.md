@@ -44,7 +44,7 @@ octobus service import baiduwaf-waf-web-template ./services/baiduwaf__waf-web-te
 
 ```json
 {
-  "api_base": "http://bss.wf.bj.baidubce.com"
+"api_base": "https://bss.wf.bj.baidubce.com"
 }
 ```
 

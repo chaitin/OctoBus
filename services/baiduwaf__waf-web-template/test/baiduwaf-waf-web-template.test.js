@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { createServer } from "node:http";
 
 import { GrpcError, grpcStatus } from "@chaitin-ai/octobus-sdk";
 
@@ -697,7 +698,7 @@ test("WhiteRules invalid JSON response maps to UNKNOWN", async () => {
   );
 });
 
-test("HTTP error body is truncated", async () => {
+test("HTTP error body is not exposed to callers", async () => {
   const longBody = "x".repeat(_test.MAX_HTTP_BODY_CHARS + 50);
   setFetch(async () => textResponse(500, longBody));
   await expectRejectPayload(
@@ -705,7 +706,17 @@ test("HTTP error body is truncated", async () => {
     "UNAVAILABLE",
     500,
     /upstream http 500/,
-    { httpBody: "x".repeat(_test.MAX_HTTP_BODY_CHARS) },
+    { httpBody: "" },
+  );
+});
+
+test("oversized upstream response maps to UNAVAILABLE", async () => {
+  setFetch(async () => textResponse(200, "x".repeat(9)));
+  await expectRejectPayload(
+    () => rpcdef(buildCtx({ req: { templateKey: "tpl-1" }, config: { maxResponseBytes: 8 } }))[WEBTEMPLATEDETAIL_PATH](),
+    "UNAVAILABLE",
+    0,
+    /exceeds 8 bytes/,
   );
 });
 
@@ -739,6 +750,9 @@ test("helper functions cover edge cases", () => {
   assert.equal(_test.unwrapString(null), "");
   assert.equal(_test.unwrapString({ value: { value: "x" } }), "x");
   assert.equal(_test.normalizeBaseUrl("https://api.example.com///"), "https://api.example.com");
+  assert.equal(_test.normalizeBaseUrl("ftp://api.example.com"), "");
+  assert.deepEqual(_test.pickStringArray({}, ["missing"]), []);
+  assert.deepEqual(_test.pickStringArray({ values: ["a", { value: "b" }, ""] }, ["values"]), ["a", "b"]);
   assert.equal(_test.resolveAccessKey({ ak: "ak1" }), "ak1");
   assert.equal(_test.resolveSecretKey({ sk: "sk1" }), "sk1");
 
@@ -748,18 +762,31 @@ test("helper functions cover edge cases", () => {
     insecureSkipVerify: true,
   });
   assert.deepEqual(_test.buildTlsOptions({}), {});
+  assert.equal(_test.buildTlsOptions({ tlsInsecureSkipVerify: true }).skipTlsVerify, true);
+  assert.equal(_test.buildTlsOptions({ insecureSkipVerify: true }).skipTlsVerify, true);
+  assert.equal(_test.resolveMaxResponseBytes({ bindings: { max_response_bytes: 16 } }), 16);
+  assert.equal(_test.resolveMaxResponseBytes({ bindings: { maxResponseBytes: 0 } }), 4 * 1024 * 1024);
 
   assert.equal(_test.mapHttpStatusToCode(401), "PERMISSION_DENIED");
+  assert.equal(_test.mapHttpStatusToCode(403), "PERMISSION_DENIED");
   assert.equal(_test.mapHttpStatusToCode(404), "FAILED_PRECONDITION");
   assert.equal(_test.mapHttpStatusToCode(500), "UNAVAILABLE");
   assert.equal(_test.MAX_HTTP_BODY_CHARS, 200);
   assert.equal(_test.truncateHttpBody("abcdef", 3), "abc");
+  assert.equal(_test.truncateHttpBody(undefined), "");
 
   assert.equal(
     _test.buildUrl("https://api.example.com", "/v1/waf/webTemplate/detail", { templateKey: "abc" }),
     "https://api.example.com/v1/waf/webTemplate/detail?templateKey=abc",
   );
   assert.equal(_test.pickString({ a: "", b: "hello" }, ["a", "b", "c"]), "hello");
+  assert.equal(_test.pickString(null, ["a"]), "");
+  assert.equal(_test.grpcCodeFor("not-a-code"), grpcStatus.UNKNOWN);
+  assert.equal(_test.firstDefined(undefined, null, "ok"), "ok");
+  assert.equal(_test.hasOwn(null, "x"), false);
+  assert.deepEqual(_test.resolveCallContext({ request: { x: 1 } }).req, { x: 1 });
+  assert.equal(_test.resolveTimeoutMs({ limits: { timeoutMs: -1 }, bindings: {} }), 10000);
+  assert.equal(_test.resolveTimeoutMs({ bindings: { timeout_ms: 25 } }), 25);
   assert.equal(_test.toInteger("12.9", 0), 12);
   assert.equal(_test.toInteger(NaN, 0), 0);
   assert.equal(_test.toInteger(undefined, 5), 5);
@@ -809,6 +836,25 @@ test("helper functions cover edge cases", () => {
     match: "contains",
     value: ["a"],
   });
+  assert.equal(_test.mapWebTemplateDetailResult(null), undefined);
+  assert.equal(_test.mapWebTemplateSaveResult(null), undefined);
+  assert.equal(_test.mapWebTemplateListItem(null), undefined);
+  assert.deepEqual(_test.mapWebTemplateListResult({ result: null, total_count: "2" }), { result: [], totalCount: 2 });
+  assert.equal(_test.mapWhiteRulesdetailTarget(null), undefined);
+  assert.deepEqual(_test.mapWhiteRulesdetailTarget({ value: null }), { field: "", key: "", match: "", value: [] });
+  assert.equal(_test.mapWhiteRulesdetailResult(null), undefined);
+  assert.deepEqual(_test.mapWhiteRulesdetailResult({ targets: null }).targets, []);
+  assert.equal(_test.mapWhiteRuleslistItem(null), undefined);
+  assert.deepEqual(_test.mapWhiteRuleslistResult({ result: null, total_count: 3 }), { result: [], totalCount: 3 });
+  assert.equal(_test.mapRegionRuleslistValue(null), undefined);
+  assert.deepEqual(_test.mapRegionRuleslistValue({ domestic: null, overseas: null }), { domestic: [], overseas: [] });
+  assert.equal(_test.mapRegionRuleslistItem(null), undefined);
+  assert.deepEqual(_test.mapRegionRuleslistItem({}), {
+    ruleName: "", protectionDomains: [], switch: undefined, updateTime: "", ruleKey: "",
+    ruleID: 0, ruleType: "", action: "", value: undefined,
+  });
+  assert.equal(_test.mapRegionRuleslistResult(null), undefined);
+  assert.deepEqual(_test.mapRegionRuleslistResult({ result: null }), { result: [], totalCount: undefined });
   assert.deepEqual(_test.mapWhiteRuleslistItem({
     ruleName: "demo",
     ruleType: "saas",
@@ -861,6 +907,36 @@ test("mock upstream detail end-to-end", async () => {
     assert.equal(mockServer.requests[0].method, "GET");
   } finally {
     await mockServer.close();
+  }
+});
+
+test("node transport supports GET bodies and enforces response limits", async () => {
+  const server = createServer((_req, res) => {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end('{"ok":true,"padding":"0123456789"}');
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const url = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const response = await _test.fetchText(
+      buildCtx(),
+      url,
+      { method: "GET", body: "{}" },
+    );
+    assert.equal(response.http_status, 200);
+    assert.match(response.http_body, /padding/);
+
+    await expectRejectPayload(
+      () => _test.fetchText(
+        buildCtx({ config: { maxResponseBytes: 8 } }),
+        url,
+      ),
+      "UNAVAILABLE",
+      0,
+      /exceeds 8 bytes/,
+    );
+  } finally {
+    await new Promise((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
   }
 });
 

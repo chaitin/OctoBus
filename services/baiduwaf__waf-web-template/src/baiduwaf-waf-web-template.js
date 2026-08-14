@@ -28,7 +28,8 @@ export const METHOD_WHITERULESLIST_FULL = "BaiduWAF_WAFWebTemplate.BaiduWAF_WAFW
 export const REGIONRULESLIST_PATH = "/BaiduWAF_WAFWebTemplate.BaiduWAF_WAFWebTemplate/RegionRuleslist";
 export const METHOD_REGIONRULESLIST_FULL = "BaiduWAF_WAFWebTemplate.BaiduWAF_WAFWebTemplate/RegionRuleslist";
 export const DEFAULT_TIMEOUT_MS = 10000;
-export const DEFAULT_API_BASE = "http://bss.wf.bj.baidubce.com";
+export const DEFAULT_MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
+export const DEFAULT_API_BASE = "https://bss.wf.bj.baidubce.com";
 export const BCE_CONTENT_TYPE = "application/json;charset=utf-8";
 export const BCE_EXPIRE_SECONDS = 1800;
 export const BCE_SIGNED_HEADERS = "content-type;host;x-bce-date";
@@ -109,6 +110,12 @@ const resolveTimeoutMs = (ctx) => {
   const bindings = ctx?.bindings ?? mergedBindings(ctx);
   const raw = Number(firstDefined(ctx?.limits?.timeoutMs, bindings.timeoutMs, bindings.timeout_ms, DEFAULT_TIMEOUT_MS));
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;
+};
+
+const resolveMaxResponseBytes = (ctx) => {
+  const bindings = ctx?.bindings ?? mergedBindings(ctx);
+  const raw = Number(firstDefined(bindings.maxResponseBytes, bindings.max_response_bytes, DEFAULT_MAX_RESPONSE_BYTES));
+  return Number.isSafeInteger(raw) && raw > 0 ? raw : DEFAULT_MAX_RESPONSE_BYTES;
 };
 
 const resolveAccessKey = (bindings = {}) => pickString(bindings, ["access_key", "accessKey", "ak"]);
@@ -241,7 +248,16 @@ const requestTextWithNodeTransport = async (url, init = {}, options = {}) => new
     rejectUnauthorized: options.rejectUnauthorized !== false,
   }, (res) => {
     const chunks = [];
-    res.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+    let size = 0;
+    res.on("data", (chunk) => {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      size += buffer.length;
+      if (size > options.maxResponseBytes) {
+        req.destroy(new Error(`upstream response exceeds ${options.maxResponseBytes} bytes`));
+        return;
+      }
+      chunks.push(buffer);
+    });
     res.on("end", () => {
       resolve({
         status: res.statusCode ?? 0,
@@ -262,9 +278,32 @@ const requestTextWithNodeTransport = async (url, init = {}, options = {}) => new
 
 // ---- 网络请求 ----
 
-const fetchText = async (ctx, url, init = {}) => {
+const readFetchBody = async (res, maxResponseBytes) => {
+  if (!res.body?.getReader) {
+    const text = await res.text();
+    if (Buffer.byteLength(text) > maxResponseBytes) throw new Error(`upstream response exceeds ${maxResponseBytes} bytes`);
+    return text;
+  }
+  const reader = res.body.getReader();
+  const chunks = [];
+  let size = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > maxResponseBytes) {
+      await reader.cancel();
+      throw new Error(`upstream response exceeds ${maxResponseBytes} bytes`);
+    }
+    chunks.push(Buffer.from(value));
+  }
+  return Buffer.concat(chunks).toString("utf8");
+};
+
+const fetchText = async (ctx, url, init = {}, options = {}) => {
   const callCtx = resolveCallContext(ctx);
   const tlsOptions = buildTlsOptions(callCtx.bindings || {});
+  const maxResponseBytes = resolveMaxResponseBytes(callCtx);
   const method = String(init.method || "GET").toUpperCase();
   const hasBody = init.body !== undefined && init.body !== null;
   const useNodeTransport = tlsOptions.skipTlsVerify || (hasBody && (method === "GET" || method === "HEAD"));
@@ -276,6 +315,7 @@ const fetchText = async (ctx, url, init = {}) => {
       const response = await requestTextWithNodeTransport(url, init, {
         timeoutMs: resolveTimeoutMs(callCtx),
         rejectUnauthorized: !tlsOptions.skipTlsVerify,
+        maxResponseBytes,
       });
       status = response.status;
       headers = response.headers;
@@ -287,7 +327,7 @@ const fetchText = async (ctx, url, init = {}) => {
       status = res.status;
       headers = res.headers;
       try {
-        text = await res.text();
+        text = await readFetchBody(res, maxResponseBytes);
       } catch (err) {
         throwStructuredError("UNKNOWN", "BaiduWAF_WAFWebTemplate upstream response body read failed", {
           httpStatus: res.status,
@@ -304,10 +344,10 @@ const fetchText = async (ctx, url, init = {}) => {
     });
   }
 
-  if (status < 200 || status >= 300) {
+  if ((status < 200 || status >= 300) && !options.acceptStatuses?.includes(status)) {
     throwStructuredError(mapHttpStatusToCode(status), `upstream HTTP ${status}`, {
       httpStatus: status,
-      httpBody: text,
+      httpBody: "",
       reason: `upstream http ${status}`,
     });
   }
@@ -732,58 +772,18 @@ const runWebTemplateDelete = async (req, ctx) => {
   const templateKey = requireString(firstDefined(req?.templateKey, req?.template_key), "templateKey");
   const queryParams = { templateKey };
   const url = buildUrl(apiBase, "/v1/waf/webTemplate/delete", queryParams);
-  const tlsOptions = buildTlsOptions(callCtx.bindings || {});
-
-  let httpStatus;
-  let text;
-  try {
-    if (tlsOptions.skipTlsVerify) {
-      const response = await requestTextWithNodeTransport(url, {
-        method: "DELETE",
-        headers: buildHeaders(callCtx, buildBceSignedHeaders(callCtx, {
-          method: "DELETE",
-          apiBase,
-          path: "/v1/waf/webTemplate/delete",
-          queryParams,
-        })),
-      }, {
-        timeoutMs: resolveTimeoutMs(callCtx),
-        rejectUnauthorized: false,
-      });
-      httpStatus = response.status;
-      text = response.text;
-    } else {
-      const res = await fetchWithTimeout(url, {
-        method: "DELETE",
-        headers: buildHeaders(callCtx, buildBceSignedHeaders(callCtx, {
-          method: "DELETE",
-          apiBase,
-          path: "/v1/waf/webTemplate/delete",
-          queryParams,
-        })),
-      }, resolveTimeoutMs(callCtx));
-      httpStatus = res.status;
-      text = await res.text();
-    }
-  } catch (err) {
-    throwStructuredError("UNAVAILABLE", "BaiduWAF_WAFWebTemplate upstream request failed", {
-      httpStatus: 0,
-      httpBody: "",
-      reason: err?.cause?.message || err?.message || "fetch failed",
-    });
-  }
+  const response = await fetchText(callCtx, url, {
+    method: "DELETE",
+    headers: buildHeaders(callCtx, buildBceSignedHeaders(callCtx, {
+      method: "DELETE", apiBase, path: "/v1/waf/webTemplate/delete", queryParams,
+    })),
+  }, { acceptStatuses: [404] });
+  const httpStatus = response.http_status;
+  const text = response.http_body;
 
   if (httpStatus === 404) {
     logFlow(callCtx, "WebTemplateDelete:already-gone", { templateKey });
     return { alreadyGone: true, json: { success: true, result: {} }, httpStatus };
-  }
-
-  if (httpStatus < 200 || httpStatus >= 300) {
-    throwStructuredError(mapHttpStatusToCode(httpStatus), `upstream HTTP ${httpStatus}`, {
-      httpStatus,
-      httpBody: text,
-      reason: `upstream http ${httpStatus}`,
-    });
   }
 
   const json = parseJsonBody(text, "WebTemplateDelete");
@@ -816,58 +816,18 @@ const runWhiteRulesdelete = async (req, ctx) => {
   const ruleKey = requireString(firstDefined(req?.ruleKey, req?.rule_key), "ruleKey");
   const queryParams = { ruleKey };
   const url = buildUrl(apiBase, "/v1/waf/whiteRules/delete", queryParams);
-  const tlsOptions = buildTlsOptions(callCtx.bindings || {});
-
-  let httpStatus;
-  let text;
-  try {
-    if (tlsOptions.skipTlsVerify) {
-      const response = await requestTextWithNodeTransport(url, {
-        method: "DELETE",
-        headers: buildHeaders(callCtx, buildBceSignedHeaders(callCtx, {
-          method: "DELETE",
-          apiBase,
-          path: "/v1/waf/whiteRules/delete",
-          queryParams,
-        })),
-      }, {
-        timeoutMs: resolveTimeoutMs(callCtx),
-        rejectUnauthorized: false,
-      });
-      httpStatus = response.status;
-      text = response.text;
-    } else {
-      const res = await fetchWithTimeout(url, {
-        method: "DELETE",
-        headers: buildHeaders(callCtx, buildBceSignedHeaders(callCtx, {
-          method: "DELETE",
-          apiBase,
-          path: "/v1/waf/whiteRules/delete",
-          queryParams,
-        })),
-      }, resolveTimeoutMs(callCtx));
-      httpStatus = res.status;
-      text = await res.text();
-    }
-  } catch (err) {
-    throwStructuredError("UNAVAILABLE", "BaiduWAF_WAFWebTemplate upstream request failed", {
-      httpStatus: 0,
-      httpBody: "",
-      reason: err?.cause?.message || err?.message || "fetch failed",
-    });
-  }
+  const response = await fetchText(callCtx, url, {
+    method: "DELETE",
+    headers: buildHeaders(callCtx, buildBceSignedHeaders(callCtx, {
+      method: "DELETE", apiBase, path: "/v1/waf/whiteRules/delete", queryParams,
+    })),
+  }, { acceptStatuses: [404] });
+  const httpStatus = response.http_status;
+  const text = response.http_body;
 
   if (httpStatus === 404) {
     logFlow(callCtx, "WhiteRulesdelete:already-gone", { ruleKey });
     return { alreadyGone: true, json: { success: true, result: [] }, httpStatus };
-  }
-
-  if (httpStatus < 200 || httpStatus >= 300) {
-    throwStructuredError(mapHttpStatusToCode(httpStatus), `upstream HTTP ${httpStatus}`, {
-      httpStatus,
-      httpBody: text,
-      reason: `upstream http ${httpStatus}`,
-    });
   }
 
   const json = parseJsonBody(text, "WhiteRulesdelete");
@@ -1169,6 +1129,7 @@ rpcdef.__test__ = {
   normalizeBaseUrl,
   parseJsonBody,
   pickString,
+  pickStringArray,
   registerHandlers,
   requestTextWithNodeTransport,
   requireBceCredentials,
@@ -1178,6 +1139,7 @@ rpcdef.__test__ = {
   resolveAccessKey,
   resolveApiBase,
   resolveCallContext,
+  resolveMaxResponseBytes,
   resolveSecretKey,
   resolveTimeoutMs,
   runWebTemplateDelete,

@@ -1,11 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "additionalProperties": true,
+  "additionalProperties": false,
   "properties": {
     "api_base": {
       "type": "string",
-      "description": "API 基础地址，默认值为 http://bss.wf.bj.baidubce.com"
+      "format": "uri",
+      "default": "https://bss.wf.bj.baidubce.com",
+      "description": "API 基础地址，默认使用百度云 HTTPS endpoint"
     },
     "apiBase": {
       "type": "string",
@@ -26,10 +28,21 @@
       "minimum": 1,
       "description": "timeoutMs 的别名（snake_case）"
     },
+    "maxResponseBytes": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 4194304,
+      "description": "允许读取的最大上游响应字节数，默认 4 MiB"
+    },
+    "max_response_bytes": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "maxResponseBytes 的别名（snake_case）"
+    },
     "skipTlsVerify": {
       "type": "boolean",
       "default": false,
-      "description": "仅在你手动改用 HTTPS 且需要忽略证书校验时启用；默认 HTTP 场景不需要"
+      "description": "仅在测试环境连接自签名 HTTPS endpoint 时启用；生产环境不建议开启"
     },
     "tlsInsecureSkipVerify": {
       "type": "boolean",
