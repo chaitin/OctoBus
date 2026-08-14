@@ -14,13 +14,24 @@ const unwrapString = (s) => { if (s === undefined || s === null) return ''; if (
 const logInfo = (m, a, p) => { try { console.log(`[${SDK_REF}][${a}]`, JSON.stringify(p)); } catch { console.log(`[${SDK_REF}][${a}]`, p); } };
 const logError = (m, a, p) => { try { console.error(`[${SDK_REF}][${a}]`, JSON.stringify(p)); } catch { console.error(`[${SDK_REF}][${a}]`, p); } };
 const parseJson = (t) => { if (!String(t || '').trim()) return null; try { return JSON.parse(t); } catch { throw errorWithCode('UNKNOWN', 'response is not valid JSON'); } };
-const mapHttpError = (res) => res.status >= 400 && res.status < 500
-  ? errorWithCode('FAILED_PRECONDITION', `upstream http ${res.status}`)
-  : errorWithCode('UNAVAILABLE', `upstream http ${res.status}`);
+const mapHttpError = (res) => {
+  if (res.status === 401 || res.status === 403) return errorWithCode('PERMISSION_DENIED', `upstream http ${res.status}`);
+  if (res.status === 429) return errorWithCode('UNAVAILABLE', `upstream http ${res.status}`);
+  return res.status >= 400 && res.status < 500
+    ? errorWithCode('FAILED_PRECONDITION', `upstream http ${res.status}`)
+    : errorWithCode('UNAVAILABLE', `upstream http ${res.status}`);
+};
 const responseString = (value) => value === undefined || value === null ? '' : String(value);
 const mergedBindings = (ctx = {}) => ({ ...(ctx.config ?? {}), ...(ctx.secret ?? {}), ...(ctx.bindings ?? {}) });
 const resolveCallContext = (ctx = {}) => ({ ...ctx, bindings: mergedBindings(ctx), limits: ctx.limits ?? {}, meta: ctx.meta ?? {}, req: ctx.req ?? ctx.request ?? {} });
 const resolveTimeoutMs = (ctx = {}, b = {}) => firstDefined(ctx.limits?.timeoutMs, b.timeoutMs, DEFAULT_TIMEOUT_MS);
+const resolveBaseUrl = (bindings = {}) => {
+  const raw = String(bindings.baseUrl || API_BASE).trim();
+  let url;
+  try { url = new URL(raw); } catch { throw errorWithCode('INVALID_ARGUMENT', 'baseUrl must be a valid URL'); }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw errorWithCode('INVALID_ARGUMENT', 'baseUrl must use http or https');
+  return raw.replace(/\/+$/, '');
+};
 
 const fetchJson = async (url, init, { bindings = {}, timeoutMs }) => {
   const controller = new AbortController();
@@ -45,7 +56,7 @@ const makeRuntime = (ctx = {}) => {
     if (!ip) throw errorWithCode('INVALID_ARGUMENT', 'ip is required');
     if (!net.isIP(ip)) throw errorWithCode('INVALID_ARGUMENT', 'invalid IP address format');
 
-    const url = `${API_BASE}/check-public?ip=${encodeURIComponent(ip)}`;
+    const url = `${resolveBaseUrl(bindings)}/check-public?ip=${encodeURIComponent(ip)}`;
     logInfo(meta, 'CheckIP:start', { ip });
 
     let result;
@@ -63,4 +74,4 @@ const makeRuntime = (ctx = {}) => {
 };
 
 export const handlers = { [METHOD_CHECK]: (ctx) => makeRuntime(ctx).runCheck(ctx.request ?? {}) };
-export const _test = { errorWithCode, firstDefined, hasOwn, logInfo, logError, makeRuntime, mapHttpError, parseJson, resolveCallContext, resolveTimeoutMs, responseString, unwrapString };
+export const _test = { errorWithCode, firstDefined, hasOwn, logInfo, logError, makeRuntime, mapHttpError, parseJson, resolveBaseUrl, resolveCallContext, resolveTimeoutMs, responseString, unwrapString };

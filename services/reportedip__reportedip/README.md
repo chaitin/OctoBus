@@ -28,3 +28,10 @@ octobus capset add-instance threat-intel reportedip-test
 curl -X POST 'http://127.0.0.1:9000/capsets/threat-intel/connect/reportedip-test/ReportedIP.ReportedIP/CheckIP' \
   -H 'Content-Type: application/json' -d '{"ip":"8.8.8.8"}'
 ```
+
+## Configuration
+
+- `baseUrl` — optional ReportedIP API base URL. It defaults to
+  `https://reportedip.de/wp-json/reportedip/v2`; use an HTTP(S) compatible
+  gateway URL only when required by your environment.
+- `timeoutMs` — optional HTTP timeout in milliseconds (default: `10000`).

@@ -31,6 +31,11 @@ test('CheckIP returns reputation data', async () => {
   const r = await handlers['ReportedIP.ReportedIP/CheckIP']({ ...ctx(), request: { ip: '8.8.8.8' } });
   assert.equal(r.code, 0); assert.equal(r.abuse_confidence_percentage, 67); assert.equal(r.isp, 'GOOGLE');
 });
+test('CheckIP uses the configured ReportedIP API base URL', async () => {
+  setFetch(async (url) => { assert.equal(url, 'http://127.0.0.1:4321/check-public?ip=8.8.8.8'); return resp(200, CHECK_RESP); });
+  const r = await handlers['ReportedIP.ReportedIP/CheckIP']({ ...ctx({ config: { baseUrl: 'http://127.0.0.1:4321/' } }), request: { ip: '8.8.8.8' } });
+  assert.equal(r.code, 0);
+});
 
 // ---- 参数校验 ----
 test('CheckIP validates missing ip', async () => { await expectErr(() => handlers['ReportedIP.ReportedIP/CheckIP']({ ...ctx(), request: {} }), 'INVALID_ARGUMENT'); });
@@ -43,9 +48,13 @@ test('CheckIP accepts IPv6', async () => {
 test('handler missing request defaults to empty', async () => { await expectErr(() => handlers['ReportedIP.ReportedIP/CheckIP'](ctx()), 'INVALID_ARGUMENT'); });
 
 // ---- HTTP 状态映射（mapHttpError 分支）----
-test('handles 4xx as FAILED_PRECONDITION', async () => {
-  setFetch(async () => resp(403, ''));
+test('handles ordinary 4xx as FAILED_PRECONDITION', async () => {
+  setFetch(async () => resp(400, ''));
   await expectErr(() => handlers['ReportedIP.ReportedIP/CheckIP']({ ...ctx(), request: { ip: '8.8.8.8' } }), 'FAILED_PRECONDITION');
+});
+test('handles authentication failures as PERMISSION_DENIED', async () => {
+  setFetch(async () => resp(403, ''));
+  await expectErr(() => handlers['ReportedIP.ReportedIP/CheckIP']({ ...ctx(), request: { ip: '8.8.8.8' } }), 'PERMISSION_DENIED');
 });
 test('handles 499 as FAILED_PRECONDITION', async () => {
   setFetch(async () => resp(499, ''));
@@ -53,6 +62,10 @@ test('handles 499 as FAILED_PRECONDITION', async () => {
 });
 test('handles 5xx as UNAVAILABLE', async () => {
   setFetch(async () => resp(500, ''));
+  await expectErr(() => handlers['ReportedIP.ReportedIP/CheckIP']({ ...ctx(), request: { ip: '8.8.8.8' } }), 'UNAVAILABLE');
+});
+test('handles rate limiting as UNAVAILABLE', async () => {
+  setFetch(async () => resp(429, ''));
   await expectErr(() => handlers['ReportedIP.ReportedIP/CheckIP']({ ...ctx(), request: { ip: '8.8.8.8' } }), 'UNAVAILABLE');
 });
 test('handles non-JSON 200 response', async () => {
@@ -161,8 +174,17 @@ test('parseJson covers empty, valid and invalid', () => {
 test('mapHttpError covers all status ranges', () => {
   assert.equal(_test.mapHttpError({ status: 200 }).legacyCode, 'UNAVAILABLE');
   assert.equal(_test.mapHttpError({ status: 400 }).legacyCode, 'FAILED_PRECONDITION');
+  assert.equal(_test.mapHttpError({ status: 401 }).legacyCode, 'PERMISSION_DENIED');
+  assert.equal(_test.mapHttpError({ status: 403 }).legacyCode, 'PERMISSION_DENIED');
+  assert.equal(_test.mapHttpError({ status: 429 }).legacyCode, 'UNAVAILABLE');
   assert.equal(_test.mapHttpError({ status: 499 }).legacyCode, 'FAILED_PRECONDITION');
   assert.equal(_test.mapHttpError({ status: 500 }).legacyCode, 'UNAVAILABLE');
+});
+test('resolveBaseUrl accepts HTTP(S) URLs and rejects invalid schemes', () => {
+  assert.equal(_test.resolveBaseUrl({ baseUrl: 'https://api.example.test/path/' }), 'https://api.example.test/path');
+  assert.equal(_test.resolveBaseUrl({ baseUrl: 'http://127.0.0.1:1234' }), 'http://127.0.0.1:1234');
+  assert.throws(() => _test.resolveBaseUrl({ baseUrl: 'not a URL' }), GrpcError);
+  assert.throws(() => _test.resolveBaseUrl({ baseUrl: 'file:///tmp/reportedip' }), GrpcError);
 });
 test('responseString normalizes nullish and scalar values', () => {
   assert.equal(_test.responseString(undefined), '');
