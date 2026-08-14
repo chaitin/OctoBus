@@ -71,7 +71,7 @@ test('machine list query succeeds and sends the real-device request shape', asyn
 test('camelCase / page aliases also accepted; defaults applied', async () => {
   const mock = await createMockServer();
   try {
-    await handlers[METHOD_QUERY_MACHINE_FULL]({ page: 3, pageSize: 50, groupUuid: 'g-2' }, buildCtx(mock));
+    await handlers[METHOD_QUERY_MACHINE_FULL](buildCtx(mock, { req: { page: 3, pageSize: 50, groupUuid: 'g-2' } }));
     const b = mock.state.requests[0].body;
     assert.equal(b.currentPage, 3);
     assert.equal(b.maxResults, 50);
@@ -84,8 +84,8 @@ test('camelCase / page aliases also accepted; defaults applied', async () => {
 // ---------- validation ----------
 
 test('binding validation', async () => {
-  await assert.rejects(() => handlers[METHOD_QUERY_MACHINE_FULL]({}, buildCtx({ host: '' })), (e) => e.legacyCode === 'INVALID_ARGUMENT');
-  await assert.rejects(() => handlers[METHOD_QUERY_MACHINE_FULL]({}, buildCtx({ host: 'https://h:443', token: '' })), (e) => e.legacyCode === 'INVALID_ARGUMENT');
+  await assert.rejects(() => handlers[METHOD_QUERY_MACHINE_FULL](buildCtx({ host: '' })), (e) => e.legacyCode === 'INVALID_ARGUMENT');
+  await assert.rejects(() => handlers[METHOD_QUERY_MACHINE_FULL](buildCtx({ host: 'https://h:443', token: '' })), (e) => e.legacyCode === 'INVALID_ARGUMENT');
 });
 
 // ---------- error mapping ----------
@@ -93,28 +93,44 @@ test('binding validation', async () => {
 test('error mapping: auth / network / http / empty / non-json / semantic', async () => {
   const ctx = buildCtx({ host: 'https://cl:443', token: 't' });
   withFetch(async () => fakeResponse(401, 'no', false));
-  await assert.rejects(() => handlers[METHOD_QUERY_MACHINE_FULL]({}, ctx), (e) => e.legacyCode === 'PERMISSION_DENIED');
+  await assert.rejects(() => handlers[METHOD_QUERY_MACHINE_FULL](ctx), (e) => e.legacyCode === 'PERMISSION_DENIED');
   withFetch(async () => fakeResponse(404, 'no', false));
-  await assert.rejects(() => handlers[METHOD_QUERY_MACHINE_FULL]({}, ctx), (e) => e.legacyCode === 'FAILED_PRECONDITION');
+  await assert.rejects(() => handlers[METHOD_QUERY_MACHINE_FULL](ctx), (e) => e.legacyCode === 'FAILED_PRECONDITION');
   withFetch(async () => fakeResponse(502, 'no', false));
-  await assert.rejects(() => handlers[METHOD_QUERY_MACHINE_FULL]({}, ctx), (e) => e.legacyCode === 'UNAVAILABLE');
+  await assert.rejects(() => handlers[METHOD_QUERY_MACHINE_FULL](ctx), (e) => e.legacyCode === 'UNAVAILABLE');
   withFetch(async () => { throw new Error('ECONNREFUSED'); });
-  await assert.rejects(() => handlers[METHOD_QUERY_MACHINE_FULL]({}, ctx), (e) => e.legacyCode === 'UNAVAILABLE');
+  await assert.rejects(() => handlers[METHOD_QUERY_MACHINE_FULL](ctx), (e) => e.legacyCode === 'UNAVAILABLE');
   withFetch(async () => fakeResponse(200, '   '));
-  await assert.rejects(() => handlers[METHOD_QUERY_MACHINE_FULL]({}, ctx), (e) => e.legacyCode === 'UNKNOWN');
+  await assert.rejects(() => handlers[METHOD_QUERY_MACHINE_FULL](ctx), (e) => e.legacyCode === 'UNKNOWN');
   withFetch(async () => fakeResponse(200, 'not-json'));
-  await assert.rejects(() => handlers[METHOD_QUERY_MACHINE_FULL]({}, ctx), (e) => e.legacyCode === 'UNKNOWN');
+  await assert.rejects(() => handlers[METHOD_QUERY_MACHINE_FULL](ctx), (e) => e.legacyCode === 'UNKNOWN');
   // code != "1" → FAILED_PRECONDITION with device msg
   withFetch(async () => fakeResponse(200, JSON.stringify({ code: '0', msg: '会话失效' })));
-  await assert.rejects(() => handlers[METHOD_QUERY_MACHINE_FULL]({}, ctx), (e) => e.legacyCode === 'FAILED_PRECONDITION' && /会话失效/.test(e.message));
+  await assert.rejects(() => handlers[METHOD_QUERY_MACHINE_FULL](ctx), (e) => e.legacyCode === 'FAILED_PRECONDITION' && /会话失效/.test(e.message));
 });
 
-test('fetch error fallback message', async () => {
+test('fetch errors preserve a safe unavailable status', async () => {
   const ctx = buildCtx({ host: 'https://cl:443', token: 't' });
   withFetch(async () => { throw {}; });
-  await assert.rejects(() => handlers[METHOD_QUERY_MACHINE_FULL]({}, ctx), (e) => /fetch failed/.test(e.message));
-  withFetch(async () => { const e = new Error('m'); e.cause = { message: 'deep' }; throw e; });
-  await assert.rejects(() => handlers[METHOD_QUERY_MACHINE_FULL]({}, ctx), (e) => /deep/.test(e.message));
+  await assert.rejects(() => handlers[METHOD_QUERY_MACHINE_FULL](ctx), (e) => e.legacyCode === 'UNAVAILABLE' && /upstream request failed/.test(e.message));
+  withFetch(async () => { throw new Error('connection refused'); });
+  await assert.rejects(() => handlers[METHOD_QUERY_MACHINE_FULL](ctx), (e) => e.legacyCode === 'UNAVAILABLE' && /connection refused/.test(e.message));
+});
+
+test('timeout is aborted and reported as deadline exceeded', async () => {
+  const ctx = buildCtx({ host: 'https://cl:443', token: 't' }, { limits: { timeoutMs: 1 } });
+  withFetch((_url, init) => new Promise((_resolve, reject) => {
+    init.signal.addEventListener('abort', () => reject(init.signal.reason), { once: true });
+  }));
+  await assert.rejects(() => handlers[METHOD_QUERY_MACHINE_FULL](ctx), (e) => e.legacyCode === 'DEADLINE_EXCEEDED' && /timed out/.test(e.message));
+});
+
+test('successful raw JSON redacts secret-shaped response fields', async () => {
+  const ctx = buildCtx({ host: 'https://cl:443', token: 't' });
+  withFetch(async () => fakeResponse(200, JSON.stringify({ code: '1', msg: 'ok', data: { token: 'upstream-secret' } })));
+  const out = await handlers[METHOD_QUERY_MACHINE_FULL](ctx);
+  assert.match(out.raw_json, /"token":"\*\*\*"/);
+  assert.doesNotMatch(out.raw_json, /upstream-secret/);
 });
 
 // ---------- service surface + helpers ----------
@@ -127,6 +143,7 @@ test('helper coverage', () => {
   const h = _test;
   assert.equal(h.normalizeBaseUrl('https://h:443/'), 'https://h:443');
   assert.equal(h.normalizeBaseUrl('ftp://x'), '');
+  assert.equal(h.resolveHost({ host: 'host-only', restBaseUrl: 'https://fallback.example/' }), 'https://fallback.example');
   assert.equal(h.resolveToken({ session_token: 't' }), 't');
   assert.equal(h.resolveToken({ sessionToken: 't2' }), 't2');
 
@@ -161,7 +178,7 @@ test('helper coverage', () => {
   assert.equal(h.unwrapScalar({ value: { value: 2 } }), 2);
   assert.deepEqual(h.sanitizeHeaders({ A: 1, '': 2 }), { A: '1' });
   assert.deepEqual(h.sanitizeHeaders('x'), {});
-  assert.equal(h.buildTlsOptions({ skipTlsVerify: true }).skipTlsVerify, true);
+  assert.ok(h.buildTlsOptions({ skipTlsVerify: true }).dispatcher);
   assert.deepEqual(h.buildTlsOptions({}), {});
   assert.equal(h.resolveTimeoutMs({ limits: { timeoutMs: 0 } }), 5000);
   assert.equal(h.resolveTimeoutMs({ limits: { timeoutMs: 321 } }), 321);

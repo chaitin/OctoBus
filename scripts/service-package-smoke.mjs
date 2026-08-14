@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
 import http from "node:http";
+import http2 from "node:http2";
 import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
@@ -44,7 +45,7 @@ let failed = false;
 try {
   await waitForDaemon(addr, daemon);
   for (const [index, serviceDir] of selectedServiceDirs.entries()) {
-    const result = await smokeService({ index, serviceDir, addr, mockBaseURL: mock.baseURL });
+    const result = await smokeService({ index, serviceDir, addr, mock });
     evidence.push(result);
     const status = result.chain_ok ? "chain-ok" : "chain-failed";
     console.error(`[${index + 1}/${selectedServiceDirs.length}] ${status} ${serviceDir} ${result.method ?? ""} http=${result.http_status ?? ""} mock_hits=${result.mock_hits}`);
@@ -81,7 +82,7 @@ if (failed) {
   process.exitCode = 1;
 }
 
-async function smokeService({ index, serviceDir, addr, mockBaseURL }) {
+async function smokeService({ index, serviceDir, addr, mock }) {
   const manifest = readJSON(path.join(servicesRoot, serviceDir, "service.json"));
   const fixture = readSmokeFixture(serviceDir);
   const serviceID = manifest.name;
@@ -102,8 +103,8 @@ async function smokeService({ index, serviceDir, addr, mockBaseURL }) {
 
   try {
     await cli(addr, ["service", "import", serviceID, `./services//${serviceDir}`, "--build", "never"], { timeoutMs: options.importTimeoutMs });
-    const config = synthesizeSchemaFile(path.join(servicesRoot, serviceDir, manifest.configSchema ?? "config.schema.json"), mockBaseURL, "config");
-    const secret = synthesizeSchemaFile(path.join(servicesRoot, serviceDir, manifest.secretSchema ?? "secret.schema.json"), mockBaseURL, "secret");
+    const config = synthesizeSchemaFile(path.join(servicesRoot, serviceDir, manifest.configSchema ?? "config.schema.json"), mock.baseURL, "config");
+    const secret = synthesizeSchemaFile(path.join(servicesRoot, serviceDir, manifest.secretSchema ?? "secret.schema.json"), mock.baseURL, "secret");
     result.config_keys = Object.keys(config).sort();
     result.secret_keys = Object.keys(secret).sort();
 
@@ -111,7 +112,7 @@ async function smokeService({ index, serviceDir, addr, mockBaseURL }) {
     await cli(addr, ["capset", "create", capsetID, "--name", capsetID], { timeoutMs: options.commandTimeoutMs });
     await cli(addr, ["capset", "add-instance", capsetID, instanceID], { timeoutMs: options.commandTimeoutMs });
 
-    const catalog = await cliJSON(addr, ["catalog", capsetID, "--connect", "--json"], { timeoutMs: options.commandTimeoutMs });
+    const catalog = await cliJSON(addr, ["catalog", capsetID, "--all", "--json"], { timeoutMs: options.commandTimeoutMs });
     const connect = fixture?.method
       ? catalog.connect_rpc?.find((rpc) => rpc.method_full_name === fixture.method)
       : catalog.connect_rpc?.[0];
@@ -125,6 +126,8 @@ async function smokeService({ index, serviceDir, addr, mockBaseURL }) {
 
     const request = fixture?.request ?? await sampleRequestFromOpenAPI(addr, capsetID, connect.endpoint);
     result.request_keys = Object.keys(request).sort();
+    const expectUpstream = fixture?.expectUpstream ?? true;
+    const requireUpstreamPerProtocol = fixture?.requireUpstreamPerProtocol === true;
 
     const response = await fetch(`http://${addr}${connect.endpoint}`, {
       method: "POST",
@@ -138,11 +141,43 @@ async function smokeService({ index, serviceDir, addr, mockBaseURL }) {
     const body = await response.text();
     result.http_status = response.status;
     result.response_summary = summarizeBody(body);
-    result.mock_hits = mock.hitCount - beforeHits;
     result.business_success = response.status >= 200 && response.status < 300;
-    const expectUpstream = fixture?.expectUpstream ?? true;
+    const protocols = fixture?.protocols ?? ["connect"];
+    result.protocols = { connect: result.business_success, connect_upstream: mock.hitCount > beforeHits };
+    if (requireUpstreamPerProtocol && !result.protocols.connect_upstream) {
+      throw new Error(`Connect ${result.method} did not reach the mock upstream`);
+    }
+    if (protocols.includes("grpc")) {
+      const grpc = catalog.grpc?.find((rpc) => rpc.method_full_name === result.method);
+      if (!grpc) {
+        throw new Error(`catalog did not expose a gRPC method for ${result.method}`);
+      }
+      const beforeProtocol = mock.hitCount;
+      await grpcInvoke(addr, grpc.method_full_name, capsetID, instanceID, options.callTimeoutMs);
+      result.protocols.grpc = true;
+      result.protocols.grpc_upstream = mock.hitCount > beforeProtocol;
+      if (requireUpstreamPerProtocol && !result.protocols.grpc_upstream) {
+        throw new Error(`gRPC ${result.method} did not reach the mock upstream`);
+      }
+    }
+    if (protocols.includes("mcp")) {
+      const mcp = catalog.mcp?.find((tool) => tool.method_full_name === result.method);
+      if (!mcp) {
+        throw new Error(`catalog did not expose an MCP tool for ${result.method}`);
+      }
+      const beforeProtocol = mock.hitCount;
+      await mcpInvoke(addr, capsetID, mcp.tool_name, request, options.callTimeoutMs);
+      result.protocols.mcp = true;
+      result.protocols.mcp_upstream = mock.hitCount > beforeProtocol;
+      if (requireUpstreamPerProtocol && !result.protocols.mcp_upstream) {
+        throw new Error(`MCP ${mcp.tool_name} did not reach the mock upstream`);
+      }
+    }
+    result.mock_hits = mock.hitCount - beforeHits;
     result.expect_upstream = expectUpstream;
-    result.chain_ok = (!expectUpstream || result.mock_hits > 0) && isAcceptableConnectResult(response.status, body);
+    assertUpstreamExpectation(fixture?.upstream, mock.requests.slice(beforeHits));
+    const connectOK = fixture?.requireBusinessSuccess ? result.business_success : isAcceptableConnectResult(response.status, body);
+    result.chain_ok = (!expectUpstream || result.mock_hits > 0) && connectOK && protocols.every((protocol) => result.protocols[protocol]);
   } catch (error) {
     result.error = error instanceof Error ? error.message : String(error);
     result.mock_hits = mock.hitCount - beforeHits;
@@ -171,6 +206,18 @@ function readSmokeFixture(serviceDir) {
   }
   if (fixture.expectUpstream !== undefined && typeof fixture.expectUpstream !== "boolean") {
     throw new Error(`${fixturePath}: expectUpstream must be a boolean`);
+  }
+  if (fixture.requireBusinessSuccess !== undefined && typeof fixture.requireBusinessSuccess !== "boolean") {
+    throw new Error(`${fixturePath}: requireBusinessSuccess must be a boolean`);
+  }
+  if (fixture.requireUpstreamPerProtocol !== undefined && typeof fixture.requireUpstreamPerProtocol !== "boolean") {
+    throw new Error(`${fixturePath}: requireUpstreamPerProtocol must be a boolean`);
+  }
+  if (fixture.protocols !== undefined && (!Array.isArray(fixture.protocols) || fixture.protocols.length === 0 || fixture.protocols.some((protocol) => !["connect", "grpc", "mcp"].includes(protocol)))) {
+    throw new Error(`${fixturePath}: protocols must be a non-empty list of connect, grpc, and/or mcp`);
+  }
+  if (fixture.upstream !== undefined && (fixture.upstream == null || typeof fixture.upstream !== "object" || Array.isArray(fixture.upstream))) {
+    throw new Error(`${fixturePath}: upstream must be an object`);
   }
   return fixture;
 }
@@ -224,17 +271,25 @@ async function startMockUpstream() {
     req.on("data", (chunk) => chunks.push(chunk));
     req.on("end", () => {
       const body = Buffer.concat(chunks).toString("utf8");
+      let jsonBody;
+      try { jsonBody = body ? JSON.parse(body) : {}; } catch { jsonBody = undefined; }
       requests.push({
         method: req.method,
         url: req.url,
-        headers: {
-          authorization: req.headers.authorization ? "present" : undefined,
-          contentType: req.headers["content-type"],
-        },
+        headers: req.headers,
+        body: jsonBody,
         bodyLength: body.length,
       });
       res.setHeader("Content-Type", "application/json");
-      res.end(JSON.stringify({
+      const cloudLockRequest = req.method === "POST"
+        && req.url === "/api/assetSrv/machineController/searchMachineList"
+        && req.headers.token === "smoke-secret"
+        && req.headers.menucode === "5101";
+      res.end(JSON.stringify(cloudLockRequest ? {
+        code: "1",
+        msg: "success",
+        data: { list: [{ id: "smoke-machine" }], total: 1 },
+      } : {
         ok: true,
         code: 0,
         msg: "ok",
@@ -336,6 +391,80 @@ function cli(addr, args, { timeoutMs, allowFailure = false } = {}) {
 async function cliJSON(addr, args, options) {
   const result = await cli(addr, args, options);
   return JSON.parse(result.stdout);
+}
+
+function grpcInvoke(addr, method, capsetID, instanceID, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const client = http2.connect(`http://${addr}`);
+    const timer = setTimeout(() => finish(new Error(`gRPC ${method} timed out after ${timeoutMs}ms`)), timeoutMs);
+    let finished = false;
+    let grpcStatus;
+    let body = "";
+    const finish = (error) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      client.close();
+      if (error) reject(error); else resolve();
+    };
+    client.once("error", finish);
+    const stream = client.request({
+      ":method": "POST",
+      ":path": `/${String(method).replace(/^\/+/, "")}`,
+      "content-type": "application/grpc+proto",
+      te: "trailers",
+      "x-octobus-capset": capsetID,
+      "x-octobus-instance": instanceID,
+    });
+    stream.on("response", (headers) => { grpcStatus = headers["grpc-status"] ?? grpcStatus; });
+    stream.on("trailers", (headers) => { grpcStatus = headers["grpc-status"] ?? grpcStatus; });
+    stream.on("data", (chunk) => { body += chunk.toString("base64"); });
+    stream.once("error", finish);
+    stream.once("end", () => {
+      if (String(grpcStatus ?? "") !== "0") {
+        finish(new Error(`gRPC ${method} failed with grpc-status=${grpcStatus ?? "missing"}, body=${body.slice(0, 300)}`));
+        return;
+      }
+      finish();
+    });
+    stream.end(Buffer.from([0, 0, 0, 0, 0]));
+  });
+}
+
+async function mcpInvoke(addr, capsetID, toolName, request, timeoutMs) {
+  const response = await fetch(`http://${addr}/capsets/${capsetID}/mcp`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: "smoke", method: "tools/call", params: { name: toolName, arguments: request } }),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  const body = await response.text();
+  if (!response.ok) {
+    throw new Error(`MCP ${toolName} returned HTTP ${response.status}: ${body.slice(0, 300)}`);
+  }
+  let payload;
+  try { payload = JSON.parse(body); } catch { throw new Error(`MCP ${toolName} returned invalid JSON: ${body.slice(0, 300)}`); }
+  if (payload.error || !payload.result?.structuredContent) {
+    throw new Error(`MCP ${toolName} failed: ${body.slice(0, 300)}`);
+  }
+}
+
+function assertUpstreamExpectation(expectation, requests) {
+  if (expectation === undefined) return;
+  const matched = requests.some((request) => {
+    if (expectation.method && request.method !== expectation.method) return false;
+    if (expectation.path && request.url !== expectation.path) return false;
+    for (const [key, value] of Object.entries(expectation.headers ?? {})) {
+      if (request.headers[String(key).toLowerCase()] !== String(value)) return false;
+    }
+    for (const [key, value] of Object.entries(expectation.body ?? {})) {
+      if (request.body?.[key] !== value) return false;
+    }
+    return true;
+  });
+  if (!matched) {
+    throw new Error(`upstream request did not match fixture expectation (${JSON.stringify(expectation)})`);
+  }
 }
 
 async function sampleRequestFromOpenAPI(addr, capsetID, endpoint) {

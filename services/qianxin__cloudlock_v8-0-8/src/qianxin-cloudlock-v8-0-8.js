@@ -1,7 +1,14 @@
 // 奇安信网神云锁服务器安全管理系统(椒图) V8.0.8 Hotfix1 适配。
 // 认证:web 会话 token(`token` 头)+ 按页面的 menuCode + Origin/Referer。
 // 当前实现服务器列表查询(QueryMachineList),请求/响应已按真机抓包对齐。
-import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import {
+  GrpcError,
+  createTlsDispatcher,
+  fetchWithTimeout,
+  grpcStatus,
+  readResponseText,
+  redactSensitive,
+} from '@chaitin-ai/octobus-sdk';
 
 const SVC = 'QIANXIN_CloudLock_V8_0_8.QIANXIN_CloudLock_V8_0_8';
 export const QUERY_MACHINE_PATH = `/${SVC}/QueryMachineList`;
@@ -136,7 +143,13 @@ const resolveCallContext = (ctx = {}) => ({
   req: ctx.req ?? ctx.request ?? {},
 });
 
-const resolveHost = (bindings = {}) => normalizeBaseUrl(pickFirstString([bindings.host, bindings.restBaseUrl, bindings.baseUrl]));
+const resolveHost = (bindings = {}) => {
+  for (const value of [bindings.host, bindings.restBaseUrl, bindings.baseUrl]) {
+    const host = normalizeBaseUrl(value);
+    if (host) return host;
+  }
+  return '';
+};
 const resolveToken = (bindings = {}) => pickStringFrom(bindings, ['token', 'sessionToken', 'session_token']);
 
 const resolveTimeoutMs = (ctx = {}) => {
@@ -146,7 +159,7 @@ const resolveTimeoutMs = (ctx = {}) => {
 
 const buildTlsOptions = (bindings = {}) => {
   const enabled = pickFirstBoolean([bindings.skipTlsVerify, bindings.tlsInsecureSkipVerify, bindings.insecureSkipVerify]) || false;
-  return enabled ? { skipTlsVerify: true, tlsInsecureSkipVerify: true, insecureSkipVerify: true } : {};
+  return enabled ? { dispatcher: createTlsDispatcher(true) } : {};
 };
 
 const sanitizeHeaders = (headers) => {
@@ -221,24 +234,20 @@ const isSuccess = (json) => String(unwrapScalar(json?.code) ?? '') === '1';
 const runQueryMachineList = async (req = {}, ctx = {}) => {
   const bound = requireBindings(ctx);
   const body = buildMachineListBody(bound.req ? { ...bound.req, ...req } : req);
-  let response;
-  try {
-    response = await fetch(`${bound.host}${MACHINE_URI}`, {
-      method: 'POST',
-      timeoutMs: resolveTimeoutMs(bound),
-      ...buildTlsOptions(bound.bindings),
-      headers: buildHeaders(bound.bindings, bound.meta, {
-        host: bound.host,
-        token: bound.token,
-        menuCode: MACHINE_MENU_CODE,
-        refererPath: MACHINE_REFERER_PATH,
-      }),
-      body: JSON.stringify(body),
-    });
-  } catch (err) {
-    throw errorWithCode('UNAVAILABLE', err?.cause?.message || err?.message || 'fetch failed');
-  }
-  const text = await response.text();
+  const response = await fetchWithTimeout(`${bound.host}${MACHINE_URI}`, {
+    method: 'POST',
+    headers: buildHeaders(bound.bindings, bound.meta, {
+      host: bound.host,
+      token: bound.token,
+      menuCode: MACHINE_MENU_CODE,
+      refererPath: MACHINE_REFERER_PATH,
+    }),
+    body: JSON.stringify(body),
+  }, {
+    timeoutMs: resolveTimeoutMs(bound),
+    ...buildTlsOptions(bound.bindings),
+  });
+  const text = await readResponseText(response);
   const status = Number(response.status);
   if (!response.ok) throwForHttpStatus(status, text);
   if (!String(text || '').trim()) throw errorWithCode('UNKNOWN', 'response body is empty');
@@ -249,7 +258,7 @@ const runQueryMachineList = async (req = {}, ctx = {}) => {
     msg: String(unwrapScalar(json?.msg) ?? ''),
     total: extractTotal(json),
     http_status: status,
-    raw_json: text,
+    raw_json: JSON.stringify(redactSensitive(json)),
   };
   if (!success) throw errorWithCode('FAILED_PRECONDITION', result.msg || `query failed (code=${result.code})`);
   return result;
@@ -263,7 +272,10 @@ export function rpcdef(ctx = {}) {
 }
 
 export const handlers = {
-  [METHOD_QUERY_MACHINE_FULL]: (req, ctx = {}) => runQueryMachineList(req, ctx),
+  [METHOD_QUERY_MACHINE_FULL]: (ctx = {}) => {
+    const callCtx = resolveCallContext(ctx);
+    return runQueryMachineList(callCtx.req, callCtx);
+  },
 };
 
 export const _test = {

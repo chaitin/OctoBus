@@ -1,0 +1,29 @@
+{
+  "method": "QIANXIN_CloudLock_V8_0_8.QIANXIN_CloudLock_V8_0_8/QueryMachineList",
+  "request": {
+    "currentPage": 1,
+    "maxResults": 20,
+    "groupUuid": "smoke-group",
+    "onlineStatus": "1"
+  },
+  "expectUpstream": true,
+  "requireBusinessSuccess": true,
+  "requireUpstreamPerProtocol": true,
+  "protocols": ["connect", "grpc", "mcp"],
+  "upstream": {
+    "method": "POST",
+    "path": "/api/assetSrv/machineController/searchMachineList",
+    "headers": {
+      "token": "smoke-secret",
+      "menucode": "5101",
+      "content-type": "application/json"
+    },
+    "body": {
+      "currentPage": 1,
+      "maxResults": 20,
+      "groupUuid": "smoke-group",
+      "onlineStatus": "1",
+      "ifShowCurrentGroupInfo": 0
+    }
+  }
+}
