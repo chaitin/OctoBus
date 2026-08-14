@@ -1,0 +1,7 @@
+{
+  "method": "CTDSG_FW.CTDSG_FW/BlockDomain",
+  "request": {
+    "domains": ["smoke.example"]
+  },
+  "expectUpstream": true
+}

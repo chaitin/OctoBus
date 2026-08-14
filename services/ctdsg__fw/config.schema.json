@@ -2,7 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": true,
-  "required": ["host", "appId"],
+  "required": ["appId"],
+  "anyOf": [{ "required": ["host"] }, { "required": ["restBaseUrl"] }, { "required": ["baseUrl"] }, { "required": ["rest_base_url"] }, { "required": ["base_url"] }],
   "properties": {
     "host": {
       "type": "string",
