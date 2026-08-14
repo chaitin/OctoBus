@@ -190,7 +190,7 @@ const handleListTargets = async (req = {}, ctx = {}) => {
   const params = {};
   if (req.state) params.state = toTrimmedString(req.state);
   const scrapePool = toTrimmedString(req.scrape_pool);
-  if (scrapePool) params.scrapePool = scrapePool;
+  if (scrapePool) params.scrape_pool = scrapePool;
   const qs = encodeQueryParams(params);
   const url = `${baseUrl}/api/v1/targets${qs ? '?' + qs : ''}`;
   const headers = buildAuthHeaders(callCtx.bindings);
@@ -447,9 +447,8 @@ const handleListMetadata = async (req = {}, ctx = {}) => {
   const baseUrl = requireBaseUrl(callCtx);
   const params = {};
   if (req.match_target) params['match_target'] = toTrimmedString(req.match_target);
-  if (req.limit_per_metric) params.limit_per_metric = toTrimmedString(req.limit_per_metric);
   if (req.metric) params.metric = toTrimmedString(req.metric);
-  if (req.limit) params.limit = String(toFiniteInt(req.limit));
+  if (req.limit) params.limit_per_metric = String(toFiniteInt(req.limit));
   const qs = encodeQueryParams(params);
   const url = `${baseUrl}/api/v1/metadata${qs ? '?' + qs : ''}`;
   const headers = buildAuthHeaders(callCtx.bindings);

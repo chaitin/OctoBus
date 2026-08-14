@@ -195,10 +195,12 @@ test('single-context SDK ABI and optional query parameters reach upstream', asyn
     await invoke('ListLabels', { match: ['up'], start: '1', end: '2', limit: 2 });
     await invoke('GetLabelValues', { label: 'job', match: ['up'], start: '1', end: '2', limit: 2 });
     await invoke('ListTargetsMetadata', { match_target: '{job="prometheus"}', metric: 'up', limit: 2 });
-    await invoke('ListMetadata', { match_target: '{job="prometheus"}', limit_per_metric: '2', metric: 'up', limit: 2 });
+    await invoke('ListMetadata', { match_target: '{job="prometheus"}', metric: 'up', limit: 2 });
     assert.equal(mock.requests.length, 10);
     assert.equal(mock.requests[0].query.stats, 'all');
-    assert.equal(mock.requests[2].query.scrapePool, 'prometheus');
+    assert.equal(mock.requests[2].query.scrape_pool, 'prometheus');
+    assert.equal(mock.requests[9].query.limit_per_metric, '2');
+    assert.equal(mock.requests[9].query.limit, undefined);
   } finally { await mock.close(); }
 });
 
