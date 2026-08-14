@@ -513,6 +513,10 @@ const services = {
     entryFile: "../thehive__cortex/bin/cortex.js",
     serviceModule: "../thehive__cortex/src/service.js",
   },
+  "vulnplatform-vuln": {
+    entryFile: "../vulnplatform__vulnerability-management_v3-2-0/bin/vulnplatform-vuln.js",
+    serviceModule: "../vulnplatform__vulnerability-management_v3-2-0/src/service.js",
+  },
   "opencti": {
     entryFile: "../filigran__opencti/bin/opencti.js",
     serviceModule: "../filigran__opencti/src/service.js",
