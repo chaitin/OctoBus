@@ -4,6 +4,7 @@ const DEFAULT_BASE_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0";
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_TIMEOUT_MS = 120_000;
 const MAX_RESULTS_PER_PAGE = 50;
+const MAX_RESPONSE_BYTES = 10 << 20;
 const RETRYABLE_ATTEMPTS = 2;
 
 function grpcError(code, message) {
@@ -55,6 +56,46 @@ function isRetryableStatus(status) {
   return status === 429 || status >= 500;
 }
 
+async function responseText(response, controller) {
+  const declaredLength = Number(response.headers?.get?.("content-length") || 0);
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_RESPONSE_BYTES) {
+    controller.abort();
+    throw grpcError(grpcStatus.UNAVAILABLE, `NVD API response exceeds ${MAX_RESPONSE_BYTES} bytes`);
+  }
+  if (!response.body?.getReader) {
+    const body = await response.text();
+    if (Buffer.byteLength(body) > MAX_RESPONSE_BYTES) {
+      throw grpcError(grpcStatus.UNAVAILABLE, `NVD API response exceeds ${MAX_RESPONSE_BYTES} bytes`);
+    }
+    return body;
+  }
+
+  const reader = response.body.getReader();
+  const chunks = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_RESPONSE_BYTES) {
+        controller.abort();
+        throw grpcError(grpcStatus.UNAVAILABLE, `NVD API response exceeds ${MAX_RESPONSE_BYTES} bytes`);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
 async function httpGetJson(url, headers, configuredTimeoutMs) {
   const requestTimeoutMs = timeoutMs(configuredTimeoutMs);
   for (let attempt = 1; attempt <= RETRYABLE_ATTEMPTS; attempt += 1) {
@@ -67,7 +108,7 @@ async function httpGetJson(url, headers, configuredTimeoutMs) {
         signal: controller.signal,
         redirect: "error",
       });
-      const body = await response.text();
+      const body = await responseText(response, controller);
       if (!response.ok) {
         const error = mapHttpError(response.status, body);
         if (attempt < RETRYABLE_ATTEMPTS && isRetryableStatus(response.status)) continue;
@@ -120,7 +161,7 @@ export function extractCveDetails(vulnerability) {
   const v30 = (metrics.cvssMetricV30 || [])[0]?.cvssData || {};
   const v2 = (metrics.cvssMetricV2 || [])[0]?.cvssData || {};
   const cweIds = (cve.weaknesses || []).flatMap((weakness) =>
-    (weakness.description || []).map((description) => description.value).filter(Boolean));
+    (weakness.description || []).map((description) => description.value).filter((value) => /^CWE-\d+$/i.test(value)));
   const affectedProducts = (cve.configurations || []).flatMap((configuration) =>
     (configuration.nodes || []).flatMap((node) => (node.cpeMatch || []).map((match) => {
       const parts = String(match.criteria || "").split(":");

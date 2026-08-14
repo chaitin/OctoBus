@@ -159,7 +159,7 @@ Content-Type: application/json
 
 - NVD 无认证时速率极低（5/30s），建议配置 `nvdApiKey`
 - NVD 偶尔 503（Cloudflare 前端），内置无 sleep 重试（最多 2 次）
-- 单次响应可能很大（Log4Shell 约 40KB），已配置 10MB maxBuffer
+- 单次响应可能很大（Log4Shell 约 40KB）；响应体读取限制为 10MB
 
 ## 建议 capset
 

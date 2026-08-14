@@ -71,6 +71,15 @@ test("CVE extraction falls back through NVD metric versions", () => {
   assert.equal(_test.appendQuery("https://example.test/api", { value: "a b" }).searchParams.get("value"), "a b");
 });
 
+test("CVE extraction excludes NVD CWE placeholders", () => {
+  const { cweIds } = extractCveDetails({
+    weaknesses: [{ description: [
+      { value: "CWE-79" }, { value: "NVD-CWE-noinfo" }, { value: "NVD-CWE-Other" }, { value: "cwe-89" },
+    ] }],
+  });
+  assert.deepEqual(cweIds, ["CWE-79", "cwe-89"]);
+});
+
 test("CVE extraction represents affected CPE version ranges", () => {
   const [exclusiveEnd, exclusiveStart, inclusiveEnd, literal] = extractCveDetails({
     configurations: [{ nodes: [{ cpeMatch: [
@@ -90,6 +99,14 @@ test("HTTP client maps malformed responses, retries, and timeouts without exposi
   const originalFetch = globalThis.fetch;
   try {
     globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => "not json" });
+    await expectsGrpcError(() => _test.httpGetJson("https://example.test", {}, 1_000), grpcStatus.UNAVAILABLE);
+
+    globalThis.fetch = async () => ({
+      ok: true,
+      status: 200,
+      headers: { get: () => String(10 << 20) },
+      text: async () => { throw new Error("body should not be read"); },
+    });
     await expectsGrpcError(() => _test.httpGetJson("https://example.test", {}, 1_000), grpcStatus.UNAVAILABLE);
 
     let attempts = 0;
