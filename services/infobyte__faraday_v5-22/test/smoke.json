@@ -1,5 +1,11 @@
 {
   "method": "InfobyteFaradayV522.Faraday/ListWorkspaces",
   "request": {},
-  "expectUpstream": true
+  "expectUpstream": true,
+  "requireUpstreamPerProtocol": true,
+  "protocols": ["connect", "grpc", "mcp"],
+  "upstream": {
+    "method": "GET",
+    "path": "/_api/v3/ws"
+  }
 }
