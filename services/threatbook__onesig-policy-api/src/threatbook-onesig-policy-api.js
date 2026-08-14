@@ -23,6 +23,8 @@ const queryAsPayloadOperations = new Set([
   'ListHttpBlacklist',
 ]);
 
+const signedQueryKeys = new Set(['apikey', 'timestamp', 'sign']);
+
 const error = (status, message) => new GrpcError(status, message);
 const invalid = (message) => error(grpcStatus.INVALID_ARGUMENT, message);
 const denied = (message) => error(grpcStatus.PERMISSION_DENIED, message);
@@ -76,6 +78,17 @@ const parsePayload = (source) => {
   throw invalid('payloadJson must be a JSON object string');
 };
 
+const validateQuery = (query) => {
+  if (query === undefined || query === null) return {};
+  if (typeof query !== 'object' || Array.isArray(query)) throw invalid('query must be an object');
+  for (const key of Object.keys(query)) {
+    if (signedQueryKeys.has(key.toLowerCase())) {
+      throw invalid(`query must not override signed parameter ${key}`);
+    }
+  }
+  return query;
+};
+
 const timeoutMsOf = (bindings) => {
   const value = Number(first(bindings.timeoutMs, DEFAULT_TIMEOUT_MS));
   return Number.isFinite(value) && value > 0 ? Math.trunc(value) : DEFAULT_TIMEOUT_MS;
@@ -96,7 +109,13 @@ const signedUrl = ({ bindings, path, query = {} }) => {
 };
 
 const readResponse = async (res) => {
-  const body = await res.text();
+  let body;
+  try {
+    body = await res.text();
+  } catch {
+    throw unavailable('upstream response read failed');
+  }
+  if (!body.trim()) throw unknown('response body is empty');
   let json = null;
   try {
     json = body ? JSON.parse(body) : null;
@@ -115,6 +134,7 @@ const callOneSig = async ({ bindings, method, path, query, payload }) => {
     method,
     headers,
     signal: AbortSignal.timeout(timeoutMsOf(bindings)),
+    redirect: 'error',
   };
   if (!['GET', 'DELETE'].includes(method)) {
     init.body = JSON.stringify(payload ?? {});
@@ -125,7 +145,10 @@ const callOneSig = async ({ bindings, method, path, query, payload }) => {
   try {
     res = await fetch(url, init);
   } catch (err) {
-    throw unavailable(err?.message || 'upstream request failed');
+    if (err?.name === 'AbortError' || err?.name === 'TimeoutError') {
+      throw unavailable('upstream request timed out');
+    }
+    throw unavailable('upstream request failed');
   }
 
   const { body, json } = await readResponse(res);
@@ -142,13 +165,14 @@ const callOneSig = async ({ bindings, method, path, query, payload }) => {
 const callMapped = (name, ctx) => {
   const [method, path] = operationMap[name];
   const request = requestOf(ctx);
+  const query = validateQuery(request.query);
   const payload = parsePayload(first(request.payload_json, request.payloadJson));
   return callOneSig({
     bindings: bindingsOf(ctx),
     method,
     path,
-    query: request.query,
-    payload: queryAsPayloadOperations.has(name) && Object.keys(payload).length === 0 ? (request.query ?? {}) : payload,
+    query,
+    payload: queryAsPayloadOperations.has(name) && Object.keys(payload).length === 0 ? query : payload,
   });
 };
 
@@ -160,5 +184,6 @@ export const _test = {
   signOf,
   signedUrl,
   parsePayload,
+  validateQuery,
   operationMap,
 };

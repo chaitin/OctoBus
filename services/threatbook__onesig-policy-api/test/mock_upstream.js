@@ -24,7 +24,7 @@ export const createMockUpstream = () => {
       res.end(JSON.stringify({ responseCode: 0, verboseMsg: 'ok', data: { list: [] } }));
       return;
     }
-    if (url.pathname === '/api/v3/httpBlacklist/create') {
+    if (url.pathname === '/api/v3/httpBlacklist/create' && body === '{}') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ responseCode: 1001, verboseMsg: 'business failed' }));
       return;
