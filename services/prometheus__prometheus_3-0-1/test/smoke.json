@@ -1,0 +1,11 @@
+{
+  "method": "CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/GetStatusFlags",
+  "request": {},
+  "protocols": ["connect", "grpc", "mcp"],
+  "requireBusinessSuccess": true,
+  "requireUpstreamPerProtocol": true,
+  "upstream": {
+    "method": "GET",
+    "path": "/api/v1/status/flags"
+  }
+}

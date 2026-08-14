@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { GrpcError } from '@chaitin-ai/octobus-sdk';
-import { handlers } from '../src/prometheus-3-0-1.js';
+import { handlers, _test } from '../src/prometheus-3-0-1.js';
 import { service } from '../src/service.js';
 import { createMockServer } from './mock_upstream.js';
 
@@ -34,6 +34,8 @@ test('InstantQuery returns result', async () => {
 test('RangeQuery requires query/start/end/step', async () => {
   await expectGrpcError(() => handlers['CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/RangeQuery']({}, buildCtx()), 'INVALID_ARGUMENT');
   await expectGrpcError(() => handlers['CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/RangeQuery']({ query: 'up' }, buildCtx()), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => handlers['CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/RangeQuery']({ query: 'up', start: '1' }, buildCtx()), 'INVALID_ARGUMENT');
+  await expectGrpcError(() => handlers['CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/RangeQuery']({ query: 'up', start: '1', end: '2' }, buildCtx()), 'INVALID_ARGUMENT');
 });
 
 test('RangeQuery returns matrix', async () => {
@@ -178,4 +180,85 @@ test('ListMetadata returns metric metadata', async () => {
     assert.equal(result.status, 'success');
     assert.ok(result.data.find((d) => d.metric === 'up'));
   } finally { await mock.close(); }
+});
+
+test('single-context SDK ABI and optional query parameters reach upstream', async () => {
+  const mock = createMockServer(); const baseUrl = await mock.start();
+  const invoke = (method, request) => handlers[`CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/${method}`]({ config: { baseUrl }, request });
+  try {
+    await invoke('InstantQuery', { query: 'up', time: '1', timeout: '2s', limit: 3, lookback_delta: '5m', stats: true });
+    await invoke('RangeQuery', { query: 'up', start: '1', end: '2', step: '1', timeout: '2s', limit: 3, lookback_delta: '5m', stats: true });
+    await invoke('ListTargets', { state: 'active', scrape_pool: 'prometheus' });
+    await invoke('ListRules', { type: 'alert', rule_name: 'HighErrorRate', rule_group: ['test'], file: ['rules.yml'] });
+    await invoke('ListAlerts', { state: 'firing' });
+    await invoke('ListSeries', { match: ['up'], start: '1', end: '2', limit: 2 });
+    await invoke('ListLabels', { match: ['up'], start: '1', end: '2', limit: 2 });
+    await invoke('GetLabelValues', { label: 'job', match: ['up'], start: '1', end: '2', limit: 2 });
+    await invoke('ListTargetsMetadata', { match_target: '{job="prometheus"}', metric: 'up', limit: 2 });
+    await invoke('ListMetadata', { match_target: '{job="prometheus"}', limit_per_metric: '2', metric: 'up', limit: 2 });
+    assert.equal(mock.requests.length, 10);
+    assert.equal(mock.requests[0].query.stats, 'all');
+    assert.equal(mock.requests[2].query.scrapePool, 'prometheus');
+  } finally { await mock.close(); }
+});
+
+test('helpers cover validation, encoding, auth, TLS and response mapping', () => {
+  assert.equal(_test.resolveBaseUrl({ baseUrl: ' ftp://bad ' }), '');
+  assert.equal(_test.resolveBaseUrl({ baseUrl: 'not a url' }), '');
+  assert.equal(_test.resolveBaseUrl({ domain: 'http://example.com/' }), 'http://example.com');
+  assert.equal(_test.resolveBaseUrl({ baseUrl: 'https://user:pass@example.com///' }), 'https://example.com');
+  assert.deepEqual(_test.buildAuthHeaders({}), {});
+  assert.deepEqual(_test.buildAuthHeaders({ username: 'u' }), {});
+  assert.equal(_test.buildAuthHeaders({ token: 'secret' }).Authorization, 'Bearer secret');
+  assert.equal(_test.buildAuthHeaders({ username: 'u', password: 'p' }).Authorization, 'Basic dTpw');
+  assert.deepEqual(_test.buildTlsOptions({}), {});
+  assert.ok(_test.buildTlsOptions({ skipTlsVerify: true }).dispatcher);
+  assert.equal(_test.toTrimmedString({ value: ' x ' }), 'x');
+  assert.equal(_test.toTrimmedString(undefined), '');
+  assert.equal(_test.toFiniteInt('2.9'), 2);
+  assert.equal(_test.toFiniteInt('', 4), 4);
+  assert.equal(_test.toFiniteInt('bad', 7), 7);
+  assert.equal(_test.toFiniteNumber('2.5'), 2.5);
+  assert.equal(_test.toFiniteNumber(undefined, 8), 8);
+  assert.equal(_test.toJsonString({ a: 1 }), '{"a":1}');
+  const circular = {}; circular.self = circular;
+  assert.equal(_test.toJsonString(circular), '');
+  assert.equal(_test.toJsonString(null), '');
+  assert.equal(_test.encodeQueryParams({ a: ['x', 'y'], b: '', c: 2 }), 'a=x&a=y&c=2');
+  assert.equal(_test.mapQueryResult([1, '2'], 'scalar')[0].values[0].value, '2');
+  assert.deepEqual(_test.mapQueryResult(null, 'vector'), []);
+  assert.deepEqual(_test.mapQueryResult([{ metric: {}, value: null }], 'vector')[0].values, []);
+  assert.deepEqual(_test.mapQueryResult([{ metric: {}, values: null }], 'matrix')[0].values, []);
+  assert.deepEqual(_test.mapQueryResult([], 'unknown'), []);
+  assert.deepEqual(_test.mapMetricLabels(), []);
+  assert.equal(_test.tryParseJson('{}').ok, true);
+  assert.equal(_test.tryParseJson('x').ok, false);
+  assert.equal(_test.safeUrlForLog('https://u:p@example.com/x?token=s'), 'https://example.com/x?token=%5BREDACTED%5D');
+  assert.equal(_test.safeUrlForLog('bad'), '[invalid-url]');
+});
+
+test('response helpers map invalid and HTTP error responses without leaking body', () => {
+  assert.deepEqual(_test.parseJsonOrThrow({ httpStatus: 200, httpBody: '{"ok":true}' }, 'x'), { ok: true });
+  for (const body of ['', 'not-json']) assert.throws(() => _test.parseJsonOrThrow({ httpStatus: 200, httpBody: body }, 'x'), GrpcError);
+  for (const status of [400, 401, 403, 404, 418, 422, 500, 503]) {
+    assert.throws(() => _test.ensureSuccess({ httpStatus: status, httpBody: 'token=secret' }, 'x'), (err) => err instanceof GrpcError && !err.message.includes('secret'));
+  }
+  assert.doesNotThrow(() => _test.ensureSuccess({ httpStatus: 204, httpBody: '' }, 'x'));
+});
+
+test('fetch failures and malformed upstream responses become gRPC errors', async () => {
+  const originalFetch = globalThis.fetch;
+  const call = (request = { query: 'up' }) => handlers['CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/InstantQuery']({ config: { baseUrl: 'https://example.com' }, request });
+  try {
+    globalThis.fetch = async () => { throw new Error('network down'); };
+    await expectGrpcError(call, 'UNAVAILABLE');
+    globalThis.fetch = async () => ({ status: 200, text: async () => { throw new Error('read failed'); } });
+    await expectGrpcError(call, 'UNAVAILABLE');
+    globalThis.fetch = async () => ({ status: 200, text: async () => '' });
+    await expectGrpcError(call, 'UNKNOWN');
+    globalThis.fetch = async () => ({ status: 200, text: async () => 'not-json' });
+    await expectGrpcError(call, 'UNKNOWN');
+    globalThis.fetch = async () => ({ status: 401, text: async () => '{"token":"secret"}' });
+    await expectGrpcError(call, 'PERMISSION_DENIED');
+  } finally { globalThis.fetch = originalFetch; }
 });

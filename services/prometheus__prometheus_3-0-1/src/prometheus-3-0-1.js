@@ -1,4 +1,5 @@
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const METHOD_INSTANT_QUERY_FULL = 'CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/InstantQuery';
 export const METHOD_RANGE_QUERY_FULL = 'CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/RangeQuery';
@@ -39,13 +40,29 @@ const toTrimmedString = (v) => { const r = unwrapScalar(v); return r === undefin
 const toFiniteInt = (v, fallback = 0) => { const r = unwrapScalar(v); if (r === undefined || r === null || r === '') return fallback; const n = Number(r); return Number.isFinite(n) ? Math.trunc(n) : fallback; };
 const toFiniteNumber = (v, fallback = 0) => { const r = unwrapScalar(v); if (r === undefined || r === null || r === '') return fallback; const n = Number(r); return Number.isFinite(n) ? n : fallback; };
 const toJsonString = (v) => { if (v === undefined || v === null) return ''; if (typeof v === 'string') return v; try { return JSON.stringify(v); } catch { return ''; } };
-const normalizeBaseUrl = (v) => { const r = toTrimmedString(v); if (!/^https?:\/\//i.test(r)) return ''; return r.replace(/\/+$/, ''); };
+const normalizeBaseUrl = (v) => {
+  const raw = toTrimmedString(v);
+  if (!raw) return '';
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return '';
+    parsed.username = '';
+    parsed.password = '';
+    return parsed.toString().replace(/\/+$/, '');
+  } catch { return ''; }
+};
 
 const mergedBindings = (ctx = {}) => ({ ...(ctx.config ?? {}), ...(ctx.secret ?? {}), ...(ctx.bindings ?? {}) });
 const resolveCallContext = (ctx = {}) => ({ ...ctx, bindings: mergedBindings(ctx), limits: ctx.limits ?? {}, meta: ctx.meta ?? {}, req: ctx.req ?? ctx.request ?? {} });
 const resolveBaseUrl = (bindings = {}) => normalizeBaseUrl(firstDefined(bindings.baseUrl, bindings.domain, bindings.url));
 const resolveTimeoutMs = (ctx = {}) => { const r = Number(firstDefined(ctx.limits?.timeoutMs, ctx.bindings?.timeoutMs, DEFAULT_TIMEOUT_MS)); return Number.isFinite(r) && r > 0 ? r : DEFAULT_TIMEOUT_MS; };
-const buildTlsOptions = (bindings = {}) => bindings.skipTlsVerify || bindings.tlsInsecureSkipVerify || bindings.insecureSkipVerify ? { skipTlsVerify: true } : {};
+let insecureDispatcher;
+const buildTlsOptions = (bindings = {}) => {
+  const skip = bindings.skipTlsVerify || bindings.tlsInsecureSkipVerify || bindings.insecureSkipVerify;
+  if (!skip) return {};
+  insecureDispatcher ??= new Agent({ connect: { rejectUnauthorized: false } });
+  return { dispatcher: insecureDispatcher };
+};
 
 const requireBaseUrl = (ctx = {}) => { const u = resolveBaseUrl(ctx.bindings || {}); if (!u) throw errorWithCode('INVALID_ARGUMENT', 'baseUrl is required'); return u; };
 const requireQuery = (req = {}) => { const q = toTrimmedString(req.query); if (!q) throw errorWithCode('INVALID_ARGUMENT', 'query is required'); return q; };
@@ -70,7 +87,8 @@ const buildLogPrefix = (ctx = {}, action) => {
   if (meta.request_id || meta.requestId) trace.push(`req=${meta.request_id || meta.requestId}`);
   return `[CNCF_Prometheus_3_0_1][${action}]${trace.length ? `[${trace.join(' ')}]` : ''}`;
 };
-const logFlow = (ctx, action, details) => { try { console.log(buildLogPrefix(ctx, action), JSON.stringify(details)); } catch { console.log(buildLogPrefix(ctx, action), details); } };
+const safeUrlForLog = (value) => { try { const url = new URL(value); url.username = ''; url.password = ''; for (const key of ['token', 'api_key', 'apikey', 'password']) if (url.searchParams.has(key)) url.searchParams.set(key, '[REDACTED]'); return url.toString(); } catch { return '[invalid-url]'; } };
+const logFlow = (ctx, action, details) => { const safe = { ...details, ...(details?.url ? { url: safeUrlForLog(details.url) } : {}) }; try { console.log(buildLogPrefix(ctx, action), JSON.stringify(safe)); } catch { console.log(buildLogPrefix(ctx, action), safe); } };
 
 const executeRequest = async (url, ctx = {}, options = {}) => {
   const timeoutMs = resolveTimeoutMs(ctx);
@@ -80,7 +98,7 @@ const executeRequest = async (url, ctx = {}, options = {}) => {
 
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  const init = { method: options.method || 'GET', headers, signal: controller.signal, ...buildTlsOptions(ctx.bindings || {}), ...(options.body !== undefined ? { body: options.body } : {}) };
+  const init = { method: options.method || 'GET', headers, signal: controller.signal, redirect: 'error', ...buildTlsOptions(ctx.bindings || {}), ...(options.body !== undefined ? { body: options.body } : {}) };
   let res;
   try { res = await fetch(url, init); } catch (err) { const m = err?.cause?.message || err?.message || 'fetch failed'; throw attachResponse(errorWithCode('UNAVAILABLE', `${options.action || 'fetch'} failed: ${m}`), { http_status: 0, http_body: m }); } finally { clearTimeout(timer); }
   let rawBody;
@@ -90,7 +108,7 @@ const executeRequest = async (url, ctx = {}, options = {}) => {
   return { httpStatus, httpBody: String(rawBody ?? '') };
 };
 
-const ensureSuccess = (result, action) => { if (result.httpStatus >= 200 && result.httpStatus < 300) return; const c = mapHttpStatusToCode(result.httpStatus); throw attachResponse(errorWithCode(c, `${action} upstream http ${result.httpStatus}: ${result.httpBody.substring(0, 500)}`), { http_status: result.httpStatus, http_body: result.httpBody }); };
+const ensureSuccess = (result, action) => { if (result.httpStatus >= 200 && result.httpStatus < 300) return; const c = mapHttpStatusToCode(result.httpStatus); throw attachResponse(errorWithCode(c, `${action} upstream http ${result.httpStatus}`), { http_status: result.httpStatus, http_body: '' }); };
 const parseJsonOrThrow = (result, action) => { const t = (result.httpBody || '').trim(); if (!t) throw attachResponse(errorWithCode('UNKNOWN', `${action} returned empty response`), { http_status: result.httpStatus, http_body: '' }); const p = tryParseJson(t); if (!p.ok) throw attachResponse(errorWithCode('UNKNOWN', `${action} response is not valid JSON`), { http_status: result.httpStatus, http_body: t }); return p.value; };
 
 const toPromResponse = (json, rawBody) => ({
@@ -455,40 +473,27 @@ const handleListMetadata = async (req = {}, ctx = {}) => {
   return { status: toTrimmedString(json?.status), data, raw_body: result.httpBody };
 };
 
-export const handlers = {
-  [METHOD_INSTANT_QUERY_FULL]: handleInstantQuery,
-  [METHOD_RANGE_QUERY_FULL]: handleRangeQuery,
-  [METHOD_LIST_TARGETS_FULL]: handleListTargets,
-  [METHOD_LIST_RULES_FULL]: handleListRules,
-  [METHOD_LIST_ALERTS_FULL]: handleListAlerts,
-  [METHOD_LIST_SERIES_FULL]: handleListSeries,
-  [METHOD_GET_STATUS_CONFIG_FULL]: handleGetStatusConfig,
-  [METHOD_LIST_LABELS_FULL]: handleListLabels,
-  [METHOD_GET_LABEL_VALUES_FULL]: handleGetLabelValues,
-  [METHOD_GET_STATUS_BUILDINFO_FULL]: handleGetStatusBuildinfo,
-  [METHOD_GET_STATUS_FLAGS_FULL]: handleGetStatusFlags,
-  [METHOD_LIST_ALERTMANAGERS_FULL]: handleListAlertmanagers,
-  [METHOD_LIST_SCRAPE_POOLS_FULL]: handleListScrapePools,
-  [METHOD_LIST_TARGETS_METADATA_FULL]: handleListTargetsMetadata,
-  [METHOD_LIST_METADATA_FULL]: handleListMetadata,
+const sdkHandler = (handler) => function sdkCall(ctx) {
+  const legacyCtx = arguments[1];
+  return legacyCtx ? handler(ctx ?? {}, legacyCtx) : handler(ctx?.request ?? {}, ctx ?? {});
 };
 
-export const rpcdef = (ctx) => ({
-  '/CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/InstantQuery': (req) => handleInstantQuery(req, ctx),
-  '/CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/RangeQuery': (req) => handleRangeQuery(req, ctx),
-  '/CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/ListTargets': (req) => handleListTargets(req, ctx),
-  '/CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/ListRules': (req) => handleListRules(req, ctx),
-  '/CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/ListAlerts': (req) => handleListAlerts(req, ctx),
-  '/CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/ListSeries': (req) => handleListSeries(req, ctx),
-  '/CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/ListLabels': (req) => handleListLabels(req, ctx),
-  '/CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/GetLabelValues': (req) => handleGetLabelValues(req, ctx),
-  '/CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/GetStatusConfig': () => handleGetStatusConfig({}, ctx),
-  '/CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/GetStatusBuildinfo': () => handleGetStatusBuildinfo({}, ctx),
-  '/CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/GetStatusFlags': () => handleGetStatusFlags({}, ctx),
-  '/CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/ListAlertmanagers': () => handleListAlertmanagers({}, ctx),
-  '/CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/ListScrapePools': () => handleListScrapePools({}, ctx),
-  '/CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/ListTargetsMetadata': (req) => handleListTargetsMetadata(req, ctx),
-  '/CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/ListMetadata': (req) => handleListMetadata(req, ctx),
-});
+export const handlers = {
+  [METHOD_INSTANT_QUERY_FULL]: sdkHandler(handleInstantQuery),
+  [METHOD_RANGE_QUERY_FULL]: sdkHandler(handleRangeQuery),
+  [METHOD_LIST_TARGETS_FULL]: sdkHandler(handleListTargets),
+  [METHOD_LIST_RULES_FULL]: sdkHandler(handleListRules),
+  [METHOD_LIST_ALERTS_FULL]: sdkHandler(handleListAlerts),
+  [METHOD_LIST_SERIES_FULL]: sdkHandler(handleListSeries),
+  [METHOD_GET_STATUS_CONFIG_FULL]: sdkHandler(handleGetStatusConfig),
+  [METHOD_LIST_LABELS_FULL]: sdkHandler(handleListLabels),
+  [METHOD_GET_LABEL_VALUES_FULL]: sdkHandler(handleGetLabelValues),
+  [METHOD_GET_STATUS_BUILDINFO_FULL]: sdkHandler(handleGetStatusBuildinfo),
+  [METHOD_GET_STATUS_FLAGS_FULL]: sdkHandler(handleGetStatusFlags),
+  [METHOD_LIST_ALERTMANAGERS_FULL]: sdkHandler(handleListAlertmanagers),
+  [METHOD_LIST_SCRAPE_POOLS_FULL]: sdkHandler(handleListScrapePools),
+  [METHOD_LIST_TARGETS_METADATA_FULL]: sdkHandler(handleListTargetsMetadata),
+  [METHOD_LIST_METADATA_FULL]: sdkHandler(handleListMetadata),
+};
 
-export const _test = { resolveBaseUrl, toTrimmedString, toFiniteInt, toFiniteNumber, toJsonString, errorWithCode, buildAuthHeaders, parseJsonOrThrow, ensureSuccess, tryParseJson, encodeQueryParams, mapQueryResult, mapMetricLabels };
+export const _test = { resolveBaseUrl, toTrimmedString, toFiniteInt, toFiniteNumber, toJsonString, errorWithCode, buildAuthHeaders, buildTlsOptions, parseJsonOrThrow, ensureSuccess, tryParseJson, encodeQueryParams, mapQueryResult, mapMetricLabels, safeUrlForLog };

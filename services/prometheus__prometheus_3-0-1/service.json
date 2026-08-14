@@ -58,6 +58,26 @@
         "CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/GetStatusBuildinfo": {
           "name": "get-status-buildinfo",
           "description": "Get Prometheus server build information."
+        },
+        "CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/GetStatusFlags": {
+          "name": "get-status-flags",
+          "description": "Get Prometheus command-line flags."
+        },
+        "CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/ListAlertmanagers": {
+          "name": "list-alertmanagers",
+          "description": "List active and dropped Alertmanager endpoints."
+        },
+        "CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/ListScrapePools": {
+          "name": "list-scrape-pools",
+          "description": "List configured scrape pools."
+        },
+        "CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/ListTargetsMetadata": {
+          "name": "list-targets-metadata",
+          "description": "List metadata exposed by scrape targets."
+        },
+        "CNCF_Prometheus_3_0_1.CNCF_Prometheus_3_0_1/ListMetadata": {
+          "name": "list-metadata",
+          "description": "List metric metadata known to Prometheus."
         }
       }
     }
