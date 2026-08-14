@@ -53,6 +53,7 @@ test("SearchCves returns records, and handlers use ctx request/config/secret", a
   assert.equal(result.data[0].cveId, "CVE-2021-44228");
   assert.equal((await searchCves(config, {}, { keyword: "log4j", severity: "" })).total, 1);
   assert.equal((await searchCves(config, {}, {})).total, 1);
+  assert.equal((await searchCves(config, {}, { limit: 0 })).total, 1);
   assert.equal(typeof service.handlers["nist.nvd.v2.NvdService/LookupCve"], "function");
 });
 

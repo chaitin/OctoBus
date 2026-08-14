@@ -115,7 +115,7 @@ Content-Type: application/json
 | **请求** `keyword` | string | 搜索关键词（可选） |
 | `severity` | string | 严重程度筛选：CRITICAL/HIGH/MEDIUM/LOW（可选） |
 | `skip` | int32 | 分页偏移 |
-| `limit` | int32 | 每页条数（最大 50） |
+| `limit` | int32 | 每页条数（0 或未提供时默认 20，最大 50） |
 | `pubStartDate` | string | 发布日期起始（ISO 8601） |
 | `pubEndDate` | string | 发布日期截止 |
 | **响应** `total` | int32 | 总结果数 |
