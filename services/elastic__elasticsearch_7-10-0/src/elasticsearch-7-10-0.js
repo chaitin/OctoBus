@@ -1,3 +1,5 @@
+import { Buffer } from 'node:buffer';
+
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
 export const METHOD_CLUSTER_HEALTH_PATH = '/Elasticsearch_7_10_0.Elasticsearch_7_10_0/ClusterHealth';
@@ -18,6 +20,7 @@ export const DEFAULT_LIST_NODES_BYTES = '';
 export const DEFAULT_SEARCH_QUERY = '{"match_all":{}}';
 export const DEFAULT_SEARCH_SIZE = 10;
 export const DEFAULT_SEARCH_FROM = 0;
+export const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 
 const VALID_HEALTH_LEVELS = new Set(['cluster', 'indices', 'shards']);
 const VALID_WAIT_FOR_STATUS = new Set(['green', 'yellow', 'red']);
@@ -27,6 +30,8 @@ const grpcCodeFor = (code) => ({
   FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
   INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT,
   PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED,
+  RESOURCE_EXHAUSTED: grpcStatus.RESOURCE_EXHAUSTED,
+  DEADLINE_EXCEEDED: grpcStatus.DEADLINE_EXCEEDED,
   UNAVAILABLE: grpcStatus.UNAVAILABLE,
   UNKNOWN: grpcStatus.UNKNOWN,
 })[code] ?? grpcStatus.UNKNOWN;
@@ -88,8 +93,16 @@ const toBool = (value, fallback = false) => {
 
 const normalizeBaseUrl = (value) => {
   const raw = toTrimmedString(value);
-  if (!/^https?:\/\//i.test(raw)) return '';
-  return raw.replace(/\/+$/, '');
+  if (!raw) return '';
+  try {
+    const parsed = new URL(raw);
+    if (!['http:', 'https:'].includes(parsed.protocol)
+      || parsed.username || parsed.password || parsed.search || parsed.hash) return '';
+    parsed.pathname = parsed.pathname === '/' ? '' : parsed.pathname.replace(/\/+$/, '');
+    return parsed.toString().replace(/\/$/, '');
+  } catch {
+    return '';
+  }
 };
 
 const mergedBindings = (ctx = {}) => ({
@@ -131,10 +144,23 @@ const resolveTimeoutMs = (ctx = {}) => {
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_TIMEOUT_MS;
 };
 
-const buildTlsOptions = (bindings = {}) => {
-  const enabled = Boolean(bindings.skipTlsVerify || bindings.tlsInsecureSkipVerify || bindings.insecureSkipVerify);
-  if (!enabled) return {};
-  return { skipTlsVerify: true, tlsInsecureSkipVerify: true, insecureSkipVerify: true };
+let insecureDispatcherPromise;
+
+const shouldSkipTlsVerify = (bindings = {}) => Boolean(
+  bindings.skipTlsVerify || bindings.tlsInsecureSkipVerify || bindings.insecureSkipVerify,
+);
+
+const createTlsDispatcher = async (skipTlsVerify) => {
+  if (!skipTlsVerify) return undefined;
+  insecureDispatcherPromise ??= import('undici').then(({ Agent }) => new Agent({
+    connect: { rejectUnauthorized: false },
+  }));
+  return insecureDispatcherPromise;
+};
+
+const buildTlsOptions = async (bindings = {}) => {
+  const dispatcher = await createTlsDispatcher(shouldSkipTlsVerify(bindings));
+  return dispatcher ? { dispatcher } : {};
 };
 
 const requireBaseUrl = (ctx = {}) => {
@@ -144,8 +170,9 @@ const requireBaseUrl = (ctx = {}) => {
 };
 
 const requireCredentials = (ctx = {}) => {
-  const username = resolveUsername(ctx.bindings || {});
-  const password = resolvePassword(ctx.bindings || {});
+  const credentials = ctx.secret && typeof ctx.secret === 'object' ? ctx.secret : ctx.bindings || {};
+  const username = resolveUsername(credentials);
+  const password = resolvePassword(credentials);
   if (!username || !password) throw errorWithCode('INVALID_ARGUMENT', 'username and password are required in secret bindings');
   return { username, password };
 };
@@ -188,6 +215,13 @@ const buildUrl = (baseUrl, path, query = {}) => {
   return qs ? `${joined}?${qs}` : joined;
 };
 
+const encodeIndexExpression = (index) => toTrimmedString(index)
+  .split(',')
+  .map((part) => part.trim())
+  .filter(Boolean)
+  .map((part) => encodeURIComponent(part))
+  .join(',');
+
 const buildLogPrefix = (ctx = {}, action) => {
   const meta = ctx.meta || {};
   const trace = [];
@@ -198,8 +232,12 @@ const buildLogPrefix = (ctx = {}, action) => {
 
 const logFlow = (ctx, action, details) => {
   const prefix = buildLogPrefix(ctx, action);
-  const sanitized = details && typeof details === 'object' && details.url
-    ? { ...details, url: stripUrlUserinfo(details.url) }
+  const sanitized = details && typeof details === 'object'
+    ? {
+      ...details,
+      ...(details.url ? { url: stripUrlUserinfo(details.url) } : {}),
+      ...(details.error ? { error: redactLogText(details.error) } : {}),
+    }
     : details;
   try { console.log(prefix, JSON.stringify(sanitized)); } catch { console.log(prefix, sanitized); }
 };
@@ -219,7 +257,15 @@ const stripUrlUserinfo = (raw) => {
   }
 };
 
+const redactLogText = (raw) => String(raw ?? '').replace(/(https?:\/\/)[^/@\s]+@/gi, '$1');
+
 const attachResponse = (err, response) => { err.response = response; return err; };
+
+const responseDetails = (httpStatus, httpBody = '') => ({
+  http_status: httpStatus,
+  http_body: '',
+  http_body_length: Buffer.byteLength(String(httpBody ?? '')),
+});
 
 const tryParseJson = (text) => {
   try { return { ok: true, value: JSON.parse(text) }; } catch { return { ok: false }; }
@@ -231,35 +277,80 @@ const mapHttpStatusToCode = (httpStatus) => {
   return 'UNAVAILABLE';
 };
 
+const readResponseText = async (response) => {
+  const declared = Number(response.headers?.get?.('content-length'));
+  if (Number.isFinite(declared) && declared > MAX_RESPONSE_BYTES) {
+    throw errorWithCode('RESOURCE_EXHAUSTED', 'upstream response exceeds the 4 MiB limit');
+  }
+  if (response.body?.getReader) {
+    const reader = response.body.getReader();
+    const chunks = [];
+    let size = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > MAX_RESPONSE_BYTES) {
+          await reader.cancel();
+          throw errorWithCode('RESOURCE_EXHAUSTED', 'upstream response exceeds the 4 MiB limit');
+        }
+        chunks.push(value);
+      }
+    } finally {
+      reader.releaseLock?.();
+    }
+    return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('utf8');
+  }
+  const text = String(await response.text());
+  if (Buffer.byteLength(text) > MAX_RESPONSE_BYTES) {
+    throw errorWithCode('RESOURCE_EXHAUSTED', 'upstream response exceeds the 4 MiB limit');
+  }
+  return text;
+};
+
 const executeRequest = async (url, ctx = {}, options = {}) => {
   const bindings = ctx.bindings || {};
   const timeoutMs = resolveTimeoutMs(ctx);
   const controller = new AbortController();
+  const parentSignal = options.signal;
+  const abortFromParent = () => controller.abort(parentSignal?.reason);
+  if (parentSignal) {
+    if (parentSignal.aborted) controller.abort(parentSignal.reason);
+    else parentSignal.addEventListener?.('abort', abortFromParent, { once: true });
+  }
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const headers = { Accept: 'application/json', ...(options.headers ?? {}) };
   const init = {
     method: options.method || 'GET',
     headers,
     signal: controller.signal,
-    ...buildTlsOptions(bindings),
+    redirect: 'manual',
     ...(options.body !== undefined ? { body: options.body } : {}),
   };
   let res;
   try {
-    res = await fetch(url, init);
+    res = await fetch(url, { ...init, ...(await buildTlsOptions(bindings)) });
   } catch (err) {
+    if (err instanceof GrpcError) throw err;
     const errMsg = err?.cause?.message || err?.message || 'fetch failed';
     logFlow(ctx, options.action || 'fetch:error', { url, error: errMsg });
-    throw attachResponse(errorWithCode('UNAVAILABLE', `${options.action || 'fetch'} failed: ${errMsg}`), { http_status: 0, http_body: errMsg });
+    const code = controller.signal.aborted ? 'DEADLINE_EXCEEDED' : 'UNAVAILABLE';
+    const message = code === 'DEADLINE_EXCEEDED'
+      ? `${options.action || 'fetch'} timed out after ${timeoutMs}ms`
+      : `${options.action || 'fetch'} failed`;
+    throw attachResponse(errorWithCode(code, message), responseDetails(0, errMsg));
   } finally {
     clearTimeout(timer);
+    parentSignal?.removeEventListener?.('abort', abortFromParent);
   }
   let rawBody;
-  try { rawBody = await res.text(); }
+  try { rawBody = await readResponseText(res); }
   catch (err) {
+    if (err instanceof GrpcError) throw attachResponse(err, responseDetails(Number(res.status || 0)));
     const errMsg = err?.message || 'response read failed';
     logFlow(ctx, 'fetch:read-error', { url, httpStatus: res.status, error: errMsg });
-    throw attachResponse(errorWithCode('UNAVAILABLE', `response read failed: ${errMsg}`), { http_status: Number(res.status || 0), http_body: errMsg });
+    throw attachResponse(errorWithCode('UNAVAILABLE', 'response read failed'), responseDetails(Number(res.status || 0), errMsg));
   }
   const httpStatus = Number(res.status || 0);
   logFlow(ctx, 'fetch:response', { url, httpStatus, bodyLength: rawBody?.length || 0 });
@@ -270,17 +361,17 @@ const ensureSuccess = (result, action) => {
   const { httpStatus, httpBody } = result;
   if (httpStatus >= 200 && httpStatus < 300) return;
   const code = mapHttpStatusToCode(httpStatus);
-  throw attachResponse(errorWithCode(code, `${action} upstream http ${httpStatus}: ${httpBody}`), { http_status: httpStatus, http_body: httpBody });
+  throw attachResponse(errorWithCode(code, `${action} upstream http ${httpStatus}`), responseDetails(httpStatus, httpBody));
 };
 
 const parseJsonOrThrowUnknown = (result, action) => {
   const trimmed = (result.httpBody || '').trim();
   if (!trimmed) {
-    throw attachResponse(errorWithCode('UNKNOWN', `${action} returned empty response`), { http_status: result.httpStatus, http_body: result.httpBody });
+    throw attachResponse(errorWithCode('UNKNOWN', `${action} returned empty response`), responseDetails(result.httpStatus, result.httpBody));
   }
   const parsed = tryParseJson(trimmed);
   if (!parsed.ok) {
-    throw attachResponse(errorWithCode('UNKNOWN', `${action} response is not valid JSON`), { http_status: result.httpStatus, http_body: result.httpBody });
+    throw attachResponse(errorWithCode('UNKNOWN', `${action} response is not valid JSON`), responseDetails(result.httpStatus, result.httpBody));
   }
   return parsed.value;
 };
@@ -373,7 +464,7 @@ const handleListIndices = async (req = {}, ctx = {}) => {
   const { username, password } = requireCredentials(callCtx);
   const indexFilter = normalizeIndexFilter(req);
 
-  const path = indexFilter ? `/_cat/indices/${encodeURIComponent(indexFilter).replace(/%2F/g, '/')}` : '/_cat/indices';
+  const path = indexFilter ? `/_cat/indices/${encodeIndexExpression(indexFilter)}` : '/_cat/indices';
   const url = buildUrl(baseUrl, path, { format: 'json', h: 'health,status,index,uuid,pri,rep,docs.count,docs.deleted,store.size,pri.store.size' });
   logFlow(callCtx, 'ListIndices', { url: joinPath(baseUrl, path), indexFilter });
   const headers = { Authorization: buildBasicAuth(username, password) };
@@ -451,14 +542,20 @@ const handleGetIndex = async (req = {}, ctx = {}) => {
   const { username, password } = requireCredentials(callCtx);
   const index = requireIndex(req);
 
-  const path = `/${encodeURIComponent(index).replace(/%2F/g, '/')}`;
+  const path = `/${encodeIndexExpression(index)}`;
   const url = joinPath(baseUrl, path);
   logFlow(callCtx, 'GetIndex', { url, index });
   const headers = { Authorization: buildBasicAuth(username, password) };
   const result = await executeRequest(url, callCtx, { headers, action: 'GetIndex' });
   ensureSuccess(result, 'GetIndex');
   const json = parseJsonOrThrowUnknown(result, 'GetIndex');
-  const entry = json && typeof json === 'object' ? json[index] || json[Object.keys(json)[0]] || {} : {};
+  const entry = json && typeof json === 'object' ? json[index] : undefined;
+  if (!entry || typeof entry !== 'object') {
+    throw attachResponse(
+      errorWithCode('FAILED_PRECONDITION', 'GetIndex response did not include the requested index'),
+      responseDetails(result.httpStatus, result.httpBody),
+    );
+  }
   return {
     index,
     aliases: { [index]: mapIndexAliases(entry.aliases) },
@@ -507,7 +604,7 @@ const handleSearchDocuments = async (req = {}, ctx = {}) => {
   catch (err) { throw errorWithCode('INVALID_ARGUMENT', `query must be valid JSON: ${err?.message || 'parse failed'}`); }
   const requestBody = JSON.stringify({ from, size, query: queryBody });
 
-  const path = `/${encodeURIComponent(index).replace(/%2F/g, '/')}/_search`;
+  const path = `/${encodeIndexExpression(index)}/_search`;
   const url = joinPath(baseUrl, path);
   logFlow(callCtx, 'SearchDocuments', { url, index, size, from });
   const headers = {
@@ -584,25 +681,38 @@ export function rpcdef(ctx = {}) {
   };
 }
 
+const isRuntimeContext = (value) => (
+  value
+  && typeof value === 'object'
+  && (hasOwn(value, 'config') || hasOwn(value, 'secret') || hasOwn(value, 'request') || hasOwn(value, 'metadata'))
+);
+
+const adaptHandler = (handler) => (arg1 = {}, arg2 = undefined) => {
+  if (arg2 === undefined && isRuntimeContext(arg1)) {
+    return handler(arg1.request ?? arg1.req ?? {}, arg1);
+  }
+  return handler(arg1, arg2 ?? {});
+};
+
 export const handlers = {
-  [METHOD_CLUSTER_HEALTH_FULL]: (req, ctx = {}) => handleClusterHealth(req, ctx),
-  [METHOD_LIST_INDICES_FULL]: (req, ctx = {}) => handleListIndices(req, ctx),
-  [METHOD_GET_INDEX_FULL]: (req, ctx = {}) => handleGetIndex(req, ctx),
-  [METHOD_SEARCH_DOCUMENTS_FULL]: (req, ctx = {}) => handleSearchDocuments(req, ctx),
-  [METHOD_LIST_NODES_FULL]: (req, ctx = {}) => handleListNodes(req, ctx),
+  [METHOD_CLUSTER_HEALTH_FULL]: adaptHandler(handleClusterHealth),
+  [METHOD_LIST_INDICES_FULL]: adaptHandler(handleListIndices),
+  [METHOD_GET_INDEX_FULL]: adaptHandler(handleGetIndex),
+  [METHOD_SEARCH_DOCUMENTS_FULL]: adaptHandler(handleSearchDocuments),
+  [METHOD_LIST_NODES_FULL]: adaptHandler(handleListNodes),
 };
 
 export const _test = {
-  attachResponse, buildBasicAuth, buildLogPrefix, buildTlsOptions, buildUrl,
-  encodeQueryPairs, ensureSuccess, errorWithCode, executeRequest, firstDefined,
+  MAX_RESPONSE_BYTES, adaptHandler, attachResponse, buildBasicAuth, buildLogPrefix, buildTlsOptions, buildUrl,
+  createTlsDispatcher, encodeIndexExpression, encodeQueryPairs, ensureSuccess, errorWithCode, executeRequest, firstDefined,
   grpcCodeFor, handleClusterHealth, handleGetIndex, handleListIndices,
   handleListNodes, handleSearchDocuments, hasOwn, joinPath, logFlow,
-  mapHttpStatusToCode, mapIndexAlias, mapIndexAliases, mapIndexMapping,
+  isRuntimeContext, mapHttpStatusToCode, mapIndexAlias, mapIndexAliases, mapIndexMapping,
   mapIndexMappingField, mapIndexSetting, mapIndexSummary, mapNodeSummary,
   mapSearchHit, mergedBindings, normalizeBaseUrl, normalizeBytes,
   normalizeClusterHealthLevel, normalizeIndexFilter, normalizeWaitForStatus,
-  parseJsonOrThrowUnknown, requireBaseUrl, requireCredentials, requireIndex,
+  parseJsonOrThrowUnknown, readResponseText, requireBaseUrl, requireCredentials, requireIndex,
   requireSearchIndex, resolveBaseUrl, resolveCallContext, resolvePassword,
   resolveSearchQuery, resolveTimeoutMs, resolveUsername, toBool, toFiniteInt,
-  toFiniteNumber, toJsonString, toTrimmedString, tryParseJson, unwrapScalar,
+  responseDetails, shouldSkipTlsVerify, toFiniteNumber, toJsonString, toTrimmedString, tryParseJson, unwrapScalar,
 };

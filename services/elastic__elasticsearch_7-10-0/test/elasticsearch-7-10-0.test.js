@@ -57,6 +57,8 @@ const expectGrpcError = async (fn, legacyCode, checker = () => {}) => {
     FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
     INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT,
     PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED,
+    RESOURCE_EXHAUSTED: grpcStatus.RESOURCE_EXHAUSTED,
+    DEADLINE_EXCEEDED: grpcStatus.DEADLINE_EXCEEDED,
     UNAVAILABLE: grpcStatus.UNAVAILABLE,
     UNKNOWN: grpcStatus.UNKNOWN,
   })[legacyCode]);
@@ -130,8 +132,10 @@ test('ClusterHealth sends GET with Basic Auth and maps all fields', async () => 
   assert.equal(parsed.searchParams.get('timeout'), '30s');
   assert.equal(parsed.searchParams.get('wait_for_status'), 'yellow');
   assert.equal(captured.init.method, 'GET');
-  assert.equal(captured.init.timeoutMs, 4000);
-  assert.equal(captured.init.skipTlsVerify, true);
+  assert.equal(Object.hasOwn(captured.init, 'timeoutMs'), false);
+  assert.equal(captured.init.signal instanceof AbortSignal, true);
+  assert.equal(captured.init.redirect, 'manual');
+  assert.ok(captured.init.dispatcher);
   const auth = Buffer.from(captured.init.headers.Authorization.slice(6), 'base64').toString('utf8');
   assert.equal(auth, `${DEFAULT_USER}:${DEFAULT_PASSWORD}`);
   assert.equal(result.cluster_name, 'demo');
@@ -283,11 +287,19 @@ test('HTTP error status codes map to expected gRPC codes', async () => {
     await expectGrpcError(
       () => handlers[METHOD_CLUSTER_HEALTH_FULL]({}, buildCtx()),
       legacyCode,
-      (err) => { assert.equal(err.response.http_status, status); assert.match(err.response.http_body, new RegExp(`status ${status}`)); },
+      (err) => {
+        assert.equal(err.response.http_status, status);
+        assert.equal(err.response.http_body, '');
+        assert.ok(err.response.http_body_length > 0);
+      },
     );
   }
   setFetch(async () => { throw Object.assign(new Error('boom'), { cause: new Error('conn refused') }); });
-  await expectGrpcError(() => handlers[METHOD_CLUSTER_HEALTH_FULL]({}, buildCtx()), 'UNAVAILABLE', (err) => assert.match(err.message, /conn refused/));
+  await expectGrpcError(
+    () => handlers[METHOD_CLUSTER_HEALTH_FULL]({}, buildCtx()),
+    'UNAVAILABLE',
+    (err) => assert.doesNotMatch(err.message, /conn refused/),
+  );
   setFetch(async () => ({ status: 200, text: async () => { throw new Error('read fail'); } }));
   await expectGrpcError(() => handlers[METHOD_CLUSTER_HEALTH_FULL]({}, buildCtx()), 'UNAVAILABLE', (err) => assert.match(err.message, /response read failed/));
 });
@@ -307,7 +319,7 @@ test('rpcdef falls back to context request when call request is nullish', async 
   assert.equal(result.timed_out, false);
 });
 
-test('helper functions cover normalization, mapping, parsing, and logging', () => {
+test('helper functions cover normalization, mapping, parsing, and logging', async () => {
   assert.equal(_test.grpcCodeFor('NOPE'), grpcStatus.UNKNOWN);
   assert.equal(_test.errorWithCode('NOPE', 'bad').code, grpcStatus.UNKNOWN);
   assert.equal(_test.hasOwn(null, 'x'), false);
@@ -336,10 +348,10 @@ test('helper functions cover normalization, mapping, parsing, and logging', () =
   assert.equal(_test.resolveTimeoutMs(), 5000);
   assert.equal(_test.resolveTimeoutMs({ limits: { timeoutMs: 'bad' }, bindings: { timeoutMs: 12 } }), 5000);
   assert.equal(_test.resolveTimeoutMs({ limits: {}, bindings: { timeoutMs: 12 } }), 12);
-  assert.deepEqual(_test.buildTlsOptions({}), {});
-  assert.deepEqual(_test.buildTlsOptions({ insecureSkipVerify: true }), {
-    skipTlsVerify: true, tlsInsecureSkipVerify: true, insecureSkipVerify: true,
-  });
+  assert.deepEqual(await _test.buildTlsOptions({}), {});
+  const tlsOptions = await _test.buildTlsOptions({ insecureSkipVerify: true });
+  assert.ok(tlsOptions.dispatcher);
+  assert.equal(Object.hasOwn(tlsOptions, 'skipTlsVerify'), false);
   assert.equal(_test.encodeQueryPairs({ a: 'x y', b: '', c: null, d: 0 }), 'a=x%20y&d=0');
   assert.equal(_test.joinPath('https://h/', '/foo/'), 'https://h/foo/');
   assert.equal(_test.buildUrl('https://h', '/foo', { a: 'b' }), 'https://h/foo?a=b');
@@ -531,12 +543,67 @@ test('SearchDocuments accepts object query (stringified)', async () => {
   assert.deepEqual(sent.query, { match: { msg: 'hi' } });
 });
 
-test('GetIndex returns default-shaped result when entry is missing', async () => {
+test('GetIndex rejects a response that omits the requested index', async () => {
   setFetch(async () => responseOf(200, { unknown_index: { aliases: {}, mappings: {}, settings: {} } }));
-  const result = await handlers[METHOD_GET_INDEX_FULL]({ index: 'logs' }, buildCtx());
-  // Picks the unknown_index fallback
-  assert.equal(result.index, 'logs');
-  assert.deepEqual(result.aliases.logs.aliases, {});
-  assert.deepEqual(result.mappings.logs.properties, {});
-  assert.equal(result.settings.logs.raw_json, '{}');
+  await expectGrpcError(
+    () => handlers[METHOD_GET_INDEX_FULL]({ index: 'logs' }, buildCtx()),
+    'FAILED_PRECONDITION',
+    (err) => assert.equal(err.response.http_body, ''),
+  );
+});
+
+test('handlers accept the single SDK runtime context ABI', async () => {
+  setFetch(async () => responseOf(200, {
+    cluster_name: 'runtime', status: 'green', timed_out: false,
+    number_of_nodes: 1, number_of_data_nodes: 1,
+  }));
+  const result = await handlers[METHOD_CLUSTER_HEALTH_FULL]({
+    ...buildCtx(),
+    request: {},
+  });
+  assert.equal(result.cluster_name, 'runtime');
+});
+
+test('preserves multi-index separators while encoding individual index names', async () => {
+  let captured;
+  setFetch(async (url) => {
+    captured = String(url);
+    return responseOf(200, { took: 0, timed_out: false, hits: { hits: [] } });
+  });
+  await handlers[METHOD_SEARCH_DOCUMENTS_FULL]({ index: 'logs-1,logs 2' }, buildCtx());
+  assert.match(captured, /\/logs-1,logs%202\/_search$/);
+  assert.doesNotMatch(captured, /%2C/);
+});
+
+test('rejects credential-bearing base URLs and redacts credentials from logs', async () => {
+  assert.equal(_test.normalizeBaseUrl('https://user:password@es.example.com:9200'), '');
+  const logs = [];
+  console.log = (...args) => logs.push(args);
+  _test.logFlow({}, 'redaction', { url: 'https://user:password@es.example.com:9200/_cluster/health' });
+  assert.doesNotMatch(logs[0][1], /user|password/);
+  assert.match(logs[0][1], /es\.example\.com/);
+  _test.logFlow({}, 'redaction-error', { error: 'request to https://user:password@es.example.com failed' });
+  assert.doesNotMatch(logs[1][1], /user|password/);
+});
+
+test('enforces response size bounds and maps timeouts to DEADLINE_EXCEEDED', async () => {
+  setFetch(async () => ({
+    status: 200,
+    headers: new Headers({ 'content-length': String(_test.MAX_RESPONSE_BYTES + 1) }),
+    text: async () => '{}',
+  }));
+  await expectGrpcError(
+    () => handlers[METHOD_CLUSTER_HEALTH_FULL]({}, buildCtx()),
+    'RESOURCE_EXHAUSTED',
+    (err) => assert.equal(err.response.http_body, ''),
+  );
+
+  setFetch((_url, init) => new Promise((_, reject) => {
+    init.signal.addEventListener('abort', () => reject(new DOMException('timed out', 'AbortError')), { once: true });
+  }));
+  await expectGrpcError(
+    () => handlers[METHOD_CLUSTER_HEALTH_FULL]({}, buildCtx({ limits: { timeoutMs: 10 } })),
+    'DEADLINE_EXCEEDED',
+    (err) => assert.equal(err.response.http_status, 0),
+  );
 });
