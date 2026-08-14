@@ -120,7 +120,8 @@
     "lighthouse-firewall": "bin/tencent-lighthouse-firewall.js",
     "qianxin-skyeye-v3-0-14-0": "bin/qianxin-skyeye-v3-0-14-0.js",
     "tencent-ssl": "bin/tencent-ssl.js",
-    "reportedip": "bin/reportedip.js"
+    "reportedip": "bin/reportedip.js",
+    "tencent-bh": "bin/tencent-bh.js"
   },
   "files": [
     "bin/huawei-ccm.js",
@@ -356,7 +357,9 @@
     "bin/qianxin-skyeye-v3-0-14-0.js",
     "qianxin__skyeye_v3.0.14.0",
     "tencent__ssl",
-    "bin/tencent-ssl.js"
+    "bin/tencent-ssl.js",
+    "tencent__bh",
+    "bin/tencent-bh.js"
   ],
   "scripts": {
     "validate": "node scripts/validate-service-package.mjs",

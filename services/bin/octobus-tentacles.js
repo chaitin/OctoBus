@@ -473,6 +473,10 @@ const services = {
     entryFile: "../tencent__ssl/bin/tencent-ssl.js",
     serviceModule: "../tencent__ssl/src/service.js",
   },
+  "tencent-bh": {
+    entryFile: "../tencent__bh/bin/tencent-bh.js",
+    serviceModule: "../tencent__bh/src/service.js",
+  },
 };
 
 const serviceNames = Object.keys(services);

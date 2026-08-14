@@ -286,6 +286,36 @@ test('ListSessions validates and maps upstream errors', async () => {
   });
   const handlerNet = await loadHandler({}, listSessionsPath);
   await assert.rejects(() => handlerNet(), /UNAVAILABLE/);
+
+  setFetch(async () => {
+    const error = new Error('request timed out');
+    error.name = 'TimeoutError';
+    throw error;
+  });
+  const handlerTimeout = await loadHandler({}, listSessionsPath);
+  await assert.rejects(() => handlerTimeout(), (error) => {
+    assert.equal(error.legacyCode, 'DEADLINE_EXCEEDED');
+    return true;
+  });
+});
+
+test('skipTlsVerify uses a request-scoped Undici dispatcher', async () => {
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url, init };
+    return {
+      ok: true,
+      status: 200,
+      headers: new Map([['content-type', 'application/json']]),
+      text: async () => JSON.stringify({ Response: { SessionSet: [], TotalCount: 0 } }),
+    };
+  });
+
+  const handler = await loadHandler({}, listSessionsPath, { bindings: { skipTlsVerify: true } });
+  await handler();
+  assert.ok(captured.init.dispatcher);
+  assert.equal(Object.hasOwn(captured.init, 'insecureSkipVerify'), false);
+  assert.equal(Object.hasOwn(captured.init, 'tlsInsecureSkipVerify'), false);
 });
 
 test('ListSessions handles Tencent API error response', async () => {
@@ -415,6 +445,7 @@ test('ListUsers builds params and maps response', async () => {
   });
   const handler = await loadHandler({}, listUsersPath);
   const res = await handler();
+  assert.equal(res.items[0].id, 'u-1');
   assert.equal(res.items[0].user_name, 'admin');
   assert.equal(res.items[0].status, 'NORMAL');
 });

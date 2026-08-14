@@ -6,6 +6,7 @@
 
 import crypto from 'node:crypto';
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 // ── Constants ──────────────────────────────────────────────
 
@@ -17,6 +18,7 @@ const DEFAULT_TIMEOUT_MS = 10000;
 const ALGORITHM = 'TC3-HMAC-SHA256';
 const MAX_LIMIT = 200;
 const DEFAULT_LIMIT = 20;
+let insecureDispatcher;
 
 // ── Method paths ───────────────────────────────────────────
 
@@ -42,6 +44,7 @@ const grpcCodeFor = (code) => ({
   PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED,
   UNAUTHENTICATED: grpcStatus.UNAUTHENTICATED,
   UNAVAILABLE: grpcStatus.UNAVAILABLE,
+  DEADLINE_EXCEEDED: grpcStatus.DEADLINE_EXCEEDED,
   UNKNOWN: grpcStatus.UNKNOWN,
 })[code] ?? grpcStatus.UNKNOWN;
 
@@ -235,6 +238,14 @@ const resolveEndpoint = (bindings = {}) => {
   return toTrimmedString(bindings.endpoint) || DEFAULT_ENDPOINT;
 };
 
+// Keep TLS bypass scoped to this service's requests. A process-wide TLS setting
+// would weaken every HTTPS request made by the OctoBus process.
+const createTlsDispatcher = (skipTlsVerify) => {
+  if (!skipTlsVerify) return undefined;
+  insecureDispatcher ??= new Agent({ connect: { rejectUnauthorized: false } });
+  return insecureDispatcher;
+};
+
 // ── API call ────────────────────────────────────────────────
 
 const callAction = async (ctx, action, params) => {
@@ -254,7 +265,7 @@ const callAction = async (ctx, action, params) => {
   };
 
   const skipVerify = toBoolean(bindings.skipTlsVerify) || toBoolean(bindings.tlsInsecureSkipVerify);
-  const tlsOptions = skipVerify ? { insecureSkipVerify: true, tlsInsecureSkipVerify: true } : {};
+  const dispatcher = createTlsDispatcher(skipVerify);
 
   logFlow(meta, `${action}:start`, { region, endpoint });
 
@@ -264,14 +275,14 @@ const callAction = async (ctx, action, params) => {
       method: 'POST',
       headers: requestHeaders,
       body: signed.body,
-      ...tlsOptions,
       signal: AbortSignal.timeout(timeoutMs),
+      ...(dispatcher ? { dispatcher } : {}),
     });
   } catch (err) {
     const isTimeout = err?.name === 'TimeoutError' || err?.name === 'AbortError';
     const reason = isTimeout ? 'timeout after ' + timeoutMs + 'ms' : (err?.cause?.message || err?.message || 'fetch failed');
     logFlow(meta, `${action}:error`, { error: reason });
-    throw errorWithCode('UNAVAILABLE', `upstream error: ${reason}`);
+    throw errorWithCode(isTimeout ? 'DEADLINE_EXCEEDED' : 'UNAVAILABLE', `upstream error: ${reason}`);
   }
 
   const text = await res.text();
@@ -457,7 +468,7 @@ const mapDeviceRecord = (item) => ({
 });
 
 const mapUserRecord = (item) => ({
-  id: String(item?.Id ?? item?.id ?? ''),
+  id: String(item?.UserId ?? item?.Id ?? item?.id ?? ''),
   user_name: String(item?.UserName ?? item?.user_name ?? ''),
   real_name: String(item?.RealName ?? item?.real_name ?? ''),
   phone: String(item?.Phone ?? item?.phone ?? ''),
@@ -626,6 +637,7 @@ export const _test = {
   resolveInvocation,
   resolveRegion,
   resolveEndpoint,
+  createTlsDispatcher,
   resolveTimeoutMs,
   toBoolean,
   toInt64,
