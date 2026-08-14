@@ -2,9 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": true,
+  "required": ["skyeye_domain", "skyeye_staff_name"],
   "properties": {
     "skyeye_domain": {
       "type": "string",
+      "format": "uri",
       "description": "QianXin SkyEye API base URL, for example https://10.0.0.1:443."
     },
     "domain": {
