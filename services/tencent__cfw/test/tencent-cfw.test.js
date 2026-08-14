@@ -187,3 +187,104 @@ test('signRequest produces valid auth header', () => {
   assert.ok(r.authorization.includes('test-id'));
   assert.equal(r.timestamp, 1000000000);
 });
+
+test('custom endpoint signs the actual host and path', async () => {
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url, headers: init.headers };
+    return response(200, { Response: { Data: [], Total: 0, RequestId: 'r' } });
+  });
+  await handlers['Tencent_CFW.Tencent_CFW/ListRules']({
+    ...ctx({ config: { endpoint: 'http://127.0.0.1:18080/tencent/cfw' } }), request: {},
+  });
+  assert.equal(captured.url, 'http://127.0.0.1:18080/tencent/cfw');
+  assert.equal(captured.headers.Host, '127.0.0.1:18080');
+  assert.match(captured.headers.Authorization, /SignedHeaders=content-type;host/);
+  assert.notEqual(
+    _test.signRequest('id', 'key', {}, 1000).authorization,
+    _test.signRequest('id', 'key', {}, 1000, 'proxy.example', '/tenant/cfw').authorization,
+  );
+});
+
+test('endpoint, region and timeout validation reject unsafe configuration', async () => {
+  for (const config of [
+    { endpoint: 'not a URL' },
+    { endpoint: 'https://user:pass@example.com' },
+    { endpoint: 'file:///tmp/socket' },
+    { region: '../invalid' },
+  ]) {
+    await expectGrpcError(() => handlers['Tencent_CFW.Tencent_CFW/ListRules']({ ...ctx({ config }), request: {} }), 'INVALID_ARGUMENT');
+  }
+  await expectGrpcError(() => handlers['Tencent_CFW.Tencent_CFW/ListRules']({ ...ctx({ limits: { timeoutMs: 120001 } }), request: {} }), 'INVALID_ARGUMENT');
+});
+
+test('BlockIP is idempotent and deduplicates requested rules', async () => {
+  let creates = 0;
+  setFetch(async (url, init) => {
+    const action = init.headers['X-TC-Action'];
+    if (action === 'DescribeAcLists') {
+      return response(200, { Response: { Data: [{ Id: 1, SourceIp: '1.1.1.1' }], Total: 1 } });
+    }
+    creates += 1;
+    const body = JSON.parse(init.body);
+    assert.deepEqual(body.Data.map((rule) => rule.SourceIp), ['2.2.2.2']);
+    return response(200, { Response: { RequestId: 'created' } });
+  });
+  const result = await handlers['Tencent_CFW.Tencent_CFW/BlockIP']({
+    ...ctx(), request: { ips: ['1.1.1.1', '2.2.2.2', '2.2.2.2'], comment: { value: 'x'.repeat(150) } },
+  });
+  assert.equal(result.message, 'created');
+  assert.equal(creates, 1);
+
+  setFetch(async () => response(200, { Response: { Data: [{ Id: 1, SourceIp: '1.1.1.1' }], Total: 1 } }));
+  const noOp = await handlers['Tencent_CFW.Tencent_CFW/BlockIP']({ ...ctx(), request: { ips: ['1.1.1.1'] } });
+  assert.equal(noOp.message, 'all IPs are already blocked');
+});
+
+test('UnblockIP validates inputs and traverses every result page', async () => {
+  await expectGrpcError(() => handlers['Tencent_CFW.Tencent_CFW/UnblockIP']({ ...ctx(), request: { ips: ['300.1.1.1'] } }), 'INVALID_ARGUMENT');
+  const offsets = [];
+  let deleted;
+  setFetch(async (url, init) => {
+    const action = init.headers['X-TC-Action'];
+    const body = JSON.parse(init.body);
+    if (action === 'DescribeAcLists') {
+      offsets.push(body.Offset);
+      const Data = body.Offset === 0
+        ? Array.from({ length: 100 }, (_, index) => ({ Id: index + 1, SourceIp: '8.8.8.8' }))
+        : [{ Id: 101, SourceIp: '9.9.9.9' }];
+      return response(200, { Response: { Data } });
+    }
+    deleted = body.Id;
+    return response(200, { Response: { RequestId: 'deleted' } });
+  });
+  const result = await handlers['Tencent_CFW.Tencent_CFW/UnblockIP']({ ...ctx(), request: { ips: ['9.9.9.9'] } });
+  assert.deepEqual(offsets, [0, 100]);
+  assert.equal(deleted, 101);
+  assert.equal(result.message, 'deleted 1 rules');
+});
+
+test('TLS dispatcher is reused and upstream error bodies are bounded and redacted', async () => {
+  const first = _test.buildTlsOptions({ skipTlsVerify: true });
+  const second = _test.buildTlsOptions({ tlsInsecureSkipVerify: 'yes' });
+  assert.ok(first.dispatcher);
+  assert.equal(first.dispatcher, second.dispatcher);
+  assert.deepEqual(_test.buildTlsOptions({}), {});
+
+  setFetch(async () => response(502, `secretKey=do-not-leak ${'x'.repeat(500)}`));
+  let caught;
+  try { await handlers['Tencent_CFW.Tencent_CFW/ListRules']({ ...ctx(), request: {} }); } catch (error) { caught = error; }
+  assert.ok(caught);
+  assert.doesNotMatch(caught.message, /do-not-leak/);
+  assert.ok(caught.message.length < 300);
+});
+
+test('malformed JSON and numeric helper edge cases are deterministic', async () => {
+  setFetch(async () => response(200, 'not-json'));
+  await expectGrpcError(() => handlers['Tencent_CFW.Tencent_CFW/ListRules']({ ...ctx(), request: {} }), 'UNKNOWN');
+  assert.equal(_test.optionalUint32('bad'), undefined);
+  assert.equal(_test.optionalUint32(0), undefined);
+  assert.equal(_test.toBoolean(1), true);
+  assert.equal(_test.toBoolean('off'), false);
+  assert.equal(_test.toBoolean({}), false);
+});

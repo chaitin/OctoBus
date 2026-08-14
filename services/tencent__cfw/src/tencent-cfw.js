@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { Agent } from 'undici';
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
@@ -15,6 +16,9 @@ const API_VERSION = '2019-09-04';
 const ENDPOINT = `${SERVICE}.tencentcloudapi.com`;
 const METHOD_POST = 'POST';
 const DEFAULT_TIMEOUT_MS = 10000;
+const MAX_TIMEOUT_MS = 120000;
+const DEFAULT_ENDPOINT = `https://${ENDPOINT}`;
+const PAGE_LIMIT = 100;
 
 const SERVICE_NAME = 'Tencent_CFW';
 
@@ -108,10 +112,9 @@ const formatDate = (timestamp) => {
   return `${year}-${month}-${day}`;
 };
 
-const buildCanonicalRequest = (payloadJson) => {
-  const canonicalUri = '/';
+const buildCanonicalRequest = (payloadJson, host = ENDPOINT, canonicalUri = '/') => {
   const canonicalQueryString = '';
-  const canonicalHeaders = `content-type:application/json; charset=utf-8\nhost:${ENDPOINT}\n`;
+  const canonicalHeaders = `content-type:application/json; charset=utf-8\nhost:${host}\n`;
   const signedHeaders = 'content-type;host';
   const hashedRequestBody = sha256hex(payloadJson);
   return {
@@ -141,10 +144,10 @@ const calcSignature = (secretKey, date, stringToSign) => {
 const buildAuthHeader = (algorithm, secretId, credentialScope, signedHeaders, signature) =>
   `${algorithm} Credential=${secretId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
 
-const signRequest = (secretId, secretKey, payload, timestamp) => {
+const signRequest = (secretId, secretKey, payload, timestamp, host = ENDPOINT, canonicalUri = '/') => {
   const payloadJson = JSON.stringify(payload);
   const date = formatDate(timestamp);
-  const { canonicalRequest, signedHeaders } = buildCanonicalRequest(payloadJson);
+  const { canonicalRequest, signedHeaders } = buildCanonicalRequest(payloadJson, host, canonicalUri);
   const { stringToSign, algorithm, credentialScope } = buildStringToSign(canonicalRequest, timestamp, date);
   const signature = calcSignature(secretKey, date, stringToSign);
   const authorization = buildAuthHeader(algorithm, secretId, credentialScope, signedHeaders, signature);
@@ -189,16 +192,22 @@ const parseJson = (text) => {
   }
 };
 
+const safeSummary = (text = '') => String(text)
+  .replace(/(authorization|secret(?:id|key)?|token|cookie)\s*[:=]\s*["']?[^"'\s,;&<>]+/gi, '$1=<redacted>')
+  .slice(0, 200);
+
 const mapHttpError = (res, bodyText) => {
-  const text = String(bodyText || '');
+  const text = safeSummary(bodyText);
   if (res.status === 401 || res.status === 403) throw errorWithCode('PERMISSION_DENIED', `upstream http ${res.status}: ${text}`);
   if (res.status >= 400 && res.status < 500) throw errorWithCode('FAILED_PRECONDITION', `upstream http ${res.status}: ${text}`);
   throw errorWithCode('UNAVAILABLE', `upstream http ${res.status}: ${text}`);
 };
 
+let insecureAgent;
 const buildTlsOptions = (bindings = {}) => {
   if (!toBoolean(bindings.skipTlsVerify) && !toBoolean(bindings.tlsInsecureSkipVerify) && !toBoolean(bindings.insecureSkipVerify)) return {};
-  return { insecureSkipVerify: true, tlsInsecureSkipVerify: true, skipTlsVerify: true };
+  insecureAgent ??= new Agent({ connect: { rejectUnauthorized: false } });
+  return { dispatcher: insecureAgent };
 };
 
 const fetchJson = async (url, init, { bindings = {}, timeoutMs }) => {
@@ -237,6 +246,17 @@ const resolveCallContext = (ctx = {}) => ({
 const resolveTimeoutMs = (ctx = {}, bindings = {}) =>
   firstDefined(optionalUint32(ctx.limits?.timeoutMs), optionalUint32(bindings.timeoutMs), DEFAULT_TIMEOUT_MS);
 
+const resolveEndpoint = (bindings = {}) => {
+  const raw = unwrapString(bindings.endpoint).trim() || DEFAULT_ENDPOINT;
+  let parsed;
+  try { parsed = new URL(raw); } catch { throw errorWithCode('INVALID_ARGUMENT', 'endpoint must be a valid HTTP(S) URL'); }
+  if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash) {
+    throw errorWithCode('INVALID_ARGUMENT', 'endpoint must be an HTTP(S) URL without credentials, query, or fragment');
+  }
+  parsed.pathname = parsed.pathname.replace(/\/+$/, '') || '/';
+  return parsed;
+};
+
 // ---- CFW API call ----
 
 const callCFWAPI = async (action, params, { meta, bindings, timeoutMs }) => {
@@ -246,6 +266,9 @@ const callCFWAPI = async (action, params, { meta, bindings, timeoutMs }) => {
   if (!secretKey) throw errorWithCode('PERMISSION_DENIED', 'secret_key is required in bindings');
 
   const region = unwrapString(bindings.region).trim() || 'ap-guangzhou';
+  if (!/^[a-z][a-z0-9-]{1,63}$/.test(region)) throw errorWithCode('INVALID_ARGUMENT', 'region is invalid');
+  if (timeoutMs < 1 || timeoutMs > MAX_TIMEOUT_MS) throw errorWithCode('INVALID_ARGUMENT', `timeoutMs must be between 1 and ${MAX_TIMEOUT_MS}`);
+  const endpoint = resolveEndpoint(bindings);
 
   // Only business params in body (Action/Version/Region go only in X-TC-* headers)
   const payload = { ...params };
@@ -255,12 +278,12 @@ const callCFWAPI = async (action, params, { meta, bindings, timeoutMs }) => {
   }
 
   const timestamp = Math.floor(Date.now() / 1000);
-  const { authorization } = signRequest(secretId, secretKey, payload, timestamp);
+  const { authorization } = signRequest(secretId, secretKey, payload, timestamp, endpoint.host, endpoint.pathname);
 
-  const url = `https://${ENDPOINT}`;
+  const url = endpoint.toString();
   const headers = {
     'Content-Type': 'application/json; charset=utf-8',
-    Host: ENDPOINT,
+    Host: endpoint.host,
     'X-TC-Action': action,
     'X-TC-Version': API_VERSION,
     'X-TC-Region': region,
@@ -284,7 +307,7 @@ const callCFWAPI = async (action, params, { meta, bindings, timeoutMs }) => {
 
   const response = result.json?.Response;
   if (!response) {
-    logError(meta, `${action}:invalid-response`, { body: result.text });
+    logError(meta, `${action}:invalid-response`, { body: safeSummary(result.text) });
     throw errorWithCode('UNKNOWN', 'empty or invalid API response');
   }
 
@@ -309,13 +332,29 @@ const makeRuntime = (ctx = {}) => {
   const timeoutMs = resolveTimeoutMs(callCtx, bindings);
   const request = callCtx.req || {};
 
+  const describeAllRules = async () => {
+    const allRules = [];
+    let offset = 0;
+    while (true) {
+      const response = await callCFWAPI('DescribeAcLists', { Limit: PAGE_LIMIT, Offset: offset }, { meta, bindings, timeoutMs });
+      const rules = Array.isArray(response.Data) ? response.Data : [];
+      allRules.push(...rules);
+      if (rules.length < PAGE_LIMIT) return allRules;
+      offset += PAGE_LIMIT;
+    }
+  };
+
   const runBlock = async (req = {}) => {
     const ips = ensureIPs(req);
     ips.forEach(validateIP);
     const comment = unwrapString(firstDefined(req.comment, req.Comment)).trim() || 'blocked by OctoBus';
 
-    // Create access control rules (deny) for each IP
-    const rules = ips.map((ip, idx) => ({
+    const existing = new Set((await describeAllRules()).map((rule) => String(rule.SourceIp || '').trim()));
+    const missing = ips.filter((ip, index) => !existing.has(ip) && ips.indexOf(ip) === index);
+    if (missing.length === 0) return { code: 0, message: 'all IPs are already blocked' };
+
+    // Create access control rules (deny) only for IPs without an existing rule.
+    const rules = missing.map((ip, idx) => ({
       OrderIndex: idx,
       SourceIp: ip,
       TargetIp: '0.0.0.0/0',
@@ -335,20 +374,11 @@ const makeRuntime = (ctx = {}) => {
 
   const runUnblock = async (req = {}) => {
     const ips = ensureIPs(req);
+    ips.forEach(validateIP);
 
     // List existing rules with pagination to find matching ones
     const ipSet = new Set(ips);
-    const allRules = [];
-    let offset = 0;
-    const PAGE_LIMIT = 100;
-    let hasMore = true;
-    while (hasMore) {
-      const listResp = await callCFWAPI('DescribeAcLists', { Limit: PAGE_LIMIT, Offset: offset }, { meta, bindings, timeoutMs });
-      const rules = listResp.Data || [];
-      allRules.push(...rules);
-      if (rules.length < PAGE_LIMIT) hasMore = false;
-      offset += PAGE_LIMIT;
-    }
+    const allRules = await describeAllRules();
 
     // Find rule IDs to delete (match by source IP)
     const ruleIds = allRules
@@ -420,6 +450,8 @@ export const _test = {
   logInfo,
   makeRuntime,
   mapHttpError,
+  buildTlsOptions,
+  resolveEndpoint,
   mergedBindings,
   optionalUint32,
   parseJson,

@@ -1,0 +1,8 @@
+{
+  "method": "Tencent_CFW.Tencent_CFW/ListRules",
+  "request": {
+    "limit": 1,
+    "offset": 0
+  },
+  "expectUpstream": true
+}
