@@ -1,4 +1,10 @@
-import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import {
+  createTlsDispatcher,
+  fetchWithTimeout,
+  httpStatusError,
+  redactSensitive,
+  serviceError,
+} from '@chaitin-ai/octobus-sdk';
 
 export const METHOD_LIST_ROUTES_PATH = '/Apache_APISIX.Apache_APISIX/ListRoutes';
 export const METHOD_GET_ROUTE_PATH = '/Apache_APISIX.Apache_APISIX/GetRoute';
@@ -20,27 +26,14 @@ export const METHOD_DELETE_UPSTREAM_FULL = 'Apache_APISIX.Apache_APISIX/DeleteUp
 
 export const DEFAULT_TIMEOUT_MS = 5000;
 export const DEFAULT_ALLOWED_ID_PREFIX = 'octobus-test-';
+export const MAX_RESPONSE_BYTES = 1024 * 1024;
 
 const RESOURCE_PATHS = {
   route: '/apisix/admin/routes',
   upstream: '/apisix/admin/upstreams',
 };
 
-const grpcCodeFor = (code) => ({
-  DEADLINE_EXCEEDED: grpcStatus.DEADLINE_EXCEEDED,
-  FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
-  INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT,
-  NOT_FOUND: grpcStatus.NOT_FOUND,
-  PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED,
-  UNAVAILABLE: grpcStatus.UNAVAILABLE,
-  UNKNOWN: grpcStatus.UNKNOWN,
-})[code] ?? grpcStatus.UNKNOWN;
-
-const errorWithCode = (code, message) => {
-  const err = new GrpcError(grpcCodeFor(code), `${code}: ${message}`);
-  err.legacyCode = code;
-  return err;
-};
+const errorWithCode = (code, message, details) => serviceError(code, message, details);
 
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj ?? {}, key);
 
@@ -60,8 +53,14 @@ const toTrimmedString = (value) => {
 
 const normalizeBaseUrl = (value) => {
   const raw = toTrimmedString(value);
-  if (!/^https?:\/\//i.test(raw)) return '';
-  return raw.replace(/\/+$/, '');
+  if (!raw) return '';
+  try {
+    const url = new URL(raw);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) return '';
+    return url.toString().replace(/\/+$/, '');
+  } catch {
+    return '';
+  }
 };
 
 const toOptionalPositiveInt = (value) => {
@@ -99,29 +98,6 @@ const resolveCallContext = (ctx = {}) => ({
   meta: ctx.meta ?? {},
   req: ctx.req ?? ctx.request ?? {},
 });
-
-const isSdkCallContext = (value) => (
-  value != null
-  && typeof value === 'object'
-  && (
-    hasOwn(value, 'request')
-    || hasOwn(value, 'config')
-    || hasOwn(value, 'secret')
-    || hasOwn(value, 'metadata')
-    || hasOwn(value, 'method')
-    || hasOwn(value, 'packageDir')
-  )
-);
-
-const resolveHandlerArgs = (reqOrCtx = {}, maybeCtx) => {
-  if (maybeCtx !== undefined) {
-    return { req: reqOrCtx ?? {}, ctx: maybeCtx ?? {} };
-  }
-  if (isSdkCallContext(reqOrCtx)) {
-    return { req: reqOrCtx.request ?? reqOrCtx.req ?? {}, ctx: reqOrCtx };
-  }
-  return { req: reqOrCtx ?? {}, ctx: {} };
-};
 
 const resolveBaseUrl = (bindings = {}) => normalizeBaseUrl(firstDefined(
   bindings.baseUrl,
@@ -170,8 +146,8 @@ const requireId = (req = {}) => {
   if (!id) {
     throw errorWithCode('INVALID_ARGUMENT', 'id is required');
   }
-  if (id.includes('/')) {
-    throw errorWithCode('INVALID_ARGUMENT', 'id must not contain "/"');
+  if (id === '.' || id === '..' || id.includes('/') || /[\u0000-\u001f\u007f]/.test(id)) {
+    throw errorWithCode('INVALID_ARGUMENT', 'id must be a single printable path segment');
   }
   return id;
 };
@@ -243,28 +219,66 @@ const normalizeDeleteResponse = (json, id) => ({
   raw_json: stableJson(json),
 });
 
-const mapHttpStatusToCode = (status) => {
-  if (status === 401 || status === 403) return 'PERMISSION_DENIED';
-  if (status === 404) return 'NOT_FOUND';
-  if (status >= 500) return 'UNAVAILABLE';
-  return 'UNKNOWN';
-};
-
 const parseResponseText = (text) => {
   if (text === '') return {};
   try {
     return JSON.parse(text);
   } catch {
-    throw errorWithCode('UNKNOWN', 'response is not valid JSON');
+    throw errorWithCode('INTERNAL', 'upstream response is not valid JSON');
   }
+};
+
+const responseContentLength = (response) => {
+  const raw = response?.headers?.get?.('content-length');
+  if (!raw || !/^\d+$/.test(raw)) return undefined;
+  return Number(raw);
+};
+
+const responseTooLarge = () => errorWithCode(
+  'RESOURCE_EXHAUSTED',
+  `upstream response exceeds ${MAX_RESPONSE_BYTES} byte limit`,
+);
+
+const readBoundedResponseText = async (response) => {
+  if (responseContentLength(response) > MAX_RESPONSE_BYTES) throw responseTooLarge();
+  if (typeof response?.body?.getReader !== 'function') {
+    const text = String(await response.text());
+    if (Buffer.byteLength(text) > MAX_RESPONSE_BYTES) throw responseTooLarge();
+    return text;
+  }
+
+  const reader = response.body.getReader();
+  const chunks = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_RESPONSE_BYTES) {
+        await reader.cancel();
+        throw responseTooLarge();
+      }
+      chunks.push(value);
+    }
+  } catch (error) {
+    if (error?.legacyCode) throw error;
+    throw errorWithCode('UNAVAILABLE', `failed to read upstream response: ${String(redactSensitive(error?.message ?? error))}`);
+  }
+
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
 };
 
 const fetchAdminApi = async (ctx = {}, req = {}, method, path, body) => {
   const baseUrl = requireBaseUrl(ctx);
   const adminApiKey = requireAdminApiKey(req, ctx);
   const timeoutMs = resolveTimeoutMs(ctx);
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const tlsRejectUnauthorized = toBool(ctx.bindings?.tlsRejectUnauthorized, true);
   const init = {
     method,
@@ -272,34 +286,27 @@ const fetchAdminApi = async (ctx = {}, req = {}, method, path, body) => {
       'Accept': 'application/json',
       'X-API-KEY': adminApiKey,
     },
-    signal: controller.signal,
+    // Never follow redirects: the Admin API key must remain scoped to baseUrl.
+    redirect: 'error',
   };
 
   if (body !== undefined) {
     init.headers['Content-Type'] = 'application/json';
     init.body = stableJson(body);
   }
-  if (!tlsRejectUnauthorized) {
-    const { Agent } = await import('undici');
-    init.dispatcher = new Agent({ connect: { rejectUnauthorized: false } });
-  }
-
   try {
-    const response = await fetch(`${baseUrl}${path}`, init);
-    const text = await response.text();
-    const json = parseResponseText(text);
+    const response = await fetchWithTimeout(`${baseUrl}${path}`, init, {
+      timeoutMs,
+      dispatcher: createTlsDispatcher(!tlsRejectUnauthorized),
+    });
+    const text = await readBoundedResponseText(response);
     if (!response.ok) {
-      throw errorWithCode(mapHttpStatusToCode(response.status), `upstream http ${response.status}: ${text || response.statusText}`);
+      throw httpStatusError(response, text);
     }
-    return json;
+    return parseResponseText(text);
   } catch (error) {
     if (error?.legacyCode) throw error;
-    if (error?.name === 'AbortError') {
-      throw errorWithCode('DEADLINE_EXCEEDED', `request timed out after ${timeoutMs}ms`);
-    }
-    throw errorWithCode('UNAVAILABLE', error?.message ?? String(error));
-  } finally {
-    clearTimeout(timeout);
+    throw errorWithCode('UNAVAILABLE', String(redactSensitive(error?.message ?? error)));
   }
 };
 
@@ -357,39 +364,20 @@ export function rpcdef(ctx = {}) {
   };
 }
 
+const handleContext = (kind, operation) => async (ctx = {}) => {
+  const callCtx = resolveCallContext(ctx);
+  return operation(kind, callCtx.req, callCtx);
+};
+
 export const handlers = {
-  [METHOD_LIST_ROUTES_FULL]: (reqOrCtx, maybeCtx) => {
-    const call = resolveHandlerArgs(reqOrCtx, maybeCtx);
-    return handleList('route', call.req, call.ctx);
-  },
-  [METHOD_GET_ROUTE_FULL]: (reqOrCtx, maybeCtx) => {
-    const call = resolveHandlerArgs(reqOrCtx, maybeCtx);
-    return handleGet('route', call.req, call.ctx);
-  },
-  [METHOD_UPSERT_ROUTE_FULL]: (reqOrCtx, maybeCtx) => {
-    const call = resolveHandlerArgs(reqOrCtx, maybeCtx);
-    return handleUpsert('route', call.req, call.ctx);
-  },
-  [METHOD_DELETE_ROUTE_FULL]: (reqOrCtx, maybeCtx) => {
-    const call = resolveHandlerArgs(reqOrCtx, maybeCtx);
-    return handleDelete('route', call.req, call.ctx);
-  },
-  [METHOD_LIST_UPSTREAMS_FULL]: (reqOrCtx, maybeCtx) => {
-    const call = resolveHandlerArgs(reqOrCtx, maybeCtx);
-    return handleList('upstream', call.req, call.ctx);
-  },
-  [METHOD_GET_UPSTREAM_FULL]: (reqOrCtx, maybeCtx) => {
-    const call = resolveHandlerArgs(reqOrCtx, maybeCtx);
-    return handleGet('upstream', call.req, call.ctx);
-  },
-  [METHOD_UPSERT_UPSTREAM_FULL]: (reqOrCtx, maybeCtx) => {
-    const call = resolveHandlerArgs(reqOrCtx, maybeCtx);
-    return handleUpsert('upstream', call.req, call.ctx);
-  },
-  [METHOD_DELETE_UPSTREAM_FULL]: (reqOrCtx, maybeCtx) => {
-    const call = resolveHandlerArgs(reqOrCtx, maybeCtx);
-    return handleDelete('upstream', call.req, call.ctx);
-  },
+  [METHOD_LIST_ROUTES_FULL]: handleContext('route', handleList),
+  [METHOD_GET_ROUTE_FULL]: handleContext('route', handleGet),
+  [METHOD_UPSERT_ROUTE_FULL]: handleContext('route', handleUpsert),
+  [METHOD_DELETE_ROUTE_FULL]: handleContext('route', handleDelete),
+  [METHOD_LIST_UPSTREAMS_FULL]: handleContext('upstream', handleList),
+  [METHOD_GET_UPSTREAM_FULL]: handleContext('upstream', handleGet),
+  [METHOD_UPSERT_UPSTREAM_FULL]: handleContext('upstream', handleUpsert),
+  [METHOD_DELETE_UPSTREAM_FULL]: handleContext('upstream', handleDelete),
 };
 
 export const _test = {
@@ -416,8 +404,9 @@ export const _test = {
   resolveAllowedIdPrefix,
   resolveBaseUrl,
   resolveCallContext,
-  resolveHandlerArgs,
   resolveTimeoutMs,
+  readBoundedResponseText,
+  responseContentLength,
   toBool,
   toOptionalPositiveInt,
   toTrimmedString,

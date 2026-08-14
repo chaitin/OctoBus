@@ -1,0 +1,11 @@
+{
+  "method": "Apache_APISIX.Apache_APISIX/ListRoutes",
+  "request": {},
+  "protocols": ["connect", "grpc", "mcp"],
+  "requireBusinessSuccess": true,
+  "requireUpstreamPerProtocol": true,
+  "upstream": {
+    "method": "GET",
+    "path": "/apisix/admin/routes"
+  }
+}
