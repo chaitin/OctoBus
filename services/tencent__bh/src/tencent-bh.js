@@ -106,6 +106,8 @@ const toValue = (value) => {
   return { stringValue: String(value) };
 };
 
+const toRequiredValue = (value) => toValue(value) ?? { nullValue: 'NULL_VALUE' };
+
 // ── TC3-HMAC-SHA256 Signing ────────────────────────────────
 
 const sha256 = (data) => crypto.createHash('sha256').update(data).digest('hex');
@@ -122,12 +124,16 @@ const tc3Sign = (params, secretId, secretKey, region, endpoint, action) => {
   const service = 'bh';
   const credentialScope = dateStr + '/' + service + '/tc3_request';
 
+  const endpointURL = endpoint.startsWith('http://') || endpoint.startsWith('https://')
+    ? endpoint
+    : `https://${endpoint}`;
+  const endpointHost = new URL(endpointURL).host;
   const payload = JSON.stringify(params);
   const payloadHash = sha256(payload);
 
   // Canonical request: only content-type and host are signed
   const contentType = 'application/json';
-  const canonicalHeaders = 'content-type:' + contentType + '\n' + 'host:' + endpoint + '\n';
+  const canonicalHeaders = 'content-type:' + contentType + '\n' + 'host:' + endpointHost + '\n';
   const signedHeaders = 'content-type;host';
   const canonicalRequest = 'POST\n/\n\n' + canonicalHeaders + '\n' + signedHeaders + '\n' + payloadHash;
 
@@ -141,10 +147,10 @@ const tc3Sign = (params, secretId, secretKey, region, endpoint, action) => {
   const authorization = 'TC3-HMAC-SHA256 Credential=' + secretId + '/' + credentialScope + ', SignedHeaders=' + signedHeaders + ', Signature=' + signature;
 
   return {
-    url: 'https://' + endpoint,
+    url: endpointURL,
     headers: {
       'Content-Type': contentType,
-      'Host': endpoint,
+      'Host': endpointHost,
       'X-TC-Action': action,
       'X-TC-Region': region,
       'X-TC-Timestamp': String(timestamp),
@@ -235,7 +241,27 @@ const resolveRegion = (bindings = {}) => {
 };
 
 const resolveEndpoint = (bindings = {}) => {
-  return toTrimmedString(bindings.endpoint) || DEFAULT_ENDPOINT;
+  const endpoint = toTrimmedString(bindings.endpoint) || DEFAULT_ENDPOINT;
+  if (!endpoint.startsWith('http://') && !endpoint.startsWith('https://')) {
+    if (!/^[a-zA-Z0-9.-]+(?::\d{1,5})?$/.test(endpoint)) {
+      throw errorWithCode('INVALID_ARGUMENT', 'endpoint must be a hostname[:port] or an HTTP(S) URL');
+    }
+    return endpoint;
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(endpoint);
+  } catch {
+    throw errorWithCode('INVALID_ARGUMENT', 'endpoint must be a valid HTTP(S) URL');
+  }
+  if (parsed.username || parsed.password || parsed.pathname !== '/' || parsed.search || parsed.hash) {
+    throw errorWithCode('INVALID_ARGUMENT', 'endpoint URL must not contain credentials, a path, a query, or a fragment');
+  }
+  if (parsed.protocol === 'http:' && !['localhost', '127.0.0.1', '::1'].includes(parsed.hostname)) {
+    throw errorWithCode('INVALID_ARGUMENT', 'endpoint must use HTTPS unless it targets a loopback address');
+  }
+  return parsed.origin;
 };
 
 // Keep TLS bypass scoped to this service's requests. A process-wide TLS setting
@@ -542,8 +568,8 @@ const killSession = async (requestOrContext = {}, maybeContext) => {
   const params = { SessionId: sessionId };
   const response = await callAction(context, 'KillSession', params);
   return {
-    err: toValue(response?.err ?? null),
-    msg: toValue(response?.msg ?? 'ok'),
+    err: toRequiredValue(response?.err),
+    msg: toRequiredValue(response?.msg ?? 'ok'),
   };
 };
 
@@ -577,8 +603,8 @@ const lockUser = async (requestOrContext = {}, maybeContext) => {
   const params = { IdSet: [idNum] };
   const response = await callAction(context, 'LockUser', params);
   return {
-    err: toValue(response?.err ?? null),
-    msg: toValue(response?.msg ?? 'ok'),
+    err: toRequiredValue(response?.err),
+    msg: toRequiredValue(response?.msg ?? 'ok'),
   };
 };
 
@@ -592,8 +618,8 @@ const unlockUser = async (requestOrContext = {}, maybeContext) => {
   const params = { IdSet: [idNum] };
   const response = await callAction(context, 'UnlockUser', params);
   return {
-    err: toValue(response?.err ?? null),
-    msg: toValue(response?.msg ?? 'ok'),
+    err: toRequiredValue(response?.err),
+    msg: toRequiredValue(response?.msg ?? 'ok'),
   };
 };
 
@@ -643,6 +669,7 @@ export const _test = {
   toInt64,
   toTrimmedString,
   toValue,
+  toRequiredValue,
   buildListSessionsParams,
   buildListDevicesParams,
   buildListUsersParams,

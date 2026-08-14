@@ -113,6 +113,7 @@ test('internal helpers work correctly', async () => {
   assert.equal(symVal.stringValue, 'Symbol(test)');
   assert.equal(_test.toValue(null), undefined);
   assert.equal(_test.toValue(undefined), undefined);
+  assert.deepEqual(_test.toRequiredValue(null), { nullValue: 'NULL_VALUE' });
 });
 
 // ── TC3 Signing ───────────────────────────────────────────
@@ -137,6 +138,10 @@ test('TC3 signing produces valid authorization header', async () => {
   assert.equal(signed.headers['X-TC-Version'], '2023-04-18');
   assert.equal(String(signed.headers['X-TC-Timestamp']).length, 10);
   assert.equal(signed.body, JSON.stringify({ Limit: 20, Offset: 0 }));
+
+  const local = _test.tc3Sign({}, 'test-secret-id', 'test-secret-key', 'ap-guangzhou', 'http://127.0.0.1:19000', 'SearchSession');
+  assert.equal(local.url, 'http://127.0.0.1:19000');
+  assert.equal(local.headers.Host, '127.0.0.1:19000');
 });
 
 test('canonical request structure', async () => {
@@ -183,6 +188,9 @@ test('resolveRegion and resolveEndpoint use defaults', async () => {
   assert.equal(_test.resolveRegion({ region: 'ap-beijing' }), 'ap-beijing');
   assert.equal(_test.resolveEndpoint({}), 'bh.tencentcloudapi.com');
   assert.equal(_test.resolveEndpoint({ endpoint: 'custom.bh.com' }), 'custom.bh.com');
+  assert.equal(_test.resolveEndpoint({ endpoint: 'http://127.0.0.1:19000' }), 'http://127.0.0.1:19000');
+  assert.throws(() => _test.resolveEndpoint({ endpoint: 'http://example.com' }), /endpoint must use HTTPS/);
+  assert.throws(() => _test.resolveEndpoint({ endpoint: 'https://example.com/path' }), /must not contain/);
 });
 
 // ── ListSessions ──────────────────────────────────────────
@@ -379,6 +387,8 @@ test('KillSession sends correct API call', async () => {
   const handler = await loadHandler({ session_id: 'sess-123' }, killSessionPath);
   const res = await handler();
   assert.equal(captured.init.headers['X-TC-Action'], 'KillSession');
+  assert.deepEqual(res.err, { nullValue: 'NULL_VALUE' });
+  assert.deepEqual(res.msg, { stringValue: 'ok' });
   const body = JSON.parse(captured.init.body);
   assert.equal(body.SessionId, 'sess-123');
 });
