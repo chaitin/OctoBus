@@ -409,6 +409,21 @@ describe('handlers (login_key auth) - QueryNetworkLog', () => {
   });
 });
 
+describe('handlers (login_key auth) - DownloadAlarmPcap', () => {
+  it('authenticates and calls upstream with the authenticated session', async () => {
+    authCache.clear();
+    const handler = handlers[METHOD_DOWNLOAD_ALARM_PCAP_FULL];
+    const result = await handler(
+      { alarm_sip: '10.0.0.1', attack_sip: '10.0.0.2', start_time: '1571385615000', end_time: '1571385617000' },
+      buildLoginKeyCtx(mockServer.url),
+    );
+    assert.equal(result.response_code, 200);
+    const request = mockServer.requests.find((item) => item.path === '/skyeye/v1/alarm/alarm/info/pcap/download');
+    assert.ok(request, 'pcap request should exist');
+    assert.equal(request.params.csrf_token, 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6');
+  });
+});
+
 // ─── rpcdef & adaptHandler ───
 
 describe('rpcdef', () => {

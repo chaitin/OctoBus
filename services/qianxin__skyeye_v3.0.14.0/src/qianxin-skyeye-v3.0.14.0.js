@@ -25,6 +25,7 @@ export const AUTH_CACHE_TTL_MS = 0; // Cache disabled - re-auth every call to ma
 const grpcCodeFor = (code) => ({
   FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
   INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT,
+  INTERNAL: grpcStatus.INTERNAL,
   PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED,
   UNAVAILABLE: grpcStatus.UNAVAILABLE,
   UNKNOWN: grpcStatus.UNKNOWN,
@@ -426,7 +427,10 @@ const withAuthRetry = async (callCtx, doFetch) => {
   let result = await doFetch(auth);
 
   if (result.httpStatus === 401 || result.httpStatus === 403) {
-    authCache.clear();
+    const bindings = callCtx.bindings || {};
+    const domain = resolveDomain(bindings);
+    const loginKey = resolveLoginKey(bindings);
+    if (domain && loginKey) authCache.delete(`${domain}:${loginKey}`);
     auth = await resolveAuth(callCtx);
     result = await doFetch(auth);
   }

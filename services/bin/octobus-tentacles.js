@@ -400,6 +400,10 @@ const services = {
     entryFile: "../api7__enterprise_v3-10-2/bin/api7-enterprise-v3-10-2.js",
     serviceModule: "../api7__enterprise_v3-10-2/src/service.js",
   },
+  "qianxin-skyeye-v3-0-14-0": {
+    entryFile: "../qianxin__skyeye_v3.0.14.0/bin/qianxin-skyeye-v3-0-14-0.js",
+    serviceModule: "../qianxin__skyeye_v3.0.14.0/src/service.js",
+  },
 };
 
 const serviceNames = Object.keys(services);

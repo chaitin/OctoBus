@@ -102,7 +102,8 @@
     "api7-enterprise-v3-10-2": "bin/api7-enterprise-v3-10-2.js",
     "sangfor-af-v8-0-35r1": "bin/sangfor-af-v8-0-35r1.js",
     "ctyun-accessone": "bin/ctyun-accessone.js",
-    "lighthouse-firewall": "bin/tencent-lighthouse-firewall.js"
+    "lighthouse-firewall": "bin/tencent-lighthouse-firewall.js",
+    "qianxin-skyeye-v3-0-14-0": "bin/qianxin-skyeye-v3-0-14-0.js"
   },
   "files": [
     "bin/huawei-ccm.js",
@@ -302,7 +303,9 @@
     "bin/ctyun-accessone.js",
     "ctyun__accessone",
     "bin/tencent-lighthouse-firewall.js",
-    "tencent__lighthouse-firewall"
+    "tencent__lighthouse-firewall",
+    "bin/qianxin-skyeye-v3-0-14-0.js",
+    "qianxin__skyeye_v3.0.14.0"
   ],
   "scripts": {
     "validate": "node scripts/validate-service-package.mjs",

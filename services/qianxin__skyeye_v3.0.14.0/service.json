@@ -1,6 +1,6 @@
 {
   "schema": "chaitin.octobus.service.v1",
-  "name": "qianxin-skyeye-v3.0.14.0",
+  "name": "qianxin-skyeye-v3-0-14-0",
   "displayName": "QianXin SkyEye V3.0.14.0",
   "description": "OctoBus package for QianXin SkyEye (TianYan) V3.0.14.0 alarm queries, payload retrieval, pcap download, and network log search.",
   "runtime": {
