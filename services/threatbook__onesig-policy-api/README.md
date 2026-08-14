@@ -48,7 +48,7 @@ octobus service import --offline --id threatbook-onesig-policy-api ./services/th
 
 - `baseUrl`: OneSIG address, for example `https://onesig.example.local`.
 - `timeoutMs`: optional timeout in milliseconds.
-- `allowInsecureHttp`: set to `true` only for local mock testing.
+- `allowInsecureHttp`: set to `true` only for local mock testing. Loopback URLs (`localhost`, `127.0.0.0/8`, or `::1`) are also accepted without this setting so the automated local smoke can run; non-loopback targets remain HTTPS-only by default.
 - `timestampPrecision`: `seconds` or `milliseconds`.
 - `headers`: optional extra headers.
 

@@ -1,0 +1,17 @@
+{
+  "method": "threatbook.onesig.policy.v1.OneSigPolicyService/ListAssetGroups",
+  "request": {
+    "query": {
+      "pageNo": "1"
+    }
+  },
+  "expectUpstream": true,
+  "protocols": [
+    "connect",
+    "grpc",
+    "mcp"
+  ],
+  "upstream": {
+    "method": "GET"
+  }
+}

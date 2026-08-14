@@ -41,10 +41,17 @@ const requestOf = (ctx = {}) => ctx.request ?? ctx.req ?? {};
 const normalizeBaseUrl = (bindings) => {
   const raw = text(first(bindings.baseUrl, bindings.base_url, bindings.host));
   if (!raw) throw invalid('baseUrl is required');
-  if (/^https:\/\//i.test(raw) || (bindings.allowInsecureHttp === true && /^http:\/\//i.test(raw))) {
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw invalid('baseUrl must be a valid URL');
+  }
+  const isLoopback = parsed.hostname === 'localhost' || parsed.hostname === '::1' || /^127(?:\.\d{1,3}){3}$/.test(parsed.hostname);
+  if (parsed.protocol === 'https:' || (parsed.protocol === 'http:' && (bindings.allowInsecureHttp === true || isLoopback))) {
     return raw.replace(/\/+$/, '');
   }
-  throw invalid('baseUrl must be https:// unless allowInsecureHttp is true');
+  throw invalid('baseUrl must be https:// unless allowInsecureHttp is true (loopback URLs are allowed for local testing)');
 };
 
 const credentialsOf = (bindings) => {

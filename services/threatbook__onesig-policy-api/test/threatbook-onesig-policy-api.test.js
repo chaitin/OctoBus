@@ -97,12 +97,21 @@ test('rejects invalid input and protects signed query parameters', async () => {
     grpcStatus.INVALID_ARGUMENT,
     /https/,
   );
+  await rejectsWithStatus(
+    () => handlers[`${PREFIX}/ListGlobalBlacklist`]({ config: { baseUrl: 'not a url' }, secret: { apiKey: 'a', secret: 'b' }, request: {} }),
+    grpcStatus.INVALID_ARGUMENT,
+    /valid URL/,
+  );
   assert.deepEqual(_test.parsePayload(''), {});
   assert.throws(() => _test.parsePayload('[]'), /payloadJson/);
   assert.throws(() => _test.validateQuery([]), /query/);
   assert.throws(
     () => _test.signedUrl({ bindings: { baseUrl: 'https://onesig.example.test', apiKey: 'a', secret: 'b', timestampPrecision: 'minutes' }, path: '/' }),
     /timestampPrecision/,
+  );
+  assert.equal(
+    _test.signedUrl({ bindings: { baseUrl: 'http://127.0.0.1:8080', apiKey: 'a', secret: 'b' }, path: '/' }).protocol,
+    'http:',
   );
 });
 
