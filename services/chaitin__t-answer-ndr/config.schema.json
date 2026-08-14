@@ -5,6 +5,7 @@
   "properties": {
     "endpoint": {
       "type": "string",
+      "format": "uri",
       "description": "Management platform base URL, for example https://t-answer.example.com."
     },
     "timeoutMs": {
@@ -17,6 +18,13 @@
       "type": "boolean",
       "default": false,
       "description": "Pass OctoBus-compatible per-request TLS verification bypass options to the runtime."
+    },
+    "maxDownloadBytes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 134217728,
+      "default": 33554432,
+      "description": "Maximum downloaded file size accepted in memory."
     }
   },
   "required": [

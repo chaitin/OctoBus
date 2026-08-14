@@ -1,0 +1,7 @@
+{
+  "method": "chaitin.t_answer_ndr.v1.TAnswerNdrService/ListAssets",
+  "request": {
+    "count": 1
+  },
+  "expectUpstream": true
+}

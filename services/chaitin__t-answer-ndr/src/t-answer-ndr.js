@@ -1,6 +1,8 @@
 import { GrpcError, grpcStatus } from "@chaitin-ai/octobus-sdk";
+import { Agent } from "undici";
 
 const DEFAULT_TIMEOUT_MS = 5000;
+const DEFAULT_MAX_DOWNLOAD_BYTES = 32 * 1024 * 1024;
 const DEFAULT_LOOKBACK_DAYS = 30;
 const DEFAULT_PAGE_SIZE = 20;
 const DEFAULT_PCAP_ANALYSIS_TIMEOUT_MS = 60000;
@@ -179,18 +181,18 @@ const getConfig = (ctx) => {
     endpoint: normalizeEndpoint(config.endpoint),
     timeoutMs: Number.isInteger(config.timeoutMs) && config.timeoutMs > 0 ? config.timeoutMs : DEFAULT_TIMEOUT_MS,
     skipTlsVerify: Boolean(config.skipTlsVerify),
+    maxDownloadBytes: Number.isInteger(config.maxDownloadBytes) && config.maxDownloadBytes > 0
+      ? config.maxDownloadBytes : DEFAULT_MAX_DOWNLOAD_BYTES,
     apiToken: secret.apiToken,
   };
 };
 
-const buildTlsOptions = (skipTlsVerify) =>
-  skipTlsVerify
-    ? {
-        insecureSkipVerify: true,
-        tlsInsecureSkipVerify: true,
-        skipTlsVerify: true,
-      }
-    : {};
+let insecureDispatcher;
+const buildTlsOptions = (skipTlsVerify) => {
+  if (!skipTlsVerify) return {};
+  insecureDispatcher ??= new Agent({ connect: { rejectUnauthorized: false } });
+  return { dispatcher: insecureDispatcher };
+};
 
 const getWebCredentials = (ctx) => {
   const secret = ctx?.secret ?? {};
@@ -1223,6 +1225,9 @@ async function downloadFile(ctx) {
   }
 
   const bytes = Buffer.from(await response.arrayBuffer());
+  if (bytes.length > config.maxDownloadBytes) {
+    throw toGrpcError(grpcStatus.RESOURCE_EXHAUSTED, `upstream download exceeds ${config.maxDownloadBytes} bytes`);
+  }
   return {
     contentType: response.headers.get("content-type") || "",
     filename: parseFilename(response.headers.get("content-disposition")),
