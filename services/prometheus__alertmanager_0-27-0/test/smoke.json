@@ -7,7 +7,6 @@
   "requireBusinessSuccess": true,
   "requireUpstreamPerProtocol": true,
   "upstream": {
-    "method": "GET",
-    "path": "/api/v2/alerts"
+    "method": "GET"
   }
 }
