@@ -514,6 +514,10 @@ const services = {
     entryFile: "../nist__nvd-v2/bin/nist-nvd-v2.js",
     serviceModule: "../nist__nvd-v2/src/service.js",
   },
+  "siem": {
+    entryFile: "../wazuh__siem/bin/siem.js",
+    serviceModule: "../wazuh__siem/src/service.js",
+  },
 };
 
 const serviceNames = Object.keys(services);

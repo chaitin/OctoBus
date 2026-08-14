@@ -129,7 +129,8 @@
     "tencent-ssl": "bin/tencent-ssl.js",
     "reportedip": "bin/reportedip.js",
     "tencent-bh": "bin/tencent-bh.js",
-    "nist-nvd-v2": "bin/nist-nvd-v2.js"
+    "nist-nvd-v2": "bin/nist-nvd-v2.js",
+    "siem": "bin/siem.js"
   },
   "files": [
     "bin/huawei-ccm.js",
@@ -383,7 +384,9 @@
     "tencent__bh",
     "bin/tencent-bh.js",
     "nist__nvd-v2",
-    "bin/nist-nvd-v2.js"
+    "bin/nist-nvd-v2.js",
+    "wazuh__siem",
+    "bin/siem.js"
   ],
   "scripts": {
     "validate": "node scripts/validate-service-package.mjs",

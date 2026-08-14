@@ -1,0 +1,185 @@
+syntax = "proto3";
+
+package Wazuh_SIEM;
+
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Wazuh_SIEM";
+
+service Wazuh_SIEM {
+  // 查询安全告警列表，支持 Wazuh 查询语法、时间范围和严重级别过滤
+  rpc ListAlerts(ListAlertsRequest) returns (ListAlertsResponse) {}
+
+  // 获取告警概览统计
+  rpc GetAlertSummary(GetAlertSummaryRequest) returns (GetAlertSummaryResponse) {}
+
+  // 查询指定代理的漏洞检测结果
+  rpc ListVulnerabilities(ListVulnerabilitiesRequest) returns (ListVulnerabilitiesResponse) {}
+
+  // 获取指定代理的漏洞摘要统计
+  rpc GetVulnerabilitySummary(GetVulnerabilitySummaryRequest) returns (GetVulnerabilitySummaryResponse) {}
+
+  // 查询代理列表（用于发现 agent_id）
+  rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse) {}
+}
+
+// ==================== ListAlerts ====================
+
+message ListAlertsRequest {
+  string username = 1;                          // Wazuh 用户名，可选（优先用 secret）
+  string password = 2;                          // Wazuh 密码，可选（优先用 secret）
+  string query = 3;                             // Wazuh 查询语法，如 "rule.level>=5"
+  google.protobuf.Int64Value start_time = 4;    // 开始时间（Unix秒），可选
+  google.protobuf.Int64Value end_time = 5;      // 结束时间（Unix秒），可选
+  google.protobuf.Int64Value severity_min = 6;  // 最低严重级别（0-16），可选
+  google.protobuf.Int64Value limit = 7;         // 每页条数，默认 10
+  google.protobuf.Int64Value offset = 8;        // 分页偏移，默认 0
+  string sort = 9;                              // 排序字段，默认 "-timestamp"
+  string search = 10;                           // 全文本搜索，可选
+}
+
+message ListAlertsResponse {
+  google.protobuf.Value err = 1;                // 错误信息
+  google.protobuf.Value msg = 2;                // 消息
+  AlertListResult data = 3;                     // 告警列表结果
+}
+
+message AlertListResult {
+  repeated AlertRecord alerts = 1;              // 告警记录列表
+  int64 total = 2;                              // 总条数
+  int64 limit = 3;                              // 每页条数
+  int64 offset = 4;                             // 分页偏移
+}
+
+message AlertRecord {
+  string id = 1;                                // 告警 ID
+  string timestamp = 2;                         // 时间戳
+  string rule_description = 3;                  // 规则描述
+  int32 rule_level = 4;                         // 规则级别（0-16）
+  string rule_groups = 5;                       // 规则分组（逗号分隔）
+  string rule_mitre_id = 6;                     // MITRE ATT&CK 技术 ID（逗号分隔）
+  string agent_id = 7;                          // 代理 ID
+  string agent_name = 8;                        // 代理名称
+  string agent_ip = 9;                          // 代理 IP
+  string full_log = 10;                         // 完整日志
+  google.protobuf.Struct raw = 11;              // 原始数据透传
+}
+
+// ==================== GetAlertSummary ====================
+
+message GetAlertSummaryRequest {
+  string username = 1;                          // Wazuh 用户名，可选
+  string password = 2;                          // Wazuh 密码，可选
+}
+
+message GetAlertSummaryResponse {
+  google.protobuf.Value err = 1;                // 错误信息
+  google.protobuf.Value msg = 2;                // 消息
+  AlertSummary data = 3;                        // 告警概览
+}
+
+message AlertSummary {
+  int64 total_alerts = 1;                       // 总告警数
+  int64 level_12_plus = 2;                      // 严重告警数（level >= 12）
+  int64 level_8_11 = 3;                         // 高危告警数（level 8-11）
+  int64 level_4_7 = 4;                          // 中危告警数（level 4-7）
+  int64 level_0_3 = 5;                          // 低危/信息告警数（level 0-3）
+  google.protobuf.Struct raw = 6;               // 原始数据透传
+}
+
+// ==================== ListVulnerabilities ====================
+
+message ListVulnerabilitiesRequest {
+  string username = 1;                          // Wazuh 用户名，可选
+  string password = 2;                          // Wazuh 密码，可选
+  string agent_id = 3;                          // Wazuh agent ID（必填，如 "001"）
+  google.protobuf.Int64Value limit = 4;         // 每页条数，默认 10
+  google.protobuf.Int64Value offset = 5;        // 分页偏移，默认 0
+  string sort = 6;                              // 排序字段
+  string search = 7;                            // 全文本搜索
+  string query = 8;                             // Wazuh 查询语法过滤
+}
+
+message ListVulnerabilitiesResponse {
+  google.protobuf.Value err = 1;                // 错误信息
+  google.protobuf.Value msg = 2;                // 消息
+  VulnerabilityListResult data = 3;             // 漏洞列表结果
+}
+
+message VulnerabilityListResult {
+  repeated VulnerabilityRecord vulnerabilities = 1; // 漏洞记录列表
+  int64 total = 2;                              // 总条数
+  int64 limit = 3;                              // 每页条数
+  int64 offset = 4;                             // 分页偏移
+}
+
+message VulnerabilityRecord {
+  string cve = 1;                               // CVE 编号
+  string severity = 2;                          // 严重级别（Low/Medium/High/Critical）
+  string package_name = 3;                      // 受影响软件包名称
+  string package_version = 4;                   // 受影响软件包版本
+  string title = 5;                             // 漏洞标题
+  string description = 6;                       // 漏洞描述
+  string reference = 7;                         // CVE 参考链接
+  string type = 8;                              // 漏洞类型（Package/Advisory）
+  google.protobuf.Struct raw = 9;               // 原始数据透传
+}
+
+// ==================== GetVulnerabilitySummary ====================
+
+message GetVulnerabilitySummaryRequest {
+  string username = 1;                          // Wazuh 用户名，可选
+  string password = 2;                          // Wazuh 密码，可选
+  string agent_id = 3;                          // Wazuh agent ID（必填）
+}
+
+message GetVulnerabilitySummaryResponse {
+  google.protobuf.Value err = 1;                // 错误信息
+  google.protobuf.Value msg = 2;                // 消息
+  VulnerabilitySummary data = 3;                // 漏洞摘要
+}
+
+message VulnerabilitySummary {
+  int64 critical_count = 1;                     // Critical 级别漏洞数
+  int64 high_count = 2;                         // High 级别漏洞数
+  int64 medium_count = 3;                       // Medium 级别漏洞数
+  int64 low_count = 4;                          // Low 级别漏洞数
+  int64 total = 5;                              // 总漏洞数
+  google.protobuf.Struct raw = 6;               // 原始数据透传
+}
+
+// ==================== ListAgents ====================
+
+message ListAgentsRequest {
+  string username = 1;                          // Wazuh 用户名，可选
+  string password = 2;                          // Wazuh 密码，可选
+  string status = 3;                            // 代理状态过滤（active/disconnected/pending/all），默认 active
+  string search = 4;                            // 全文本搜索
+  google.protobuf.Int64Value limit = 5;         // 每页条数，默认 10
+  google.protobuf.Int64Value offset = 6;        // 分页偏移，默认 0
+  string query = 7;                             // Wazuh 查询语法过滤
+}
+
+message ListAgentsResponse {
+  google.protobuf.Value err = 1;                // 错误信息
+  google.protobuf.Value msg = 2;                // 消息
+  AgentListResult data = 3;                     // 代理列表结果
+}
+
+message AgentListResult {
+  repeated AgentRecord agents = 1;              // 代理记录列表
+  int64 total = 2;                              // 总条数
+}
+
+message AgentRecord {
+  string id = 1;                                // 代理 ID
+  string name = 2;                              // 代理名称
+  string ip = 3;                                // 代理 IP
+  string status = 4;                            // 代理状态
+  string os_name = 5;                           // 操作系统名称
+  string os_version = 6;                        // 操作系统版本
+  string wazuh_version = 7;                     // Wazuh 代理版本
+  string last_keep_alive = 8;                   // 最后心跳时间
+  string group = 9;                             // 所属分组（逗号分隔）
+}
