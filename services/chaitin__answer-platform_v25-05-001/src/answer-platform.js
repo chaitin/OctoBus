@@ -2,28 +2,11 @@
 // JSON-RPC 2.0 proxy over HTTP with cookie-based session management.
 
 import crypto from 'node:crypto';
+import { Agent } from 'undici';
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
-// --- Method path constants ---
-
-const LOGIN_PATH = '/Answer_Platform.Answer_Platform/Login';
-const SEARCH_ALARMS_PATH = '/Answer_Platform.Answer_Platform/SearchAlarms';
-const GET_ALARM_PATH = '/Answer_Platform.Answer_Platform/GetAlarm';
-const SEARCH_BLOCK_RULES_PATH = '/Answer_Platform.Answer_Platform/SearchBlockRules';
-const CREATE_BLOCK_RULE_PATH = '/Answer_Platform.Answer_Platform/CreateBlockRule';
-const UPDATE_BLOCK_RULE_STATUS_PATH = '/Answer_Platform.Answer_Platform/UpdateBlockRuleStatus';
-const DELETE_BLOCK_RULE_PATH = '/Answer_Platform.Answer_Platform/DeleteBlockRule';
-const LIST_FIREWALLS_PATH = '/Answer_Platform.Answer_Platform/ListFirewalls';
-const CREATE_BLACKLIST_PATH = '/Answer_Platform.Answer_Platform/CreateBlackList';
-const DELETE_BLACKLIST_PATH = '/Answer_Platform.Answer_Platform/DeleteBlackList';
-const SEARCH_BLACKLIST_PATH = '/Answer_Platform.Answer_Platform/SearchBlackList';
-const GET_SYSTEM_STATUS_PATH = '/Answer_Platform.Answer_Platform/GetSystemStatus';
-const SEARCH_ASSETS_PATH = '/Answer_Platform.Answer_Platform/SearchAssets';
-const LOGOUT_PATH = '/Answer_Platform.Answer_Platform/Logout';
-const GET_AGENT_GROUPS_PATH = '/Answer_Platform.Answer_Platform/GetAgentGroups';
-
-// Full method name constants for handler map
+// Full proto method names for the production handler map.
 
 const LOGIN = 'Answer_Platform.Answer_Platform/Login';
 const SEARCH_ALARMS = 'Answer_Platform.Answer_Platform/SearchAlarms';
@@ -42,6 +25,7 @@ const LOGOUT = 'Answer_Platform.Answer_Platform/Logout';
 const GET_AGENT_GROUPS = 'Answer_Platform.Answer_Platform/GetAgentGroups';
 
 const DEFAULT_TIMEOUT_MS = 30000;
+const DEFAULT_MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 const RPC_PATH = '/rpc';
 
 // --- Helpers ---
@@ -114,6 +98,13 @@ const toStruct = (obj) => {
   return { fields };
 };
 
+const resultCode = (result) => Number.isFinite(result?.code) ? result.code : 0;
+const resultMsg = (result) => String(result?.msg ?? '');
+const resultItems = (result) => Array.isArray(result?.data)
+  ? result.data
+  : (Array.isArray(result?.list) ? result.list : []);
+const resultTotal = (result, items) => Number(firstDefined(result?.total_count, result?.totalCount, items.length));
+
 // --- Config resolution ---
 
 const normalizeBaseUrl = (url) => {
@@ -122,28 +113,25 @@ const normalizeBaseUrl = (url) => {
   return base.replace(/\/+$/, '');
 };
 
-const resolveBaseUrl = (bindings) => normalizeBaseUrl(firstDefined(
-  bindings?.restBaseUrl,
-  bindings?.baseUrl,
-  bindings?.rest_base_url,
-  bindings?.base_url,
-  bindings?.host,
-));
+const resolveBaseUrl = (bindings) => normalizeBaseUrl(bindings?.restBaseUrl);
 
 
 const limitPageSize = (val) => {
   const n = Number(val);
   return Number.isFinite(n) && n > 0 ? Math.min(n, 1000) : 20;
 };
+const resolvePage = (value) => Number(value) > 0 ? Number(value) : 1;
 
 const resolveTimeoutMs = (ctx) => {
   const bindings = ctx?.bindings ?? {};
-  const timeout = Number(firstDefined(
-    bindings.timeoutMs,
-    bindings.timeout_ms,
-    DEFAULT_TIMEOUT_MS,
-  ));
+  const timeout = Number(bindings.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   return Number.isFinite(timeout) && timeout > 0 ? timeout : DEFAULT_TIMEOUT_MS;
+};
+
+const resolveMaxResponseBytes = (ctx) => {
+  const bindings = ctx?.bindings ?? {};
+  const value = Number(bindings.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES);
+  return Number.isSafeInteger(value) && value > 0 ? value : DEFAULT_MAX_RESPONSE_BYTES;
 };
 
 const toBoolean = (value) => {
@@ -157,15 +145,11 @@ const toBoolean = (value) => {
   return false;
 };
 
-// Follows the same TLS verification skip pattern used by all OctoBus services.
-// The OctoBus runtime provides a fetch polyfill that supports these options.
+let insecureDispatcher;
 const buildTlsOptions = (bindings) => {
-  if (!toBoolean(bindings?.tlsInsecureSkipVerify) && !toBoolean(bindings?.skipTlsVerify) && !toBoolean(bindings?.insecureSkipVerify)) return {};
-  return {
-    insecureSkipVerify: true,
-    tlsInsecureSkipVerify: true,
-    skipTlsVerify: true,
-  };
+  if (!toBoolean(bindings?.skipTlsVerify)) return {};
+  insecureDispatcher ??= new Agent({ connect: { rejectUnauthorized: false } });
+  return { dispatcher: insecureDispatcher };
 };
 
 // --- Context resolution ---
@@ -229,6 +213,7 @@ const rpcCall = async (ctx, method, params = {}) => {
   if (!baseUrl) throw errorWithCode('INVALID_ARGUMENT', 'restBaseUrl/baseUrl is required (https://...)');
 
   const timeoutMs = resolveTimeoutMs(ctx);
+  const maxResponseBytes = resolveMaxResponseBytes(ctx);
 
   const tlsOpts = buildTlsOptions(ctx?.bindings ?? {});
 
@@ -268,13 +253,21 @@ const rpcCall = async (ctx, method, params = {}) => {
   }
 
   // Capture set-cookie for session persistence
-  const responseCookies = res.headers.getSetCookie();
+  const responseCookies = typeof res.headers.getSetCookie === 'function'
+    ? res.headers.getSetCookie()
+    : (res.headers.get('set-cookie') ? [res.headers.get('set-cookie')] : []);
 
   let json;
   try {
-    json = await res.json();
+    const contentLength = Number(res.headers.get('content-length'));
+    if (Number.isFinite(contentLength) && contentLength > maxResponseBytes) {
+      throw new Error(`RPC response exceeds ${maxResponseBytes} bytes`);
+    }
+    const text = await res.text();
+    if (Buffer.byteLength(text) > maxResponseBytes) throw new Error(`RPC response exceeds ${maxResponseBytes} bytes`);
+    json = JSON.parse(text);
   } catch {
-    throw errorWithCode('UNKNOWN', `RPC response is not valid JSON (HTTP ${res.status})`);
+    throw errorWithCode('UNKNOWN', `RPC response is invalid or too large (HTTP ${res.status})`);
   }
 
   if (!res.ok) {
@@ -349,14 +342,19 @@ async function resolveAgentUuid(callCtx, token) {
   return uuid;
 }
 
+const resolveAgentId = async (callCtx, token, request) => {
+  const explicit = String(firstDefined(request?.agent_id, request?.agentId, '')).trim();
+  return explicit || resolveAgentUuid(callCtx, token);
+};
+
 // --- Login / Logout ---
 
 async function handleLogin(_req, ctx) {
   const callCtx = resolveCallContext(ctx);
   const bindings = callCtx.bindings || {};
 
-  const username = resolveCredential(bindings, ['bindUser', 'bind_user', 'user', 'username'], 'username');
-  const password = resolveCredential(bindings, ['bindPassword', 'bind_password', 'password'], 'password');
+  const username = resolveCredential(bindings, ['bindUser'], 'username');
+  const password = resolveCredential(bindings, ['bindPassword'], 'password');
 
   const { result, cookies } = await rpcCall(callCtx, 'HeraAccountNoAuthService.Login', {
     username,
@@ -433,7 +431,7 @@ async function handleSearchAlarms(req, ctx) {
 
   // Use Unix timestamps (seconds) for time_range
   const now = Math.floor(Date.now() / 1000);
-  const page = Number(req.page) > 0 ? Number(req.page) : 1;
+  const page = resolvePage(req.page);
   const pageSize = limitPageSize(req.page_size);
 
   const params = {
@@ -444,11 +442,13 @@ async function handleSearchAlarms(req, ctx) {
   };
   if (req.start_time) {
     const ts = Date.parse(String(req.start_time));
-    if (!Number.isNaN(ts)) params.time_range_start = Math.floor(ts / 1000);
+    if (Number.isNaN(ts)) throw errorWithCode('INVALID_ARGUMENT', 'start_time must be a valid ISO 8601 timestamp');
+    params.time_range_start = Math.floor(ts / 1000);
   }
   if (req.end_time) {
     const ts = Date.parse(String(req.end_time));
-    if (!Number.isNaN(ts)) params.time_range_end = Math.floor(ts / 1000);
+    if (Number.isNaN(ts)) throw errorWithCode('INVALID_ARGUMENT', 'end_time must be a valid ISO 8601 timestamp');
+    params.time_range_end = Math.floor(ts / 1000);
   }
   if (req.threat_level) params.threat_level = String(req.threat_level);
   if (req.attack_result) params.attack_result = String(req.attack_result);
@@ -456,13 +456,13 @@ async function handleSearchAlarms(req, ctx) {
 
   const result = await authenticatedRpc(callCtx, token, 'AlarmService.SearchAlarmList', params);
 
-  const items = Array.isArray(result?.data) ? result.data : (Array.isArray(result?.list) ? result.list : []);
+  const items = resultItems(result);
 
   return {
-    code: typeof result?.code === 'number' ? result.code : 0,
-    msg: String(result?.msg ?? ''),
+    code: resultCode(result),
+    msg: resultMsg(result),
     items: items.map(toStruct),
-    total_count: Number(result?.total_count ?? result?.totalCount ?? items.length),
+    total_count: resultTotal(result, items),
     raw: toStruct(result ?? {}),
   };
 }
@@ -477,8 +477,8 @@ async function handleGetAlarm(req, ctx) {
   });
 
   return {
-    code: typeof result?.code === 'number' ? result.code : 0,
-    msg: String(result?.msg ?? ''),
+    code: resultCode(result),
+    msg: resultMsg(result),
     alarm: toStruct(result?.data ?? result ?? {}),
     raw: toStruct(result ?? {}),
   };
@@ -489,13 +489,12 @@ async function handleGetAlarm(req, ctx) {
 async function handleSearchBlockRules(req, ctx) {
   const callCtx = resolveCallContext(ctx);
   const token = requireSessionToken(req);
-  const au = await resolveAgentUuid(callCtx, token);
-
-  const page = Number(req.page) > 0 ? Number(req.page) : 1;
+  const agentId = await resolveAgentId(callCtx, token, req);
+  const page = resolvePage(req.page);
   const pageSize = limitPageSize(req.page_size);
 
   const params = {
-    agent_id: req.agent_id ? String(req.agent_id) : au,
+    agent_id: agentId,
     offset: (page - 1) * pageSize,
     count: pageSize,
   };
@@ -503,13 +502,13 @@ async function handleSearchBlockRules(req, ctx) {
 
   const result = await authenticatedRpc(callCtx, token, 'RulesService.SearchBlockRules', params);
 
-  const items = Array.isArray(result?.data) ? result.data : (Array.isArray(result?.list) ? result.list : []);
+  const items = resultItems(result);
 
   return {
-    code: typeof result?.code === 'number' ? result.code : 0,
-    msg: String(result?.msg ?? ''),
+    code: resultCode(result),
+    msg: resultMsg(result),
     items: items.map(toStruct),
-    total_count: Number(result?.total_count ?? result?.totalCount ?? items.length),
+    total_count: resultTotal(result, items),
   };
 }
 
@@ -519,12 +518,15 @@ async function handleCreateBlockRule(req, ctx) {
 
   const name = requireField(req, ['name'], 'name');
   const ip = requireField(req, ['src_ip', 'srcIp', 'ip'], 'src_ip');
-  const agentId = req.agent_id ? String(req.agent_id) : await resolveAgentUuid(callCtx, token);
+  const agentId = await resolveAgentId(callCtx, token, req);
 
   const params = {
     agent_ids: [agentId],
     Ips: [String(ip)],
     name,
+    description: String(req.description || ''),
+    dst_ip: String(req.dst_ip || req.dstIp || ''),
+    protocol: String(req.protocol || ''),
     action: req.action ? String(req.action) : 'block',
     status: 2,
     block_time_type: 1,
@@ -535,8 +537,8 @@ async function handleCreateBlockRule(req, ctx) {
   const result = await authenticatedRpc(callCtx, token, 'RulesService.CreateBlockRules', params);
 
   return {
-    code: typeof result?.code === 'number' ? result.code : 0,
-    msg: String(result?.msg ?? ''),
+    code: resultCode(result),
+    msg: resultMsg(result),
     rule_id: String(result?.data?.id ?? result?.id ?? ''),
     raw: toStruct(result ?? {}),
   };
@@ -548,14 +550,14 @@ async function handleUpdateBlockRuleStatus(req, ctx) {
   const ruleId = requireField(req, ['rule_id', 'ruleId'], 'rule_id');
 
   const result = await authenticatedRpc(callCtx, token, 'RulesService.UpdateBlockRulesStatus', {
-    agent_id: req.agent_id ? String(req.agent_id) : await resolveAgentUuid(callCtx, token),
+    agent_id: await resolveAgentId(callCtx, token, req),
     id: Number(ruleId),
     status: req.enabled ? 2 : 3,
   });
 
   return {
-    code: typeof result?.code === 'number' ? result.code : 0,
-    msg: String(result?.msg ?? ''),
+    code: resultCode(result),
+    msg: resultMsg(result),
     raw: toStruct(result ?? {}),
   };
 }
@@ -564,7 +566,7 @@ async function handleDeleteBlockRule(req, ctx) {
   const callCtx = resolveCallContext(ctx);
   const token = requireSessionToken(req);
   const ruleId = requireField(req, ['rule_id', 'ruleId'], 'rule_id');
-  const agentId = req.agent_id ? String(req.agent_id) : await resolveAgentUuid(callCtx, token);
+  const agentId = await resolveAgentId(callCtx, token, req);
 
   // Fetch the existing rule to get original IPs and name (paginated search)
   let existing = null;
@@ -598,7 +600,7 @@ async function handleDeleteBlockRule(req, ctx) {
   });
 
   return {
-    code: typeof result?.code === 'number' ? result.code : 0,
+    code: resultCode(result),
     msg: String(result?.msg ?? 'ok'),
     raw: toStruct(result ?? {}),
   };
@@ -609,17 +611,15 @@ async function handleDeleteBlockRule(req, ctx) {
 async function handleListFirewalls(req, ctx) {
   const callCtx = resolveCallContext(ctx);
   const token = requireSessionToken(req);
-  const au = await resolveAgentUuid(callCtx, token);
-
-  const params = { agent_id: req.agent_id ? String(req.agent_id) : au };
+  const params = { agent_id: await resolveAgentId(callCtx, token, req) };
 
   const result = await authenticatedRpc(callCtx, token, 'FirewallService.SearchFirewall', params);
 
-  const items = Array.isArray(result?.data) ? result.data : (Array.isArray(result?.list) ? result.list : []);
+  const items = resultItems(result);
 
   return {
-    code: typeof result?.code === 'number' ? result.code : 0,
-    msg: String(result?.msg ?? ''),
+    code: resultCode(result),
+    msg: resultMsg(result),
     items: items.map(toStruct),
   };
 }
@@ -627,21 +627,19 @@ async function handleListFirewalls(req, ctx) {
 async function handleCreateBlackList(req, ctx) {
   const callCtx = resolveCallContext(ctx);
   const token = requireSessionToken(req);
-  const au = await resolveAgentUuid(callCtx, token);
-
   const ips = Array.isArray(req?.ips) ? req.ips.map(String) : [];
   if (!ips.length) throw errorWithCode('INVALID_ARGUMENT', 'ips is required and must be a non-empty array');
 
   const params = { ips };
-  params.agent_id = req.agent_id ? String(req.agent_id) : au;
+  params.agent_id = await resolveAgentId(callCtx, token, req);
   if (req.firewall_id) params.firewall_id = String(req.firewall_id);
   if (req.description) params.description = String(req.description);
 
   const result = await authenticatedRpc(callCtx, token, 'FirewallService.BatchCreateBlackList', params);
 
   return {
-    code: typeof result?.code === 'number' ? result.code : 0,
-    msg: String(result?.msg ?? ''),
+    code: resultCode(result),
+    msg: resultMsg(result),
     raw: toStruct(result ?? {}),
   };
 }
@@ -649,19 +647,17 @@ async function handleCreateBlackList(req, ctx) {
 async function handleDeleteBlackList(req, ctx) {
   const callCtx = resolveCallContext(ctx);
   const token = requireSessionToken(req);
-  const au = await resolveAgentUuid(callCtx, token);
-
   const ids = Array.isArray(req?.ids) ? req.ids.map(String) : [];
   if (!ids.length) throw errorWithCode('INVALID_ARGUMENT', 'ids is required and must be a non-empty array');
 
   const result = await authenticatedRpc(callCtx, token, 'FirewallService.DeleteBlackList', {
     ids,
-    agent_id: req.agent_id ? String(req.agent_id) : au,
+    agent_id: await resolveAgentId(callCtx, token, req),
   });
 
   return {
-    code: typeof result?.code === 'number' ? result.code : 0,
-    msg: String(result?.msg ?? ''),
+    code: resultCode(result),
+    msg: resultMsg(result),
     raw: toStruct(result ?? {}),
   };
 }
@@ -669,13 +665,12 @@ async function handleDeleteBlackList(req, ctx) {
 async function handleSearchBlackList(req, ctx) {
   const callCtx = resolveCallContext(ctx);
   const token = requireSessionToken(req);
-  const au = await resolveAgentUuid(callCtx, token);
-
-  const page = Number(req.page) > 0 ? Number(req.page) : 1;
-  const pageSize = Number(req.page_size) > 0 ? Number(req.page_size) : 20;
+  const agentId = await resolveAgentId(callCtx, token, req);
+  const page = resolvePage(req.page);
+  const pageSize = limitPageSize(req.page_size);
 
   const params = {
-    agent_id: req.agent_id ? String(req.agent_id) : au,
+    agent_id: agentId,
     offset: (page - 1) * pageSize,
     count: pageSize,
   };
@@ -683,13 +678,13 @@ async function handleSearchBlackList(req, ctx) {
 
   const result = await authenticatedRpc(callCtx, token, 'FirewallService.SearchBlackList', params);
 
-  const items = Array.isArray(result?.data) ? result.data : (Array.isArray(result?.list) ? result.list : []);
+  const items = resultItems(result);
 
   return {
-    code: typeof result?.code === 'number' ? result.code : 0,
-    msg: String(result?.msg ?? ''),
+    code: resultCode(result),
+    msg: resultMsg(result),
     items: items.map(toStruct),
-    total_count: Number(result?.total_count ?? result?.totalCount ?? items.length),
+    total_count: resultTotal(result, items),
   };
 }
 
@@ -701,11 +696,11 @@ async function handleGetAgentGroups(req, ctx) {
 
   const result = await authenticatedRpc(callCtx, token, 'AssetService.GetAgentGroups', {});
 
-  const items = Array.isArray(result?.data) ? result.data : [];
+  const items = resultItems(result);
 
   return {
-    code: typeof result?.code === 'number' ? result.code : 0,
-    msg: String(result?.msg ?? ''),
+    code: resultCode(result),
+    msg: resultMsg(result),
     items: items.map(toStruct),
   };
 }
@@ -719,8 +714,8 @@ async function handleGetSystemStatus(req, ctx) {
   const result = await authenticatedRpc(callCtx, token, 'OpsService.GetBaseInfo', {});
 
   return {
-    code: typeof result?.code === 'number' ? result.code : 0,
-    msg: String(result?.msg ?? ''),
+    code: resultCode(result),
+    msg: resultMsg(result),
     cpu_usage: String(result?.cpu_usage ?? result?.cpu ?? ''),
     memory_usage: String(result?.memory_usage ?? result?.memory ?? ''),
     disk_usage: String(result?.disk_usage ?? result?.disk ?? ''),
@@ -735,7 +730,7 @@ async function handleSearchAssets(req, ctx) {
   const callCtx = resolveCallContext(ctx);
   const token = requireSessionToken(req);
 
-  const page = Number(req.page) > 0 ? Number(req.page) : 1;
+  const page = resolvePage(req.page);
   const pageSize = limitPageSize(req.page_size);
 
   const params = { page_num: page, page_size: pageSize };
@@ -743,37 +738,13 @@ async function handleSearchAssets(req, ctx) {
 
   const result = await authenticatedRpc(callCtx, token, 'AssetService.GetAssetList', params);
 
-  const items = Array.isArray(result?.data) ? result.data : (Array.isArray(result?.list) ? result.list : []);
+  const items = resultItems(result);
 
   return {
-    code: typeof result?.code === 'number' ? result.code : 0,
-    msg: String(result?.msg ?? ''),
+    code: resultCode(result),
+    msg: resultMsg(result),
     items: items.map(toStruct),
-    total_count: Number(result?.total_count ?? result?.totalCount ?? items.length),
-  };
-}
-
-// --- rpcdef (for SDK runtime) ---
-
-export function rpcdef(ctx) {
-  const callCtx = resolveCallContext(ctx);
-  const req = ctx?.request ?? ctx?.req ?? {};
-  return {
-    [LOGIN_PATH]: async (r) => handleLogin(r ?? req, callCtx),
-    [SEARCH_ALARMS_PATH]: async (r) => handleSearchAlarms(r ?? req, callCtx),
-    [GET_ALARM_PATH]: async (r) => handleGetAlarm(r ?? req, callCtx),
-    [SEARCH_BLOCK_RULES_PATH]: async (r) => handleSearchBlockRules(r ?? req, callCtx),
-    [CREATE_BLOCK_RULE_PATH]: async (r) => handleCreateBlockRule(r ?? req, callCtx),
-    [UPDATE_BLOCK_RULE_STATUS_PATH]: async (r) => handleUpdateBlockRuleStatus(r ?? req, callCtx),
-    [DELETE_BLOCK_RULE_PATH]: async (r) => handleDeleteBlockRule(r ?? req, callCtx),
-    [LIST_FIREWALLS_PATH]: async (r) => handleListFirewalls(r ?? req, callCtx),
-    [CREATE_BLACKLIST_PATH]: async (r) => handleCreateBlackList(r ?? req, callCtx),
-    [DELETE_BLACKLIST_PATH]: async (r) => handleDeleteBlackList(r ?? req, callCtx),
-    [SEARCH_BLACKLIST_PATH]: async (r) => handleSearchBlackList(r ?? req, callCtx),
-    [GET_SYSTEM_STATUS_PATH]: async (r) => handleGetSystemStatus(r ?? req, callCtx),
-    [SEARCH_ASSETS_PATH]: async (r) => handleSearchAssets(r ?? req, callCtx),
-    [LOGOUT_PATH]: async (r) => handleLogout(r ?? req, callCtx),
-    [GET_AGENT_GROUPS_PATH]: async (r) => handleGetAgentGroups(r ?? req, callCtx),
+    total_count: resultTotal(result, items),
   };
 }
 
@@ -809,6 +780,15 @@ export const _test = {
   normalizeBaseUrl,
   resolveBaseUrl,
   resolveTimeoutMs,
+  resolveMaxResponseBytes,
+  buildTlsOptions,
+  limitPageSize,
+  resolvePage,
+  rpcCall,
+  resultCode,
+  resultMsg,
+  resultItems,
+  resultTotal,
   toBoolean,
   toStruct,
   toValue,
@@ -816,4 +796,11 @@ export const _test = {
   mergedBindings,
   querySessions: () => new Map(sessions),
   clearSessions: () => sessions.clear(),
+  getSession,
+  setSession,
+  pruneSessions,
+  firstDefined,
+  pickFirst,
+  unwrapScalar,
+  errorWithCode,
 };

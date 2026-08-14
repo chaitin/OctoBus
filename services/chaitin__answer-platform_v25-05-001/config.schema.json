@@ -1,27 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "additionalProperties": true,
+  "additionalProperties": false,
   "properties": {
     "restBaseUrl": {
       "type": "string",
+      "format": "uri",
       "description": "Answer-Platform base URL with https scheme (e.g. https://192.168.24.60)."
-    },
-    "baseUrl": {
-      "type": "string",
-      "description": "Alias for restBaseUrl."
-    },
-    "rest_base_url": {
-      "type": "string",
-      "description": "Alias for restBaseUrl."
-    },
-    "base_url": {
-      "type": "string",
-      "description": "Alias for restBaseUrl."
-    },
-    "host": {
-      "type": "string",
-      "description": "Alias for restBaseUrl."
     },
     "timeoutMs": {
       "type": "integer",
@@ -29,25 +14,16 @@
       "default": 30000,
       "description": "HTTP timeout in milliseconds."
     },
-    "timeout_ms": {
+    "maxResponseBytes": {
       "type": "integer",
       "minimum": 1,
-      "description": "Alias for timeoutMs."
+      "default": 4194304,
+      "description": "Maximum upstream JSON-RPC response size in bytes."
     },
     "skipTlsVerify": {
       "type": "boolean",
       "default": false,
       "description": "Skip TLS certificate verification for self-signed deployments."
-    },
-    "tlsInsecureSkipVerify": {
-      "type": "boolean",
-      "default": false,
-      "description": "Legacy alias for skipTlsVerify."
-    },
-    "insecureSkipVerify": {
-      "type": "boolean",
-      "default": false,
-      "description": "Alias for skipTlsVerify."
     },
     "headers": {
       "type": "object",

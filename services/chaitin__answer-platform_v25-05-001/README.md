@@ -27,7 +27,9 @@ Chaitin Answer-Platform Advanced Threat Analysis and Warning System — OctoBus 
 ```json
 {
   "restBaseUrl": "https://<device-ip>",
-  "skipTlsVerify": true
+  "timeoutMs": 30000,
+  "maxResponseBytes": 4194304,
+  "skipTlsVerify": false
 }
 ```
 
@@ -35,7 +37,9 @@ Chaitin Answer-Platform Advanced Threat Analysis and Warning System — OctoBus 
 
 ```json
 {
-  "username": "admin",
-  "password": "your-password"
+  "bindUser": "admin",
+  "bindPassword": "your-password"
 }
 ```
+
+`skipTlsVerify` should only be enabled for a trusted deployment using a self-signed certificate.
