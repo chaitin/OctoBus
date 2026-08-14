@@ -1,4 +1,11 @@
-## Integration Evidence: ListNamespaces successful
+## Deterministic mock evidence: ListNamespaces
+
+This transcript is produced by the package's local HTTP fixture. It verifies
+request/response mapping without requiring cluster credentials; it is not a
+claim of compatibility with a real Kubernetes deployment. The repository L2
+smoke separately exercises the packaged service through Connect, native gRPC,
+and MCP. A maintainer must still review evidence from a real cluster before
+claiming device compatibility.
 
 # Request
 ```

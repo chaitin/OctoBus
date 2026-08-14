@@ -9,6 +9,8 @@ export const METHOD_GET_POD_FULL = 'Kubernetes_API.Kubernetes_API/GetPod';
 export const METHOD_GET_POD_LOGS_FULL = 'Kubernetes_API.Kubernetes_API/GetPodLogs';
 
 export const DEFAULT_TIMEOUT_MS = 15000;
+export const MAX_TIMEOUT_MS = 120000;
+export const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
 
 const grpcCodeFor = (code) => ({
   FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
@@ -27,15 +29,25 @@ const toFiniteInt = (v, fallback = 0) => { const r = unwrapScalar(v); if (r === 
 const toBool = (v, fallback = false) => { const r = unwrapScalar(v); if (r === undefined || r === null) return fallback; if (typeof r === 'boolean') return r; if (typeof r === 'number') return r !== 0; if (typeof r === 'string') { const n = r.trim().toLowerCase(); if (['true','1','yes','on'].includes(n)) return true; if (['false','0','no','off',''].includes(n)) return false; } return fallback; };
 const toJsonString = (v) => { if (v === undefined || v === null) return ''; if (typeof v === 'string') return v; try { return JSON.stringify(v); } catch { return ''; } };
 const strToMap = (obj) => { const m = {}; if (obj && typeof obj === 'object' && !Array.isArray(obj)) { for (const [k, v] of Object.entries(obj)) m[String(k)] = String(v ?? ''); } return m; };
-const normalizeBaseUrl = (v) => { const r = toTrimmedString(v); if (!/^https?:\/\//i.test(r)) return ''; return r.replace(/\/+$/, ''); };
+const normalizeBaseUrl = (v, bindings = {}) => {
+  const raw = toTrimmedString(v);
+  let url;
+  try { url = new URL(raw); } catch { return ''; }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) return '';
+  const loopback = ['localhost', '127.0.0.1', '::1'].includes(url.hostname);
+  if (url.protocol === 'http:' && !loopback && !toBool(bindings.allowInsecureHttp)) return '';
+  return url.toString().replace(/\/+$/, '');
+};
 
 const mergedBindings = (ctx = {}) => ({ ...(ctx.config ?? {}), ...(ctx.secret ?? {}), ...(ctx.bindings ?? {}) });
 const resolveCallContext = (ctx = {}) => ({ ...ctx, bindings: mergedBindings(ctx), limits: ctx.limits ?? {}, meta: ctx.meta ?? {}, req: ctx.req ?? ctx.request ?? {} });
-const resolveBaseUrl = (bindings = {}) => normalizeBaseUrl(firstDefined(bindings.baseUrl, bindings.domain, bindings.url));
-const resolveTimeoutMs = (ctx = {}) => { const r = Number(firstDefined(ctx.limits?.timeoutMs, ctx.bindings?.timeoutMs, DEFAULT_TIMEOUT_MS)); return Number.isFinite(r) && r > 0 ? r : DEFAULT_TIMEOUT_MS; };
-const buildTlsOptions = (bindings = {}) => { const opts = {}; if (bindings.skipTlsVerify || bindings.tlsInsecureSkipVerify || bindings.insecureSkipVerify) { opts.skipTlsVerify = true; } return opts; };
+const resolveBaseUrl = (bindings = {}) => normalizeBaseUrl(firstDefined(bindings.baseUrl, bindings.domain, bindings.url), bindings);
+const resolveTimeoutMs = (ctx = {}) => { const r = Number(firstDefined(ctx.limits?.timeoutMs, ctx.bindings?.timeoutMs, DEFAULT_TIMEOUT_MS)); return Number.isFinite(r) && r > 0 ? Math.min(Math.trunc(r), MAX_TIMEOUT_MS) : DEFAULT_TIMEOUT_MS; };
+const buildTlsOptions = (bindings = {}) => toBool(firstDefined(bindings.skipTlsVerify, bindings.tlsInsecureSkipVerify, bindings.insecureSkipVerify))
+  ? { insecureSkipVerify: true, tlsInsecureSkipVerify: true, skipTlsVerify: true }
+  : {};
 
-const requireBaseUrl = (ctx = {}) => { const u = resolveBaseUrl(ctx.bindings || {}); if (!u) throw errorWithCode('INVALID_ARGUMENT', 'baseUrl is required'); return u; };
+const requireBaseUrl = (ctx = {}) => { const u = resolveBaseUrl(ctx.bindings || {}); if (!u) throw errorWithCode('INVALID_ARGUMENT', 'baseUrl must be a valid http(s) URL without credentials, query, or fragment; non-loopback HTTP requires allowInsecureHttp'); return u; };
 
 const buildAuthHeaders = (bindings = {}) => {
   const headers = {};
@@ -54,22 +66,45 @@ const mapHttpStatusToCode = (s) => { if (s === 401) return 'PERMISSION_DENIED'; 
 const buildLogPrefix = (ctx = {}, action) => { const meta = ctx.meta || {}; const trace = []; if (meta.instance_id || meta.instanceId) trace.push(`inst=${meta.instance_id || meta.instanceId}`); return `[Kubernetes_API][${action}]${trace.length ? `[${trace.join(' ')}]` : ''}`; };
 const logFlow = (ctx, action, details) => { try { console.log(buildLogPrefix(ctx, action), JSON.stringify(details)); } catch { console.log(buildLogPrefix(ctx, action), details); } };
 
+const readResponseBody = async (res, maxBytes = MAX_RESPONSE_BYTES) => {
+  const declared = Number(res.headers?.get?.('content-length'));
+  if (Number.isFinite(declared) && declared > maxBytes) throw errorWithCode('UNAVAILABLE', `upstream response exceeds ${maxBytes} bytes`);
+  if (!res.body?.getReader) {
+    const text = await res.text();
+    if (Buffer.byteLength(text) > maxBytes) throw errorWithCode('UNAVAILABLE', `upstream response exceeds ${maxBytes} bytes`);
+    return text;
+  }
+  const reader = res.body.getReader();
+  const chunks = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) { await reader.cancel(); throw errorWithCode('UNAVAILABLE', `upstream response exceeds ${maxBytes} bytes`); }
+      chunks.push(value);
+    }
+  } finally { reader.releaseLock(); }
+  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)), size).toString('utf8');
+};
+
 const executeRequest = async (url, ctx = {}, options = {}) => {
   const timeoutMs = resolveTimeoutMs(ctx);
   const headers = { Accept: 'application/json', ...(options.headers ?? {}) };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  const init = { method: options.method || 'GET', headers, signal: controller.signal, ...buildTlsOptions(ctx.bindings || {}), ...(options.body !== undefined ? { body: options.body } : {}) };
+  const init = { method: options.method || 'GET', headers, signal: controller.signal, redirect: 'manual', ...buildTlsOptions(ctx.bindings || {}), ...(options.body !== undefined ? { body: options.body } : {}) };
   let res;
   try { res = await fetch(url, init); } catch (err) { const m = err?.cause?.message || err?.message || 'fetch failed'; throw attachResponse(errorWithCode('UNAVAILABLE', `${options.action || 'fetch'} failed: ${m}`), { http_status: 0, http_body: m }); } finally { clearTimeout(timer); }
   let rawBody;
-  try { rawBody = await res.text(); } catch (err) { throw attachResponse(errorWithCode('UNAVAILABLE', `response read failed: ${err.message}`), { http_status: Number(res.status || 0), http_body: '' }); }
+  try { rawBody = await readResponseBody(res); } catch (err) { if (err instanceof GrpcError) throw err; throw attachResponse(errorWithCode('UNAVAILABLE', `response read failed: ${err.message}`), { http_status: Number(res.status || 0), http_body: '' }); }
   const httpStatus = Number(res.status || 0);
-  logFlow(ctx, 'fetch:response', { url, httpStatus, bodyLength: rawBody?.length || 0 });
+  logFlow(ctx, 'fetch:response', { httpStatus, bodyLength: Buffer.byteLength(rawBody || '') });
   return { httpStatus, httpBody: String(rawBody ?? '') };
 };
 
-const ensureSuccess = (result, action) => { if (result.httpStatus >= 200 && result.httpStatus < 300) return; const c = mapHttpStatusToCode(result.httpStatus); throw attachResponse(errorWithCode(c, `${action} upstream http ${result.httpStatus}: ${(result.httpBody || '').substring(0, 500)}`), { http_status: result.httpStatus, http_body: result.httpBody }); };
+const ensureSuccess = (result, action) => { if (result.httpStatus >= 200 && result.httpStatus < 300) return; const c = mapHttpStatusToCode(result.httpStatus); throw attachResponse(errorWithCode(c, `${action} upstream http ${result.httpStatus}`), { http_status: result.httpStatus, http_body: '' }); };
 const parseJsonOrThrow = (result, action) => { const t = (result.httpBody || '').trim(); if (!t) throw attachResponse(errorWithCode('UNKNOWN', `${action} returned empty response`), { http_status: result.httpStatus, http_body: '' }); const p = tryParseJson(t); if (!p.ok) throw attachResponse(errorWithCode('UNKNOWN', `${action} response is not valid JSON`), { http_status: result.httpStatus, http_body: t }); return p.value; };
 
 const mapObjectMeta = (meta = {}) => ({
@@ -294,23 +329,13 @@ const handleGetPodLogs = async (req = {}, ctx = {}) => {
 };
 
 export const handlers = {
-  [METHOD_LIST_NAMESPACES_FULL]: handleListNamespaces,
-  [METHOD_LIST_PODS_FULL]: handleListPods,
-  [METHOD_LIST_SERVICES_FULL]: handleListServices,
-  [METHOD_LIST_DEPLOYMENTS_FULL]: handleListDeployments,
-  [METHOD_LIST_NODES_FULL]: handleListNodes,
-  [METHOD_GET_POD_FULL]: handleGetPod,
-  [METHOD_GET_POD_LOGS_FULL]: handleGetPodLogs,
+  [METHOD_LIST_NAMESPACES_FULL]: (ctx) => handleListNamespaces(ctx.request ?? {}, ctx),
+  [METHOD_LIST_PODS_FULL]: (ctx) => handleListPods(ctx.request ?? {}, ctx),
+  [METHOD_LIST_SERVICES_FULL]: (ctx) => handleListServices(ctx.request ?? {}, ctx),
+  [METHOD_LIST_DEPLOYMENTS_FULL]: (ctx) => handleListDeployments(ctx.request ?? {}, ctx),
+  [METHOD_LIST_NODES_FULL]: (ctx) => handleListNodes(ctx.request ?? {}, ctx),
+  [METHOD_GET_POD_FULL]: (ctx) => handleGetPod(ctx.request ?? {}, ctx),
+  [METHOD_GET_POD_LOGS_FULL]: (ctx) => handleGetPodLogs(ctx.request ?? {}, ctx),
 };
 
-export const rpcdef = (ctx) => ({
-  '/Kubernetes_API.Kubernetes_API/ListNamespaces': (req) => handleListNamespaces(req, ctx),
-  '/Kubernetes_API.Kubernetes_API/ListPods': (req) => handleListPods(req, ctx),
-  '/Kubernetes_API.Kubernetes_API/ListServices': (req) => handleListServices(req, ctx),
-  '/Kubernetes_API.Kubernetes_API/ListDeployments': (req) => handleListDeployments(req, ctx),
-  '/Kubernetes_API.Kubernetes_API/ListNodes': (req) => handleListNodes(req, ctx),
-  '/Kubernetes_API.Kubernetes_API/GetPod': (req) => handleGetPod(req, ctx),
-  '/Kubernetes_API.Kubernetes_API/GetPodLogs': (req) => handleGetPodLogs(req, ctx),
-});
-
-export const _test = { resolveBaseUrl, toTrimmedString, toFiniteInt, toBool, toJsonString, errorWithCode, buildAuthHeaders, parseJsonOrThrow, ensureSuccess, tryParseJson, mapObjectMeta, mapPodInfo, mapContainerState, mapPodContainer, mapListMeta, buildQuery, strToMap };
+export const _test = { resolveBaseUrl, resolveTimeoutMs, buildTlsOptions, readResponseBody, toTrimmedString, toFiniteInt, toBool, toJsonString, errorWithCode, buildAuthHeaders, parseJsonOrThrow, ensureSuccess, tryParseJson, mapObjectMeta, mapPodInfo, mapContainerState, mapPodContainer, mapListMeta, buildQuery, strToMap };

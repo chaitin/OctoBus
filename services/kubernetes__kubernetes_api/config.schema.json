@@ -25,6 +25,11 @@
       "type": "boolean",
       "default": false,
       "description": "Skip TLS certificate verification."
+    },
+    "allowInsecureHttp": {
+      "type": "boolean",
+      "default": false,
+      "description": "Explicitly permit plaintext HTTP for non-loopback API endpoints. Credentials may be exposed; HTTPS is strongly recommended."
     }
   }
 }
