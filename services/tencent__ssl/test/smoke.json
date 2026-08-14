@@ -1,0 +1,8 @@
+{
+  "method": "Tencent_SSL.Tencent_SSL/ListCertificates",
+  "request": {
+    "limit": 1,
+    "offset": 0
+  },
+  "expectUpstream": true
+}

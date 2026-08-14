@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { Agent } from 'undici';
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
@@ -17,6 +18,8 @@ const API_VERSION = '2019-12-05';
 const ENDPOINT = `${SERVICE}.tencentcloudapi.com`;
 const METHOD_POST = 'POST';
 const DEFAULT_TIMEOUT_MS = 10000;
+const MAX_TIMEOUT_MS = 120000;
+const DEFAULT_ENDPOINT = `https://${ENDPOINT}`;
 
 const SERVICE_NAME = 'Tencent_SSL';
 
@@ -77,11 +80,11 @@ const formatDate = (timestamp) => {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
 };
 
-const signRequest = (secretId, secretKey, payload, timestamp) => {
+const signRequest = (secretId, secretKey, payload, timestamp, host = ENDPOINT, canonicalUri = '/') => {
   const payloadJson = JSON.stringify(payload);
   const date = formatDate(timestamp);
-  const canonicalHeaders = `content-type:application/json; charset=utf-8\nhost:${ENDPOINT}\n`;
-  const canonicalRequest = `${METHOD_POST}\n/\n\n${canonicalHeaders}\ncontent-type;host\n${sha256hex(payloadJson)}`;
+  const canonicalHeaders = `content-type:application/json; charset=utf-8\nhost:${host}\n`;
+  const canonicalRequest = `${METHOD_POST}\n${canonicalUri}\n\n${canonicalHeaders}\ncontent-type;host\n${sha256hex(payloadJson)}`;
   const credentialScope = `${date}/${SERVICE}/tc3_request`;
   const stringToSign = `TC3-HMAC-SHA256\n${timestamp}\n${credentialScope}\n${sha256hex(canonicalRequest)}`;
   const secretDate = hmacSha256(`TC3${secretKey}`, date);
@@ -118,16 +121,22 @@ const parseJson = (text) => {
   try { return JSON.parse(text); } catch { throw errorWithCode('UNKNOWN', 'response is not valid JSON'); }
 };
 
+const safeSummary = (text = '') => String(text)
+  .replace(/(authorization|secret(?:id|key)?|token|cookie)\s*[:=]\s*["']?[^"'\s,;&<>]+/gi, '$1=<redacted>')
+  .slice(0, 200);
+
 const mapHttpError = (res, bodyText) => {
-  const text = String(bodyText || '');
+  const text = safeSummary(bodyText);
   if (res.status === 401 || res.status === 403) throw errorWithCode('PERMISSION_DENIED', `upstream http ${res.status}: ${text}`);
   if (res.status >= 400 && res.status < 500) throw errorWithCode('FAILED_PRECONDITION', `upstream http ${res.status}: ${text}`);
   throw errorWithCode('UNAVAILABLE', `upstream http ${res.status}: ${text}`);
 };
 
+let insecureAgent;
 const buildTlsOptions = (bindings = {}) => {
   if (!toBoolean(bindings.skipTlsVerify) && !toBoolean(bindings.tlsInsecureSkipVerify) && !toBoolean(bindings.insecureSkipVerify)) return {};
-  return { insecureSkipVerify: true, tlsInsecureSkipVerify: true, skipTlsVerify: true };
+  insecureAgent ??= new Agent({ connect: { rejectUnauthorized: false } });
+  return { dispatcher: insecureAgent };
 };
 
 const fetchJson = async (url, init, { bindings = {}, timeoutMs }) => {
@@ -158,6 +167,17 @@ const resolveCallContext = (ctx = {}) => ({
 const resolveTimeoutMs = (ctx = {}, bindings = {}) =>
   firstDefined(optionalUint32(ctx.limits?.timeoutMs), optionalUint32(bindings.timeoutMs), DEFAULT_TIMEOUT_MS);
 
+const resolveEndpoint = (bindings = {}) => {
+  const raw = unwrapString(bindings.endpoint).trim() || DEFAULT_ENDPOINT;
+  let parsed;
+  try { parsed = new URL(raw); } catch { throw errorWithCode('INVALID_ARGUMENT', 'endpoint must be a valid HTTP(S) URL'); }
+  if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash) {
+    throw errorWithCode('INVALID_ARGUMENT', 'endpoint must be an HTTP(S) URL without credentials, query, or fragment');
+  }
+  parsed.pathname = parsed.pathname.replace(/\/+$/, '') || '/';
+  return parsed;
+};
+
 // ---- SSL API call ----
 
 const callSSLAPI = async (action, params, { meta, bindings, timeoutMs }) => {
@@ -167,6 +187,9 @@ const callSSLAPI = async (action, params, { meta, bindings, timeoutMs }) => {
   if (!secretKey) throw errorWithCode('PERMISSION_DENIED', 'secret_key is required in bindings');
 
   const region = unwrapString(bindings.region).trim() || 'ap-guangzhou';
+  if (!/^[a-z][a-z0-9-]{1,63}$/.test(region)) throw errorWithCode('INVALID_ARGUMENT', 'region is invalid');
+  if (timeoutMs < 1 || timeoutMs > MAX_TIMEOUT_MS) throw errorWithCode('INVALID_ARGUMENT', `timeoutMs must be between 1 and ${MAX_TIMEOUT_MS}`);
+  const endpoint = resolveEndpoint(bindings);
 
   // Only business params in body
   const payload = { ...params };
@@ -175,12 +198,12 @@ const callSSLAPI = async (action, params, { meta, bindings, timeoutMs }) => {
   }
 
   const timestamp = Math.floor(Date.now() / 1000);
-  const { authorization } = signRequest(secretId, secretKey, payload, timestamp);
+  const { authorization } = signRequest(secretId, secretKey, payload, timestamp, endpoint.host, endpoint.pathname);
 
-  const url = `https://${ENDPOINT}`;
+  const url = endpoint.toString();
   const headers = {
     'Content-Type': 'application/json; charset=utf-8',
-    Host: ENDPOINT,
+    Host: endpoint.host,
     'X-TC-Action': action,
     'X-TC-Version': API_VERSION,
     'X-TC-Region': region,
@@ -200,7 +223,7 @@ const callSSLAPI = async (action, params, { meta, bindings, timeoutMs }) => {
 
   const response = result.json?.Response;
   if (!response) {
-    logError(meta, `${action}:invalid-response`, { body: result.text });
+    logError(meta, `${action}:invalid-response`, { body: safeSummary(result.text) });
     throw errorWithCode('UNKNOWN', 'empty or invalid API response');
   }
 
@@ -227,6 +250,7 @@ const makeRuntime = (ctx = {}) => {
   const runList = async (req = {}) => {
     const limit = optionalUint32(firstDefined(req.limit)) || 20;
     const offset = optionalUint32(firstDefined(req.offset)) || 0;
+    if (limit > 1000) throw errorWithCode('INVALID_ARGUMENT', 'limit must be between 1 and 1000');
 
     const params = { Limit: limit, Offset: offset };
     const response = await callSSLAPI('DescribeCertificates', params, { meta, bindings, timeoutMs });
@@ -246,6 +270,9 @@ const makeRuntime = (ctx = {}) => {
   const runGet = async (req = {}) => {
     const certificateId = unwrapString(firstDefined(req.certificate_id, req.certificateId, req.CertificateId)).trim();
     if (!certificateId) throw errorWithCode('INVALID_ARGUMENT', 'certificate_id is required');
+    if (certificateId.length > 200 || !/^[A-Za-z0-9_-]+$/.test(certificateId)) {
+      throw errorWithCode('INVALID_ARGUMENT', 'certificate_id contains invalid characters');
+    }
 
     const params = { CertificateId: certificateId };
     const response = await callSSLAPI('DescribeCertificateDetail', params, { meta, bindings, timeoutMs });
@@ -282,6 +309,8 @@ export const _test = {
   logError,
   makeRuntime,
   mapHttpError,
+  buildTlsOptions,
+  resolveEndpoint,
   mergedBindings,
   optionalUint32,
   parseJson,
