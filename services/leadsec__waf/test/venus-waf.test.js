@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import http from "node:http";
 
 const healthPath = "/Venus_WAF.Venus_WAF/HealthCheck";
 const listBlacklistsPath = "/Venus_WAF.Venus_WAF/ListBlacklists";
@@ -526,4 +527,59 @@ test("SDK handler registry exposes every proto RPC with current call context", a
     else if (/Priority/.test(name)) request = { priority: 1 };
     await assert.rejects(() => handler({ request }), /baseUrl is required/);
   }
+});
+
+test("helper edge cases reject missing appliance options and map wrapped proto values", async () => {
+  const { _test } = await import("../src/venus-waf.js");
+  assert.deepEqual(_test.normalizeRule({ log: { value: 1 }, enable: "bad" }), {
+    name: "", if_in: "", src_addrobj: "", dst_addrobj: "", dst_servobj: "",
+    log: 1, log_level: 0, enable: 0, week_day: "", day_enable_time: "", set_periodic: 0,
+  });
+  assert.equal(_test.buildRulePayload({
+    name: { value: "wrapped" }, if_in: "any", src_addrobj: "src", dst_addrobj: "any", dst_servobj: "any",
+  }).name, "wrapped");
+  const options = _test.normalizeAccessOptions({ data: { addr: { obj: [{ name: "range", item: [{ range1: "1.1.1.1", range2: "1.1.1.2" }] }] } } });
+  assert.deepEqual(options.address_objects[0].ranges, ["1.1.1.1-1.1.1.2"]);
+  assert.throws(() => _test.buildRuleFromIP({ ip: "1.1.1.1" }, { interfaces: [], service_objects: [], address_objects: [] }, "blacklist"), /no address object/);
+  assert.throws(() => _test.buildRuleFromIP({ ip: "1.1.1.1", src_addrobj: "src" }, { interfaces: [], service_objects: [], address_objects: [] }, "blacklist"), /if_in has no available options/);
+});
+
+test("login maps HTTP client errors and accepts an empty success body only as missing auth", async () => {
+  for (const [status, pattern] of [[403, /PERMISSION_DENIED/], [422, /FAILED_PRECONDITION/]]) {
+    global.fetch = async () => ({ ok: false, status, headers: { get: () => "" }, text: async () => "denied" });
+    await assert.rejects(() => loadHandler(healthPath).then((handler) => handler()), pattern);
+  }
+  global.fetch = async () => ({ ok: true, status: 204, headers: { get: () => "" }, text: async () => "" });
+  await assert.rejects(() => loadHandler(healthPath).then((handler) => handler()), /upstream business error/);
+});
+
+test("insecure TLS option uses bounded node transport and preserves cookie auth", async (t) => {
+  const requests = [];
+  const server = http.createServer(async (req, res) => {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    requests.push({ url: req.url, headers: req.headers, body: Buffer.concat(chunks).toString() });
+    if (req.url === "/api/mgr/login") {
+      res.writeHead(200, { "content-type": "application/json", "set-cookie": ["SID=one; Path=/", "X=two; Path=/"] });
+      res.end(JSON.stringify({ code: 0, data: { authorization: "auth" } }));
+      return;
+    }
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ code: 0, data: { blacklist: [] } }));
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const handler = await loadHandler(listBlacklistsPath, {}, { config: { baseUrl, insecureSkipTlsVerify: true } });
+  assert.deepEqual((await handler()).rules, []);
+  assert.equal(requests[1].headers.authorization, "auth");
+  assert.match(requests[1].headers.cookie, /SID=one/);
+});
+
+test("legacy two-argument SDK handlers merge runtime context safely", async () => {
+  const { _test } = await import("../src/venus-waf.js");
+  global.fetch = async () => jsonResponse({ code: 0, data: { authorization: "token" } });
+  const registered = _test.registerHandlers({ config: { baseUrl: "https://base.invalid" }, secret: { username: "u" } });
+  const result = await registered[healthPath]({}, { config: { baseUrl: "https://waf.example.local" }, secret: { password: "p" } });
+  assert.equal(result.ok, true);
 });
