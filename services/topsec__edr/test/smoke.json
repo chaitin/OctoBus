@@ -1,0 +1,9 @@
+{
+  "method": "TopSec_EDR.TopSec_EDR/GetSystemInfo",
+  "request": {
+    "session": {
+      "token": "smoke-token"
+    }
+  },
+  "expectUpstream": true
+}

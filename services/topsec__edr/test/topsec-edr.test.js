@@ -1,254 +1,172 @@
-// Unit tests for topsec-edr service.
-// Run with: node --test test/topsec-edr.test.js
-//
-// Note: Tests that import the service module require the @chaitin-ai/octobus-sdk
-// to be installed (available in the OctoBus build environment).
-// The crypto/utility tests below can run standalone.
-
-import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import crypto from 'node:crypto';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import http from 'node:http';
+import test from 'node:test';
 
-import {
-  mockLoginResponse,
-  decryptLoginBody,
-  validateSignedQuery,
-  mockListClientsResponse,
-  mockGetClientResponse,
-  mockDashboardResponse,
-  mockSystemInfoResponse,
-  MOCK,
-} from './mock_upstream.js';
+import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
-// Replicate pure functions from the service for standalone testing
-const AES_KEY = MOCK.AES_KEY;
-const AES_IV = MOCK.AES_IV;
+import { handlers, RPC } from '../src/topsec-edr.js';
+import { service } from '../src/service.js';
 
-const encryptAes256Cbc = (plaintext) => {
-  const key = Buffer.from(AES_KEY, 'utf8');
-  const iv = Buffer.from(AES_IV, 'utf8');
-  const input = Buffer.from(String(plaintext || ''), 'utf8');
-  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
-  // PKCS7 padding (Node.js default) — matches the main service implementation
-  return Buffer.concat([cipher.update(input), cipher.final()]).toString('base64');
+const client = {
+  client_id: 'client-1', hostname: 'host-1', mac: '00:11:22:33:44:55', client_ip: '10.0.0.1',
+  os_name: 'Windows', os_version: '11', os_arch: 'x64', client_version: '1.2.3', virus_db_version: 123,
+  group_name: 'default', group_id: 'group-1', person: 'owner', terminal_type: 'desktop', location: 'office',
+  login_time: 10, heartbeat_time: 11, status: 1, os_type: 'windows', tenancy_id: 'tenant',
+  upgrade_dbver: 124, next_heart_time: 12, off_line: 0,
 };
 
-const decryptAes256Cbc = (ciphertextB64) => {
-  const key = Buffer.from(AES_KEY, 'utf8');
-  const iv = Buffer.from(AES_IV, 'utf8');
-  const ciphertext = Buffer.from(String(ciphertextB64 || '').replace(/\s+/g, ''), 'base64');
-  const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-  // PKCS7 padding (Node.js default) — matches the main service implementation
-  const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-  return decrypted.toString('utf8');
+const dashboard = {
+  scan: { threats_num: 1, terminal_num: 2 }, hi_leak: { threats_num: 3, terminal_num: 4 },
+  week_pwd: { threats_num: 5, terminal_num: 6 }, intrusion: { threats_num: 7, terminal_num: 8 },
+  aggregate_virus_value: 9, aggregate_ransom_value: 10, file_prot: 11, exec_prot: 12, reg_prot: 13,
+  proc_prot: 14, risk_blocked: 15, virus_immune: 16, udev_illegal: 17, soft_illegal: 18, inner_illegal: 19,
+  view: { terminal_all: 20, terminal_online: 18, terminal_banned: 1, total_use: 30, windows: 10, server: 4, linux: 5, domestic: 1 },
+  server: { host_name: 'edr', server_time: 'now' }, license: { user: 'company', type: 'formal', license_platform: 'all' },
+  disk_usage: 21, memory_usage: 22, cpu_usage: 23, network_tx: 24, network_rx: 25, server_time: 'now',
 };
 
-const computeSign = (nonce, stime, token) => {
-  const raw = String(token || '') + String(stime || '') + String(nonce || '') + 'dO(QK*EX@cTG';
-  return crypto.createHash('md5').update(raw, 'utf8').digest('hex');
-};
+let server;
+let baseUrl;
+let calls;
+let customResponse;
 
-// --- AES Encryption/Decryption Tests ---
-
-describe('AES-256-CBC encryption/decryption', () => {
-  it('should roundtrip ASCII text', () => {
-    assert.equal(decryptAes256Cbc(encryptAes256Cbc('admin')), 'admin');
-  });
-
-  it('should roundtrip empty string', () => {
-    assert.equal(decryptAes256Cbc(encryptAes256Cbc('')), '');
-  });
-
-  it('should roundtrip long text (multi-block)', () => {
-    const long = 'ThisIsAVeryLongPasswordThatSpansMultipleAESBlocks123456789';
-    assert.equal(decryptAes256Cbc(encryptAes256Cbc(long)), long);
-  });
-
-  it('should roundtrip Chinese characters', () => {
-    assert.equal(decryptAes256Cbc(encryptAes256Cbc('天融信EDR')), '天融信EDR');
-  });
-
-  it('should produce different ciphertext for different inputs', () => {
-    assert.notEqual(encryptAes256Cbc('admin'), encryptAes256Cbc('user1'));
-  });
-
-  it('should produce deterministic ciphertext for same input', () => {
-    assert.equal(encryptAes256Cbc('admin'), encryptAes256Cbc('admin'));
-  });
-});
-
-// --- Signature Tests ---
-
-describe('computeSign', () => {
-  it('should produce a 32-char hex MD5', () => {
-    const sign = computeSign('nonce123', '1719000000', 'jwt_token_here');
-    assert.equal(sign.length, 32);
-    assert.match(sign, /^[0-9a-f]{32}$/);
-  });
-
-  it('should be consistent for same inputs', () => {
-    assert.equal(computeSign('abc', '123', 'xyz'), computeSign('abc', '123', 'xyz'));
-  });
-
-  it('should differ for different inputs', () => {
-    assert.notEqual(computeSign('abc', '123', 'xyz'), computeSign('def', '456', 'uvw'));
-  });
-
-  it('should match MOCK constants', () => {
-    const expectedSign = computeSign(MOCK.NONCE, MOCK.STIME, MOCK.TOKEN);
-    assert.equal(expectedSign, MOCK.SIGN);
-  });
-});
-
-// --- Mock Upstream Tests ---
-
-describe('mock login response', () => {
-  it('should produce a valid encryptStr that decrypts to token/nonce/stime', () => {
-    const responseBody = mockLoginResponse();
-    const parsed = JSON.parse(responseBody);
-    assert.ok(parsed.encryptStr, 'response should have encryptStr');
-
-    const decrypted = decryptAes256Cbc(parsed.encryptStr);
-    const decoded = JSON.parse(decrypted);
-    assert.equal(decoded.token, MOCK.TOKEN);
-    assert.equal(decoded.nonce, MOCK.NONCE);
-    assert.equal(decoded.stime, MOCK.STIME);
-  });
-});
-
-describe('decrypt login body', () => {
-  it('should decrypt encrypted credentials from request body (encryptStr format)', () => {
-    // Actual EDR login body format: { encryptStr: AES(JSON) }
-    const payload = JSON.stringify({ 'ng-cloud': true, username: 'admin', password: 'hashedPwd123', captcha: '', tenant_id: '', captcha_id: '' });
-    const body = JSON.stringify({ encryptStr: encryptAes256Cbc(payload) });
-    const { username, password } = decryptLoginBody(body);
-    assert.equal(username, 'admin');
-    assert.equal(password, 'hashedPwd123');
-  });
-});
-
-describe('validate signed query', () => {
-  it('should accept valid signed query', () => {
-    const query = {
-      nonce: MOCK.NONCE,
-      stime: MOCK.STIME,
-      token: MOCK.TOKEN,
-      sign: MOCK.SIGN,
-    };
-    assert.equal(validateSignedQuery(query), true);
-  });
-
-  it('should reject invalid sign', () => {
-    const query = {
-      nonce: MOCK.NONCE,
-      stime: MOCK.STIME,
-      token: MOCK.TOKEN,
-      sign: 'invalid_sign',
-    };
-    assert.equal(validateSignedQuery(query), false);
-  });
-
-  it('should reject tampered token', () => {
-    const query = {
-      nonce: MOCK.NONCE,
-      stime: MOCK.STIME,
-      token: 'tampered_token',
-      sign: MOCK.SIGN,
-    };
-    assert.equal(validateSignedQuery(query), false);
-  });
-});
-
-describe('mock list clients response', () => {
-  it('should return paginated client list', () => {
-    const body = mockListClientsResponse(1, 25);
-    const parsed = JSON.parse(body);
-    assert.equal(parsed.data.total, 2);
-    assert.equal(parsed.data.list.length, 2);
-    assert.equal(parsed.data.list[0].client_id, 'client-001');
-  });
-
-  it('should return empty list for out-of-range page', () => {
-    const body = mockListClientsResponse(2, 25);
-    const parsed = JSON.parse(body);
-    assert.equal(parsed.data.list.length, 0);
-  });
-});
-
-describe('mock get client response', () => {
-  it('should return client by id', () => {
-    const body = mockGetClientResponse('client-001');
-    const parsed = JSON.parse(body);
-    assert.equal(parsed.data.client_id, 'client-001');
-    assert.equal(parsed.data.hostname, 'WORKSTATION-01');
-  });
-
-  it('should return null for unknown client', () => {
-    const body = mockGetClientResponse('unknown-id');
-    const parsed = JSON.parse(body);
-    assert.equal(parsed.data, null);
-  });
-});
-
-describe('mock dashboard response', () => {
-  it('should contain alert stats and system view', () => {
-    const body = mockDashboardResponse();
-    const parsed = JSON.parse(body);
-    assert.ok(parsed.data.scan);
-    assert.ok(parsed.data.view);
-    assert.ok(parsed.data.server);
-    assert.ok(parsed.data.license);
-    assert.equal(parsed.data.scan.threats_num, 15);
-    assert.equal(parsed.data.view.terminal_all, 150);
-  });
-});
-
-describe('mock system info response', () => {
-  it('should contain resource usage data', () => {
-    const body = mockSystemInfoResponse();
-    const parsed = JSON.parse(body);
-    assert.equal(parsed.data.disk_usage, 65);
-    assert.equal(parsed.data.cpu_usage, 35);
-    assert.equal(parsed.data.memory_usage, 72);
-  });
-});
-
-// --- SDK Handler Contract Tests ---
-// Verify that handlers accept single-arg ctx (OctoBus SDK calling convention)
-// where request, config, and secret are accessed via ctx.request, ctx.config, ctx.secret
-// These tests verify the handler signature WITHOUT importing the service module
-// (which requires @chaitin-ai/octobus-sdk). Full SDK integration tests run in the
-// OctoBus build environment.
-
-describe('SDK handler contract (single-arg ctx)', () => {
-  it('handler functions should have length 1 (single ctx parameter)', () => {
-    const sourceDir = path.dirname(fileURLToPath(import.meta.url));
-    const source = fs.readFileSync(path.join(sourceDir, '../src/topsec-edr.js'), 'utf8');
-    // Find all handler definitions in the handlers export
-    const handlerPattern = /\[METHOD_\w+_FULL\]:\s*\(([^)]*)\)\s*=>/g;
-    let match;
-    let count = 0;
-    while ((match = handlerPattern.exec(source)) !== null) {
-      count++;
-      const params = match[1].trim();
-      // Should be "ctx = {}" (single param), NOT "req, ctx = {}" (two params)
-      assert.ok(
-        params.startsWith('ctx') && !params.includes(','),
-        `Handler should accept single ctx param, got: (${params})`
-      );
+test.before(async () => {
+  server = http.createServer(async (request, response) => {
+    let body = '';
+    for await (const chunk of request) body += chunk;
+    calls.push({ method: request.method, url: new URL(request.url, baseUrl), headers: request.headers, body });
+    if (customResponse) return customResponse(request, response);
+    response.setHeader('content-type', 'application/json');
+    if (request.url.startsWith('/auth/token')) return response.end(JSON.stringify({ token: 'token-value' }));
+    if (request.url.startsWith('/api/v1/getCustomList')) {
+      return response.end(JSON.stringify({ data: body.includes('client_id') ? client : { list: [client], total: 1 } }));
     }
-    assert.equal(count, 6, `Expected 6 handler definitions, found ${count}`);
+    return response.end(JSON.stringify({ data: dashboard }));
   });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  baseUrl = `http://127.0.0.1:${server.address().port}`;
+});
 
-  it('handlers should extract request from ctx.request or ctx.req', () => {
-    const sourceDir = path.dirname(fileURLToPath(import.meta.url));
-    const source = fs.readFileSync(path.join(sourceDir, '../src/topsec-edr.js'), 'utf8');
-    // Each handler should call callX(ctx.request ?? ctx.req ?? {}, ctx)
-    const callPattern = /call\w+\(ctx\.request\s*\?\?\s*ctx\.req\s*\?\?\s*\{\},\s*ctx\)/g;
-    const matches = source.match(callPattern);
-    assert.ok(matches && matches.length >= 6, 'All handlers should use ctx.request ?? ctx.req ?? {} pattern');
+test.after(async () => new Promise((resolve) => server.close(resolve)));
+test.beforeEach(() => { calls = []; customResponse = undefined; });
+
+const context = (method, request = {}, overrides = {}) => ({
+  request: { host: baseUrl, ...request }, config: { timeoutMs: 1000, ...(overrides.config ?? {}) },
+  secret: overrides.secret ?? {}, limits: overrides.limits ?? {}, meta: { instance_id: 'instance', request_id: 'request' },
+});
+
+const invoke = (method, request, overrides) => handlers[method](context(method, request, overrides));
+
+const expectError = async (promise, code, pattern) => {
+  await assert.rejects(promise, (error) => {
+    assert.ok(error instanceof GrpcError);
+    assert.equal(error.code, code);
+    if (pattern) assert.match(error.message, pattern);
+    return true;
   });
+};
+
+test('service exports exactly every proto RPC handler', () => {
+  assert.ok(service);
+  assert.deepEqual(Object.keys(handlers).sort(), Object.values(RPC).sort());
+});
+
+test('Login hashes and encrypts credentials without sending plaintext', async () => {
+  const result = await invoke(RPC.login, { username: 'admin', password: 'secret' });
+  assert.equal(result.session.token, 'token-value');
+  assert.equal(result.status_code, 200);
+  assert.doesNotMatch(calls[0].body, /admin|secret/);
+  assert.ok(JSON.parse(calls[0].body).encryptStr);
+  assert.equal(calls[0].headers['x-request-id'], 'request');
+});
+
+test('Login accepts config endpoint and secret credentials', async () => {
+  const result = await handlers[RPC.login]({ request: {}, config: { endpoint: baseUrl }, secret: { username: 'admin', password: 'secret' } });
+  assert.equal(result.session.token, 'token-value');
+});
+
+test('ListClients sends pagination and maps every client field', async () => {
+  const result = await invoke(RPC.listClients, { session: { token: 'token' }, page: { value: 2 }, page_size: { value: 999 }, first_load: false });
+  assert.deepEqual(result.clients[0], client);
+  assert.equal(result.total_count, 1);
+  assert.equal(calls[0].headers.authorization, 'Bearer token');
+  assert.match(calls[0].url.search, /nonce=\d{8}/);
+  assert.match(calls[0].url.search, /sign=[a-f0-9]{32}/);
+  assert.doesNotMatch(calls[0].url.search, /token/);
+  assert.match(calls[0].body, /encryptStr/);
+});
+
+test('ListClients clamps invalid pagination and handles an empty list', async () => {
+  customResponse = (_request, response) => response.end(JSON.stringify({ data: {} }));
+  const result = await invoke(RPC.listClients, { session: { token: 'token' }, page: -2, page_size: 0 });
+  assert.deepEqual(result.clients, []);
+  assert.equal(result.total_count, 0);
+});
+
+test('GetClient validates id and maps a record', async () => {
+  await expectError(invoke(RPC.getClient, { session: { token: 'token' } }), grpcStatus.INVALID_ARGUMENT, /client_id/);
+  const result = await invoke(RPC.getClient, { session: { token: 'token' }, client_id: 'client-1' });
+  assert.deepEqual(result.client, client);
+});
+
+test('GetClient accepts list-shaped upstream response', async () => {
+  customResponse = (_request, response) => response.end(JSON.stringify({ data: { list: [client] } }));
+  const result = await invoke(RPC.getClient, { session: { token: 'token' }, client_id: 'client-1' });
+  assert.equal(result.client.client_id, 'client-1');
+});
+
+test('GetAlertStats maps all statistics', async () => {
+  const result = await invoke(RPC.getAlertStats, { session: { token: 'token' } });
+  assert.equal(result.scan.threats_num, 1);
+  assert.equal(result.intrusion.terminal_num, 8);
+  assert.equal(result.inner_illegal, 19);
+});
+
+test('GetSystemView maps overview, server and license', async () => {
+  const result = await invoke(RPC.getSystemView, { session: { token: 'token' } });
+  assert.equal(result.view.terminal_all, 20);
+  assert.equal(result.server_info.host_name, 'edr');
+  assert.equal(result.license_info.user, 'company');
+});
+
+test('GetSystemInfo maps resource usage', async () => {
+  const result = await invoke(RPC.getSystemInfo, { session: { token: 'token' } });
+  assert.deepEqual(result.system_info, { disk_usage: 21, memory_usage: 22, cpu_usage: 23, network_tx: 24, network_rx: 25, server_time: 'now' });
+});
+
+test('apiToken secret can supply a session', async () => {
+  const result = await invoke(RPC.getSystemInfo, {}, { secret: { apiToken: 'configured-token' } });
+  assert.equal(result.status_code, 200);
+  assert.equal(calls[0].headers.authorization, 'Bearer configured-token');
+});
+
+test('invalid endpoint and embedded credentials are rejected', async () => {
+  await expectError(handlers[RPC.login]({ request: { host: 'not-a-url', username: 'a', password: 'b' } }), grpcStatus.INVALID_ARGUMENT, /absolute/);
+  await expectError(handlers[RPC.login]({ request: { host: 'http://user:pass@example.test', username: 'a', password: 'b' } }), grpcStatus.INVALID_ARGUMENT, /without credentials/);
+});
+
+test('missing credentials and session are rejected', async () => {
+  await expectError(invoke(RPC.login, { password: 'password' }), grpcStatus.INVALID_ARGUMENT, /username/);
+  await expectError(invoke(RPC.login, { username: 'admin' }), grpcStatus.INVALID_ARGUMENT, /password/);
+  await expectError(invoke(RPC.getSystemInfo, {}), grpcStatus.INVALID_ARGUMENT, /session.token/);
+});
+
+test('HTTP authentication and server errors are mapped without leaking bodies', async () => {
+  customResponse = (_request, response) => { response.statusCode = 401; response.end('secret upstream body'); };
+  await expectError(invoke(RPC.getSystemInfo, { session: { token: 'token' } }), grpcStatus.PERMISSION_DENIED, /HTTP 401/);
+  customResponse = (_request, response) => { response.statusCode = 503; response.end('secret upstream body'); };
+  await expectError(invoke(RPC.getSystemInfo, { session: { token: 'token' } }), grpcStatus.UNAVAILABLE, /HTTP 503/);
+});
+
+test('other HTTP failures and malformed JSON are mapped', async () => {
+  customResponse = (_request, response) => { response.statusCode = 400; response.end('bad request'); };
+  await expectError(invoke(RPC.getSystemInfo, { session: { token: 'token' } }), grpcStatus.UNKNOWN, /HTTP 400/);
+  customResponse = (_request, response) => response.end('{broken');
+  await expectError(invoke(RPC.getSystemInfo, { session: { token: 'token' } }), grpcStatus.UNKNOWN, /valid JSON/);
+});
+
+test('network errors and timeouts are sanitized', async () => {
+  await expectError(handlers[RPC.login]({ request: { host: 'http://127.0.0.1:1', username: 'a', password: 'b' }, config: { timeoutMs: 50 } }), grpcStatus.UNAVAILABLE, /unavailable/);
+  customResponse = () => {};
+  await expectError(invoke(RPC.getSystemInfo, { session: { token: 'token' } }, { config: { timeoutMs: 10 } }), grpcStatus.UNAVAILABLE, /timed out/);
 });

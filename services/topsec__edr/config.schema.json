@@ -1,18 +1,21 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "additionalProperties": true,
+  "additionalProperties": false,
   "properties": {
     "host": {
       "type": "string",
+      "format": "uri",
       "description": "TopSec EDR management center base URL, e.g. https://192.168.8.201."
     },
     "endpoint": {
       "type": "string",
+      "format": "uri",
       "description": "Alias for host."
     },
     "restBaseUrl": {
       "type": "string",
+      "format": "uri",
       "description": "Alias for host."
     },
     "timeoutMs": {
