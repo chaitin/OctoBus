@@ -300,4 +300,30 @@ describe('cloudwalker handlers', () => {
     assert.equal(response.eventId, 'event-1');
     assert.equal(requests.at(-1).url, '/cluster_vuln/vuln_event_info?id=event-1');
   });
+
+  it('dispatches every proto RPC through the production handlers', async () => {
+    const context = (request) => ({
+      config: { baseUrl },
+      secret: { token: 'handler-token' },
+      request,
+    });
+
+    const cluster = await handlers['Chaitin_CloudWalker.Chaitin_CloudWalker/GetClusterInfo'](context({ clusterId: 'cluster-1' }));
+    assert.equal(cluster.clusterId, 'cluster-1');
+
+    const clusterEvents = await handlers['Chaitin_CloudWalker.Chaitin_CloudWalker/ListClusterVulnEvents'](
+      context({ clusterId: 'cluster-1', pageSize: 10, pageToken: 'cursor-a' }),
+    );
+    assert.equal(clusterEvents.vulnEvents[0].eventId, 'event-1');
+
+    const microserviceEvents = await handlers['Chaitin_CloudWalker.Chaitin_CloudWalker/ListMicroserviceVulnEvents'](
+      context({ pageSize: 5, pageToken: 'cursor-m' }),
+    );
+    assert.equal(microserviceEvents.vulnEvents[0].eventId, 'ms-event-1');
+
+    const microserviceEvent = await handlers['Chaitin_CloudWalker.Chaitin_CloudWalker/GetMicroserviceVulnEvent'](
+      context({ eventId: 'ms-event-1' }),
+    );
+    assert.equal(microserviceEvent.eventId, 'ms-event-1');
+  });
 });

@@ -398,6 +398,20 @@ describe('cloudwalker client', () => {
     assert.equal(result.nextPageToken, 'cursor-3');
   });
 
+  it('stops fallback scanning after the requested match count', async () => {
+    let calls = 0;
+    const result = await collectFilteredItems({
+      request: { pageSize: 1 },
+      fetchPage: async () => {
+        calls += 1;
+        return { items: [{ id: 'match' }, { id: 'unused' }], nextPageToken: 'next' };
+      },
+      matchesItem: async () => true,
+    });
+    assert.deepEqual(result.items, [{ id: 'match' }]);
+    assert.equal(calls, 1);
+  });
+
   it('falls back from html response and keeps pagination token for later pages', async () => {
     const client = createClient({
       baseUrl,
@@ -481,5 +495,136 @@ describe('cloudwalker client', () => {
     assert.equal(response.vulnEvents[0].status, '0');
     assert.equal(response.vulnEvents[0].risk, 0);
     assert.equal(response.vulnEvents[0].manageStatus, 0);
+  });
+
+  it('maps redirects, timeouts, network failures, and invalid payloads safely', async () => {
+    const cases = [
+      [async () => new Response(null, { status: 302, headers: { location: '/login' } }), { code: 16, httpStatus: 302 }],
+      [async () => { throw Object.assign(new Error('timed out'), { name: 'TimeoutError' }); }, { code: 4 }],
+      [async () => { throw new Error('connection reset'); }, { code: 14 }],
+      [async () => new Response('plain error', { status: 200, headers: { 'content-type': 'text/plain' } }), { code: 14, httpStatus: 200 }],
+      [async () => new Response('missing content type', { status: 200 }), { code: 14, httpStatus: 200 }],
+    ];
+
+    for (const [fetchImpl, expected] of cases) {
+      const client = createClient({ baseUrl, token: 'test-token', fetchImpl });
+      await assert.rejects(() => client.get('/anything'), expected);
+    }
+
+    const emptyClient = createClient({
+      baseUrl,
+      token: 'test-token',
+      fetchImpl: async () => new Response(null, { status: 204, headers: { 'content-type': 'application/json' } }),
+    });
+    assert.deepEqual(await emptyClient.get('/empty'), {});
+  });
+
+  it('handles empty fallback pages and filters clusters by status', async () => {
+    let calls = 0;
+    const client = createClient({
+      baseUrl,
+      token: 'test-token',
+      fetchImpl: async (url) => {
+        calls += 1;
+        const path = url.toString();
+        if (path.includes('status=2')) {
+          return new Response('<!doctype html><html>login</html>', {
+            status: 200,
+            headers: { 'content-type': 'text/html' },
+          });
+        }
+        return new Response(JSON.stringify({ data: { data: [] } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+
+    assert.deepEqual(await client.listClusters({ status: 2 }), { clusters: [], nextPageToken: '' });
+    assert.equal(calls, 2);
+  });
+
+  it('rejects malformed JSON and does not leak its body', async () => {
+    const client = createClient({
+      baseUrl,
+      token: 'test-token',
+      fetchImpl: async () => new Response('{"secret":', {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    });
+
+    await assert.rejects(() => client.get('/malformed'), {
+      code: 13,
+      details: 'Upstream returned malformed JSON',
+    });
+  });
+
+  it('omits empty scalar and repeated filters from upstream queries', async () => {
+    let requestedUrl = '';
+    const client = createClient({
+      baseUrl,
+      token: 'test-token',
+      fetchImpl: async (url) => {
+        requestedUrl = url.toString();
+        return new Response(JSON.stringify({ data: { data: [] } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+
+    await client.listMicroserviceVulnEvents({
+      pageSize: 0,
+      pageToken: '',
+      serviceName: ' ',
+      risk: null,
+      state: [],
+      characteristic: [null, undefined, ' ', 'NETWORK'],
+    });
+    const params = new URL(requestedUrl).searchParams;
+    assert.deepEqual(params.getAll('characteristic'), ['NETWORK']);
+    assert.equal(params.has('page_size'), false);
+    assert.equal(params.has('service_name'), false);
+
+    await client.listClusters({ status: 0 });
+    assert.equal(new URL(requestedUrl).searchParams.has('status'), false);
+  });
+
+  it('does not hide network failures behind client-side fallback', async () => {
+    const client = createClient({
+      baseUrl,
+      token: 'test-token',
+      fetchImpl: async () => { throw new Error('offline'); },
+    });
+    await assert.rejects(() => client.listClusters({ name: 'prod' }), { code: 14 });
+    await assert.rejects(() => client.listClusterVulnEvents({ clusterName: 'prod' }), { code: 14 });
+    await assert.rejects(() => client.listMicroserviceVulnEvents({ clusterName: 'prod' }), { code: 14 });
+  });
+
+  it('matches both name and status during cluster fallback scans', async () => {
+    const client = createClient({
+      baseUrl,
+      token: 'test-token',
+      fetchImpl: async (url) => {
+        const params = new URL(url).searchParams;
+        if (params.has('name')) {
+          return new Response('<!doctype html><html>login</html>', {
+            status: 200,
+            headers: { 'content-type': 'text/html' },
+          });
+        }
+        return new Response(JSON.stringify({
+          data: { data: [
+            { id: 'wrong-name', name: 'staging', status: 2 },
+            { id: 'wrong-status', name: 'prod', status: 1 },
+            { id: 'match', name: 'prod', status: 2 },
+          ] },
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      },
+    });
+
+    const result = await client.listClusters({ name: 'prod', status: 2, pageSize: 5 });
+    assert.deepEqual(result.clusters.map((cluster) => cluster.clusterId), ['match']);
   });
 });

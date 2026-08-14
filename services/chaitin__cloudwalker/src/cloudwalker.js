@@ -4,6 +4,7 @@ const grpcStatus = Object.freeze({
   ALREADY_EXISTS: 6,
   RESOURCE_EXHAUSTED: 8,
   FAILED_PRECONDITION: 9,
+  INTERNAL: 13,
   DEADLINE_EXCEEDED: 4,
   UNAVAILABLE: 14,
   PERMISSION_DENIED: 7,
@@ -166,9 +167,6 @@ const hasMeaningfulValue = (value) => {
   if (typeof value === 'string') {
     return value.trim() !== '';
   }
-  if (Array.isArray(value)) {
-    return value.some((item) => hasMeaningfulValue(item));
-  }
   return true;
 };
 
@@ -329,6 +327,14 @@ const readPayload = async (response) => {
   try {
     return JSON.parse(text);
   } catch {
+    const contentType = response.headers.get('content-type') || '';
+    if (isJsonContentType(contentType)) {
+      throw new CloudWalkerError('CloudWalker upstream returned invalid JSON', {
+        code: grpcStatus.INTERNAL,
+        details: 'Upstream returned malformed JSON',
+        httpStatus: response.status,
+      });
+    }
     return { message: text };
   }
 };
