@@ -1,7 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "additionalProperties": true,
+  "additionalProperties": false,
+  "required": ["baseUrl", "allowHttp"],
   "properties": {
     "baseUrl": {
       "type": "string",
@@ -37,13 +38,15 @@
     },
     "allowInsecureHttp": {
       "type": "boolean",
-      "default": false,
       "description": "Allow plain HTTP baseUrl for Proxmox deployments without TLS."
     },
     "allow_insecure_http": {
       "type": "boolean",
-      "default": false,
       "description": "Alias for allowInsecureHttp."
+    },
+    "allowHttp": {
+      "type": "boolean",
+      "description": "Explicitly allow a plain HTTP baseUrl. Defaults to false when omitted."
     },
     "skipTlsVerify": {
       "type": "boolean",

@@ -97,6 +97,7 @@ test('service exports handlers and rpcdef path handlers', () => {
     METHOD_GET_NODE_STATUS_FULL,
   ]) {
     assert.equal(typeof handlers[key], 'function', `handler for ${key} should be a function`);
+    assert.equal(handlers[key].length, 1, `handler for ${key} must use the single-context SDK ABI`);
   }
   const defs = rpcdef(buildCtx());
   for (const key of [
@@ -127,7 +128,9 @@ test('ListNodes happy path issues GET to /api2/json/nodes', async () => {
   assert.equal(captured.url, 'https://pve.example.com:8006/api2/json/nodes');
   assert.equal(captured.init.headers.Authorization, `PVEAPIToken=${TOKEN_ID}=${TOKEN_SECRET}`);
   assert.equal(captured.init.headers.Accept, 'application/json');
-  assert.equal(captured.init.timeoutMs, 4000);
+  assert.equal(captured.init.timeoutMs, undefined);
+  assert.equal(captured.init.redirect, 'error');
+  assert.ok(captured.init.signal instanceof AbortSignal);
   assert.equal(res.http_status, 200);
   assert.equal(res.nodes.length, 1);
   assert.equal(res.nodes[0].node, 'pve-a');
@@ -460,7 +463,7 @@ test('rpcdef falls back to context request when call argument is nullish', async
   assert.equal(url, 'https://pve.example.com:8006/api2/json/nodes/ctx-only/qemu');
 });
 
-test('helper functions cover normalization, mapping, and validation', () => {
+test('helper functions cover normalization, mapping, and validation', async () => {
   assert.equal(_test.grpcCodeFor('NOPE'), grpcStatus.UNKNOWN);
   assert.equal(_test.engineError('FAILED_PRECONDITION', 'x').code, grpcStatus.FAILED_PRECONDITION);
   assert.equal(_test.hasOwn(null, 'x'), false);
@@ -480,6 +483,8 @@ test('helper functions cover normalization, mapping, and validation', () => {
   assert.equal(_test.pickFirstBoolean(['bad', 'true']), true);
   assert.equal(_test.normalizeBaseUrl('https://pve.example.com:8006'), 'https://pve.example.com:8006');
   assert.equal(_test.normalizeBaseUrl('https://pve.example.com:8006///'), 'https://pve.example.com:8006');
+  assert.equal(_test.normalizeBaseUrl('https://token@example.com:8006'), '');
+  assert.equal(_test.normalizeBaseUrl('https://pve.example.com:8006/api2/json'), '');
   assert.equal(_test.normalizeBaseUrl('ftp://x'), '');
   assert.equal(_test.normalizeBaseUrl(''), '');
   assert.equal(_test.isValidNodeName('pve-node-1'), true);
@@ -511,17 +516,16 @@ test('helper functions cover normalization, mapping, and validation', () => {
   assert.equal(_test.resolveTimeoutMs({ limits: { timeoutMs: 10 } }), 10);
   assert.equal(_test.resolveTimeoutMs({ bindings: { timeout_ms: 20 } }), 20);
   assert.equal(_test.resolveTimeoutMs({ bindings: { timeout: 30 } }), 30);
+  assert.equal(_test.resolveTimeoutMs({ limits: { timeoutMs: 999999 } }), _test.MAX_TIMEOUT_MS);
   assert.equal(_test.resolveTimeoutMs({ limits: { timeoutMs: 'bad' } }), 5000);
-  assert.deepEqual(_test.buildTlsOptions({}), {});
-  assert.deepEqual(_test.buildTlsOptions({ skipTlsVerify: true }), {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  });
+  assert.equal(_test.buildTlsDispatcher({}), undefined);
+  const dispatcher = _test.buildTlsDispatcher({ skipTlsVerify: true });
+  assert.equal(typeof dispatcher.dispatch, 'function');
+  await dispatcher.close();
   assert.equal(_test.shouldSkipTls({ tlsInsecureSkipVerify: 'on' }), true);
   assert.equal(_test.shouldSkipTls({ tls_skip_verify: 'yes' }), true);
   assert.equal(_test.shouldSkipTls({}), false);
-  assert.deepEqual(_test.sanitizeHeaders({ a: 1, b: { value: false } }), { a: '1', b: 'false' });
+  assert.deepEqual(_test.sanitizeHeaders({ a: 1, b: { value: false }, Authorization: 'bad', Cookie: 'bad', evil: 'x\ny' }), { a: '1', b: 'false' });
   assert.deepEqual(_test.sanitizeHeaders(null), {});
   assert.deepEqual(_test.sanitizeHeaders(['skip']), {});
   assert.equal(_test.buildHeaders({ headers: { Extra: '1' } }, 'AUTH').Extra, '1');
@@ -672,8 +676,68 @@ test('network failure maps to UNAVAILABLE', async () => {
   await expectGrpcError(
     () => handlers[METHOD_LIST_NODES_FULL]({}, buildCtx()),
     'UNAVAILABLE',
-    (err) => assert.match(err.message, /ECONNREFUSED/),
+    (err) => assert.equal(err.message, 'UNAVAILABLE: upstream request failed'),
   );
+});
+
+test('single-context ABI passes request and bindings to the SDK handler', async () => {
+  let url;
+  setFetch(async (value) => {
+    url = String(value);
+    return responseOf(200, { data: [] });
+  });
+  await handlers[METHOD_LIST_QEMU_VMS_FULL]({ ...buildCtx(), req: { node: 'single-ctx' } });
+  assert.equal(url, 'https://pve.example.com:8006/api2/json/nodes/single-ctx/qemu');
+});
+
+test('request hardening uses dispatcher, aborts timeout, bounds responses, and redacts secrets', async () => {
+  let init;
+  setFetch(async (_url, requestInit) => {
+    init = requestInit;
+    return responseOf(200, { data: [] });
+  });
+  await handlers[METHOD_LIST_NODES_FULL]({}, buildCtx({
+    config: { skipTlsVerify: true, headers: { Authorization: 'attacker', Cookie: 'attacker', Safe: 'yes' } },
+  }));
+  assert.equal(init.redirect, 'error');
+  assert.equal(init.headers.Authorization, `PVEAPIToken=${TOKEN_ID}=${TOKEN_SECRET}`);
+  assert.equal(init.headers.Cookie, undefined);
+  assert.equal(init.headers.Safe, 'yes');
+  assert.equal(typeof init.dispatcher.dispatch, 'function');
+
+  setFetch(async (_url, requestInit) => new Promise((_resolve, reject) => {
+    requestInit.signal.addEventListener('abort', () => reject(new Error(`leak ${TOKEN_SECRET}`)), { once: true });
+  }));
+  await expectGrpcError(
+    () => handlers[METHOD_LIST_NODES_FULL]({}, buildCtx({ limits: { timeoutMs: 1 } })),
+    'UNAVAILABLE',
+    (err) => assert.equal(err.message, 'UNAVAILABLE: upstream timeout'),
+  );
+
+  setFetch(async () => responseOf(200, 'x'.repeat(_test.MAX_RESPONSE_BYTES + 1)));
+  await expectGrpcError(() => handlers[METHOD_LIST_NODES_FULL]({}, buildCtx()), 'UNAVAILABLE');
+
+  const logs = [];
+  console.log = (...args) => logs.push(JSON.stringify(args));
+  setFetch(async () => { throw new Error(`PVEAPIToken=a=${TOKEN_SECRET}`); });
+  await expectGrpcError(() => handlers[METHOD_LIST_NODES_FULL]({}, buildCtx()), 'UNAVAILABLE');
+  assert.doesNotMatch(logs.join('\n'), new RegExp(TOKEN_SECRET));
+});
+
+test('upstream bodies and unsafe base URLs never become error or redirect targets', async () => {
+  setFetch(async () => responseOf(502, `server echoed ${TOKEN_SECRET}`));
+  await expectGrpcError(
+    () => handlers[METHOD_LIST_NODES_FULL]({}, buildCtx()),
+    'UNAVAILABLE',
+    (err) => assert.equal(err.message, 'UNAVAILABLE: upstream http 502'),
+  );
+  for (const baseUrl of [
+    'https://user:password@pve.example.com:8006',
+    'https://pve.example.com:8006/api2/json',
+    'https://pve.example.com:8006?redirect=https://attacker.example',
+  ]) {
+    await expectGrpcError(() => handlers[METHOD_LIST_NODES_FULL]({}, buildCtx({ config: { baseUrl } })), 'INVALID_ARGUMENT');
+  }
 });
 
 test('http 200 with empty body maps to UNKNOWN', async () => {

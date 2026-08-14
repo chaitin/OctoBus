@@ -1,4 +1,5 @@
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const METHOD_LIST_NODES_PATH = '/Proxmox_VE_8_3_5.Proxmox_VE_8_3_5/ListNodes';
 export const METHOD_LIST_QEMU_VMS_PATH = '/Proxmox_VE_8_3_5.Proxmox_VE_8_3_5/ListQemuVMs';
@@ -15,6 +16,8 @@ export const METHOD_LIST_STORAGE_FULL = 'Proxmox_VE_8_3_5.Proxmox_VE_8_3_5/ListS
 export const METHOD_GET_NODE_STATUS_FULL = 'Proxmox_VE_8_3_5.Proxmox_VE_8_3_5/GetNodeStatus';
 
 export const DEFAULT_TIMEOUT_MS = 5000;
+export const MAX_TIMEOUT_MS = 60_000;
+export const MAX_RESPONSE_BYTES = 1024 * 1024;
 export const API_PREFIX = '/api2/json';
 export const NODE_NAME_RE = /^[A-Za-z0-9_.-]{1,64}$/;
 export const VMID_MAX = 9_999_999_999;
@@ -108,17 +111,33 @@ const pickFirstBoolean = (values = []) => {
   return undefined;
 };
 
+const HEADER_NAME_RE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+const FORBIDDEN_HEADERS = new Set([
+  'authorization', 'cookie', 'host', 'connection', 'content-length',
+  'proxy-authorization', 'transfer-encoding',
+]);
+
 const sanitizeHeaders = (headers) => {
   const raw = unwrapScalar(headers);
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
-  return Object.fromEntries(Object.entries(raw).filter(([key]) => key).map(([key, value]) => [key, String(unwrapScalar(value) ?? '')]));
+  return Object.fromEntries(Object.entries(raw).flatMap(([key, value]) => {
+    const name = String(key).trim();
+    const headerValue = String(unwrapScalar(value) ?? '');
+    if (!HEADER_NAME_RE.test(name) || FORBIDDEN_HEADERS.has(name.toLowerCase()) || /[\r\n]/.test(headerValue)) return [];
+    return [[name, headerValue]];
+  }));
 };
 
 const normalizeBaseUrl = (raw) => {
   const value = pickString(raw);
   if (!value) return '';
-  if (!/^https?:\/\//i.test(value)) return '';
-  return value.replace(/\/+$/, '');
+  try {
+    const parsed = new URL(value.replace(/\/+$/, ''));
+    if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname || parsed.username || parsed.password || parsed.search || parsed.hash || !['', '/'].includes(parsed.pathname)) return '';
+    return parsed.origin;
+  } catch {
+    return '';
+  }
 };
 
 const isValidNodeName = (name) => NODE_NAME_RE.test(String(name ?? '').trim());
@@ -152,7 +171,7 @@ const resolveBaseUrl = (bindings = {}, options = {}) => {
   if (!normalized) {
     throw engineError('INVALID_ARGUMENT', 'bindings.baseUrl is required (e.g. https://pve.example.com:8006)');
   }
-  const allowInsecure = pickFirstBoolean([bindings.allowInsecureHttp, bindings.allow_insecure_http]) === true;
+  const allowInsecure = pickFirstBoolean([bindings.allowInsecureHttp, bindings.allow_insecure_http, bindings.allowHttp]) === true;
   const isHttps = /^https:\/\//i.test(normalized);
   if (!isHttps && !allowInsecure && !options.allowHttp) {
     throw engineError('INVALID_ARGUMENT', 'bindings.baseUrl must use https (set allowInsecureHttp to allow http)');
@@ -169,9 +188,10 @@ const resolveToken = (bindings = {}) => {
   if (!tokenSecret) {
     throw engineError('INVALID_ARGUMENT', 'secret.tokenSecret is required');
   }
-  if (!tokenId.includes('!')) {
+  if (!/^[^=\r\n!]+![^=\r\n!]+$/.test(tokenId)) {
     throw engineError('INVALID_ARGUMENT', 'secret.tokenId must be in the form USER@REALM!TOKENID');
   }
+  if (/[\r\n]/.test(tokenSecret)) throw engineError('INVALID_ARGUMENT', 'secret.tokenSecret contains an invalid character');
   return { tokenId, tokenSecret };
 };
 
@@ -184,7 +204,8 @@ const buildAuthHeader = (token) => {
 
 const resolveTimeoutMs = (ctx = {}, fallback = DEFAULT_TIMEOUT_MS) => {
   const raw = Number(unwrapScalar(ctx.limits?.timeoutMs ?? ctx.bindings?.timeoutMs ?? ctx.bindings?.timeout_ms ?? ctx.bindings?.timeout ?? fallback));
-  return Number.isFinite(raw) && raw > 0 ? raw : fallback;
+  if (!Number.isFinite(raw) || raw <= 0) return fallback;
+  return Math.min(Math.trunc(raw), MAX_TIMEOUT_MS);
 };
 
 const shouldSkipTls = (bindings = {}) => {
@@ -197,14 +218,9 @@ const shouldSkipTls = (bindings = {}) => {
   return value === true;
 };
 
-const buildTlsOptions = (bindings = {}) => {
-  if (!shouldSkipTls(bindings)) return {};
-  return {
-    skipTlsVerify: true,
-    tlsInsecureSkipVerify: true,
-    insecureSkipVerify: true,
-  };
-};
+const buildTlsDispatcher = (bindings = {}) => shouldSkipTls(bindings)
+  ? new Agent({ connect: { rejectUnauthorized: false } })
+  : undefined;
 
 const buildHeaders = (bindings = {}, authHeader) => ({
   ...sanitizeHeaders(bindings.headers),
@@ -226,6 +242,38 @@ const logFlow = (ctx = {}, action, details) => {
   } catch {
     console.log(prefix, details);
   }
+};
+
+const readResponseText = async (response) => {
+  const declaredLength = Number(response.headers?.get?.('content-length'));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_RESPONSE_BYTES) {
+    throw engineError('UNAVAILABLE', 'upstream response exceeds the maximum allowed size');
+  }
+  if (!response.body?.getReader) {
+    const text = await response.text();
+    if (Buffer.byteLength(String(text), 'utf8') > MAX_RESPONSE_BYTES) {
+      throw engineError('UNAVAILABLE', 'upstream response exceeds the maximum allowed size');
+    }
+    return text;
+  }
+  const reader = response.body.getReader();
+  const chunks = [];
+  let byteLength = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      byteLength += value.byteLength;
+      if (byteLength > MAX_RESPONSE_BYTES) {
+        await reader.cancel();
+        throw engineError('UNAVAILABLE', 'upstream response exceeds the maximum allowed size');
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock?.();
+  }
+  return new TextDecoder().decode(Buffer.concat(chunks));
 };
 
 const encodePath = (value) => encodeURIComponent(String(unwrapScalar(value) ?? ''));
@@ -270,42 +318,35 @@ const proxmoxRequest = async (ctx, segments, { method = 'GET', query, allowHttp 
   const timeoutMs = resolveTimeoutMs(callCtx);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const dispatcher = buildTlsDispatcher(bindings);
   const url = buildUrl(baseUrl, segments, query);
   logFlow(callCtx, 'request', { method, url, segments });
 
-  let response;
   try {
-    response = await fetch(url, {
+    const response = await fetch(url, {
       method,
       headers: buildHeaders(bindings, authHeader),
       signal: controller.signal,
-      ...buildTlsOptions(bindings),
+      redirect: 'error',
+      ...(dispatcher ? { dispatcher } : {}),
     });
+    const text = await readResponseText(response);
+    const httpStatus = Number(response.status || 0);
+    logFlow(callCtx, 'fetch:response', { url, httpStatus, bodyLength: Buffer.byteLength(text, 'utf8') });
+
+    if (!response.ok) {
+      throw engineError(mapHttpStatus(httpStatus), `upstream http ${httpStatus}`);
+    }
+    return { httpStatus, text, json: parseJsonBody(text) };
   } catch (err) {
-    const message = err?.cause?.message || err?.message || 'fetch failed';
-    logFlow(callCtx, 'fetch:error', { url, error: message });
-    throw engineError('UNAVAILABLE', `upstream fetch failed: ${message}`);
+    if (err instanceof GrpcError) throw err;
+    const reason = controller.signal.aborted ? 'timeout' : 'request failed';
+    logFlow(callCtx, 'fetch:error', { url, error: reason });
+    throw engineError('UNAVAILABLE', `upstream ${reason}`);
   } finally {
     clearTimeout(timer);
+    if (dispatcher) await dispatcher.close();
   }
-  let text;
-  try {
-    text = await response.text();
-  } catch (err) {
-    const message = err?.cause?.message || err?.message || 'response read failed';
-    logFlow(callCtx, 'fetch:error', { url, error: message });
-    throw engineError('UNAVAILABLE', `upstream response read failed: ${message}`);
-  }
-  const httpStatus = Number(response.status || 0);
-  logFlow(callCtx, 'fetch:response', { url, httpStatus, bodyLength: text?.length || 0 });
-
-  if (!response.ok) {
-    const code = mapHttpStatus(httpStatus);
-    throw engineError(code, `upstream http ${httpStatus}: ${String(text || '').slice(0, 256)}`);
-  }
-
-  const json = parseJsonBody(text);
-  return { httpStatus, text, json };
 };
 
 const requireNodeName = (req = {}, bindings = {}, methodLabel) => {
@@ -661,17 +702,37 @@ export function rpcdef(ctx = {}) {
 }
 
 export const handlers = {
-  [METHOD_LIST_NODES_FULL]: (req, ctx = {}) => handleListNodes(req, ctx),
-  [METHOD_LIST_QEMU_VMS_FULL]: (req, ctx = {}) => handleListQemuVMs(req, ctx),
-  [METHOD_GET_QEMU_VM_CONFIG_FULL]: (req, ctx = {}) => handleGetQemuVMConfig(req, ctx),
-  [METHOD_LIST_LXCS_FULL]: (req, ctx = {}) => handleListLXCs(req, ctx),
-  [METHOD_LIST_STORAGE_FULL]: (req, ctx = {}) => handleListStorage(req, ctx),
-  [METHOD_GET_NODE_STATUS_FULL]: (req, ctx = {}) => handleGetNodeStatus(req, ctx),
+  [METHOD_LIST_NODES_FULL]: function listNodes(context) {
+    context ??= {};
+    return handleListNodes(arguments[1] ? arguments[0] : context.req ?? {}, arguments[1] ?? context);
+  },
+  [METHOD_LIST_QEMU_VMS_FULL]: function listQemuVMs(context) {
+    context ??= {};
+    return handleListQemuVMs(arguments[1] ? arguments[0] : context.req ?? {}, arguments[1] ?? context);
+  },
+  [METHOD_GET_QEMU_VM_CONFIG_FULL]: function getQemuVMConfig(context) {
+    context ??= {};
+    return handleGetQemuVMConfig(arguments[1] ? arguments[0] : context.req ?? {}, arguments[1] ?? context);
+  },
+  [METHOD_LIST_LXCS_FULL]: function listLXCs(context) {
+    context ??= {};
+    return handleListLXCs(arguments[1] ? arguments[0] : context.req ?? {}, arguments[1] ?? context);
+  },
+  [METHOD_LIST_STORAGE_FULL]: function listStorage(context) {
+    context ??= {};
+    return handleListStorage(arguments[1] ? arguments[0] : context.req ?? {}, arguments[1] ?? context);
+  },
+  [METHOD_GET_NODE_STATUS_FULL]: function getNodeStatus(context) {
+    context ??= {};
+    return handleGetNodeStatus(arguments[1] ? arguments[0] : context.req ?? {}, arguments[1] ?? context);
+  },
 };
 
 export const _test = {
   API_PREFIX,
   DEFAULT_TIMEOUT_MS,
+  MAX_RESPONSE_BYTES,
+  MAX_TIMEOUT_MS,
   METHOD_PATHS,
   VMID_MAX,
   NODE_NAME_RE,
@@ -686,7 +747,7 @@ export const _test = {
   buildQemuVMConfig,
   buildQemuVMInfo,
   buildStorageInfo,
-  buildTlsOptions,
+  buildTlsDispatcher,
   buildUrl,
   engineError,
   extractData,
@@ -718,6 +779,7 @@ export const _test = {
   resolveCallContext,
   resolveTimeoutMs,
   resolveToken,
+  readResponseText,
   resolveVmidString,
   sanitizeHeaders,
   shouldSkipTls,
