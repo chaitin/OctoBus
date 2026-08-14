@@ -1,0 +1,12 @@
+{
+  "method": "Elasticsearch_7_10_0.Elasticsearch_7_10_0/ClusterHealth",
+  "request": {},
+  "expectUpstream": true,
+  "requireBusinessSuccess": true,
+  "requireUpstreamPerProtocol": true,
+  "protocols": ["connect", "grpc", "mcp"],
+  "upstream": {
+    "method": "GET",
+    "path": "/_cluster/health"
+  }
+}
