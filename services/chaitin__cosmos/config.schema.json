@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["endpoint"],
+  "properties": {
+    "endpoint": {
+      "type": "string",
+      "format": "uri",
+      "description": "Cosmos Pedestal RPC base URL, for example https://cosmos.example.com."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional extra HTTP headers sent to Cosmos."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000,
+      "description": "HTTP timeout in milliseconds."
+    }
+  }
+}

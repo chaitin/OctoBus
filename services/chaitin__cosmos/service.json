@@ -1,0 +1,37 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "cosmos",
+  "displayName": "Chaitin Cosmos",
+  "description": "OctoBus package for Chaitin Cosmos (万象) log search, log detail, and aggregation statistics APIs via Pedestal JSON-RPC.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/cosmos.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Chaitin_COSMOS.Chaitin_COSMOS/SearchLogInfo": {
+          "name": "search-log-info",
+          "description": "Get Cosmos log detail by IDs."
+        },
+        "Chaitin_COSMOS.Chaitin_COSMOS/SearchLogList": {
+          "name": "search-log-list",
+          "description": "Search Cosmos log list with filters."
+        },
+        "Chaitin_COSMOS.Chaitin_COSMOS/SearchAggregationStatistics": {
+          "name": "search-aggregation-statistics",
+          "description": "Get Cosmos log aggregation statistics."
+        }
+      }
+    }
+  }
+}

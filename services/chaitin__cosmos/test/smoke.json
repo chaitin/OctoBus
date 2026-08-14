@@ -1,0 +1,9 @@
+{
+  "method": "Chaitin_COSMOS.Chaitin_COSMOS/SearchLogInfo",
+  "request": {
+    "ids": [
+      "smoke-log-id"
+    ]
+  },
+  "expectUpstream": true
+}
