@@ -5,7 +5,7 @@ import { GrpcError, grpcStatus } from "@chaitin-ai/octobus-sdk";
 import { _test, extractCveDetails, handlers, lookupCve, searchCves } from "../src/nist-nvd-v2.js";
 import { service } from "../src/service.js";
 
-const port = 19001;
+const port = 20_000 + (process.pid % 10_000);
 const config = { nvdBaseUrl: `http://127.0.0.1:${port}/`, timeoutMs: 1_000 };
 let mock;
 
@@ -67,6 +67,38 @@ test("CVE extraction falls back through NVD metric versions", () => {
   assert.equal(_test.timeoutMs(-1), 30_000);
   assert.equal(_test.timeoutMs(999_999), 120_000);
   assert.equal(_test.appendQuery("https://example.test/api", { value: "a b" }).searchParams.get("value"), "a b");
+});
+
+test("HTTP client maps malformed responses, retries, and timeouts without exposing secrets", async () => {
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => "not json" });
+    await expectsGrpcError(() => _test.httpGetJson("https://example.test", {}, 1_000), grpcStatus.UNAVAILABLE);
+
+    let attempts = 0;
+    globalThis.fetch = async () => ({ ok: attempts++ > 0, status: attempts > 1 ? 200 : 503, text: async () => attempts > 1 ? "{}" : "temporarily unavailable" });
+    assert.deepEqual(await _test.httpGetJson("https://example.test", {}, 1_000), {});
+
+    globalThis.fetch = (_url, init) => new Promise((_resolve, reject) => init.signal.addEventListener("abort", () => {
+      const error = new Error("aborted");
+      error.name = "AbortError";
+      reject(error);
+    }, { once: true }));
+    await expectsGrpcError(() => _test.httpGetJson("https://example.test", {}, 1), grpcStatus.UNAVAILABLE);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("extraction handles sparse NVD documents and explicit HTTP error classes", () => {
+  assert.deepEqual(extractCveDetails(null), {});
+  const record = extractCveDetails({ id: "CVE-2025-0003", descriptions: [{ lang: "fr", value: "ignored" }], metrics: {}, weaknesses: [{}], references: [{}], configurations: [{ nodes: [{}] }] });
+  assert.equal(record.description, "");
+  assert.equal(record.references[0].url, "");
+  assert.equal(record.affectedProducts.length, 0);
+  assert.equal(_test.mapHttpError(401, "").code, grpcStatus.PERMISSION_DENIED);
+  assert.equal(_test.mapHttpError(429, "").code, grpcStatus.UNAVAILABLE);
+  assert.equal(_test.mapHttpError(400, "bad").code, grpcStatus.INVALID_ARGUMENT);
 });
 
 test("cleanup", () => mock?.kill());
