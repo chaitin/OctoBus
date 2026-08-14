@@ -22,6 +22,8 @@ Optional fields:
 - `timeoutMs`: defaults to `10000`.
 - `insecureSkipTlsVerify`: enable only for lab self-signed TLS.
 
+TLS verification is enabled by default. When explicitly disabled, the setting is scoped to this service's HTTP dispatcher and does not alter process-wide TLS behavior. Requests use a 10-second default timeout and do not follow redirects, preventing credentials from being forwarded to another origin.
+
 ## Secret
 
 - `username`
@@ -73,4 +75,6 @@ The password is SHA-256 hashed for `POST /api/v3/login`.
 
 - Write methods verify results where the product exposes a query endpoint.
 - `UploadCustomSensitiveWords` returns the upload response from the product; the API document does not define a separate file-list verification endpoint.
+- Upstream response bodies are limited to 2 MiB and sensitive-word uploads to 1 MiB.
+- Multipart filenames are sanitized before being inserted into `Content-Disposition`.
 - Do not store credentials, tokens, cookies, or real internal device addresses in repository files or PR evidence.

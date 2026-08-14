@@ -1,141 +1,201 @@
-import assert from "node:assert/strict";
-import test from "node:test";
+import assert from 'node:assert/strict';
+import test from 'node:test';
 
-import { rpcdef, _test } from "../src/venus-maf.js";
+import {
+  METHOD_CREATE_SITE_FULL,
+  METHOD_DELETE_SITE_FULL,
+  METHOD_HEALTH_CHECK_FULL,
+  METHOD_LIST_SITES_FULL,
+  METHOD_UPLOAD_SENSITIVE_WORDS_FULL,
+  _test,
+  handlers,
+} from '../src/venus-maf.js';
 
-const jsonResponse = (body, options = {}) => ({
-  ok: options.ok ?? true,
-  status: options.status ?? 200,
-  headers: { get: () => "" },
-  text: async () => typeof body === "string" ? JSON.stringify(body) : JSON.stringify(body),
-});
+const response = (body, status = 200, headers = {}) => new Response(
+  typeof body === 'string' ? body : JSON.stringify(body),
+  { status, headers: { 'content-type': 'application/json', ...headers } },
+);
 
-const baseCtx = {
-  config: { baseUrl: "https://maf.example.local/monitor", insecureSkipTlsVerify: false },
-  secret: { username: "adm", password: "secret" },
+const withFetch = async (fetchImpl, callback) => {
+  const original = global.fetch;
+  global.fetch = fetchImpl;
+  try {
+    return await callback();
+  } finally {
+    global.fetch = original;
+  }
 };
 
-test("helpers hash password and normalize UI URL to origin", () => {
-  assert.equal(_test.sha256Hex("secret"), "2bb80d537b1da3e38bd30361aa855686bde0eacd7162fef6a25fe97bf527a25b");
-  assert.equal(_test.normalizeOrigin("https://maf.example.local/monitor"), "https://maf.example.local");
-  assert.equal(_test.normalizePrefix("api/v3/"), "/api/v3");
+const baseContext = (request = {}) => ({
+  config: { baseUrl: 'https://maf.example.local/monitor', timeoutMs: 1234 },
+  secret: { username: 'admin', password: 'secret' },
+  request,
 });
 
-test("CreateSite builds expected upstream requests and verifies list", async () => {
+const loginResponse = () => response({ code: 0, msg: 'success', data: { authorization: 'token-1' } });
+
+test('helpers hash passwords, normalize URLs, and sanitize multipart filenames', () => {
+  assert.equal(_test.sha256Hex('secret'), '2bb80d537b1da3e38bd30361aa855686bde0eacd7162fef6a25fe97bf527a25b');
+  assert.equal(_test.normalizeOrigin('https://maf.example.local/monitor'), 'https://maf.example.local');
+  assert.equal(_test.normalizePrefix('api/v3/'), '/api/v3');
+  assert.equal(_test.normalizeOrigin('not a URL'), '');
+  const multipart = _test.multipartBody('bad"name\\with\r\nbreak.txt', 'word');
+  assert.equal(multipart.filename, 'bad_name_with__break.txt');
+  assert.match(multipart.body.toString(), /filename="bad_name_with__break\.txt"/);
+});
+
+test('HealthCheck logs in with hashed credentials, timeout, and manual redirects', async () => {
   const calls = [];
-  global.fetch = async (url, init = {}) => {
-    calls.push({ url, init });
-    if (url.endsWith("/api/v3/login")) {
-      return jsonResponse({ code: 0, msg: "success", data: { authorization: "token-1" } });
-    }
-    if (url.endsWith("/api/v3/protect/vs/add")) return jsonResponse("success");
-    if (url.includes("/api/v3/protect/vs/find?")) {
-      return jsonResponse({
-        code: 0,
-        msg: "success",
-        data: {
-          list: [{ id: 7, name: "octobus-maf-site", ip: "192.0.2.10", port: 8080, http_type: "http", enable: 1 }],
-          total: 1,
-          page: 1,
-          pageSize: 10,
-        },
-      });
-    }
-    throw new Error(`unexpected ${url}`);
-  };
-  const req = {
-    name: "octobus-maf-site",
-    ip: "192.0.2.10",
-    port: 8080,
-    server_name: ["maf.example.local"],
-    upstream: { server_addr: [{ ip: "198.51.100.1", port: 8080 }] },
-  };
-  const res = await rpcdef({ ...baseCtx, req })["/Venus_MAF.Venus_MAF/CreateSite"]();
-  assert.equal(res.ok, true);
-  assert.equal(calls[1].url, "https://maf.example.local/api/v3/protect/vs/add");
-  const payload = JSON.parse(calls[1].init.body);
-  assert.equal(payload.enable, 1);
-  assert.equal(payload.upstream.load_balance_algo, "round_robin");
-});
-
-test("DeleteSite resolves id by name when id is omitted", async () => {
-  const writes = [];
-  let findCount = 0;
-  global.fetch = async (url, init = {}) => {
-    if (url.endsWith("/api/v3/login")) {
-      return jsonResponse({ code: 0, msg: "success", data: { authorization: "token-1" } });
-    }
-    if (url.includes("/api/v3/protect/vs/find?")) {
-      findCount += 1;
-      if (findCount > 1) return jsonResponse({ code: 0, msg: "success", data: { list: [], total: 0 } });
-      return jsonResponse({ code: 0, msg: "success", data: { list: [{ id: 9, name: "site-a" }], total: 1 } });
-    }
-    if (url.endsWith("/api/v3/protect/vs/delete")) {
-      writes.push(JSON.parse(init.body));
-      return jsonResponse("success");
-    }
-    throw new Error(`unexpected ${url}`);
-  };
-  const res = await rpcdef({ ...baseCtx, req: { name: "site-a" } })["/Venus_MAF.Venus_MAF/DeleteSite"]();
-  assert.equal(res.ok, true);
-  assert.deepEqual(writes[0], [{ id: 9, name: "site-a" }]);
-});
-
-test("UploadCustomSensitiveWords sends multipart body", async () => {
-  const calls = [];
-  global.fetch = async (url, init = {}) => {
-    calls.push({ url, init });
-    if (url.endsWith("/api/v3/login")) {
-      return jsonResponse({ code: 0, msg: "success", data: { authorization: "token-1" } });
-    }
-    if (url.endsWith("/api/v3/protect/tmpl/llm/customize/file")) return jsonResponse("words.txt");
-    throw new Error(`unexpected ${url}`);
-  };
-  const res = await rpcdef({
-    ...baseCtx,
-    req: { filename: "words.txt", content: "secret-word\n" },
-  })["/Venus_MAF.Venus_MAF/UploadCustomSensitiveWords"]();
-  assert.equal(res.ok, true);
-  assert.equal(res.origin_file_name, "words.txt");
-  assert.match(calls[1].init.headers["Content-Type"], /^multipart\/form-data; boundary=/);
-  assert.match(calls[1].init.body.toString("utf8"), /secret-word/);
-});
-
-test("UploadCustomSensitiveWords escapes multipart filename parameters", () => {
-  const multipart = _test.buildMultipart({
-    fieldName: "file",
-    filename: 'bad"name\\with\r\nbreak.txt',
-    content: "secret-word\n",
+  await withFetch(async (url, init) => {
+    calls.push({ url: String(url), init });
+    return loginResponse();
+  }, async () => {
+    const result = await handlers[METHOD_HEALTH_CHECK_FULL](baseContext());
+    assert.deepEqual(result, { ok: true, code: 0, message: 'success' });
   });
-
-  assert.match(
-    multipart.body.toString("utf8"),
-    /filename="bad\\"name\\\\with__break\.txt"/,
-  );
-});
-
-test("default fetch path uses AbortSignal timeout", async () => {
-  const calls = [];
-  global.fetch = async (url, init = {}) => {
-    calls.push({ url, init });
-    return jsonResponse({ code: 0, msg: "success", data: { authorization: "token-1" } });
-  };
-
-  await rpcdef({ ...baseCtx, config: { ...baseCtx.config, timeoutMs: 1234 } })["/Venus_MAF.Venus_MAF/HealthCheck"]();
-
+  assert.equal(calls[0].url, 'https://maf.example.local/api/v3/login');
+  assert.equal(calls[0].init.redirect, 'manual');
   assert.ok(calls[0].init.signal instanceof AbortSignal);
-  assert.equal("timeoutMs" in calls[0].init, false);
+  assert.equal(JSON.parse(calls[0].init.body).password, _test.sha256Hex('secret'));
 });
 
-test("upstream auth failure maps to UNAUTHENTICATED", async () => {
-  global.fetch = async () => ({
-    ok: false,
-    status: 401,
-    headers: { get: () => "" },
-    text: async () => "unauthorized",
+test('ListSites maps pagination and every proto response field', async () => {
+  const calls = [];
+  await withFetch(async (url, init) => {
+    calls.push({ url: String(url), init });
+    if (String(url).endsWith('/login')) return loginResponse();
+    return response({
+      code: 0,
+      msg: 'ok',
+      data: { list: [{ id: 7, name: 'site-a', ip: '192.0.2.1', port: 443, http_type: 'https', enable: 1, server_name: ['a.example'] }], total: 1, page: 2, pageSize: 5 },
+    });
+  }, async () => {
+    const result = await handlers[METHOD_LIST_SITES_FULL](baseContext({ page: 2, pageSize: 5, name: 'site-a' }));
+    assert.equal(result.sites[0].httpType, 'https');
+    assert.deepEqual(result.sites[0].serverName, ['a.example']);
+    assert.equal(result.total, 1);
+    assert.equal(result.pageSize, 5);
   });
-  await assert.rejects(
-    rpcdef({ ...baseCtx, req: {} })["/Venus_MAF.Venus_MAF/HealthCheck"](),
-    /UNAUTHENTICATED/,
-  );
+  assert.match(calls[1].url, /page=2&pageSize=5&name=site-a/);
+  assert.equal(calls[1].init.headers.authorization, 'token-1');
+});
+
+test('CreateSite sends only proto-backed fields and verifies the created site', async () => {
+  const calls = [];
+  await withFetch(async (url, init) => {
+    calls.push({ url: String(url), init });
+    if (String(url).endsWith('/login')) return loginResponse();
+    if (String(url).endsWith('/protect/vs/add')) return response('success');
+    return response({ code: 0, data: { list: [{ id: 8, name: 'site-a' }], total: 1 } });
+  }, async () => {
+    const result = await handlers[METHOD_CREATE_SITE_FULL](baseContext({
+      name: 'site-a', description: 'managed', enable: 1, httpType: 'http', ip: '192.0.2.10', port: 8080,
+      serverName: ['site.example'], netMode: 2, safeMode: 1,
+      upstream: { httpType: 'http', loadBalanceAlgo: 'round_robin', serverAddr: [{ ip: '198.51.100.1', port: 8080, weight: 10 }] },
+    }));
+    assert.equal(result.ok, true);
+  });
+  const payload = JSON.parse(calls[1].init.body);
+  assert.deepEqual(Object.keys(payload).sort(), ['description', 'enable', 'http_type', 'ip', 'name', 'net_mode', 'port', 'safe_mode', 'server_name', 'upstream'].sort());
+  assert.deepEqual(payload.upstream.server_addr, [{ ip: '198.51.100.1', port: 8080, weight: 10 }]);
+});
+
+test('DeleteSite resolves an omitted id and verifies absence before success', async () => {
+  let findCalls = 0;
+  let deleteBody;
+  await withFetch(async (url, init) => {
+    if (String(url).endsWith('/login')) return loginResponse();
+    if (String(url).endsWith('/protect/vs/delete')) {
+      deleteBody = JSON.parse(init.body);
+      return response({ code: 0, msg: 'deleted' });
+    }
+    findCalls += 1;
+    return response({ code: 0, data: { list: findCalls === 1 ? [{ id: 9, name: 'site-a' }] : [] } });
+  }, async () => {
+    const result = await handlers[METHOD_DELETE_SITE_FULL](baseContext({ name: 'site-a' }));
+    assert.equal(result.ok, true);
+  });
+  assert.deepEqual(deleteBody, [{ id: 9, name: 'site-a' }]);
+});
+
+test('UploadCustomSensitiveWords sends bounded multipart data and maps filenames', async () => {
+  let upload;
+  await withFetch(async (url, init) => {
+    if (String(url).endsWith('/login')) return loginResponse();
+    upload = init;
+    return response({ code: 0, data: { file_name: 'stored.txt' }, msg: 'uploaded' });
+  }, async () => {
+    const result = await handlers[METHOD_UPLOAD_SENSITIVE_WORDS_FULL](baseContext({ filename: 'words.txt', content: 'secret-word\n' }));
+    assert.equal(result.fileName, 'stored.txt');
+    assert.equal(result.originFileName, 'words.txt');
+  });
+  assert.match(upload.headers['content-type'], /^multipart\/form-data; boundary=/);
+  assert.match(upload.body.toString(), /secret-word/);
+});
+
+test('rejects unsafe configuration, invalid requests, and oversized uploads', async () => {
+  await assert.rejects(handlers[METHOD_HEALTH_CHECK_FULL]({ config: { baseUrl: 'https://u:p@maf.example' }, secret: { username: 'u', password: 'p' } }), /valid HTTP\(S\) URL/);
+  await assert.rejects(handlers[METHOD_HEALTH_CHECK_FULL]({ config: { baseUrl: 'https://maf.example' }, secret: {} }), /username and secret.password/);
+  await assert.rejects(handlers[METHOD_CREATE_SITE_FULL](baseContext({ name: '', ip: '', port: 0 })), /name and ip are required/);
+  await assert.rejects(handlers[METHOD_CREATE_SITE_FULL](baseContext({ name: 'a', ip: '1.1.1.1', port: 70000, serverName: ['a'], upstream: { serverAddr: [{ ip: '1.1.1.2', port: 80 }] } })), /port must be/);
+  await assert.rejects(handlers[METHOD_DELETE_SITE_FULL](baseContext({})), /id or name is required/);
+  await assert.rejects(handlers[METHOD_UPLOAD_SENSITIVE_WORDS_FULL](baseContext({ content: ' ' })), /content is required/);
+  await assert.rejects(handlers[METHOD_UPLOAD_SENSITIVE_WORDS_FULL](baseContext({ content: 'x'.repeat(1024 * 1024 + 1) })), /1 MiB/);
+});
+
+test('maps HTTP, malformed login, business, verification, and response-size failures', async () => {
+  await withFetch(async () => response({ message: 'denied' }, 401), async () => {
+    await assert.rejects(handlers[METHOD_HEALTH_CHECK_FULL](baseContext()), /UNAUTHENTICATED/);
+  });
+  await withFetch(async () => response('success'), async () => {
+    await assert.rejects(handlers[METHOD_HEALTH_CHECK_FULL](baseContext()), /invalid JSON object/);
+  });
+  await withFetch(async () => response({ code: 9, msg: 'bad login' }), async () => {
+    await assert.rejects(handlers[METHOD_HEALTH_CHECK_FULL](baseContext()), /business error/);
+  });
+  await withFetch(async () => response({ code: 0, data: {} }), async () => {
+    await assert.rejects(handlers[METHOD_HEALTH_CHECK_FULL](baseContext()), /missing data.authorization/);
+  });
+  await withFetch(async () => response('x', 200, { 'content-length': String(2 * 1024 * 1024 + 1) }), async () => {
+    await assert.rejects(handlers[METHOD_HEALTH_CHECK_FULL](baseContext()), /2 MiB/);
+  });
+  await withFetch(async () => response('x'.repeat(2 * 1024 * 1024 + 1)), async () => {
+    await assert.rejects(handlers[METHOD_HEALTH_CHECK_FULL](baseContext()), /2 MiB/);
+  });
+
+  for (const [status, expected] of [[403, /PERMISSION_DENIED/], [422, /FAILED_PRECONDITION/], [500, /UNAVAILABLE/]]) {
+    await withFetch(async () => response({ message: 'failure' }, status), async () => {
+      await assert.rejects(handlers[METHOD_HEALTH_CHECK_FULL](baseContext()), expected);
+    });
+  }
+});
+
+test('reports failed create/delete verification with the most useful reason', async () => {
+  let call = 0;
+  await withFetch(async (url) => {
+    call += 1;
+    if (String(url).endsWith('/login')) return loginResponse();
+    if (String(url).endsWith('/protect/vs/add')) return response({ code: 9, msg: 'rejected' });
+    return response({ code: 0, data: { list: [] } });
+  }, async () => {
+    await assert.rejects(handlers[METHOD_CREATE_SITE_FULL](baseContext({
+      name: 'missing', ip: '192.0.2.1', port: 80, serverName: ['missing.example'],
+      upstream: { serverAddr: [{ ip: '198.51.100.1', port: 80 }] },
+    })), /create site upstream business error/);
+  });
+
+  await withFetch(async (url) => {
+    if (String(url).endsWith('/login')) return loginResponse();
+    if (String(url).endsWith('/protect/vs/delete')) return response({ code: 9, msg: 'rejected' });
+    return response({ code: 0, data: { list: [{ id: 7, name: 'still-there' }] } });
+  }, async () => {
+    await assert.rejects(
+      handlers[METHOD_DELETE_SITE_FULL](baseContext({ id: 7, name: 'still-there' })),
+      /still exists after delete/,
+    );
+  });
+
+  await withFetch(async (url) => String(url).endsWith('/login') ? loginResponse() : response('success'), async () => {
+    await assert.rejects(handlers[METHOD_LIST_SITES_FULL](baseContext()), /invalid JSON object/);
+  });
 });

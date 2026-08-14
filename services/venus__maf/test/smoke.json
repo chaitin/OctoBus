@@ -1,0 +1,8 @@
+{
+  "method": "Venus_MAF.Venus_MAF/ListSites",
+  "request": {
+    "page": 1,
+    "pageSize": 10
+  },
+  "expectUpstream": true
+}
