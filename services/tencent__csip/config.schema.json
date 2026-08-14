@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "endpoint": {
+      "type": "string",
+      "default": "https://csip.tencentcloudapi.com",
+      "description": "Tencent Cloud CSIP API endpoint."
+    },
+    "region": {
+      "type": "string",
+      "description": "Optional Tencent Cloud region, for example ap-guangzhou."
+    },
+    "version": {
+      "type": "string",
+      "default": "2022-11-21",
+      "description": "Tencent Cloud CSIP API version."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 5000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "maxResponseBytes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10485760,
+      "default": 4194304,
+      "description": "Maximum accepted response size in bytes."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Disable TLS certificate verification for private test endpoints only."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional additional HTTP headers. Tencent Cloud signing headers are set by the service."
+    }
+  }
+}

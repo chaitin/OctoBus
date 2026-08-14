@@ -1,0 +1,16 @@
+{
+  "name": "@chaitin-ai/octobus-service-tencent-csip",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "tencent-csip": "bin/tencent-csip.js"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.6.0",
+    "undici": "^7.16.0"
+  }
+}

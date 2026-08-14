@@ -325,6 +325,10 @@ const services = {
     entryFile: "../tencent__lighthouse-firewall/bin/tencent-lighthouse-firewall.js",
     serviceModule: "../tencent__lighthouse-firewall/src/service.js",
   },
+  "tencent-csip": {
+    entryFile: "../tencent__csip/bin/tencent-csip.js",
+    serviceModule: "../tencent__csip/src/service.js",
+  },
   "tencent-qyweixin-group-robot": {
     entryFile: "../tencent__qyweixin-group-robot/bin/tencent-qyweixin-group-robot.js",
     serviceModule: "../tencent__qyweixin-group-robot/src/service.js",

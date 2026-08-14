@@ -1,0 +1,85 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "tencent-csip",
+  "displayName": "Tencent Cloud CSIP",
+  "description": "OctoBus package for Tencent Cloud Cloud Security Center read-only APIs.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/tencent_csip.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Tencent_CSIP.Tencent_CSIP/DescribeAlertList": {
+          "name": "describe-alert-list",
+          "description": "Query Tencent Cloud CSIP alert list."
+        },
+        "Tencent_CSIP.Tencent_CSIP/DescribeCVMAssets": {
+          "name": "describe-cvm-assets",
+          "description": "Query Tencent Cloud CSIP CVM assets."
+        },
+        "Tencent_CSIP.Tencent_CSIP/DescribePublicIpAssets": {
+          "name": "describe-public-ip-assets",
+          "description": "Query Tencent Cloud CSIP public IP assets."
+        },
+        "Tencent_CSIP.Tencent_CSIP/DescribeVpcAssets": {
+          "name": "describe-vpc-assets",
+          "description": "Query Tencent Cloud CSIP VPC assets."
+        },
+        "Tencent_CSIP.Tencent_CSIP/DescribeRiskCenterAssetViewVULRiskList": {
+          "name": "describe-risk-center-vul-risks",
+          "description": "Query Tencent Cloud CSIP vulnerability risks."
+        },
+        "Tencent_CSIP.Tencent_CSIP/DescribeRiskCenterAssetViewWeakPasswordRiskList": {
+          "name": "describe-risk-center-weak-password-risks",
+          "description": "Query Tencent Cloud CSIP weak password risks."
+        },
+        "Tencent_CSIP.Tencent_CSIP/DescribeRiskCenterAssetViewCFGRiskList": {
+          "name": "describe-risk-center-config-risks",
+          "description": "Query Tencent Cloud CSIP configuration risks."
+        },
+        "Tencent_CSIP.Tencent_CSIP/DescribeRiskCenterAssetViewPortRiskList": {
+          "name": "describe-risk-center-port-risks",
+          "description": "Query Tencent Cloud CSIP port risks."
+        },
+        "Tencent_CSIP.Tencent_CSIP/DescribeCSIPRiskStatistics": {
+          "name": "describe-csip-risk-statistics",
+          "description": "Query Tencent Cloud CSIP risk statistics."
+        },
+        "Tencent_CSIP.Tencent_CSIP/DescribeAccessKeyRisk": {
+          "name": "describe-access-key-risk",
+          "description": "Query Tencent Cloud CSIP access key risks."
+        },
+        "Tencent_CSIP.Tencent_CSIP/DescribeCosAlarmList": {
+          "name": "describe-cos-alarm-list",
+          "description": "Query Tencent Cloud CSIP COS alarms."
+        },
+        "Tencent_CSIP.Tencent_CSIP/DescribeSkillScanResult": {
+          "name": "describe-skill-scan-result",
+          "description": "Query Tencent Cloud CSIP skill scan result."
+        },
+        "Tencent_CSIP.Tencent_CSIP/DescribeOrganizationUserInfo": {
+          "name": "describe-organization-user-info",
+          "description": "Query Tencent Cloud CSIP organization users."
+        },
+        "Tencent_CSIP.Tencent_CSIP/DescribeSubUserInfo": {
+          "name": "describe-sub-user-info",
+          "description": "Query Tencent Cloud CSIP sub users."
+        },
+        "Tencent_CSIP.Tencent_CSIP/InvokeReadOnlyAction": {
+          "name": "invoke-read-only-action",
+          "description": "Invoke an allowed Tencent Cloud CSIP Describe* action."
+        }
+      }
+    }
+  }
+}

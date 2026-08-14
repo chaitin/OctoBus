@@ -1,0 +1,10 @@
+{
+  "method": "Tencent_CSIP.Tencent_CSIP/DescribeAlertList",
+  "request": { "payload": {} },
+  "protocols": ["connect", "grpc", "mcp"],
+  "requireUpstreamPerProtocol": true,
+  "upstream": {
+    "method": "POST",
+    "path": "/"
+  }
+}
