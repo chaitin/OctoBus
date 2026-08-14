@@ -1,4 +1,5 @@
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const METHOD_LIST_ALERTS_FULL = 'Prometheus_Alertmanager_0_27_0.Prometheus_Alertmanager_0_27_0/ListAlerts';
 export const METHOD_GET_ALERT_GROUPS_FULL = 'Prometheus_Alertmanager_0_27_0.Prometheus_Alertmanager_0_27_0/GetAlertGroups';
@@ -8,6 +9,10 @@ export const METHOD_GET_STATUS_FULL = 'Prometheus_Alertmanager_0_27_0.Prometheus
 export const METHOD_LIST_RECEIVERS_FULL = 'Prometheus_Alertmanager_0_27_0.Prometheus_Alertmanager_0_27_0/ListReceivers';
 
 export const DEFAULT_TIMEOUT_MS = 10000;
+export const MAX_TIMEOUT_MS = 120000;
+export const MAX_RESPONSE_BYTES = 10 * 1024 * 1024;
+
+let insecureDispatcher;
 
 const grpcCodeFor = (code) => ({
   FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
@@ -24,13 +29,26 @@ const unwrapScalar = (v) => { if (v === undefined || v === null) return undefine
 const toTrimmedString = (v) => { const r = unwrapScalar(v); return r === undefined || r === null ? '' : String(r).trim(); };
 const toBool = (v, fallback = false) => { const r = unwrapScalar(v); if (r === undefined || r === null) return fallback; if (typeof r === 'boolean') return r; if (typeof r === 'number') return r !== 0; if (typeof r === 'string') { const n = r.trim().toLowerCase(); if (['true','1','yes','on'].includes(n)) return true; if (['false','0','no','off',''].includes(n)) return false; } return fallback; };
 const toJsonString = (v) => { if (v === undefined || v === null) return ''; if (typeof v === 'string') return v; try { return JSON.stringify(v); } catch { return ''; } };
-const normalizeBaseUrl = (v) => { const r = toTrimmedString(v); if (!/^https?:\/\//i.test(r)) return ''; return r.replace(/\/+$/, ''); };
+const normalizeBaseUrl = (v) => {
+  const raw = toTrimmedString(v);
+  if (!raw) return '';
+  try {
+    const url = new URL(raw);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return '';
+    return url.toString().replace(/\/+$/, '');
+  } catch { return ''; }
+};
 
 const mergedBindings = (ctx = {}) => ({ ...(ctx.config ?? {}), ...(ctx.secret ?? {}), ...(ctx.bindings ?? {}) });
 const resolveCallContext = (ctx = {}) => ({ ...ctx, bindings: mergedBindings(ctx), limits: ctx.limits ?? {}, meta: ctx.meta ?? {}, req: ctx.req ?? ctx.request ?? {} });
 const resolveBaseUrl = (bindings = {}) => normalizeBaseUrl(firstDefined(bindings.baseUrl, bindings.domain, bindings.url));
-const resolveTimeoutMs = (ctx = {}) => { const r = Number(firstDefined(ctx.limits?.timeoutMs, ctx.bindings?.timeoutMs, DEFAULT_TIMEOUT_MS)); return Number.isFinite(r) && r > 0 ? r : DEFAULT_TIMEOUT_MS; };
-const buildTlsOptions = (bindings = {}) => bindings.skipTlsVerify || bindings.tlsInsecureSkipVerify || bindings.insecureSkipVerify ? { skipTlsVerify: true } : {};
+const resolveTimeoutMs = (ctx = {}) => { const r = Number(firstDefined(ctx.limits?.timeoutMs, ctx.bindings?.timeoutMs, DEFAULT_TIMEOUT_MS)); return Number.isFinite(r) && r > 0 ? Math.min(Math.floor(r), MAX_TIMEOUT_MS) : DEFAULT_TIMEOUT_MS; };
+const buildTlsOptions = (bindings = {}, url = '') => {
+  const skip = toBool(firstDefined(bindings.skipTlsVerify, bindings.tlsInsecureSkipVerify, bindings.insecureSkipVerify));
+  if (!skip || !String(url).startsWith('https:')) return {};
+  insecureDispatcher ??= new Agent({ connect: { rejectUnauthorized: false } });
+  return { dispatcher: insecureDispatcher };
+};
 
 const requireBaseUrl = (ctx = {}) => { const u = resolveBaseUrl(ctx.bindings || {}); if (!u) throw errorWithCode('INVALID_ARGUMENT', 'baseUrl is required'); return u; };
 
@@ -63,17 +81,21 @@ const executeRequest = async (url, ctx = {}, options = {}) => {
 
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  const init = { method: options.method || 'GET', headers, signal: controller.signal, ...buildTlsOptions(ctx.bindings || {}), ...(options.body !== undefined ? { body: options.body } : {}) };
+  const init = { method: options.method || 'GET', headers, signal: controller.signal, redirect: 'error', ...buildTlsOptions(ctx.bindings || {}, url), ...(options.body !== undefined ? { body: options.body } : {}) };
   let res;
-  try { res = await fetch(url, init); } catch (err) { const m = err?.cause?.message || err?.message || 'fetch failed'; throw attachResponse(errorWithCode('UNAVAILABLE', `${options.action || 'fetch'} failed: ${m}`), { http_status: 0, http_body: m }); } finally { clearTimeout(timer); }
+  try { res = await fetch(url, init); } catch (err) { const m = err?.name === 'AbortError' ? `timeout after ${timeoutMs}ms` : 'upstream unavailable'; throw attachResponse(errorWithCode('UNAVAILABLE', `${options.action || 'fetch'} failed: ${m}`), { http_status: 0, http_body: '' }); } finally { clearTimeout(timer); }
+  const declaredLength = Number(res.headers?.get?.('content-length') || 0);
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_RESPONSE_BYTES) throw attachResponse(errorWithCode('UNAVAILABLE', `${options.action || 'fetch'} response is too large`), { http_status: Number(res.status || 0), http_body: '' });
   let rawBody;
   try { rawBody = await res.text(); } catch (err) { throw attachResponse(errorWithCode('UNAVAILABLE', `response read failed: ${err.message}`), { http_status: Number(res.status || 0), http_body: '' }); }
+  if (Buffer.byteLength(rawBody) > MAX_RESPONSE_BYTES) throw attachResponse(errorWithCode('UNAVAILABLE', `${options.action || 'fetch'} response is too large`), { http_status: Number(res.status || 0), http_body: '' });
   const httpStatus = Number(res.status || 0);
-  logFlow(ctx, 'fetch:response', { url, httpStatus, bodyLength: rawBody?.length || 0 });
+  const target = new URL(url);
+  logFlow(ctx, 'fetch:response', { origin: target.origin, path: target.pathname, httpStatus, bodyLength: rawBody?.length || 0 });
   return { httpStatus, httpBody: String(rawBody ?? '') };
 };
 
-const ensureSuccess = (result, action) => { if (result.httpStatus >= 200 && result.httpStatus < 300) return; const c = mapHttpStatusToCode(result.httpStatus); throw attachResponse(errorWithCode(c, `${action} upstream http ${result.httpStatus}: ${(result.httpBody || '').substring(0, 500)}`), { http_status: result.httpStatus, http_body: result.httpBody }); };
+const ensureSuccess = (result, action) => { if (result.httpStatus >= 200 && result.httpStatus < 300) return; const c = mapHttpStatusToCode(result.httpStatus); throw attachResponse(errorWithCode(c, `${action} upstream HTTP ${result.httpStatus}`), { http_status: result.httpStatus, http_body: '' }); };
 const parseJsonOrThrow = (result, action) => { const t = (result.httpBody || '').trim(); if (!t) throw attachResponse(errorWithCode('UNKNOWN', `${action} returned empty response`), { http_status: result.httpStatus, http_body: '' }); const p = tryParseJson(t); if (!p.ok) throw attachResponse(errorWithCode('UNKNOWN', `${action} response is not valid JSON`), { http_status: result.httpStatus, http_body: t }); return p.value; };
 
 const mapAlertLabels = (labels = {}) => Object.entries(labels || {}).map(([name, value]) => ({ name: toTrimmedString(name), value: toTrimmedString(value) }));
@@ -224,13 +246,15 @@ const handleListReceivers = async (req = {}, ctx = {}) => {
   return { status: 'success', receivers, raw_body: result.httpBody };
 };
 
+const requestFrom = (ctx = {}) => ctx.request ?? ctx.req ?? {};
+
 export const handlers = {
-  [METHOD_LIST_ALERTS_FULL]: handleListAlerts,
-  [METHOD_GET_ALERT_GROUPS_FULL]: handleGetAlertGroups,
-  [METHOD_LIST_SILENCES_FULL]: handleListSilences,
-  [METHOD_GET_SILENCE_FULL]: handleGetSilence,
-  [METHOD_GET_STATUS_FULL]: handleGetStatus,
-  [METHOD_LIST_RECEIVERS_FULL]: handleListReceivers,
+  [METHOD_LIST_ALERTS_FULL]: (ctx) => handleListAlerts(requestFrom(ctx), ctx),
+  [METHOD_GET_ALERT_GROUPS_FULL]: (ctx) => handleGetAlertGroups(requestFrom(ctx), ctx),
+  [METHOD_LIST_SILENCES_FULL]: (ctx) => handleListSilences(requestFrom(ctx), ctx),
+  [METHOD_GET_SILENCE_FULL]: (ctx) => handleGetSilence(requestFrom(ctx), ctx),
+  [METHOD_GET_STATUS_FULL]: (ctx) => handleGetStatus(requestFrom(ctx), ctx),
+  [METHOD_LIST_RECEIVERS_FULL]: (ctx) => handleListReceivers(requestFrom(ctx), ctx),
 };
 
 export const rpcdef = (ctx) => ({
@@ -242,4 +266,4 @@ export const rpcdef = (ctx) => ({
   '/Prometheus_Alertmanager_0_27_0.Prometheus_Alertmanager_0_27_0/ListReceivers': () => handleListReceivers({}, ctx),
 });
 
-export const _test = { resolveBaseUrl, toTrimmedString, toBool, toJsonString, errorWithCode, buildAuthHeaders, parseJsonOrThrow, ensureSuccess, tryParseJson, mapAlert, mapSilence, mapMatcher, mapAlertLabels, buildQuery };
+export const _test = { resolveBaseUrl, resolveTimeoutMs, normalizeBaseUrl, buildTlsOptions, executeRequest, toTrimmedString, toBool, toJsonString, errorWithCode, buildAuthHeaders, parseJsonOrThrow, ensureSuccess, tryParseJson, mapHttpStatusToCode, mapAlert, mapSilence, mapMatcher, mapAlertLabels, buildQuery };

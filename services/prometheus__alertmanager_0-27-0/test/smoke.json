@@ -1,0 +1,13 @@
+{
+  "method": "Prometheus_Alertmanager_0_27_0.Prometheus_Alertmanager_0_27_0/ListAlerts",
+  "request": {
+    "active": true
+  },
+  "protocols": ["connect", "grpc", "mcp"],
+  "requireBusinessSuccess": true,
+  "requireUpstreamPerProtocol": true,
+  "upstream": {
+    "method": "GET",
+    "path": "/api/v2/alerts"
+  }
+}
