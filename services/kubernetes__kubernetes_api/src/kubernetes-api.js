@@ -1,4 +1,5 @@
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { Agent } from 'undici';
 
 export const METHOD_LIST_NAMESPACES_FULL = 'Kubernetes_API.Kubernetes_API/ListNamespaces';
 export const METHOD_LIST_PODS_FULL = 'Kubernetes_API.Kubernetes_API/ListPods';
@@ -43,8 +44,9 @@ const mergedBindings = (ctx = {}) => ({ ...(ctx.config ?? {}), ...(ctx.secret ??
 const resolveCallContext = (ctx = {}) => ({ ...ctx, bindings: mergedBindings(ctx), limits: ctx.limits ?? {}, meta: ctx.meta ?? {}, req: ctx.req ?? ctx.request ?? {} });
 const resolveBaseUrl = (bindings = {}) => normalizeBaseUrl(firstDefined(bindings.baseUrl, bindings.domain, bindings.url), bindings);
 const resolveTimeoutMs = (ctx = {}) => { const r = Number(firstDefined(ctx.limits?.timeoutMs, ctx.bindings?.timeoutMs, DEFAULT_TIMEOUT_MS)); return Number.isFinite(r) && r > 0 ? Math.min(Math.trunc(r), MAX_TIMEOUT_MS) : DEFAULT_TIMEOUT_MS; };
+const insecureDispatcher = new Agent({ connect: { rejectUnauthorized: false } });
 const buildTlsOptions = (bindings = {}) => toBool(firstDefined(bindings.skipTlsVerify, bindings.tlsInsecureSkipVerify, bindings.insecureSkipVerify))
-  ? { insecureSkipVerify: true, tlsInsecureSkipVerify: true, skipTlsVerify: true }
+  ? { dispatcher: insecureDispatcher }
   : {};
 
 const requireBaseUrl = (ctx = {}) => { const u = resolveBaseUrl(ctx.bindings || {}); if (!u) throw errorWithCode('INVALID_ARGUMENT', 'baseUrl must be a valid http(s) URL without credentials, query, or fragment; non-loopback HTTP requires allowInsecureHttp'); return u; };
@@ -96,9 +98,15 @@ const executeRequest = async (url, ctx = {}, options = {}) => {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const init = { method: options.method || 'GET', headers, signal: controller.signal, redirect: 'manual', ...buildTlsOptions(ctx.bindings || {}), ...(options.body !== undefined ? { body: options.body } : {}) };
   let res;
-  try { res = await fetch(url, init); } catch (err) { const m = err?.cause?.message || err?.message || 'fetch failed'; throw attachResponse(errorWithCode('UNAVAILABLE', `${options.action || 'fetch'} failed: ${m}`), { http_status: 0, http_body: m }); } finally { clearTimeout(timer); }
   let rawBody;
-  try { rawBody = await readResponseBody(res); } catch (err) { if (err instanceof GrpcError) throw err; throw attachResponse(errorWithCode('UNAVAILABLE', `response read failed: ${err.message}`), { http_status: Number(res.status || 0), http_body: '' }); }
+  try {
+    res = await fetch(url, init);
+    rawBody = await readResponseBody(res);
+  } catch (err) {
+    if (err instanceof GrpcError) throw err;
+    const message = err?.name === 'AbortError' ? 'request timed out' : (err?.cause?.message || err?.message || 'fetch failed');
+    throw attachResponse(errorWithCode('UNAVAILABLE', `${options.action || 'fetch'} failed: ${message}`), { http_status: Number(res?.status || 0), http_body: '' });
+  } finally { clearTimeout(timer); }
   const httpStatus = Number(res.status || 0);
   logFlow(ctx, 'fetch:response', { httpStatus, bodyLength: Buffer.byteLength(rawBody || '') });
   return { httpStatus, httpBody: String(rawBody ?? '') };
@@ -317,8 +325,16 @@ const handleGetPodLogs = async (req = {}, ctx = {}) => {
   if (!name) throw errorWithCode('INVALID_ARGUMENT', 'name is required');
   const params = {};
   if (req.container) params.container = toTrimmedString(req.container);
-  if (req.tail_lines !== undefined && req.tail_lines !== null) params.tailLines = String(toFiniteInt(req.tail_lines));
-  if (req.since_seconds !== undefined && req.since_seconds !== null) params.sinceSeconds = String(Number(req.since_seconds));
+  if (req.tail_lines !== undefined && req.tail_lines !== null) {
+    const tailLines = toFiniteInt(req.tail_lines, -1);
+    if (tailLines < 0) throw errorWithCode('INVALID_ARGUMENT', 'tail_lines must be a non-negative integer');
+    params.tailLines = String(tailLines);
+  }
+  if (req.since_seconds !== undefined && req.since_seconds !== null) {
+    const sinceSeconds = toFiniteInt(req.since_seconds, -1);
+    if (sinceSeconds < 0) throw errorWithCode('INVALID_ARGUMENT', 'since_seconds must be a non-negative integer');
+    params.sinceSeconds = String(sinceSeconds);
+  }
   if (toBool(req.previous)) params.previous = 'true';
   if (toBool(req.timestamps)) params.timestamps = 'true';
   const url = `${baseUrl}/api/v1/namespaces/${encodeURIComponent(ns)}/pods/${encodeURIComponent(name)}/log${buildQuery(params)}`;

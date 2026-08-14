@@ -105,7 +105,8 @@ test('URL, authentication, timeout, TLS, and helper boundaries are safe', () => 
   }
   assert.deepEqual(_test.buildAuthHeaders({ token: ' secret ' }), { Authorization: 'Bearer secret' });
   assert.match(_test.buildAuthHeaders({ username: 'u', password: 'p' }).Authorization, /^Basic /);
-  assert.deepEqual(_test.buildTlsOptions({ skipTlsVerify: 'true' }), { insecureSkipVerify: true, tlsInsecureSkipVerify: true, skipTlsVerify: true });
+  assert.equal(typeof _test.buildTlsOptions({ skipTlsVerify: 'true' }).dispatcher.dispatch, 'function');
+  assert.deepEqual(_test.buildTlsOptions({ skipTlsVerify: false }), {});
   assert.equal(_test.resolveTimeoutMs({ bindings: { timeoutMs: 999999 } }), 120000);
   assert.equal(_test.resolveTimeoutMs({ bindings: { timeoutMs: -1 } }), 15000);
   assert.equal(_test.toFiniteInt({ value: '4.9' }), 4);
@@ -126,6 +127,9 @@ test('HTTP, protocol, network, redirect, and bounded-response failures map safel
     await assert.rejects(() => run(async () => new Response('not-json', { status: 200 })), /not valid JSON/);
     await assert.rejects(() => run(async () => new Response('', { status: 200 })), /empty response/);
     await assert.rejects(() => run(async () => { throw new Error('network down'); }), /UNAVAILABLE/);
+    await assert.rejects(() => run(async (_url, init) => new Response(new ReadableStream({
+      start(controller) { init.signal.addEventListener('abort', () => controller.error(new DOMException('aborted', 'AbortError'))); },
+    }))), /timed out/);
     await assert.rejects(() => run(async () => new Response('x', { status: 200, headers: { 'content-length': String(5 * 1024 * 1024) } })), /exceeds/);
     let redirect;
     await assert.rejects(() => run(async (_url, init) => { redirect = init.redirect; return new Response('', { status: 500 }); }), /upstream http 500/);
@@ -192,4 +196,15 @@ test('bounded response reader covers non-streaming and streaming limits', async 
     assert.throws(() => _test.ensureSuccess({ httpStatus: status, httpBody: 'secret' }, 'test'), GrpcError);
   }
   assert.throws(() => _test.parseJsonOrThrow({ httpStatus: 200, httpBody: ' ' }, 'test'), /empty/);
+});
+
+test('GetPodLogs validates and unwraps numeric query parameters', async () => {
+  const mock = createMockServer(); const baseUrl = await mock.start();
+  try {
+    await call('Kubernetes_API.Kubernetes_API/GetPodLogs', { namespace: 'default', name: 'nginx-pod', tail_lines: { value: 5 }, since_seconds: { value: 60 } }, { config: { baseUrl } });
+    assert.equal(mock.requests.at(-1).query.tailLines, '5');
+    assert.equal(mock.requests.at(-1).query.sinceSeconds, '60');
+    await assert.rejects(() => call('Kubernetes_API.Kubernetes_API/GetPodLogs', { namespace: 'default', name: 'nginx-pod', tail_lines: 'invalid' }, { config: { baseUrl } }), /tail_lines/);
+    await assert.rejects(() => call('Kubernetes_API.Kubernetes_API/GetPodLogs', { namespace: 'default', name: 'nginx-pod', since_seconds: 'invalid' }, { config: { baseUrl } }), /since_seconds/);
+  } finally { await mock.close(); }
 });
