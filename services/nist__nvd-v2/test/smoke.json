@@ -1,0 +1,12 @@
+{
+  "method": "nist.nvd.v2.NvdService/LookupCve",
+  "request": {
+    "cveId": "CVE-2021-44228"
+  },
+  "protocols": ["connect", "grpc", "mcp"],
+  "requireBusinessSuccess": true,
+  "requireUpstreamPerProtocol": true,
+  "upstream": {
+    "method": "GET"
+  }
+}
