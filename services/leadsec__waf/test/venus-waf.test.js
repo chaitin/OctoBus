@@ -404,3 +404,126 @@ test("upstream business auth error maps to UNAUTHENTICATED", async () => {
   const handler = await loadHandler(healthPath);
   await assert.rejects(() => handler(), /UNAUTHENTICATED: 用户名或密码错误/);
 });
+
+test("all remaining write RPCs honor their proto paths and validate flags", async () => {
+  const { rpcdef } = await import("../src/venus-waf.js");
+  const writes = [];
+  global.fetch = async (url, init) => {
+    if (url.endsWith("/api/mgr/login")) {
+      return jsonResponse({ code: 0, data: { authorization: "token" } });
+    }
+    writes.push({ url, body: init.body ? JSON.parse(init.body) : undefined });
+    return jsonResponse({ code: 0, msg: "ok" });
+  };
+  const rule = {
+    name: "r1", if_in: "any", src_addrobj: "src", dst_addrobj: "any", dst_servobj: "any",
+  };
+  const cases = [
+    ["/Venus_WAF.Venus_WAF/UpdateBlacklist", rule, "/blacklist/edit_submit"],
+    ["/Venus_WAF.Venus_WAF/DeleteBlockedIP", { name: "r1" }, "/blacklist/delete"],
+    ["/Venus_WAF.Venus_WAF/SetBlacklistPriority", { priority: 1 }, "/blacklist/setpriority"],
+    ["/Venus_WAF.Venus_WAF/UpdateWhitelist", rule, "/whitelist/edit_submit"],
+    ["/Venus_WAF.Venus_WAF/DeleteAllowedIP", { name: "r1" }, "/whitelist/delete"],
+    ["/Venus_WAF.Venus_WAF/SetWhitelistPriority", { priority: 0 }, "/whitelist/setpriority"],
+  ];
+  for (const [path, req, suffix] of cases) {
+    await rpcdef(buildCtx(req))[path]();
+    assert.equal(writes.at(-1).url, `https://waf.example.local${suffix}`);
+  }
+  await assert.rejects(() => rpcdef(buildCtx({ name: "r", enable: 2 }))[setBlacklistEnabledPath](), /enable must be 0 or 1/);
+  await assert.rejects(() => rpcdef(buildCtx({ priority: 2 }))["/Venus_WAF.Venus_WAF/SetWhitelistPriority"](), /priority must be 0 or 1/);
+  await assert.rejects(() => rpcdef(buildCtx({}))[deleteBlacklistPath](), /name is required/);
+});
+
+test("AllowIP supports an explicit source object and default rule values", async () => {
+  const writes = [];
+  global.fetch = async (url, init) => {
+    if (url.endsWith("/api/mgr/login")) return jsonResponse({ code: 0, data: { authorization: "token" } });
+    if (url.endsWith("/blacklist/add")) {
+      return jsonResponse({ code: 0, data: { if_in: ["any"], servobj: ["any"], addr: { obj: [] } } });
+    }
+    if (url.endsWith("/whitelist") && init.method === "GET") {
+      return jsonResponse({ code: 0, data: { blacklist: [{ name: "octobus_allow_8_8_8_8" }] } });
+    }
+    writes.push({ url, body: JSON.parse(init.body) });
+    return jsonResponse({ code: 0, msg: "ok" });
+  };
+  const handler = await loadHandler("/Venus_WAF.Venus_WAF/AllowIP", { ip: "8.8.8.8", src_addrobj: "dns" });
+  assert.equal((await handler()).ok, true);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].body.src_addrobj, "dns");
+});
+
+test("HTTP authentication expiry refreshes credentials exactly once", async () => {
+  let logins = 0;
+  let lists = 0;
+  global.fetch = async (url) => {
+    if (url.endsWith("/api/mgr/login")) {
+      logins += 1;
+      return jsonResponse({ code: 0, data: { authorization: `token-${logins}` } });
+    }
+    lists += 1;
+    if (lists === 1) return jsonResponse({ error: "expired" }, { ok: false, status: 401 });
+    return jsonResponse({ code: 0, data: { blacklist: [] } });
+  };
+  assert.deepEqual((await (await loadHandler(listBlacklistsPath))()).rules, []);
+  assert.equal(logins, 2);
+  assert.equal(lists, 2);
+});
+
+test("business authentication expiry refreshes credentials exactly once", async () => {
+  let logins = 0;
+  let lists = 0;
+  global.fetch = async (url) => {
+    if (url.endsWith("/api/mgr/login")) {
+      logins += 1;
+      return jsonResponse({ code: 0, data: { authorization: `token-${logins}` } });
+    }
+    lists += 1;
+    if (lists === 1) return jsonResponse({ code: 401, msg: "session expired" });
+    return jsonResponse({ code: 0, data: { blacklist: [] } });
+  };
+  await (await loadHandler(listBlacklistsPath))();
+  assert.equal(logins, 2);
+});
+
+test("configuration, login and malformed upstream failures are typed and sanitized", async () => {
+  const { rpcdef } = await import("../src/venus-waf.js");
+  await assert.rejects(() => rpcdef(buildCtx({}, { config: { baseUrl: "file:///etc/passwd" } }))[healthPath](), /baseUrl is required/);
+  await assert.rejects(() => rpcdef(buildCtx({}, { config: { baseUrl: "https://user:pass@example.test" } }))[healthPath](), /baseUrl is required/);
+  await assert.rejects(() => rpcdef(buildCtx({}, { config: { timeoutMs: 120001 } }))[healthPath](), /timeoutMs must be between/);
+  await assert.rejects(() => rpcdef(buildCtx({}, { secret: { username: "" } }))[healthPath](), /username is required/);
+  await assert.rejects(() => rpcdef(buildCtx({}, { secret: { password: "" } }))[healthPath](), /password is required/);
+
+  global.fetch = async () => jsonResponse({ code: 0, data: {} });
+  await assert.rejects(() => rpcdef(buildCtx())[healthPath](), /missing data.authorization/);
+  global.fetch = async () => ({ ok: true, status: 200, headers: { get: () => "" }, text: async () => "not-json" });
+  await assert.rejects(() => rpcdef(buildCtx())[healthPath](), /invalid JSON/);
+  global.fetch = async () => { throw new Error("connect failed"); };
+  await assert.rejects(() => rpcdef(buildCtx())[healthPath](), /UNAVAILABLE: connect failed/);
+});
+
+test("create verifies that upstream persisted the rule", async () => {
+  global.fetch = async (url) => {
+    if (url.endsWith("/api/mgr/login")) return jsonResponse({ code: 0, data: { authorization: "token" } });
+    if (url.endsWith("/blacklist")) return jsonResponse({ code: 0, data: { blacklist: [] } });
+    return jsonResponse({ code: 0, msg: "accepted" });
+  };
+  const rule = { name: "missing", if_in: "any", src_addrobj: "src", dst_addrobj: "any", dst_servobj: "any" };
+  await assert.rejects(() => loadHandler(createBlacklistPath, rule).then((handler) => handler()), /was not found after create/);
+});
+
+test("SDK handler registry exposes every proto RPC with current call context", async () => {
+  const { handlers } = await import("../src/venus-waf.js");
+  assert.equal(Object.keys(handlers).length, 19);
+  const rule = { name: "r", if_in: "any", src_addrobj: "src", dst_addrobj: "any", dst_servobj: "any" };
+  for (const [name, handler] of Object.entries(handlers)) {
+    let request = {};
+    if (/CreateAddressObject/.test(name)) request = { ip: "1.2.3.4", name: "addr" };
+    else if (/BlockIP|AllowIP/.test(name)) request = { ip: "1.2.3.4", src_addrobj: "src" };
+    else if (/CreateBlacklist|UpdateBlacklist|CreateWhitelist|UpdateWhitelist/.test(name)) request = rule;
+    else if (/Delete|Enabled/.test(name)) request = { name: "r", enable: 1 };
+    else if (/Priority/.test(name)) request = { priority: 1 };
+    await assert.rejects(() => handler({ request }), /baseUrl is required/);
+  }
+});

@@ -6,11 +6,13 @@
   "properties": {
     "baseUrl": {
       "type": "string",
+      "format": "uri",
       "description": "WAF base URL, for example https://waf.example.local"
     },
     "timeoutMs": {
       "type": "integer",
       "minimum": 1,
+      "maximum": 120000,
       "default": 5000,
       "description": "Upstream request timeout in milliseconds"
     },

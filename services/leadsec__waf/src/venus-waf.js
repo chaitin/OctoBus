@@ -52,8 +52,16 @@ const mergedBindings = (ctx = {}) => ({
 
 const normalizeBaseUrl = (url) => {
   const base = String(url || "").trim();
-  if (!/^https?:\/\//i.test(base)) return null;
-  return base.replace(/\/+$/, "");
+  try {
+    const parsed = new URL(base);
+    if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash) {
+      return null;
+    }
+    parsed.pathname = parsed.pathname.replace(/\/+$/, "");
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    return null;
+  }
 };
 
 const unwrapString = (value) => {
@@ -344,6 +352,9 @@ export function rpcdef(ctx) {
     if (!baseUrl) throw errorWithCode("INVALID_ARGUMENT", "baseUrl is required and must be http(s)");
     if (!username.trim()) throw errorWithCode("INVALID_ARGUMENT", "username is required");
     if (!password) throw errorWithCode("INVALID_ARGUMENT", "password is required");
+    if (timeoutMs < 1 || timeoutMs > 120000) {
+      throw errorWithCode("INVALID_ARGUMENT", "timeoutMs must be between 1 and 120000");
+    }
   };
 
   const fetchWaf = async (path, init = {}) => {
@@ -390,6 +401,11 @@ export function rpcdef(ctx) {
     };
     if (auth.cookie) headers.Cookie = auth.cookie;
     const res = await fetchWaf(path, { ...init, headers });
+    if (retry && (res.status === 401 || res.status === 403)) {
+      auth = null;
+      await login();
+      return request(path, init, false);
+    }
     const json = await readJson(res);
     if (retry && isAuthExpired(json)) {
       auth = null;
