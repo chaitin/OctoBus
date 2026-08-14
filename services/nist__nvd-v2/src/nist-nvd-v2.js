@@ -103,6 +103,14 @@ function severity(metric) {
   return "";
 }
 
+function affectedVersion(match, literalVersion) {
+  const start = match.versionStartIncluding ? `>= ${match.versionStartIncluding}`
+    : match.versionStartExcluding ? `> ${match.versionStartExcluding}` : "";
+  const end = match.versionEndIncluding ? `<= ${match.versionEndIncluding}`
+    : match.versionEndExcluding ? `< ${match.versionEndExcluding}` : "";
+  return [start, end].filter(Boolean).join(" ") || literalVersion || "*";
+}
+
 export function extractCveDetails(vulnerability) {
   const cve = vulnerability?.cve || vulnerability;
   if (!cve) return {};
@@ -119,7 +127,7 @@ export function extractCveDetails(vulnerability) {
       return {
         vendor: parts[3] || "",
         product: parts[4] || "",
-        version: match.versionEndExcluding || match.versionStartIncluding || parts[5] || "*",
+        version: affectedVersion(match, parts[5]),
       };
     })));
   return {

@@ -71,6 +71,21 @@ test("CVE extraction falls back through NVD metric versions", () => {
   assert.equal(_test.appendQuery("https://example.test/api", { value: "a b" }).searchParams.get("value"), "a b");
 });
 
+test("CVE extraction represents affected CPE version ranges", () => {
+  const [exclusiveEnd, exclusiveStart, inclusiveEnd, literal] = extractCveDetails({
+    configurations: [{ nodes: [{ cpeMatch: [
+      { criteria: "cpe:2.3:a:apache:log4j:*:*:*:*:*:*:*:*", versionStartIncluding: "2.0", versionEndExcluding: "2.15.0" },
+      { criteria: "cpe:2.3:a:vendor:product:*:*:*:*:*:*:*:*", versionStartExcluding: "1.0", versionEndIncluding: "3.0" },
+      { criteria: "cpe:2.3:a:vendor:other:*:*:*:*:*:*:*:*", versionEndIncluding: "4.0" },
+      { criteria: "cpe:2.3:a:vendor:literal:1.2.3:*:*:*:*:*:*:*" },
+    ] }] }],
+  }).affectedProducts;
+  assert.equal(exclusiveEnd.version, ">= 2.0 < 2.15.0");
+  assert.equal(exclusiveStart.version, "> 1.0 <= 3.0");
+  assert.equal(inclusiveEnd.version, "<= 4.0");
+  assert.equal(literal.version, "1.2.3");
+});
+
 test("HTTP client maps malformed responses, retries, and timeouts without exposing secrets", async () => {
   const originalFetch = globalThis.fetch;
   try {
