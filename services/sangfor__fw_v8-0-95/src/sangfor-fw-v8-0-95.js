@@ -25,6 +25,7 @@ export const METHOD_GET_SECURITY_POLICY_FULL = "Sangfor_FW_V8095.Sangfor_FW_V809
 
 const DEFAULT_NAMESPACE = "public";
 const DEFAULT_TIMEOUT_MS = 5000;
+const MAX_RESPONSE_BYTES = 1024 * 1024;
 const DEFAULT_BLACKLIST_DESCRIPTION = "OctoBus block";
 const DEFAULT_ATTACK = "PLT-MANUAL";
 const DEFAULT_CREATOR = "AF";
@@ -106,9 +107,38 @@ const fromProtoValue = (value) => {
 };
 
 const normalizeBaseUrl = (value) => {
-  const baseUrl = trim(value).replace(/\/+$/, "");
-  if (!/^https?:\/\//i.test(baseUrl)) return "";
-  return baseUrl;
+  try {
+    const url = new URL(trim(value));
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash) return "";
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return "";
+  }
+};
+
+const redact = (value) => String(value ?? "")
+  .replace(/(token|password|cookie|authorization)(["'\s:=]+)[^\s,"'}]+/gi, "$1$2[REDACTED]")
+  .slice(0, 512);
+
+const readBoundedText = async (res) => {
+  const declared = Number(res.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > MAX_RESPONSE_BYTES) throw fail("UNAVAILABLE", "upstream response exceeded size limit");
+  if (!res.body) return "";
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let size = 0;
+  let text = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_RESPONSE_BYTES) {
+      await reader.cancel();
+      throw fail("UNAVAILABLE", "upstream response exceeded size limit");
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  return text + decoder.decode();
 };
 
 const normalizeNamespace = (value) => {
@@ -179,7 +209,9 @@ const createContext = (runtimeCtx = {}) => {
   const config = runtimeCtx.config ?? {};
   const secret = runtimeCtx.secret ?? {};
   const bindings = { ...config, ...secret, ...(runtimeCtx.bindings ?? {}) };
-  const baseUrl = normalizeBaseUrl(firstDefined(bindings.host, bindings.baseUrl, bindings.restBaseUrl));
+  const baseUrl = [bindings.host, bindings.baseUrl, bindings.restBaseUrl]
+    .map(normalizeBaseUrl)
+    .find(Boolean) ?? "";
   if (!baseUrl) throw fail("INVALID_ARGUMENT", "config.host/baseUrl/restBaseUrl must be an http(s) URL");
   const namespace = normalizeNamespace(bindings.namespace);
   const timeoutMs = Math.max(1, toInt(firstDefined(runtimeCtx.limits?.timeoutMs, bindings.timeoutMs), DEFAULT_TIMEOUT_MS));
@@ -208,12 +240,14 @@ const apiFetch = async (ctx, method, apiPath, { token, body, query } = {}) => {
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: controller.signal,
       dispatcher: ctx.dispatcher,
+      redirect: "error",
     });
-    const raw = await res.text();
+    const raw = await readBoundedText(res);
     if (!res.ok) {
-      if (res.status === 401 || res.status === 403) throw fail("PERMISSION_DENIED", `upstream HTTP ${res.status}: ${raw}`);
-      if (res.status >= 400 && res.status < 500) throw fail("FAILED_PRECONDITION", `upstream HTTP ${res.status}: ${raw}`);
-      throw fail("UNAVAILABLE", `upstream HTTP ${res.status}: ${raw}`);
+      const detail = redact(raw);
+      if (res.status === 401 || res.status === 403) throw fail("PERMISSION_DENIED", `upstream HTTP ${res.status}: ${detail}`);
+      if (res.status >= 400 && res.status < 500) throw fail("FAILED_PRECONDITION", `upstream HTTP ${res.status}: ${detail}`);
+      throw fail("UNAVAILABLE", `upstream HTTP ${res.status}: ${detail}`);
     }
     const json = raw ? JSON.parse(raw) : {};
     return mapResponse(json, raw);
@@ -221,7 +255,7 @@ const apiFetch = async (ctx, method, apiPath, { token, body, query } = {}) => {
     if (err instanceof GrpcError) throw err;
     if (err?.name === "AbortError") throw fail("UNAVAILABLE", `upstream timeout after ${ctx.timeoutMs}ms`);
     if (err instanceof SyntaxError) throw fail("UNKNOWN", "upstream response is not valid JSON");
-    throw fail("UNAVAILABLE", err?.message || "upstream request failed");
+    throw fail("UNAVAILABLE", redact(err?.message || "upstream request failed"));
   } finally {
     clearTimeout(timer);
   }
@@ -537,39 +571,51 @@ const getSecurityPolicy = async (req = {}, runtimeCtx = {}) => {
   return assertApiSuccess(response, SUCCESS_CODES, "GetSecurityPolicy");
 };
 
+const contextHandler = (operation) => async (first = {}, legacyCtx) => {
+  if (legacyCtx !== undefined) return operation(first, legacyCtx);
+  return operation(first.req ?? first.request ?? {}, first);
+};
+
 export const handlers = {
-  [METHOD_LOGIN_FULL]: login,
-  [METHOD_KEEP_ALIVE_FULL]: keepAlive,
-  [METHOD_LOGOUT_FULL]: logout,
-  [METHOD_LIST_BLACK_WHITE_FULL]: listBlackWhiteList,
-  [METHOD_ADD_BLACKLIST_FULL]: addBlacklist,
-  [METHOD_REMOVE_BLACKLIST_FULL]: removeBlacklist,
-  [METHOD_LIST_BLOCKED_IP_FULL]: listBlockedIP,
-  [METHOD_BLOCK_IP_FULL]: blockIP,
-  [METHOD_UNBLOCK_IP_FULL]: unblockIP,
-  [METHOD_GET_BLOCK_TIME_FULL]: getBlockTime,
-  [METHOD_SET_BLOCK_TIME_FULL]: setBlockTime,
-  [METHOD_LIST_IP_GROUPS_FULL]: listIPGroups,
-  [METHOD_GET_IP_GROUP_FULL]: getIPGroup,
-  [METHOD_ADD_IP_GROUP_FULL]: addIPGroup,
-  [METHOD_DELETE_IP_GROUP_FULL]: deleteIPGroup,
-  [METHOD_BUSINESS_BLOCK_IP_FULL]: businessBlockIP,
-  [METHOD_BUSINESS_UNBLOCK_IP_FULL]: businessUnblockIP,
-  [METHOD_QUERY_SESSIONS_FULL]: querySessions,
-  [METHOD_BLOCK_SESSION_FULL]: blockSession,
-  [METHOD_LIST_SECURITY_POLICIES_FULL]: listSecurityPolicies,
-  [METHOD_GET_SECURITY_POLICY_FULL]: getSecurityPolicy,
+  [METHOD_LOGIN_FULL]: contextHandler(login),
+  [METHOD_KEEP_ALIVE_FULL]: contextHandler(keepAlive),
+  [METHOD_LOGOUT_FULL]: contextHandler(logout),
+  [METHOD_LIST_BLACK_WHITE_FULL]: contextHandler(listBlackWhiteList),
+  [METHOD_ADD_BLACKLIST_FULL]: contextHandler(addBlacklist),
+  [METHOD_REMOVE_BLACKLIST_FULL]: contextHandler(removeBlacklist),
+  [METHOD_LIST_BLOCKED_IP_FULL]: contextHandler(listBlockedIP),
+  [METHOD_BLOCK_IP_FULL]: contextHandler(blockIP),
+  [METHOD_UNBLOCK_IP_FULL]: contextHandler(unblockIP),
+  [METHOD_GET_BLOCK_TIME_FULL]: contextHandler(getBlockTime),
+  [METHOD_SET_BLOCK_TIME_FULL]: contextHandler(setBlockTime),
+  [METHOD_LIST_IP_GROUPS_FULL]: contextHandler(listIPGroups),
+  [METHOD_GET_IP_GROUP_FULL]: contextHandler(getIPGroup),
+  [METHOD_ADD_IP_GROUP_FULL]: contextHandler(addIPGroup),
+  [METHOD_DELETE_IP_GROUP_FULL]: contextHandler(deleteIPGroup),
+  [METHOD_BUSINESS_BLOCK_IP_FULL]: contextHandler(businessBlockIP),
+  [METHOD_BUSINESS_UNBLOCK_IP_FULL]: contextHandler(businessUnblockIP),
+  [METHOD_QUERY_SESSIONS_FULL]: contextHandler(querySessions),
+  [METHOD_BLOCK_SESSION_FULL]: contextHandler(blockSession),
+  [METHOD_LIST_SECURITY_POLICIES_FULL]: contextHandler(listSecurityPolicies),
+  [METHOD_GET_SECURITY_POLICY_FULL]: contextHandler(getSecurityPolicy),
 };
 
 export const _test = {
+  asArray,
   buildIPGroupBody,
   buildBlacklistEntries,
   buildQuery,
   createContext,
+  fromProtoValue,
   getSkipTlsVerifyDispatcher,
   handlers,
   mapResponse,
   normalizeBaseUrl,
   normalizeNamespace,
+  plainObject,
+  readBoundedText,
+  redact,
   stringList,
+  toBool,
+  toInt,
 };

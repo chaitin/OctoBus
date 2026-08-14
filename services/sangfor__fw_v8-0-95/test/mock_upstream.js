@@ -57,6 +57,7 @@ export const startMockUpstream = async () => {
       },
     ],
     requests: [],
+    forced: null,
   };
 
   const server = http.createServer(async (req, res) => {
@@ -64,6 +65,15 @@ export const startMockUpstream = async () => {
     state.requests.push({ method: req.method, pathname: url.pathname, search: url.search, token: tokenFrom(req) });
 
     try {
+      if (state.forced) {
+        const forced = state.forced;
+        state.forced = null;
+        if (typeof forced.body === "string") {
+          res.writeHead(forced.status, { "Content-Type": "text/plain", "Content-Length": Buffer.byteLength(forced.body) });
+          return res.end(forced.body);
+        }
+        return send(res, forced.status, forced.body);
+      }
       if (req.method === "POST" && url.pathname.endsWith("/login")) {
         const body = await readJson(req);
         state.logins += 1;

@@ -227,3 +227,74 @@ test("security policy methods are read only", async () => {
     await upstream.close();
   }
 });
+
+test("normalizers handle protobuf wrappers and reject unsafe configuration", () => {
+  assert.equal(_test.toBool({ value: true }), true);
+  assert.equal(_test.toBool(0), false);
+  assert.equal(_test.toBool("yes"), true);
+  assert.equal(_test.toBool("off"), false);
+  assert.equal(_test.toBool("unknown", true), true);
+  assert.equal(_test.toInt({ value: "12.8" }, 1), 12);
+  assert.equal(_test.toInt("bad", 7), 7);
+  assert.deepEqual(_test.asArray({ values: ["a", "b"] }), ["a", "b"]);
+  assert.deepEqual(_test.asArray("a"), ["a"]);
+  assert.deepEqual(_test.stringList([" a ", "", { value: "b" }]), ["a", "b"]);
+  assert.deepEqual(_test.fromProtoValue({ listValue: { values: [{ stringValue: "a" }, { numberValue: 2 }, { boolValue: true }, { nullValue: 0 }] } }), ["a", 2, true, null]);
+  assert.deepEqual(_test.fromProtoValue({ unknown: "preserved" }), { unknown: "preserved" });
+  assert.deepEqual(_test.plainObject({ fields: { a: { stringValue: "x" }, nested: { structValue: { fields: { ok: { boolValue: true } } } } } }), { a: "x", nested: { ok: true } });
+  assert.deepEqual(_test.plainObject([]), {});
+  assert.equal(_test.normalizeBaseUrl("https://example.test/"), "https://example.test");
+  assert.equal(_test.normalizeBaseUrl("ftp://example.test"), "");
+  assert.equal(_test.normalizeBaseUrl("https://user:secret@example.test"), "");
+  assert.equal(_test.normalizeBaseUrl("not a url"), "");
+  assert.throws(() => _test.normalizeNamespace("bad/path"), /unsupported/);
+  assert.throws(() => _test.buildIPGroupBody({ name: "empty" }), /one of ip_ranges/);
+  assert.match(_test.redact("password=secret token: abc"), /\[REDACTED\]/);
+});
+
+test("current SDK single-context handler ABI reads request", async () => {
+  const upstream = await startMockUpstream();
+  try {
+    const ctx = { ...baseCtx(upstream.baseUrl), request: { username: "mock-user", password: "mock-password" } };
+    const response = await handlers["Sangfor_FW_V8095.Sangfor_FW_V8095/Login"](ctx);
+    assert.equal(response.token, "mock-token");
+  } finally {
+    await upstream.close();
+  }
+});
+
+test("input validation fails before upstream calls", async () => {
+  const upstream = await startMockUpstream();
+  try {
+    const ctx = baseCtx(upstream.baseUrl);
+    await assert.rejects(handlers["Sangfor_FW_V8095.Sangfor_FW_V8095/BlockIP"]({}, ctx), /one of src_ips/);
+    await assert.rejects(handlers["Sangfor_FW_V8095.Sangfor_FW_V8095/AddIPGroup"]({}, ctx), /name is required/);
+    await assert.rejects(handlers["Sangfor_FW_V8095.Sangfor_FW_V8095/BlockSession"]({}, ctx), /srcIp is required/);
+    await assert.rejects(handlers["Sangfor_FW_V8095.Sangfor_FW_V8095/Login"]({}, { config: { host: upstream.baseUrl }, secret: {} }), /username is required/);
+    await assert.rejects(handlers["Sangfor_FW_V8095.Sangfor_FW_V8095/Logout"]({}, { config: { host: upstream.baseUrl } }), /token is required/);
+  } finally {
+    await upstream.close();
+  }
+});
+
+test("upstream HTTP, API, parse, and response-bound failures are mapped safely", async () => {
+  const upstream = await startMockUpstream();
+  try {
+    const ctx = baseCtx(upstream.baseUrl);
+    const keepAlive = () => handlers["Sangfor_FW_V8095.Sangfor_FW_V8095/KeepAlive"]({ token: "mock-token" }, ctx);
+    for (const [status, expected] of [[401, grpcStatus.PERMISSION_DENIED], [400, grpcStatus.FAILED_PRECONDITION], [500, grpcStatus.UNAVAILABLE]]) {
+      upstream.state.forced = { status, body: { password: "must-not-leak" } };
+      await assert.rejects(keepAlive(), (error) => error.code === expected && !error.message.includes("must-not-leak"));
+    }
+    upstream.state.forced = { status: 200, body: "not-json" };
+    await assert.rejects(keepAlive(), (error) => error.code === grpcStatus.UNKNOWN);
+    for (const [code, expected] of [[1, grpcStatus.PERMISSION_DENIED], [1003, grpcStatus.UNAUTHENTICATED], [22, grpcStatus.INVALID_ARGUMENT], [999, grpcStatus.FAILED_PRECONDITION]]) {
+      upstream.state.forced = { status: 200, body: { code, message: "failure", data: "" } };
+      await assert.rejects(keepAlive(), (error) => error.code === expected);
+    }
+    upstream.state.forced = { status: 200, body: "x".repeat(1024 * 1024 + 1) };
+    await assert.rejects(keepAlive(), /size limit/);
+  } finally {
+    await upstream.close();
+  }
+});

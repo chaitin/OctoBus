@@ -1,0 +1,13 @@
+{
+  "method": "Sangfor_FW_V8095.Sangfor_FW_V8095/KeepAlive",
+  "request": {
+    "token": "smoke-token"
+  },
+  "protocols": ["connect", "grpc", "mcp"],
+  "requireBusinessSuccess": true,
+  "requireUpstreamPerProtocol": true,
+  "upstream": {
+    "method": "GET",
+    "path": "/api/v1/namespaces/public/keepalive"
+  }
+}
