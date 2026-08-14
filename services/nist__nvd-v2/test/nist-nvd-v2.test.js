@@ -44,13 +44,15 @@ test("SearchCves supports every request field and retries transient upstream err
   const result = await searchCves(config, { nvdApiKey: "test-key" }, { keyword: "RETRY", severity: "high", skip: 0, limit: 99, pubStartDate: "2024-01-01T00:00:00.000", pubEndDate: "2024-12-31T00:00:00.000" });
   assert.equal(result.total, 0);
   await expectsGrpcError(() => searchCves(config, {}, { severity: "bad" }), grpcStatus.INVALID_ARGUMENT);
-  await expectsGrpcError(() => searchCves(config, {}, { limit: 0 }), grpcStatus.INVALID_ARGUMENT);
+  await expectsGrpcError(() => searchCves(config, {}, { limit: -1 }), grpcStatus.INVALID_ARGUMENT);
 });
 
 test("SearchCves returns records, and handlers use ctx request/config/secret", async () => {
   const result = await handlers["nist.nvd.v2.NvdService/SearchCves"]({ config, secret: {}, request: { keyword: "log4j", limit: 5 } });
   assert.equal(result.total, 1);
   assert.equal(result.data[0].cveId, "CVE-2021-44228");
+  assert.equal((await searchCves(config, {}, { keyword: "log4j", severity: "" })).total, 1);
+  assert.equal((await searchCves(config, {}, {})).total, 1);
   assert.equal(typeof service.handlers["nist.nvd.v2.NvdService/LookupCve"], "function");
 });
 

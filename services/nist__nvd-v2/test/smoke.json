@@ -1,7 +1,8 @@
 {
-  "method": "nist.nvd.v2.NvdService/LookupCve",
+  "method": "nist.nvd.v2.NvdService/SearchCves",
   "request": {
-    "cveId": "CVE-2021-44228"
+    "keyword": "smoke",
+    "limit": 1
   },
   "protocols": ["connect", "grpc", "mcp"],
   "requireBusinessSuccess": true,

@@ -161,19 +161,22 @@ export async function searchCves(config, secret, request = {}) {
   if (request.keyword !== undefined && typeof request.keyword !== "string") {
     throw grpcError(grpcStatus.INVALID_ARGUMENT, "keyword must be a string");
   }
-  if (request.severity !== undefined && !["LOW", "MEDIUM", "HIGH", "CRITICAL"].includes(String(request.severity).toUpperCase())) {
+  const requestedSeverity = String(request.severity || "").trim().toUpperCase();
+  if (requestedSeverity && !["LOW", "MEDIUM", "HIGH", "CRITICAL"].includes(requestedSeverity)) {
     throw grpcError(grpcStatus.INVALID_ARGUMENT, "severity must be LOW, MEDIUM, HIGH, or CRITICAL");
   }
-  if (!Number.isInteger(request.skip ?? 0) || (request.skip ?? 0) < 0 || !Number.isInteger(request.limit ?? 20) || (request.limit ?? 20) < 1) {
+  const skip = request.skip || 0;
+  const limit = request.limit || 20;
+  if (!Number.isInteger(skip) || skip < 0 || !Number.isInteger(limit) || limit < 1) {
     throw grpcError(grpcStatus.INVALID_ARGUMENT, "skip must be non-negative and limit must be positive integers");
   }
   const headers = { Accept: "application/json", "User-Agent": "OctoBus-NVD/0.1" };
   if (secret?.nvdApiKey) headers.apiKey = String(secret.nvdApiKey);
   const url = appendQuery(nvdBaseUrl(config), {
-    resultsPerPage: Math.min(request.limit ?? 20, MAX_RESULTS_PER_PAGE),
-    startIndex: request.skip ?? 0,
+    resultsPerPage: Math.min(limit, MAX_RESULTS_PER_PAGE),
+    startIndex: skip,
     keywordSearch: request.keyword,
-    cvssV3Severity: request.severity?.toUpperCase(),
+    cvssV3Severity: requestedSeverity,
     pubStartDate: request.pubStartDate,
     pubEndDate: request.pubEndDate,
   });
