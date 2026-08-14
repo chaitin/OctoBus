@@ -1,0 +1,10 @@
+{
+  "method": "MISP.MISP/SearchEvents",
+  "request": {
+    "limit": 1
+  },
+  "expectUpstream": true,
+  "requireBusinessSuccess": true,
+  "requireUpstreamPerProtocol": true,
+  "protocols": ["connect", "grpc", "mcp"]
+}
