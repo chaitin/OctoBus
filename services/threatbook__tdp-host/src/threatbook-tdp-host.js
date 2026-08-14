@@ -237,10 +237,10 @@ const queryFallHostList = async (req = {}, ctx = {}) => {
   const payload = buildQueryPayload(req);
   const url = `${runtime.bindings.baseUrl}${FALL_HOST_PATH}`;
   const headers = {
+    ...runtime.bindings.headers,
     'Content-Type': 'application/json;charset=UTF-8',
     Accept: 'application/json, text/plain, */*',
     [TDP_AUTH_HEADER]: runtime.bindings.token,
-    ...runtime.bindings.headers,
   };
   const tlsOptions = runtime.bindings.skipTlsVerify ? { insecureSkipVerify: true, tlsInsecureSkipVerify: true, skipTlsVerify: true } : {};
 
@@ -309,7 +309,10 @@ export function rpcdef(ctx = {}) {
 }
 
 export const handlers = {
-  [METHOD_QUERY_FALL_HOST_FULL]: (req, ctx = {}) => queryFallHostList(req, ctx),
+  [METHOD_QUERY_FALL_HOST_FULL]: (ctx = {}) => {
+    const callCtx = resolveCallContext(ctx);
+    return queryFallHostList(callCtx.req, callCtx);
+  },
 };
 
 export const _test = {

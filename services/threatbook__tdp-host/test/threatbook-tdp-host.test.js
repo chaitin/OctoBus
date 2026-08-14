@@ -79,10 +79,17 @@ test('QueryFallHostList builds payload, auth header and parses response', async 
     });
   });
 
-  const result = await handlers[METHOD_QUERY_FALL_HOST_FULL](
-    { keyword: { value: '198.51.100' }, cur_page: 2, page_size: 50, status: ['0'] },
-    buildCtx({ bindings: { skipTlsVerify: true, headers: { Referer: 'https://tdp.example.com/hosts' } } }),
-  );
+  const result = await handlers[METHOD_QUERY_FALL_HOST_FULL](buildCtx({
+    bindings: {
+      skipTlsVerify: true,
+      headers: {
+        Referer: 'https://tdp.example.com/hosts',
+        [TDP_AUTH_HEADER]: 'untrusted-header-override',
+        'Content-Type': 'text/plain',
+      },
+    },
+    req: { keyword: { value: '198.51.100' }, cur_page: 2, page_size: 50, status: ['0'] },
+  }));
 
   assert.equal(captured.url, `https://tdp.example.com${FALL_HOST_PATH}`);
   assert.equal(captured.init.method, 'POST');
@@ -111,7 +118,7 @@ test('QueryFallHostList builds payload, auth header and parses response', async 
 test('explicit time window, sort and extra_condition override defaults', async () => {
   let captured;
   setFetch(async (url, init) => { captured = JSON.parse(init.body); return response(200, { response_code: 0, data: { items: [] } }); });
-  await handlers[METHOD_QUERY_FALL_HOST_FULL]({
+  await handlers[METHOD_QUERY_FALL_HOST_FULL](buildCtx({ req: {
     time_from: 1781798400,
     time_to: 1782403199,
     sort_by: 'time',
@@ -120,7 +127,7 @@ test('explicit time window, sort and extra_condition override defaults', async (
     threat_type: ['c2'],
     disposal_status: ['1'],
     extra_condition: { fields: { asset_section: { listValue: { values: [{ stringValue: '服务器' }] } }, custom_flag: { boolValue: true } } },
-  }, buildCtx());
+  } }));
   assert.equal(captured.condition.time_from, 1781798400);
   assert.equal(captured.condition.time_to, 1782403199);
   assert.deepEqual(captured.condition.direction, ['out']);
@@ -134,12 +141,12 @@ test('explicit time window, sort and extra_condition override defaults', async (
 
 test('validates bindings', async () => {
   await expectGrpcError(
-    () => handlers[METHOD_QUERY_FALL_HOST_FULL]({}, buildCtx({ config: { restBaseUrl: '' } })),
+    () => handlers[METHOD_QUERY_FALL_HOST_FULL](buildCtx({ config: { restBaseUrl: '' } })),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /restBaseUrl/),
   );
   await expectGrpcError(
-    () => handlers[METHOD_QUERY_FALL_HOST_FULL]({}, buildCtx({ secret: { tdp_authentication: '' } })),
+    () => handlers[METHOD_QUERY_FALL_HOST_FULL](buildCtx({ secret: { tdp_authentication: '' } })),
     'INVALID_ARGUMENT',
     (err) => assert.match(err.message, /tdp_authentication/),
   );
@@ -147,24 +154,24 @@ test('validates bindings', async () => {
 
 test('maps transport, http, business and parse failures', async () => {
   setFetch(async () => { throw Object.assign(new Error('outer'), { cause: new Error('connection refused') }); });
-  await expectGrpcError(() => handlers[METHOD_QUERY_FALL_HOST_FULL]({}, buildCtx()), 'UNAVAILABLE', (err) => assert.match(err.message, /connection refused/));
+  await expectGrpcError(() => handlers[METHOD_QUERY_FALL_HOST_FULL](buildCtx()), 'UNAVAILABLE', (err) => assert.match(err.message, /connection refused/));
 
   for (const [status, legacyCode] of [[401, 'PERMISSION_DENIED'], [403, 'PERMISSION_DENIED'], [400, 'FAILED_PRECONDITION'], [500, 'UNAVAILABLE']]) {
     setFetch(async () => response(status, `status-${status}`));
-    await expectGrpcError(() => handlers[METHOD_QUERY_FALL_HOST_FULL]({}, buildCtx()), legacyCode, (err) => assert.match(err.message, new RegExp(`upstream http ${status}`)));
+    await expectGrpcError(() => handlers[METHOD_QUERY_FALL_HOST_FULL](buildCtx()), legacyCode, (err) => assert.match(err.message, new RegExp(`upstream http ${status}`)));
   }
 
   setFetch(async () => response(200, { response_code: 7, response_message: 'bad filter' }));
-  await expectGrpcError(() => handlers[METHOD_QUERY_FALL_HOST_FULL]({}, buildCtx()), 'FAILED_PRECONDITION', (err) => assert.match(err.message, /bad filter/));
+  await expectGrpcError(() => handlers[METHOD_QUERY_FALL_HOST_FULL](buildCtx()), 'FAILED_PRECONDITION', (err) => assert.match(err.message, /bad filter/));
 
   setFetch(async () => response(200, 'NOT_A_JSON!'));
-  await expectGrpcError(() => handlers[METHOD_QUERY_FALL_HOST_FULL]({}, buildCtx()), 'UNKNOWN', (err) => assert.match(err.message, /valid JSON/));
+  await expectGrpcError(() => handlers[METHOD_QUERY_FALL_HOST_FULL](buildCtx()), 'UNKNOWN', (err) => assert.match(err.message, /valid JSON/));
 
   setFetch(async () => response(200, ''));
-  await expectGrpcError(() => handlers[METHOD_QUERY_FALL_HOST_FULL]({}, buildCtx()), 'UNKNOWN', (err) => assert.match(err.message, /empty/));
+  await expectGrpcError(() => handlers[METHOD_QUERY_FALL_HOST_FULL](buildCtx()), 'UNKNOWN', (err) => assert.match(err.message, /empty/));
 
   setFetch(async () => ({ status: 200, text: async () => { throw new Error('read failed'); } }));
-  await expectGrpcError(() => handlers[METHOD_QUERY_FALL_HOST_FULL]({}, buildCtx()), 'UNAVAILABLE', (err) => assert.match(err.message, /read failed/));
+  await expectGrpcError(() => handlers[METHOD_QUERY_FALL_HOST_FULL](buildCtx()), 'UNAVAILABLE', (err) => assert.match(err.message, /read failed/));
 });
 
 test('rpcdef falls back to context request', async () => {
@@ -231,19 +238,19 @@ test('mock upstream handles query, auth, empty and failure cases', async () => {
   const server = await createMockServer();
   try {
     const ctx = buildCtx({ config: { restBaseUrl: server.url } });
-    const ok = await handlers[METHOD_QUERY_FALL_HOST_FULL]({ keyword: '198.51.100' }, ctx);
+    const ok = await handlers[METHOD_QUERY_FALL_HOST_FULL]({ ...ctx, req: { keyword: '198.51.100' } });
     assert.equal(ok.response_code, 0);
     assert.equal(ok.item_count, 2);
     assert.equal(server.requests[0].headers['tdp-authentication'], 'test_tdp_token');
 
-    const none = await handlers[METHOD_QUERY_FALL_HOST_FULL]({ keyword: 'none' }, ctx);
+    const none = await handlers[METHOD_QUERY_FALL_HOST_FULL]({ ...ctx, req: { keyword: 'none' } });
     assert.equal(none.item_count, 0);
 
-    await expectGrpcError(() => handlers[METHOD_QUERY_FALL_HOST_FULL]({ keyword: 'biz_error' }, ctx), 'FAILED_PRECONDITION');
-    await expectGrpcError(() => handlers[METHOD_QUERY_FALL_HOST_FULL]({ keyword: 'bad_json' }, ctx), 'UNKNOWN');
-    await expectGrpcError(() => handlers[METHOD_QUERY_FALL_HOST_FULL]({ keyword: 'empty_body' }, ctx), 'UNKNOWN');
+    await expectGrpcError(() => handlers[METHOD_QUERY_FALL_HOST_FULL]({ ...ctx, req: { keyword: 'biz_error' } }), 'FAILED_PRECONDITION');
+    await expectGrpcError(() => handlers[METHOD_QUERY_FALL_HOST_FULL]({ ...ctx, req: { keyword: 'bad_json' } }), 'UNKNOWN');
+    await expectGrpcError(() => handlers[METHOD_QUERY_FALL_HOST_FULL]({ ...ctx, req: { keyword: 'empty_body' } }), 'UNKNOWN');
     await expectGrpcError(
-      () => handlers[METHOD_QUERY_FALL_HOST_FULL]({}, buildCtx({ config: { restBaseUrl: server.url }, secret: { tdp_authentication: 'wrong' } })),
+      () => handlers[METHOD_QUERY_FALL_HOST_FULL](buildCtx({ config: { restBaseUrl: server.url }, secret: { tdp_authentication: 'wrong' } })),
       'PERMISSION_DENIED',
     );
   } finally {
