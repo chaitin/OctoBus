@@ -22,6 +22,8 @@ const {
   mergedBindings, resolveCallContext, errorWithCode,
   authenticate, resolveAuth, authCache,
   withAuthRetry,
+  buildTlsOptions, resolveTimeoutMs, mapHttpStatusToCode, grpcCodeFor,
+  unwrapScalar, reqField,
 } = _test;
 
 const buildCtx = (overrides = {}) => ({
@@ -92,8 +94,8 @@ describe('resolveUserName', () => {
     assert.equal(resolveUserName({ skyeye_user_name: 'admin' }), 'admin');
   });
 
-  it('returns empty string when not set', () => {
-    assert.equal(resolveUserName({ skyeye_staff_name: 'admin' }), '');
+  it('defaults to staff name when username is not set', () => {
+    assert.equal(resolveUserName({ skyeye_staff_name: 'admin' }), 'admin');
   });
 });
 
@@ -128,6 +130,30 @@ describe('requireField', () => {
 
   it('reads camelCase variant', () => {
     assert.equal(requireField({ startTime: '1571385615000' }, 'start_time'), '1571385615000');
+  });
+});
+
+describe('configuration hardening', () => {
+  it('rejects unsafe or malformed endpoints', () => {
+    assert.equal(normalizeBaseUrl('ftp://example.test'), '');
+    assert.equal(normalizeBaseUrl('https://user:pass@example.test'), '');
+    assert.equal(normalizeBaseUrl('https://example.test?a=1'), '');
+    assert.equal(normalizeBaseUrl('not a url'), '');
+  });
+
+  it('normalizes wrapped values, timeouts, aliases, TLS and status mappings', () => {
+    assert.equal(unwrapScalar({ value: { value: ' x ' } }), ' x ');
+    assert.equal(toTrimmedString({ value: ' x ' }), 'x');
+    assert.equal(firstDefined(undefined, null, 0), 0);
+    assert.equal(reqField({ startTime: '1' }, 'start_time'), '1');
+    assert.equal(resolveTimeoutMs({ limits: { timeoutMs: 25 } }), 25);
+    assert.equal(resolveTimeoutMs({ limits: { timeoutMs: -1 } }), 10000);
+    assert.equal(buildTlsOptions({ skipTlsVerify: true }).skipTlsVerify, true);
+    assert.deepEqual(buildTlsOptions({}), {});
+    assert.equal(mapHttpStatusToCode(401), 'PERMISSION_DENIED');
+    assert.equal(mapHttpStatusToCode(404), 'FAILED_PRECONDITION');
+    assert.equal(mapHttpStatusToCode(500), 'UNAVAILABLE');
+    assert.equal(grpcCodeFor('DOES_NOT_EXIST'), grpcCodeFor('UNKNOWN'));
   });
 });
 
@@ -220,6 +246,17 @@ describe('withAuthRetry', () => {
     assert.equal(result.httpStatus, 500);
     assert.equal(callCount, 1);
   });
+
+  it('does not retry a rejected static token', async () => {
+    let callCount = 0;
+    const ctx = resolveCallContext(buildCtx());
+    const result = await withAuthRetry(ctx, async () => {
+      callCount += 1;
+      return { httpStatus: 401, httpBody: '' };
+    });
+    assert.equal(result.httpStatus, 401);
+    assert.equal(callCount, 1);
+  });
 });
 
 // ─── buildAuthQuery ───
@@ -230,6 +267,11 @@ describe('buildAuthQuery', () => {
     assert.equal(result.csrf_token, 'test-token');
     assert.ok(result.r);
     assert.ok(typeof result.r === 'string');
+  });
+
+  it('encodes supported values and omits empty values', () => {
+    assert.equal(encodeQueryPairs({ a: true, b: false, c: '', d: null }), 'a=true&b=false');
+    assert.equal(buildQueryUrl('https://example.test', '/path', { q: 'a b' }), 'https://example.test/path?q=a%20b');
   });
 });
 
@@ -267,8 +309,19 @@ describe('parseSkyEyeResponse', () => {
   });
 
   it('handles invalid JSON', () => {
-    const result = parseSkyEyeResponse('not json');
-    assert.equal(result.responseCode, 0);
+    assert.throws(() => parseSkyEyeResponse('not json'), /invalid JSON/);
+  });
+});
+
+describe('HTTP error mapping', () => {
+  it('maps authorization, client, server and network failures without echoing bodies', () => {
+    for (const [status, pattern] of [[401, /PERMISSION_DENIED/], [400, /FAILED_PRECONDITION/], [500, /UNAVAILABLE/], [0, /UNAVAILABLE/]]) {
+      assert.throws(() => handleHttpResponse(status, 'secret upstream body', {}, 'test'), (error) => {
+        assert.match(error.message, pattern);
+        assert.doesNotMatch(error.message, /secret upstream body/);
+        return true;
+      });
+    }
   });
 });
 
@@ -353,6 +406,49 @@ describe('handlers (legacy csrf_token) - QueryNetworkLog', () => {
   });
 });
 
+describe('proto request mapping', () => {
+  const ctx = () => ({
+    config: { skyeye_domain: mockServer.url, skyeye_staff_name: 'admin' },
+    secret: { skyeye_csrf_token: 'test-token' },
+  });
+
+  it('maps every optional alarm-list field defined by the proto', async () => {
+    mockServer.requests.length = 0;
+    await handlers[METHOD_QUERY_ALARM_LIST_FULL]({
+      start_time: '1', end_time: '2', threat_type: 'apt', hazard_level: 3,
+      host_state: 'up', status: 'open', data_source: '1', alarm_sip: '10.0.0.1',
+      attack_sip: '10.0.0.2', attack_stage: 'delivery', asset_group: 'prod',
+      attack_dimension: 'network', alarm_id: 'a1', focus_label: 'focus',
+      is_alarm_black_ip: 1, black_ip: '10.0.0.2', is_white: 0,
+      threat_name: 'test', is_accurate: 1, offset: 0, limit: 20, order_by: 'time',
+    }, ctx());
+    const params = mockServer.requests.at(-1).params;
+    assert.equal(params.threat_type, 'apt');
+    assert.equal(params.limit, '20');
+    assert.equal(params.is_white, '0');
+  });
+
+  it('maps optional packet, pcap and network-log fields defined by the proto', async () => {
+    mockServer.requests.length = 0;
+    await handlers[METHOD_QUERY_ALARM_PACKET_FULL]({
+      alarm_sip: '1', attack_sip: '2', start_time: '3', end_time: '4', alarm_id: '5',
+      skyeye_type: 'sensor', ioc: 'ioc', branch_id: 'b', host_state: 'up',
+    }, ctx());
+    assert.equal(mockServer.requests.at(-1).params.host_state, 'up');
+    await handlers[METHOD_DOWNLOAD_ALARM_PCAP_FULL]({
+      alarm_sip: '1', attack_sip: '2', start_time: '3', end_time: '4',
+      skyeye_type: 'sensor', ioc: 'ioc', type: 'full', branch_id: 'b',
+    }, ctx());
+    assert.equal(mockServer.requests.at(-1).params.type, 'full');
+    await handlers[METHOD_QUERY_NETWORK_LOG_FULL]({
+      start_time: '1', end_time: '2', index: 'idx', category: 'cat', mode: 'mode', offset: '0', limit: '10',
+      branch_id: 'b', keyword: 'key', asset_group_ids: 'g', stime: '1', etime: '2', interval: '1m',
+      page: '1', size: '10', key_fields: 'sip', graph_conf: '{}', curBranch: 'b2',
+    }, ctx());
+    assert.equal(mockServer.requests.at(-1).params.curBranch, 'b2');
+  });
+});
+
 // ─── Handlers with login_key auth flow ───
 
 describe('handlers (login_key auth) - QueryAlarmList', () => {
@@ -417,7 +513,7 @@ describe('handlers (login_key auth) - DownloadAlarmPcap', () => {
       { alarm_sip: '10.0.0.1', attack_sip: '10.0.0.2', start_time: '1571385615000', end_time: '1571385617000' },
       buildLoginKeyCtx(mockServer.url),
     );
-    assert.equal(result.response_code, 200);
+    assert.equal(result.response_code, 1000);
     const request = mockServer.requests.find((item) => item.path === '/skyeye/v1/alarm/alarm/info/pcap/download');
     assert.ok(request, 'pcap request should exist');
     assert.equal(request.params.csrf_token, 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6');

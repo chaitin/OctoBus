@@ -1,0 +1,8 @@
+{
+  "method": "QianXin_SkyEye_V3_0_14_0.QianXin_SkyEye_V3_0_14_0/QueryAlarmList",
+  "request": {
+    "start_time": "1571385615000",
+    "end_time": "1571385617000"
+  },
+  "expectUpstream": true
+}

@@ -54,8 +54,14 @@ const toTrimmedString = (value) => {
 
 const normalizeBaseUrl = (value) => {
   const raw = toTrimmedString(value);
-  if (!/^https?:\/\//i.test(raw)) return '';
-  return raw.replace(/\/+$/, '');
+  try {
+    const url = new URL(raw);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return '';
+    if (url.hash || url.search) return '';
+    return raw.replace(/\/+$/, '');
+  } catch {
+    return '';
+  }
 };
 
 const mergedBindings = (ctx = {}) => ({
@@ -94,6 +100,8 @@ const resolveCsrfToken = (bindings = {}) => toTrimmedString(firstDefined(
 const resolveUserName = (bindings = {}) => toTrimmedString(firstDefined(
   bindings.skyeye_user_name,
   bindings.user_name,
+  bindings.skyeye_staff_name,
+  bindings.staff_name,
 ));
 
 const resolveStaffName = (bindings = {}) => toTrimmedString(firstDefined(
@@ -234,8 +242,11 @@ const httpRequest = async (url, options, body) => {
       };
     }
 
-    const nextUrl = new URL(location, currentUrl).toString();
-    currentUrl = nextUrl;
+    const nextUrl = new URL(location, currentUrl);
+    if (nextUrl.origin !== new URL(currentUrl).origin) {
+      throw errorWithCode('UNAVAILABLE', 'SkyEye refused a cross-origin redirect');
+    }
+    currentUrl = nextUrl.toString();
     // Redirects become GET
     options = { ...options, method: 'GET' };
   }
@@ -426,7 +437,7 @@ const withAuthRetry = async (callCtx, doFetch) => {
   let auth = await resolveAuth(callCtx);
   let result = await doFetch(auth);
 
-  if (result.httpStatus === 401 || result.httpStatus === 403) {
+  if ((result.httpStatus === 401 || result.httpStatus === 403) && resolveLoginKey(callCtx.bindings || {})) {
     const bindings = callCtx.bindings || {};
     const domain = resolveDomain(bindings);
     const loginKey = resolveLoginKey(bindings);
@@ -470,11 +481,11 @@ const fetchWithStatus = async (url, ctx = {}, extraHeaders = {}) => {
     });
     const httpBody = await res.text();
     const httpStatus = Number(res.status || 0);
-    logFlow(ctx, 'fetch:response', { url, httpStatus, bodyLength: httpBody?.length || 0 });
+    logFlow(ctx, 'fetch:response', { path: new URL(url).pathname, httpStatus, bodyLength: httpBody?.length || 0 });
     return { httpStatus, httpBody };
   } catch (err) {
     const errMsg = err?.message || 'request failed';
-    logFlow(ctx, 'fetch:error', { url, error: errMsg });
+    logFlow(ctx, 'fetch:error', { path: new URL(url).pathname, error: errMsg });
     return { httpStatus: 0, httpBody: errMsg };
   }
 };
@@ -513,7 +524,7 @@ const parseSkyEyeResponse = (httpBody) => {
 
     return { responseCode, verboseMsg, data };
   } catch {
-    return { responseCode: 0, verboseMsg: '', data: '' };
+    throw errorWithCode('INTERNAL', 'SkyEye returned invalid JSON');
   }
 };
 
@@ -523,7 +534,7 @@ const handleHttpResponse = (httpStatus, httpBody, ctx, action) => {
     return { response_code: parsed.responseCode, verbose_msg: parsed.verboseMsg, data: parsed.data };
   }
   const code = mapHttpStatusToCode(httpStatus);
-  throw errorWithCode(code, `upstream http ${httpStatus}: ${httpBody}`);
+  throw errorWithCode(code, `SkyEye upstream returned HTTP ${httpStatus}`);
 };
 
 // ─── Method handlers ───
