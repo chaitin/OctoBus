@@ -3,6 +3,7 @@
 // Secret: machineId + password (JWT auth), apiKey (Bouncer API Key auth)
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
+import { createHash } from 'node:crypto';
 import { Agent } from 'undici';
 
 const DEFAULT_TIMEOUT_MS = 5000;
@@ -141,7 +142,22 @@ const readResponse = async (res) => {
   if (Number.isFinite(declaredLength) && declaredLength > MAX_RESPONSE_BYTES) {
     throw errorWithCode('RESOURCE_EXHAUSTED', 'upstream response is too large');
   }
-  const text = await res.text();
+  const chunks = [];
+  let total = 0;
+  const reader = res.body?.getReader?.();
+  if (reader) {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_RESPONSE_BYTES) {
+        await reader.cancel();
+        throw errorWithCode('RESOURCE_EXHAUSTED', 'upstream response is too large');
+      }
+      chunks.push(Buffer.from(value));
+    }
+  }
+  const text = reader ? Buffer.concat(chunks, total).toString('utf8') : await res.text();
   if (Buffer.byteLength(text) > MAX_RESPONSE_BYTES) throw errorWithCode('RESOURCE_EXHAUSTED', 'upstream response is too large');
   if (!text.trim()) return null;
   try { return JSON.parse(text); } catch { throw errorWithCode('UNAVAILABLE', 'upstream returned invalid JSON'); }
@@ -150,9 +166,11 @@ const readResponse = async (res) => {
 // ── JWT auth ───────────────────────────────────────────────────────────────
 
 const jwtCacheMap = new Map();
+const jwtCacheKey = (endpoint, machineId, password) => `${endpoint}:${machineId}:${createHash('sha256').update(String(password)).digest('hex')}`;
+const invalidateJwtToken = (endpoint, machineId, password) => jwtCacheMap.delete(jwtCacheKey(endpoint, machineId, password));
 
 const getJwtToken = async (endpoint, machineId, password, timeout, skipTls) => {
-  const cacheKey = `${endpoint}:${machineId}`;
+  const cacheKey = jwtCacheKey(endpoint, machineId, password);
   const cached = jwtCacheMap.get(cacheKey);
   const now = Date.now();
   if (cached && cached.expiresAt > now + 30_000) {
@@ -175,8 +193,8 @@ const getJwtToken = async (endpoint, machineId, password, timeout, skipTls) => {
       redirect: 'error',
       ...buildTlsOptions(skipTls, url),
     });
-    clearTimeout(timer);
     const data = await readResponse(res);
+    clearTimeout(timer);
 
     if (!res.ok) {
       const mapped = mapHttpStatus(res.status, data);
@@ -246,9 +264,18 @@ const crowdsecFetch = async (endpoint, path, { method = 'GET', query, body, auth
   const timer = setTimeout(() => controller.abort(), timeout);
 
   try {
-    const res = await fetch(url, { ...fetchOpts, ...buildTlsOptions(skipTls, url) });
+    const performFetch = async () => {
+      const response = await fetch(url, { ...fetchOpts, ...buildTlsOptions(skipTls, url) });
+      return { response, data: await readResponse(response) };
+    };
+    let { response: res, data } = await performFetch();
+
+    if (res.status === 401 && authType === 'jwt') {
+      invalidateJwtToken(endpoint, req.machine_id, req.password);
+      headers.Authorization = `Bearer ${await getJwtToken(endpoint, req.machine_id, req.password, timeout, skipTls)}`;
+      ({ response: res, data } = await performFetch());
+    }
     clearTimeout(timer);
-    const data = await readResponse(res);
 
     if (!res.ok) {
       const mapped = mapHttpStatus(res.status, data);
@@ -549,6 +576,7 @@ export const _test = {
   mapHttpStatus,
   crowdsecFetch,
   getJwtToken,
+  invalidateJwtToken,
   requestWithDefaults,
   clearJwtCache: () => jwtCacheMap.clear(),
 };

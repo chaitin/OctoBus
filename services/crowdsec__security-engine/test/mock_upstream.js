@@ -211,7 +211,7 @@ const server = http.createServer(async (req, res) => {
       return alert;
     });
     res.writeHead(201, { 'content-type': 'application/json' });
-    res.end(JSON.stringify(created));
+    res.end(JSON.stringify(created.map((alert) => String(alert.id))));
     return;
   }
 

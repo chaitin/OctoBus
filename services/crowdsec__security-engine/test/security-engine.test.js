@@ -733,3 +733,38 @@ test('response mappers tolerate sparse upstream objects', async () => {
   assert.equal(alert.source.latitude, 0);
   assert.equal(mod._test.mapDecision({ simulated: true }).simulated, true);
 });
+
+test('a rejected cached JWT is invalidated and retried once', async () => {
+  const mod = await importModule();
+  const saved = global.fetch;
+  mod._test.clearJwtCache();
+  let logins = 0;
+  let calls = 0;
+  mockFetch(async (url) => {
+    if (url.includes('/v1/watchers/login')) {
+      logins++;
+      return new Response(JSON.stringify({ token: `token-${logins}` }), { status: 200 });
+    }
+    calls++;
+    if (calls === 1) return new Response('{"message":"revoked"}', { status: 401 });
+    return new Response('[]', { status: 200 });
+  });
+  const result = await invokeRpc(mod, METHOD_LIST_ALERTS, {}, { bindings: { endpoint: 'http://localhost:18080', machineId: 'rotate-user', password: 'p' } });
+  assert.deepEqual(result, { alerts: [] });
+  assert.equal(logins, 2);
+  assert.equal(calls, 2);
+  restoreFetch(saved);
+});
+
+test('timeout remains active while the response body is being read', async () => {
+  const mod = await importModule();
+  const saved = global.fetch;
+  mockFetch(async (_url, opts) => new Response(new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('{'));
+      opts.signal.addEventListener('abort', () => controller.error(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+    },
+  }), { status: 200 }));
+  await assert.rejects(() => mod._test.crowdsecFetch('http://localhost', '/slow', { authType: 'apiKey', req: { api_key: 'k' }, bindings: {}, timeout: 1, skipTls: false }), { code: 4 });
+  restoreFetch(saved);
+});
