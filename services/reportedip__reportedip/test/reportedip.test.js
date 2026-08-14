@@ -96,6 +96,31 @@ test('maps response with no data object', async () => {
   const r = await handlers['ReportedIP.ReportedIP/CheckIP']({ ...ctx(), request: { ip: '8.8.8.8' } });
   assert.equal(r.ip, '8.8.8.8'); assert.equal(r.abuse_confidence_percentage, 0);
 });
+test('normalizes upstream values to protobuf-compatible types', async () => {
+  setFetch(async () => resp(200, { data: {
+    ip: 1234,
+    abuseConfidencePercentage: '67',
+    countryCode: 1,
+    usageType: false,
+    isp: 42,
+    domain: null,
+    hostnames: ['dns.google', 7, null],
+  } }));
+  const r = await handlers['ReportedIP.ReportedIP/CheckIP']({ ...ctx(), request: { ip: '8.8.8.8' } });
+  assert.equal(r.ip, '1234');
+  assert.equal(r.abuse_confidence_percentage, 67);
+  assert.equal(r.country_code, '1');
+  assert.equal(r.usage_type, 'false');
+  assert.equal(r.isp, '42');
+  assert.equal(r.domain, '');
+  assert.deepEqual(r.hostnames, ['dns.google', '7', '']);
+});
+test('rejects non-integer confidence and non-array hostnames', async () => {
+  setFetch(async () => resp(200, { data: { abuseConfidencePercentage: 67.5, hostnames: 'dns.google' } }));
+  const r = await handlers['ReportedIP.ReportedIP/CheckIP']({ ...ctx(), request: { ip: '8.8.8.8' } });
+  assert.equal(r.abuse_confidence_percentage, 0);
+  assert.deepEqual(r.hostnames, []);
+});
 test('uses default timeout when timeoutMs is falsy', async () => {
   setFetch(async () => resp(200, CHECK_RESP));
   const r = await handlers['ReportedIP.ReportedIP/CheckIP']({ ...ctx({ limits: { timeoutMs: 0 } }), request: { ip: '8.8.8.8' } });
@@ -134,10 +159,16 @@ test('parseJson covers empty, valid and invalid', () => {
   assert.throws(() => _test.parseJson('not-json'), GrpcError);
 });
 test('mapHttpError covers all status ranges', () => {
-  assert.throws(() => _test.mapHttpError({ status: 200 }, ''), GrpcError);
-  assert.throws(() => _test.mapHttpError({ status: 400 }, ''), GrpcError);
-  assert.throws(() => _test.mapHttpError({ status: 499 }, ''), GrpcError);
-  assert.throws(() => _test.mapHttpError({ status: 500 }, ''), GrpcError);
+  assert.equal(_test.mapHttpError({ status: 200 }).legacyCode, 'UNAVAILABLE');
+  assert.equal(_test.mapHttpError({ status: 400 }).legacyCode, 'FAILED_PRECONDITION');
+  assert.equal(_test.mapHttpError({ status: 499 }).legacyCode, 'FAILED_PRECONDITION');
+  assert.equal(_test.mapHttpError({ status: 500 }).legacyCode, 'UNAVAILABLE');
+});
+test('responseString normalizes nullish and scalar values', () => {
+  assert.equal(_test.responseString(undefined), '');
+  assert.equal(_test.responseString(null), '');
+  assert.equal(_test.responseString(0), '0');
+  assert.equal(_test.responseString(false), 'false');
 });
 test('errorWithCode sets legacyCode and falls back for unknown code', () => {
   const a = _test.errorWithCode('INVALID_ARGUMENT', 'x');

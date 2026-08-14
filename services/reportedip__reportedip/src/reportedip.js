@@ -14,7 +14,10 @@ const unwrapString = (s) => { if (s === undefined || s === null) return ''; if (
 const logInfo = (m, a, p) => { try { console.log(`[${SDK_REF}][${a}]`, JSON.stringify(p)); } catch { console.log(`[${SDK_REF}][${a}]`, p); } };
 const logError = (m, a, p) => { try { console.error(`[${SDK_REF}][${a}]`, JSON.stringify(p)); } catch { console.error(`[${SDK_REF}][${a}]`, p); } };
 const parseJson = (t) => { if (!String(t || '').trim()) return null; try { return JSON.parse(t); } catch { throw errorWithCode('UNKNOWN', 'response is not valid JSON'); } };
-const mapHttpError = (res, bt) => { if (res.status >= 400 && res.status < 500) throw errorWithCode('FAILED_PRECONDITION', `upstream http ${res.status}`); throw errorWithCode('UNAVAILABLE', `upstream http ${res.status}`); };
+const mapHttpError = (res) => res.status >= 400 && res.status < 500
+  ? errorWithCode('FAILED_PRECONDITION', `upstream http ${res.status}`)
+  : errorWithCode('UNAVAILABLE', `upstream http ${res.status}`);
+const responseString = (value) => value === undefined || value === null ? '' : String(value);
 const mergedBindings = (ctx = {}) => ({ ...(ctx.config ?? {}), ...(ctx.secret ?? {}), ...(ctx.bindings ?? {}) });
 const resolveCallContext = (ctx = {}) => ({ ...ctx, bindings: mergedBindings(ctx), limits: ctx.limits ?? {}, meta: ctx.meta ?? {}, req: ctx.req ?? ctx.request ?? {} });
 const resolveTimeoutMs = (ctx = {}, b = {}) => firstDefined(ctx.limits?.timeoutMs, b.timeoutMs, DEFAULT_TIMEOUT_MS);
@@ -25,7 +28,7 @@ const fetchJson = async (url, init, { bindings = {}, timeoutMs }) => {
   try {
     const res = await fetch(url, { ...init, signal: controller.signal });
     const text = await res.text();
-    if (!res.ok) mapHttpError(res, text);
+    if (!res.ok) throw mapHttpError(res);
     return { json: parseJson(text), text };
   } catch (err) {
     if (err instanceof GrpcError) throw err;
@@ -50,12 +53,14 @@ const makeRuntime = (ctx = {}) => {
     catch (err) { logError(meta, 'CheckIP:http-error', { ip, error: err.message }); throw err; }
 
     const data = result.json?.data || {};
+    const confidence = Number(data.abuseConfidencePercentage);
+    const hostnames = Array.isArray(data.hostnames) ? data.hostnames.map(responseString) : [];
     logInfo(meta, 'CheckIP:success', { ip });
-    return { code: 0, message: 'ok', ip: data.ip || ip, abuse_confidence_percentage: data.abuseConfidencePercentage ?? 0, country_code: data.countryCode || '', usage_type: data.usageType || '', isp: data.isp || '', domain: data.domain || '', hostnames: data.hostnames || [] };
+    return { code: 0, message: 'ok', ip: responseString(data.ip) || ip, abuse_confidence_percentage: Number.isInteger(confidence) && confidence >= 0 ? confidence : 0, country_code: responseString(data.countryCode), usage_type: responseString(data.usageType), isp: responseString(data.isp), domain: responseString(data.domain), hostnames };
   };
 
   return { runCheck };
 };
 
 export const handlers = { [METHOD_CHECK]: (ctx) => makeRuntime(ctx).runCheck(ctx.request ?? {}) };
-export const _test = { errorWithCode, firstDefined, hasOwn, logInfo, logError, makeRuntime, mapHttpError, parseJson, resolveCallContext, resolveTimeoutMs, unwrapString };
+export const _test = { errorWithCode, firstDefined, hasOwn, logInfo, logError, makeRuntime, mapHttpError, parseJson, resolveCallContext, resolveTimeoutMs, responseString, unwrapString };
