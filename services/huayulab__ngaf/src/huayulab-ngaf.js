@@ -485,7 +485,8 @@ function parseFiltersJson(value) {
       throw makeServiceError(`filters_json contains blocked key: ${key}`);
     }
     const keyBase = key.split("[", 1)[0];
-    if (reservedKeyBases.has(keyBase)) {
+    const phpKeyBase = keyBase.replaceAll(".", "_");
+    if (reservedKeyBases.has(keyBase) || reservedKeyBases.has(phpKeyBase)) {
       throw makeServiceError(`filters_json contains reserved key: ${key}`);
     }
     const values = Array.isArray(rawValue) ? rawValue : [rawValue];

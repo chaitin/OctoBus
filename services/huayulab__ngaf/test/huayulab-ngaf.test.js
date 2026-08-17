@@ -500,7 +500,16 @@ test("request validation rejects malformed endpoints, paging, filters, and order
     () => _test.queryParamsFromRequest({ query: { filtersJson: JSON.stringify({ pageSize: 9999 }) } }),
     /reserved key/,
   );
-  for (const key of ["page[0]", "pageSize[0]", "time_period[0]", "time_period[]"]) {
+  for (const key of [
+    "page[0]",
+    "pageSize[0]",
+    "time_period[0]",
+    "time_period[]",
+    "page.size",
+    "page.size[0]",
+    "time.period",
+    "time.period[0]",
+  ]) {
     assert.throws(
       () => _test.queryParamsFromRequest({ query: { filtersJson: JSON.stringify({ [key]: "bypass" }) } }),
       /reserved key/,
