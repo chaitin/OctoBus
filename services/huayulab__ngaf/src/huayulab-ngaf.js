@@ -101,7 +101,7 @@ const AUDIT_LOG_ENDPOINTS = {
   AUDIT_LOG_SYSLOG: "/reporter/nsaslog/NsasSyslogLog/getList",
   AUDIT_LOG_SSH: "/reporter/nsaslog/NsasSshLog/getList",
   AUDIT_LOG_TFTP: "/reporter/nsaslog/NsasTFtpLog/getList",
-  AUDIT_LOG_NFS: "/reporter/nsaslog/NsasSSLLog/getList",
+  AUDIT_LOG_NFS: "/reporter/nsaslog/NsasNfsLog/getList",
   AUDIT_LOG_DATABASE: "/reporter/nsaslog/NsasDbLog/getList",
   AUDIT_LOG_EMAIL: "/reporter/nsaslog/NsasEmailLog/getList",
   AUDIT_LOG_AUTH: "/reporter/jrlog/AuthLog/getList",
@@ -469,12 +469,23 @@ function parseFiltersJson(value) {
   }
 
   const filters = {};
+  const reservedKeys = new Set([
+    "page",
+    "pageSize",
+    "page_size",
+    "keyword",
+    "order",
+    "time_period[]",
+  ]);
   for (const [key, rawValue] of Object.entries(parsed)) {
     if (!/^[A-Za-z0-9_.\-[\]]{1,64}$/.test(key)) {
       throw makeServiceError(`filters_json contains invalid key: ${key}`);
     }
     if (["__proto__", "constructor", "prototype"].includes(key)) {
       throw makeServiceError(`filters_json contains blocked key: ${key}`);
+    }
+    if (reservedKeys.has(key)) {
+      throw makeServiceError(`filters_json contains reserved key: ${key}`);
     }
     const values = Array.isArray(rawValue) ? rawValue : [rawValue];
     if (values.length > MAX_FILTER_VALUES) {

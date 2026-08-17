@@ -496,6 +496,23 @@ test("request validation rejects malformed endpoints, paging, filters, and order
     () => _test.queryParamsFromRequest({ query: { filtersJson: JSON.stringify({ values: Array(21).fill("x") }) } }),
     /too many values/,
   );
+  assert.throws(
+    () => _test.queryParamsFromRequest({ query: { filtersJson: JSON.stringify({ pageSize: 9999 }) } }),
+    /reserved key/,
+  );
+});
+
+test("NFS audit queries use the NFS endpoint", async () => {
+  const upstream = await createMockUpstream();
+  try {
+    const response = await handlers[METHOD_QUERY_AUDIT_LOG_FULL]({
+      ...contextFor(upstream.baseUrl),
+      req: { type: "AUDIT_LOG_NFS" },
+    });
+    assert.equal(response.upstreamPath, "/reporter/nsaslog/NsasNfsLog/getList");
+  } finally {
+    await upstream.close();
+  }
 });
 
 test("configuration and request aliases normalize to bounded canonical values", () => {
