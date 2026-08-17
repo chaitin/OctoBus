@@ -1,0 +1,11 @@
+{
+  "method": "H3C_SECPATH.H3C_SECPATH/GetSecurityZones",
+  "request": {},
+  "protocols": ["connect", "grpc", "mcp"],
+  "requireBusinessSuccess": true,
+  "requireUpstreamPerProtocol": true,
+  "upstream": {
+    "method": "GET",
+    "path": "/restconf/data/comware-securityzone:SecurityZone/Zones"
+  }
+}
