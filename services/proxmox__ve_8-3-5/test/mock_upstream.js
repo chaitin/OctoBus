@@ -215,13 +215,12 @@ export function createMockServer({
           status: 'online',
           uptime: 12345,
           loadavg: [0.12, 0.34, 0.56],
-          cpu_count: 16,
-          cpu_usage: 0.18,
+          cpu: 0.18,
           memory: { total: 34359738368, used: 17179869184, free: 17179869184 },
           swap: { total: 8589934592, used: 0, free: 8589934592 },
           kversion: 'Linux 6.8.4-2-pve',
           pveversion: 'pve-manager/8.3.5/4562d8152094b115',
-          cpuinfo: { model: 'Intel(R) Xeon(R) CPU', cores: 16, mhz: 3200 },
+          cpuinfo: { model: 'Intel(R) Xeon(R) CPU', cores: 8, sockets: 2, cpus: 16, mhz: 3200 },
         },
       });
       return;

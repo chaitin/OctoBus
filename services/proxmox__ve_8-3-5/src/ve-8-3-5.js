@@ -173,7 +173,8 @@ const resolveBaseUrl = (bindings = {}, options = {}) => {
   }
   const allowInsecure = pickFirstBoolean([bindings.allowInsecureHttp, bindings.allow_insecure_http, bindings.allowHttp]) === true;
   const isHttps = /^https:\/\//i.test(normalized);
-  if (!isHttps && !allowInsecure && !options.allowHttp) {
+  const isLoopbackHttp = /^http:\/\/(?:localhost|127(?:\.\d{1,3}){3}|\[::1\])(?::\d+)?$/i.test(normalized);
+  if (!isHttps && !isLoopbackHttp && !allowInsecure && !options.allowHttp) {
     throw engineError('INVALID_ARGUMENT', 'bindings.baseUrl must use https (set allowInsecureHttp to allow http)');
   }
   return normalized;
@@ -532,8 +533,8 @@ const buildNodeStatus = (raw, node) => {
     load_average_1m: valueOrZeroDouble(loadavg[0]),
     load_average_5m: valueOrZeroDouble(loadavg[1]),
     load_average_15m: valueOrZeroDouble(loadavg[2]),
-    cpu_count: valueOrZeroLong(data.cpu_count),
-    cpu_usage: valueOrZeroDouble(data.cpu_usage),
+    cpu_count: valueOrZeroLong(data.cpu_count ?? cpuinfo?.cpus),
+    cpu_usage: valueOrZeroDouble(data.cpu ?? data.cpu_usage),
     memory_total: valueOrZeroLong(memory?.total),
     memory_used: valueOrZeroLong(memory?.used),
     memory_free: valueOrZeroLong(memory?.free),

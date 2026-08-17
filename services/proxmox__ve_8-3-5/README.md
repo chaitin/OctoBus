@@ -23,7 +23,7 @@ Configuration:
 
 - `baseUrl` (or `base_url`, `host`, `restBaseUrl`, `url`): Proxmox API base URL, e.g. `https://pve.example.com:8006`.
 - `defaultNode` (or `default_node`, `node`): Default Proxmox node name used when a per-RPC request omits `node`.
-- `allowInsecureHttp` (or `allow_insecure_http`): when `true`, allows plain HTTP base URLs (default `false`).
+- `allowInsecureHttp` (or `allow_insecure_http`): when `true`, allows plain HTTP base URLs (default `false`). Loopback HTTP URLs are accepted for local tests without this flag.
 - `skipTlsVerify` (or `tlsInsecureSkipVerify`, `insecureSkipVerify`, `tls_skip_verify`): skip TLS certificate verification for self-signed deployments (default `false`).
 - `timeoutMs` (or `timeout_ms`, `timeout`): HTTP timeout in milliseconds, default `5000`.
 - `headers`: optional additional HTTP headers merged into every request.

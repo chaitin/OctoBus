@@ -1,9 +1,13 @@
-## Integration Evidence: ListNodes successful
+## Mock Integration Evidence: ListNodes successful
+
+This transcript was produced by the local `test/mock_upstream.js` fixture. It
+validates request construction and response decoding, but it is not evidence
+of compatibility with a real Proxmox VE 8.3.5 installation.
 
 # Request
 ```
 https://<pve-host>:8006/api2/json/nodes
-PVEAPIToken=root@pam!automation:11111111-2222-3333-4444-555555555555
+Authorization: PVEAPIToken=root@pam!automation=<redacted>
 ```
 
 # Response   HTTP/1.1 200 OK

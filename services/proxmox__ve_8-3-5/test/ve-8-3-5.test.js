@@ -319,13 +319,12 @@ test('GetNodeStatus happy path decodes loadavg and memory', async () => {
       status: 'online',
       uptime: 1234,
       loadavg: [0.1, 0.2, 0.3],
-      cpu_count: 8,
-      cpu_usage: 0.25,
+      cpu: 0.25,
       memory: { total: 1000, used: 250, free: 750 },
       swap: { total: 500, used: 10, free: 490 },
       kversion: 'Linux 6.8',
       pveversion: 'pve-manager/8.3.5/test',
-      cpuinfo: { model: 'test-cpu' },
+      cpuinfo: { model: 'test-cpu', cpus: 8 },
     },
   }));
   const res = await handlers[METHOD_GET_NODE_STATUS_FULL]({ node: 'pve-node-1' }, buildCtx());
@@ -344,7 +343,7 @@ test('GetNodeStatus happy path decodes loadavg and memory', async () => {
   assert.equal(res.swap_used, 10);
   assert.equal(res.kernel_version, 'Linux 6.8');
   assert.equal(res.pve_version, 'pve-manager/8.3.5/test');
-  assert.deepEqual(res.cpuinfo, { model: 'test-cpu' });
+  assert.deepEqual(res.cpuinfo, { model: 'test-cpu', cpus: 8 });
 });
 
 test('GetNodeStatus missing node returns INVALID_ARGUMENT', async () => {
@@ -389,6 +388,8 @@ test('mock upstream supports all RPCs end-to-end', async () => {
     const status = await handlers[METHOD_GET_NODE_STATUS_FULL]({ node: 'pve-node-1' }, ctx);
     assert.equal(status.status, 'online');
     assert.equal(status.load_average_1m, 0.12);
+    assert.equal(status.cpu_count, 16);
+    assert.equal(status.cpu_usage, 0.18);
     assert.equal(status.kernel_version, 'Linux 6.8.4-2-pve');
 
     for (const r of mock.requests) {
@@ -595,7 +596,7 @@ test('helper functions cover normalization, mapping, and validation', async () =
   // NodeStatus: extended fields
   const ns = _test.buildNodeStatus({
     node: 'n', status: 'online', uptime: 100, loadavg: [1, 2, 3],
-    cpu_count: 4, cpu_usage: 0.5, memory: { total: 100, used: 50, free: 50, available: 80 },
+    cpu: 0.5, cpuinfo: { cpus: 4 }, memory: { total: 100, used: 50, free: 50, available: 80 },
     'boot-info': { mode: 'efi', secureboot: true },
     'current-kernel': { sysname: 'Linux', release: '6.8', version: '#1', machine: 'x86_64' },
     rootfs: { total: 200, used: 50, free: 150, avail: 100 },
@@ -614,6 +615,8 @@ test('helper functions cover normalization, mapping, and validation', async () =
   assert.equal(ns.idle, 12345);
   assert.equal(ns.ksm_shared, 5);
   assert.equal(ns.wait, 0.05);
+  assert.equal(ns.cpu_count, 4);
+  assert.equal(ns.cpu_usage, 0.5);
   assert.equal(_test.buildNodeStatus({}, 'fb').node, 'fb');
 
   // QemuVMConfig: extended fields
@@ -669,6 +672,57 @@ test('helper functions cover normalization, mapping, and validation', async () =
   circular.self = circular;
   _test.logFlow({}, 'fallback', circular);
   assert.equal(logs[1][0], '[Proxmox_VE_8_3_5][fallback]');
+});
+
+test('helper aliases and response limits cover production fallback paths', async () => {
+  assert.equal(_test.normalizeBaseUrl('not a url'), '');
+  assert.equal(_test.resolveBaseUrl({ base_url: 'https://pve.example.com:8006' }), 'https://pve.example.com:8006');
+  assert.equal(_test.resolveBaseUrl({ host: 'https://pve.example.com:8006' }), 'https://pve.example.com:8006');
+  assert.equal(_test.resolveBaseUrl({ restBaseUrl: 'https://pve.example.com:8006' }), 'https://pve.example.com:8006');
+  assert.equal(_test.resolveBaseUrl({ url: 'https://pve.example.com:8006' }), 'https://pve.example.com:8006');
+  assert.equal(_test.resolveBaseUrl({ baseUrl: 'http://pve.local', allowHttp: true }), 'http://pve.local');
+  assert.equal(_test.resolveBaseUrl({ baseUrl: 'http://pve.local' }, { allowHttp: true }), 'http://pve.local');
+  assert.equal(_test.resolveBaseUrl({ baseUrl: 'http://127.0.0.1:8006' }), 'http://127.0.0.1:8006');
+  assert.equal(_test.resolveBaseUrl({ baseUrl: 'http://[::1]:8006' }), 'http://[::1]:8006');
+  assert.equal(_test.resolveToken({ token_id: 'a@b!c', token_secret: 's' }).tokenSecret, 's');
+  assert.throws(() => _test.resolveToken({ tokenId: 'a@b!c', tokenSecret: 'bad\nvalue' }), /invalid character/);
+  assert.equal(_test.requireNodeName({ nodeName: 'node-a' }, {}, 'X'), 'node-a');
+  assert.equal(_test.requireNodeName({ name: 'node-b' }, {}, 'X'), 'node-b');
+  assert.equal(_test.requireNodeName({}, { default_node: 'node-c' }, 'X'), 'node-c');
+  assert.equal(_test.requireVmid({ vmId: 2 }, 'X'), 2);
+  assert.equal(_test.requireVmid({ VMID: 3 }, 'X'), 3);
+  assert.equal(_test.pickBoolean(NaN), undefined);
+  assert.equal(_test.pickBoolean(1), true);
+  assert.equal(_test.pickBoolean(0), false);
+  assert.equal(_test.pickBoolean({ value: 'on' }), true);
+  assert.equal(_test.pickLong('bad'), 0);
+  assert.equal(_test.pickDouble('bad'), 0);
+  assert.equal(_test.extractData('scalar'), 'scalar');
+  assert.equal(_test.isValidVmid(_test.VMID_MAX + 1), false);
+  assert.equal(_test.resolveTimeoutMs({ limits: { timeoutMs: 0 } }), 5000);
+  assert.equal(_test.shouldSkipTls({ insecureSkipVerify: true }), true);
+  assert.equal(_test.buildLogPrefix({ instanceId: 'i', requestId: 'r' }, 'x'), '[Proxmox_VE_8_3_5][x][inst=i req=r]');
+
+  await assert.rejects(
+    () => _test.readResponseText({ headers: { get: () => String(_test.MAX_RESPONSE_BYTES + 1) } }),
+    /maximum allowed size/,
+  );
+  let cancelled = false;
+  let released = false;
+  const oversized = new Uint8Array(_test.MAX_RESPONSE_BYTES + 1);
+  await assert.rejects(
+    () => _test.readResponseText({
+      headers: { get: () => null },
+      body: { getReader: () => ({
+        read: async () => ({ done: false, value: oversized }),
+        cancel: async () => { cancelled = true; },
+        releaseLock: () => { released = true; },
+      }) },
+    }),
+    /maximum allowed size/,
+  );
+  assert.equal(cancelled, true);
+  assert.equal(released, true);
 });
 
 test('network failure maps to UNAVAILABLE', async () => {
