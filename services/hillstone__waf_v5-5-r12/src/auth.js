@@ -36,12 +36,13 @@ function buildAuthHeaders(session) {
     'X-Auth-Token': String(session.token),
   };
   const cookieParts = [];
-  if (session.phpSessionId) cookieParts.push(`PHPSESSID=${session.phpSessionId}`);
-  cookieParts.push(`username=${String(session.username || '')}`);
-  cookieParts.push(`token=${String(session.token)}`);
-  cookieParts.push(`vsysId=${String(session.vsysId ?? '0')}`);
-  cookieParts.push(`role=${String(session.role ?? 'admin')}`);
-  cookieParts.push(`fromrootvsys=${String(session.fromrootvsys ?? 'true')}`);
+  const cookieValue = (value) => encodeURIComponent(String(value));
+  if (session.phpSessionId) cookieParts.push(`PHPSESSID=${cookieValue(session.phpSessionId)}`);
+  cookieParts.push(`username=${cookieValue(session.username || '')}`);
+  cookieParts.push(`token=${cookieValue(session.token)}`);
+  cookieParts.push(`vsysId=${cookieValue(session.vsysId ?? '0')}`);
+  cookieParts.push(`role=${cookieValue(session.role ?? 'admin')}`);
+  cookieParts.push(`fromrootvsys=${cookieValue(session.fromrootvsys ?? 'true')}`);
   headers.Cookie = cookieParts.join('; ');
   return headers;
 }

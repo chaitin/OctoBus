@@ -1,0 +1,14 @@
+{
+  "method": "HILLSTONE_WAF_V55R12.HILLSTONE_WAF_V55R12/ListWebsites",
+  "request": {
+    "token": "smoke-token",
+    "username": "smoke-user"
+  },
+  "protocols": ["connect", "grpc", "mcp"],
+  "requireBusinessSuccess": true,
+  "requireUpstreamPerProtocol": true,
+  "upstream": {
+    "method": "GET",
+    "path": "/rest/api/website"
+  }
+}

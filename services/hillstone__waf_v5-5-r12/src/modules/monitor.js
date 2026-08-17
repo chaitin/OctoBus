@@ -6,10 +6,4 @@ async function getWebSecurityLog(input, ctx) {
   return payload;
 }
 
-async function getConfigurationLog(input, ctx) {
-  const request = mapPayload(input);
-  const { payload } = await authenticatedRequest(ctx, 'GET', '/rest/api/configurationlog', request);
-  return payload;
-}
-
-module.exports = { getWebSecurityLog, getConfigurationLog };
+module.exports = { getWebSecurityLog };

@@ -29,7 +29,13 @@
         "HILLSTONE_WAF_V55R12.HILLSTONE_WAF_V55R12/DeleteWebsite": { "name": "delete-website", "description": "Delete website." },
         "HILLSTONE_WAF_V55R12.HILLSTONE_WAF_V55R12/QueryWafPolicy": { "name": "query-waf-policy", "description": "Query WAF policy." },
         "HILLSTONE_WAF_V55R12.HILLSTONE_WAF_V55R12/UpdateWafPolicy": { "name": "update-waf-policy", "description": "Update WAF policy." },
+        "HILLSTONE_WAF_V55R12.HILLSTONE_WAF_V55R12/QueryWafAcPolicy": { "name": "query-waf-ac-policy", "description": "Query WAF access-control policy." },
+        "HILLSTONE_WAF_V55R12.HILLSTONE_WAF_V55R12/UpdateWafAcPolicy": { "name": "update-waf-ac-policy", "description": "Update WAF access-control policy." },
+        "HILLSTONE_WAF_V55R12.HILLSTONE_WAF_V55R12/ListBlocklist": { "name": "list-blocklist", "description": "List blocked addresses." },
+        "HILLSTONE_WAF_V55R12.HILLSTONE_WAF_V55R12/ListAllowlist": { "name": "list-allowlist", "description": "List allowed addresses." },
+        "HILLSTONE_WAF_V55R12.HILLSTONE_WAF_V55R12/ListExceptionList": { "name": "list-exception-list", "description": "List WAF exceptions." },
         "HILLSTONE_WAF_V55R12.HILLSTONE_WAF_V55R12/GetSysInfo": { "name": "get-sys-info", "description": "Get system info." },
+        "HILLSTONE_WAF_V55R12.HILLSTONE_WAF_V55R12/ListVsys": { "name": "list-vsys", "description": "List virtual systems." },
         "HILLSTONE_WAF_V55R12.HILLSTONE_WAF_V55R12/GetWebSecurityLog": { "name": "get-web-security-log", "description": "Get web security log." }
       }
     }

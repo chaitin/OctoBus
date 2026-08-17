@@ -183,7 +183,7 @@ const services = {
   },
   "hillstone-waf-v5-5-r12": {
     entryFile: "../hillstone__waf_v5-5-r12/bin/hillstone-waf-v5-5-r12.js",
-    serviceModule: "../hillstone__waf_v5-5-r12/src/service.mjs",
+    serviceModule: "../hillstone__waf_v5-5-r12/src/service.js",
   },
   "hillstone-fw-v5-5-r4": {
     entryFile: "../hillstone__fw_v5-5-r4/bin/hillstone-fw-v5-5-r4.js",

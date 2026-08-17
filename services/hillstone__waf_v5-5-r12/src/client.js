@@ -4,6 +4,8 @@ const { URL } = require('node:url');
 const { invalidArgument, invalidJson, unavailable, fromUpstream } = require('./errors.js');
 const { asBase64, getCredentialSource, normalizeSession, buildAuthHeaders, sessionFromInput, validateLoginSource } = require('./auth.js');
 
+const MAX_RESPONSE_BYTES = 1024 * 1024;
+
 function resolveFetch(ctx) {
   if (ctx?.bindings?.fetch) return ctx.bindings.fetch;
   if (typeof fetch === 'function') return fetch;
@@ -11,15 +13,20 @@ function resolveFetch(ctx) {
 }
 
 function baseUrl(ctx) {
-  const host = ctx?.bindings?.host;
+  const host = String(ctx?.bindings?.host || '').trim();
   if (!host) throw invalidArgument('host is required');
-  const protocol = ctx?.bindings?.protocol || 'https';
-  const port = ctx?.bindings?.port || 443;
+  if (/[/\\@?#\s]/.test(host)) throw invalidArgument('host must be a hostname or IP address');
+  const protocol = String(ctx?.bindings?.protocol || 'https').toLowerCase();
+  if (protocol !== 'https' && protocol !== 'http') throw invalidArgument('protocol must be http or https');
+  const port = Number(ctx?.bindings?.port || (protocol === 'https' ? 443 : 80));
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw invalidArgument('port must be between 1 and 65535');
   return `${protocol}://${host}:${port}`;
 }
 
 function timeoutMs(ctx) {
-  return Number(ctx?.bindings?.timeoutMs || 5000);
+  const value = Number(ctx?.bindings?.timeoutMs || 5000);
+  if (!Number.isFinite(value) || value < 1 || value > 120000) throw invalidArgument('timeoutMs must be between 1 and 120000');
+  return Math.trunc(value);
 }
 
 function buildRequestHeaders(ctx, headers = {}) {
@@ -99,6 +106,7 @@ function fromValue(value) {
 
 async function parseJson(response) {
   const text = await response.text();
+  if (Buffer.byteLength(text, 'utf8') > MAX_RESPONSE_BYTES) throw unavailable('Upstream response exceeded size limit');
   try {
     return text ? JSON.parse(text) : {};
   } catch {
@@ -108,6 +116,9 @@ async function parseJson(response) {
 
 function extractPhpSessionId(response) {
   const setCookie = response?.headers?.get?.('set-cookie');
+  if (Array.isArray(setCookie)) {
+    return setCookie.map((cookie) => String(cookie).match(/(?:^|;\s*)PHPSESSID=([^;]+)/)?.[1]).find(Boolean) || '';
+  }
   if (!setCookie || typeof setCookie !== 'string') return '';
   const match = setCookie.match(/PHPSESSID=([^;]+)/);
   return match ? match[1] : '';
@@ -130,10 +141,19 @@ function nativeRequest(ctx, method, path, { body, headers } = {}) {
       headers: requestHeaders,
       rejectUnauthorized: url.protocol === 'https:' ? !shouldSkipTlsVerify(ctx) : undefined,
       timeout: timeoutMs(ctx),
+      maxHeaderSize: 32 * 1024,
     }, (res) => {
       let data = '';
+      let size = 0;
       res.setEncoding?.('utf8');
-      res.on('data', (chunk) => { data += chunk; });
+      res.on('data', (chunk) => {
+        size += Buffer.byteLength(chunk, 'utf8');
+        if (size > MAX_RESPONSE_BYTES) {
+          req.destroy(unavailable('Upstream response exceeded size limit'));
+          return;
+        }
+        data += chunk;
+      });
       res.on('end', () => {
         resolve({
           status: res.statusCode || 0,
@@ -161,15 +181,24 @@ async function send(ctx, method, path, { body, headers } = {}) {
             headers: buildRequestHeaders(ctx, headers),
             body: body === undefined ? undefined : JSON.stringify(body),
             signal: typeof AbortController !== 'undefined' ? AbortSignal.timeout(timeoutMs(ctx)) : undefined,
+            redirect: 'error',
           })
         : await nativeRequest(ctx, method, path, { body, headers });
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) throw require('./errors.js').unauthenticated('Upstream authentication failed');
+      if (response.status >= 500) throw unavailable('Upstream service unavailable');
+      throw invalidArgument(`Upstream rejected request with HTTP ${response.status}`);
+    }
     const payload = await parseJson(response);
     payload.__meta = { phpSessionId: extractPhpSessionId(response) };
     const upstreamError = fromUpstream(payload);
     if (upstreamError) throw upstreamError;
     return payload;
   } catch (error) {
-    if (error?.name === 'AbortError') throw unavailable('Upstream request timed out');
+    if (error?.name === 'AbortError' || error?.name === 'TimeoutError') throw unavailable('Upstream request timed out');
+    if (error?.code === 'ECONNREFUSED' || error?.code === 'ECONNRESET' || error?.code === 'ENOTFOUND' || error?.code === 'EAI_AGAIN') {
+      throw unavailable('Unable to reach upstream service');
+    }
     throw error;
   }
 }
