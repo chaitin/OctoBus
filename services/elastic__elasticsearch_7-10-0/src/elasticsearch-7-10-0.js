@@ -331,30 +331,27 @@ const executeRequest = async (url, ctx = {}, options = {}) => {
   let res;
   try {
     res = await fetch(url, { ...init, ...(await buildTlsOptions(bindings)) });
+    const rawBody = await readResponseText(res);
+    const httpStatus = Number(res.status || 0);
+    logFlow(ctx, 'fetch:response', { url, httpStatus, bodyLength: rawBody?.length || 0 });
+    return { httpStatus, httpBody: String(rawBody ?? '') };
   } catch (err) {
-    if (err instanceof GrpcError) throw err;
+    if (err instanceof GrpcError) {
+      throw attachResponse(err, responseDetails(Number(res?.status || 0)));
+    }
     const errMsg = err?.cause?.message || err?.message || 'fetch failed';
-    logFlow(ctx, options.action || 'fetch:error', { url, error: errMsg });
+    logFlow(ctx, res ? 'fetch:read-error' : (options.action || 'fetch:error'), {
+      url, httpStatus: Number(res?.status || 0), error: errMsg,
+    });
     const code = controller.signal.aborted ? 'DEADLINE_EXCEEDED' : 'UNAVAILABLE';
     const message = code === 'DEADLINE_EXCEEDED'
       ? `${options.action || 'fetch'} timed out after ${timeoutMs}ms`
-      : `${options.action || 'fetch'} failed`;
-    throw attachResponse(errorWithCode(code, message), responseDetails(0, errMsg));
+      : (res ? 'response read failed' : `${options.action || 'fetch'} failed`);
+    throw attachResponse(errorWithCode(code, message), responseDetails(Number(res?.status || 0), errMsg));
   } finally {
     clearTimeout(timer);
     parentSignal?.removeEventListener?.('abort', abortFromParent);
   }
-  let rawBody;
-  try { rawBody = await readResponseText(res); }
-  catch (err) {
-    if (err instanceof GrpcError) throw attachResponse(err, responseDetails(Number(res.status || 0)));
-    const errMsg = err?.message || 'response read failed';
-    logFlow(ctx, 'fetch:read-error', { url, httpStatus: res.status, error: errMsg });
-    throw attachResponse(errorWithCode('UNAVAILABLE', 'response read failed'), responseDetails(Number(res.status || 0), errMsg));
-  }
-  const httpStatus = Number(res.status || 0);
-  logFlow(ctx, 'fetch:response', { url, httpStatus, bodyLength: rawBody?.length || 0 });
-  return { httpStatus, httpBody: String(rawBody ?? '') };
 };
 
 const ensureSuccess = (result, action) => {
@@ -596,7 +593,10 @@ const handleSearchDocuments = async (req = {}, ctx = {}) => {
   const { username, password } = requireCredentials(callCtx);
   const index = requireSearchIndex(req);
   const queryRaw = resolveSearchQuery(req);
-  const size = toFiniteInt(req.size, DEFAULT_SEARCH_SIZE);
+  // proto3 decoders materialize an omitted scalar as zero. Elasticsearch's
+  // documented default is 10, so treat that wire default as unspecified.
+  const decodedSize = toFiniteInt(req.size, DEFAULT_SEARCH_SIZE);
+  const size = decodedSize === 0 ? DEFAULT_SEARCH_SIZE : decodedSize;
   const from = toFiniteInt(req.from, DEFAULT_SEARCH_FROM);
 
   let queryBody;

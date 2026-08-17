@@ -543,6 +543,16 @@ test('SearchDocuments accepts object query (stringified)', async () => {
   assert.deepEqual(sent.query, { match: { msg: 'hi' } });
 });
 
+test('SearchDocuments uses size 10 for the omitted proto3 scalar', async () => {
+  let body;
+  setFetch(async (_url, init) => {
+    body = JSON.parse(init.body);
+    return responseOf(200, { took: 0, timed_out: false, hits: { hits: [] } });
+  });
+  await handlers[METHOD_SEARCH_DOCUMENTS_FULL]({ index: 'logs', size: 0 }, buildCtx());
+  assert.equal(body.size, 10);
+});
+
 test('GetIndex rejects a response that omits the requested index', async () => {
   setFetch(async () => responseOf(200, { unknown_index: { aliases: {}, mappings: {}, settings: {} } }));
   await expectGrpcError(
@@ -605,5 +615,20 @@ test('enforces response size bounds and maps timeouts to DEADLINE_EXCEEDED', asy
     () => handlers[METHOD_CLUSTER_HEALTH_FULL]({}, buildCtx({ limits: { timeoutMs: 10 } })),
     'DEADLINE_EXCEEDED',
     (err) => assert.equal(err.response.http_status, 0),
+  );
+
+  setFetch(async (_url, init) => ({
+    status: 200,
+    headers: new Headers(),
+    body: new ReadableStream({
+      start(controller) {
+        init.signal.addEventListener('abort', () => controller.error(new DOMException('timed out', 'AbortError')), { once: true });
+      },
+    }),
+  }));
+  await expectGrpcError(
+    () => handlers[METHOD_CLUSTER_HEALTH_FULL]({}, buildCtx({ limits: { timeoutMs: 10 } })),
+    'DEADLINE_EXCEEDED',
+    (err) => assert.equal(err.response.http_status, 200),
   );
 });
