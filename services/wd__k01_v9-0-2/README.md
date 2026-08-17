@@ -46,7 +46,8 @@
 
 ### 关键输入
 
-- `QueryAttackLog`:`page`/`count`,以及 `type_mask[]`(情报类型，如 256=IP黑名单)、`severity_mask[]`(0低/1中/2高)、`party_3rd_mask[]`(0公有/1私有)、`action_mask[]`(1监控/2阻断)、`r_sip`/`r_dip`/`r_s_time`/`r_e_time` 等过滤项;未提供的可选项不下发。
+- 所有查询的 `page` 必须为正整数且不超过 10000，`count` 取值为 `10`、`20`、`50` 或 `100`（默认 10）。
+- `QueryAttackLog`:`page`/`count`,以及 `type_mask[]`(情报类型，如 256=IP黑名单)、`severity_mask[]`(0低/1中/2高)、`party_3rd_mask[]`(0公有/1私有)、`action_mask[]`(1监控/2阻断)、`r_sip`/`r_dip`/`r_s_time`/`r_e_time` 等过滤项;未提供的可选项不下发，负数列表项会被忽略。
 - `QueryIPList`:`color`(0黑/1白,默认0)、`dir`(0源/1目的/2两者,默认2)、`page`/`count`、`ip_search`/`comment_search`/时间过滤。
 - `AddThreatIntel`:`ip`(IPv4,必填)、`type`(攻击类型,>0)、`severity`(优先级,>0)。`method` 固定 `add`。
 - `DeleteThreatIntel`:`id`(>0)。`method` 固定 `delete`。

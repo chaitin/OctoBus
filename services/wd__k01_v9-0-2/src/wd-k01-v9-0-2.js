@@ -97,7 +97,7 @@ const pickIntList = (value) => {
   const out = [];
   for (const item of arr) {
     const num = Number(unwrapScalar(item));
-    if (Number.isFinite(num)) out.push(Math.trunc(num));
+    if (Number.isFinite(num) && num >= 0) out.push(Math.trunc(num));
   }
   return out.length ? out : undefined;
 };

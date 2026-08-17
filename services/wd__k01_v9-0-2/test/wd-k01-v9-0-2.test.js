@@ -118,6 +118,7 @@ test('iplist color/dir validation', () => {
   assert.throws(() => _test.buildAttackLogPayload({ page: -1 }), (e) => e.legacyCode === 'INVALID_ARGUMENT');
   assert.throws(() => _test.buildIntelQueryPayload({ page: 10001 }), (e) => e.legacyCode === 'OUT_OF_RANGE');
   assert.throws(() => _test.buildIPListPayload({ count: 11 }), (e) => e.legacyCode === 'INVALID_ARGUMENT');
+  assert.throws(() => _test.buildIntelQueryPayload({ count: 15 }), (e) => e.legacyCode === 'INVALID_ARGUMENT');
 });
 
 test('SDK transport rejects redirects and response values redact credentials', async () => {
@@ -210,7 +211,8 @@ test('helper coverage', () => {
   assert.equal(h.requirePositiveInt(5, 'x'), 5);
   assert.throws(() => h.requirePositiveInt(-1, 'x'), (e) => e.legacyCode === 'INVALID_ARGUMENT');
 
-  assert.deepEqual(h.pickIntList([1, 2, 'bad', 3]), [1, 2, 3]);
+  assert.deepEqual(h.pickIntList([1, 2, 'bad', -1, 3]), [1, 2, 3]);
+  assert.equal(h.pickIntList([-1]), undefined);
   assert.deepEqual(h.pickIntList({ values: [4, 5] }), [4, 5]);
   assert.equal(h.pickIntList([]), undefined);
   assert.equal(h.pickIntList('x'), undefined);

@@ -50,7 +50,7 @@ message QueryIPListRequest {
 
 message QueryThreatIntelRequest {
   int32 page = 1;      // 页码，默认 1
-  int32 count = 2;     // 每页数量，默认 10
+  int32 count = 2;     // 每页数量，取值 [10,20,50,100]，默认 10
   int32 source_id = 3; // 情报源 id，可选（接口新增的情报源查询时传 63）
 }
 
