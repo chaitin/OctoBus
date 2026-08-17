@@ -5,10 +5,10 @@
   "properties": {
     "host": { "type": "string", "minLength": 1 },
     "port": { "type": "integer", "minimum": 1, "maximum": 65535, "default": 443 },
-    "protocol": { "type": "string", "enum": ["http", "https"], "default": "https" },
+    "protocol": { "type": "string", "enum": ["https", "http"], "default": "https" },
     "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 120000, "default": 5000 },
     "skipTlsVerify": { "type": "boolean", "default": false },
     "lang": { "type": "string", "default": "zh_CN" }
   },
-  "required": ["host", "protocol"]
+  "required": ["host"]
 }

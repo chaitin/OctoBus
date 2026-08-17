@@ -260,15 +260,15 @@ test('all public RPC handlers reach their documented upstream endpoint', async (
 
 test('handlers support the SDK 0.6 single-context ABI', async () => {
   const fetch = createFetchMock();
-  fetch.queueJson({ result: [{ token: 'token-1', username: 'hillstone' }], success: true });
   fetch.queueJson({ result: [], success: true });
   const result = await handlers[METHOD_LIST_WEBSITES_FULL]({
-    request: {},
+    request: { token: 'request-token', username: 'request-user' },
     config: { host: 'waf.local', protocol: 'https', port: 443, fetch },
     secret: { username: 'hillstone', password: 'secret' },
   });
   assert.equal(result.success, true);
-  fetch.assertCall(1, 'GET', '/rest/api/website');
+  fetch.assertCall(0, 'GET', '/rest/api/website');
+  assert.equal(fetch.calls[0].init.headers['X-Auth-Token'], 'request-token');
 });
 
 test('cookie values are encoded and multiple Set-Cookie values preserve PHP session', async () => {
@@ -323,10 +323,24 @@ test('HTTP, network, timeout, response size, and upstream errors are sanitized',
 
 test('API token login sends only the configured token', async () => {
   const fetch = createFetchMock();
-  fetch.queueJson({ token: 'session-token', username: 'api', success: true });
+  fetch.queueJson({ token: 'session-token', username: 'api', success: true }, 200, { 'set-cookie': 'PHPSESSID=api-session; Secure' });
   const result = await handlers[METHOD_LOGIN_FULL]({}, buildCtx({ bindings: { fetch }, secrets: { username: '', password: '', apiToken: 'api-secret' } }));
   assert.deepEqual(JSON.parse(fetch.calls[0].init.body), { api_token: 'api-secret' });
   assert.equal(result.result[0].token, 'session-token');
+  assert.equal(result.result[0].phpSessionId, 'api-session');
+});
+
+test('embedded ports, local smoke defaults, and IPv6 hosts produce valid URLs', async () => {
+  for (const [bindings, expected] of [
+    [{ host: 'waf.example:8443', protocol: 'https' }, 'https://waf.example:8443/rest/api/sysinfo'],
+    [{ host: '127.0.0.1:4567' }, 'http://127.0.0.1:4567/rest/api/sysinfo'],
+    [{ host: '[::1]:8443', protocol: 'https' }, 'https://[::1]:8443/rest/api/sysinfo'],
+  ]) {
+    const fetch = createFetchMock();
+    fetch.queueJson({ success: true });
+    await send({ bindings: { ...bindings, fetch } }, 'GET', '/rest/api/sysinfo');
+    assert.equal(fetch.calls[0].url, expected);
+  }
 });
 
 test('payload conversion and session normalization cover protobuf shapes', () => {

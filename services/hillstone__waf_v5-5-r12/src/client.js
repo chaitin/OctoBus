@@ -16,18 +16,20 @@ function baseUrl(ctx) {
   const host = String(ctx?.bindings?.host || '').trim();
   if (!host) throw invalidArgument('host is required');
   if (/[/\\@?#\s]/.test(host)) throw invalidArgument('host must be a hostname or IP address');
-  const protocol = String(ctx?.bindings?.protocol || 'https').toLowerCase();
+  const configuredProtocol = String(ctx?.bindings?.protocol || '').toLowerCase();
+  const parseProtocol = configuredProtocol || 'https';
+  const protocol = configuredProtocol || (/^(?:127\.0\.0\.1|localhost|\[::1\])(?::\d+)?$/i.test(host) ? 'http' : 'https');
   if (protocol !== 'https' && protocol !== 'http') throw invalidArgument('protocol must be http or https');
   let parsed;
   try {
-    parsed = new URL(`${protocol}://${host}`);
+    parsed = new URL(`${parseProtocol}://${host}`);
   } catch {
     throw invalidArgument('host must be a hostname or IP address');
   }
   if (!parsed.hostname || parsed.username || parsed.password) throw invalidArgument('host must be a hostname or IP address');
   const port = Number(parsed.port || ctx?.bindings?.port || (protocol === 'https' ? 443 : 80));
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw invalidArgument('port must be between 1 and 65535');
-  return `${protocol}://${parsed.hostname.includes(':') ? `[${parsed.hostname}]` : parsed.hostname}:${port}`;
+  return `${protocol}://${parsed.hostname}:${port}`;
 }
 
 function timeoutMs(ctx) {
@@ -50,7 +52,7 @@ function shouldSkipTlsVerify(ctx) {
 
 function mapPayload(input) {
   if (!input) return {};
-  if (input.request && typeof input.request === 'object' && input.request.fields) return structToPlain(input.request);
+  if (input.request && typeof input.request === 'object') return input.request.fields ? structToPlain(input.request) : input.request;
   if (input.fields && typeof input.fields === 'object') return structToPlain(input);
   if (input.payload && typeof input.payload === 'object' && input.payload.fields) return structToPlain(input.payload);
   return input;
@@ -215,7 +217,7 @@ async function login(ctx, input = {}) {
   validateLoginSource(source);
   if (source.apiToken) {
     const payload = await send(ctx, 'POST', '/rest/api/login', { body: { api_token: source.apiToken } });
-    return normalizeSession(payload, source.username);
+    return normalizeSession({ ...payload, phpSessionId: payload?.__meta?.phpSessionId || '' }, source.username);
   }
   const payload = await send(ctx, 'POST', '/rest/api/login', {
     body: {
