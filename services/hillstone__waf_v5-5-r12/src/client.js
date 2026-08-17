@@ -18,9 +18,16 @@ function baseUrl(ctx) {
   if (/[/\\@?#\s]/.test(host)) throw invalidArgument('host must be a hostname or IP address');
   const protocol = String(ctx?.bindings?.protocol || 'https').toLowerCase();
   if (protocol !== 'https' && protocol !== 'http') throw invalidArgument('protocol must be http or https');
-  const port = Number(ctx?.bindings?.port || (protocol === 'https' ? 443 : 80));
+  let parsed;
+  try {
+    parsed = new URL(`${protocol}://${host}`);
+  } catch {
+    throw invalidArgument('host must be a hostname or IP address');
+  }
+  if (!parsed.hostname || parsed.username || parsed.password) throw invalidArgument('host must be a hostname or IP address');
+  const port = Number(parsed.port || ctx?.bindings?.port || (protocol === 'https' ? 443 : 80));
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw invalidArgument('port must be between 1 and 65535');
-  return `${protocol}://${host}:${port}`;
+  return `${protocol}://${parsed.hostname.includes(':') ? `[${parsed.hostname}]` : parsed.hostname}:${port}`;
 }
 
 function timeoutMs(ctx) {
