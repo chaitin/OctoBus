@@ -500,6 +500,12 @@ test("request validation rejects malformed endpoints, paging, filters, and order
     () => _test.queryParamsFromRequest({ query: { filtersJson: JSON.stringify({ pageSize: 9999 }) } }),
     /reserved key/,
   );
+  for (const key of ["page[0]", "pageSize[0]", "time_period[0]", "time_period[]"]) {
+    assert.throws(
+      () => _test.queryParamsFromRequest({ query: { filtersJson: JSON.stringify({ [key]: "bypass" }) } }),
+      /reserved key/,
+    );
+  }
 });
 
 test("NFS audit queries use the NFS endpoint", async () => {

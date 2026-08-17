@@ -469,13 +469,13 @@ function parseFiltersJson(value) {
   }
 
   const filters = {};
-  const reservedKeys = new Set([
+  const reservedKeyBases = new Set([
     "page",
     "pageSize",
     "page_size",
     "keyword",
     "order",
-    "time_period[]",
+    "time_period",
   ]);
   for (const [key, rawValue] of Object.entries(parsed)) {
     if (!/^[A-Za-z0-9_.\-[\]]{1,64}$/.test(key)) {
@@ -484,7 +484,8 @@ function parseFiltersJson(value) {
     if (["__proto__", "constructor", "prototype"].includes(key)) {
       throw makeServiceError(`filters_json contains blocked key: ${key}`);
     }
-    if (reservedKeys.has(key)) {
+    const keyBase = key.split("[", 1)[0];
+    if (reservedKeyBases.has(keyBase)) {
       throw makeServiceError(`filters_json contains reserved key: ${key}`);
     }
     const values = Array.isArray(rawValue) ? rawValue : [rawValue];
