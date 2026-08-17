@@ -546,18 +546,29 @@ const handleGetIndex = async (req = {}, ctx = {}) => {
   const result = await executeRequest(url, callCtx, { headers, action: 'GetIndex' });
   ensureSuccess(result, 'GetIndex');
   const json = parseJsonOrThrowUnknown(result, 'GetIndex');
-  const entry = json && typeof json === 'object' ? json[index] : undefined;
-  if (!entry || typeof entry !== 'object') {
+  let entries = json && typeof json === 'object' && !Array.isArray(json)
+    ? Object.entries(json).filter(([, value]) => value && typeof value === 'object')
+    : [];
+  if (!/[,*?]/.test(index)) entries = entries.filter(([resolvedIndex]) => resolvedIndex === index);
+  if (entries.length === 0) {
     throw attachResponse(
-      errorWithCode('FAILED_PRECONDITION', 'GetIndex response did not include the requested index'),
+      errorWithCode('FAILED_PRECONDITION', 'GetIndex response did not include any matching indices'),
       responseDetails(result.httpStatus, result.httpBody),
     );
   }
+  const aliases = {};
+  const mappings = {};
+  const settings = {};
+  for (const [resolvedIndex, entry] of entries) {
+    aliases[resolvedIndex] = mapIndexAliases(entry.aliases);
+    mappings[resolvedIndex] = mapIndexMapping(entry.mappings);
+    settings[resolvedIndex] = mapIndexSetting(entry.settings);
+  }
   return {
     index,
-    aliases: { [index]: mapIndexAliases(entry.aliases) },
-    mappings: { [index]: mapIndexMapping(entry.mappings) },
-    settings: { [index]: mapIndexSetting(entry.settings) },
+    aliases,
+    mappings,
+    settings,
     raw_body: result.httpBody,
   };
 };
@@ -593,10 +604,9 @@ const handleSearchDocuments = async (req = {}, ctx = {}) => {
   const { username, password } = requireCredentials(callCtx);
   const index = requireSearchIndex(req);
   const queryRaw = resolveSearchQuery(req);
-  // proto3 decoders materialize an omitted scalar as zero. Elasticsearch's
-  // documented default is 10, so treat that wire default as unspecified.
-  const decodedSize = toFiniteInt(req.size, DEFAULT_SEARCH_SIZE);
-  const size = decodedSize === 0 ? DEFAULT_SEARCH_SIZE : decodedSize;
+  // `size` is proto3 optional so presence distinguishes Elasticsearch's valid
+  // size=0 aggregation/count-only request from an omitted default of 10.
+  const size = hasOwn(req, 'size') ? toFiniteInt(req.size, DEFAULT_SEARCH_SIZE) : DEFAULT_SEARCH_SIZE;
   const from = toFiniteInt(req.from, DEFAULT_SEARCH_FROM);
 
   let queryBody;

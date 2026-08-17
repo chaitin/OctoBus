@@ -36,6 +36,15 @@ than this live compatibility run.
   returned the indexed document with `total_hits=1`.
 - `ListNodes`: HTTP 200; returned the single Docker node and its node roles.
 
+A second live run created `octobus-evidence-1` and `octobus-evidence-2` and
+verified the expression edge cases directly against 7.10.0:
+
+- `GetIndex(index="octobus-evidence-*")` returned mappings for both concrete
+  indices rather than looking up the wildcard as a literal response key.
+- `SearchDocuments(index="octobus-evidence-*", size=0)` reported
+  `total_hits=2` with an empty `hits` array, preserving Elasticsearch's valid
+  count-only/aggregation semantics. Omitting the optional `size` still uses 10.
+
 Run date: 2026-08-17. Host/container addresses, generated UUIDs, resource
 metrics, and credentials are intentionally omitted because they are not
 compatibility facts.

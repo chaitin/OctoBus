@@ -543,14 +543,16 @@ test('SearchDocuments accepts object query (stringified)', async () => {
   assert.deepEqual(sent.query, { match: { msg: 'hi' } });
 });
 
-test('SearchDocuments uses size 10 for the omitted proto3 scalar', async () => {
+test('SearchDocuments distinguishes omitted size from explicit size zero', async () => {
   let body;
   setFetch(async (_url, init) => {
     body = JSON.parse(init.body);
     return responseOf(200, { took: 0, timed_out: false, hits: { hits: [] } });
   });
-  await handlers[METHOD_SEARCH_DOCUMENTS_FULL]({ index: 'logs', size: 0 }, buildCtx());
+  await handlers[METHOD_SEARCH_DOCUMENTS_FULL]({ index: 'logs' }, buildCtx());
   assert.equal(body.size, 10);
+  await handlers[METHOD_SEARCH_DOCUMENTS_FULL]({ index: 'logs', size: 0 }, buildCtx());
+  assert.equal(body.size, 0);
 });
 
 test('GetIndex rejects a response that omits the requested index', async () => {
@@ -560,6 +562,16 @@ test('GetIndex rejects a response that omits the requested index', async () => {
     'FAILED_PRECONDITION',
     (err) => assert.equal(err.response.http_body, ''),
   );
+});
+
+test('GetIndex maps every index returned for an expression', async () => {
+  setFetch(async () => responseOf(200, {
+    'logs-1': { aliases: {}, mappings: {}, settings: { index: { number_of_shards: '1' } } },
+    'logs-2': { aliases: {}, mappings: {}, settings: { index: { number_of_shards: '2' } } },
+  }));
+  const result = await handlers[METHOD_GET_INDEX_FULL]({ index: 'logs-*' }, buildCtx());
+  assert.deepEqual(Object.keys(result.mappings), ['logs-1', 'logs-2']);
+  assert.equal(result.settings['logs-2'].number_of_shards, '2');
 });
 
 test('handlers accept the single SDK runtime context ABI', async () => {

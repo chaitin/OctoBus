@@ -107,7 +107,7 @@ message GetIndexResponse {
 message SearchDocumentsRequest {
   string index = 1;
   string query = 2;
-  int32 size = 3;
+  optional int32 size = 3;
   int32 from = 4;
 }
 
