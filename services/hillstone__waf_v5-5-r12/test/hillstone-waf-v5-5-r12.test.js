@@ -323,9 +323,10 @@ test('HTTP, network, timeout, response size, and upstream errors are sanitized',
 
 test('API token login sends only the configured token', async () => {
   const fetch = createFetchMock();
-  fetch.queueJson({ result: [{ token: 'session-token', username: 'api' }], success: true });
-  await handlers[METHOD_LOGIN_FULL]({}, buildCtx({ bindings: { fetch }, secrets: { username: '', password: '', apiToken: 'api-secret' } }));
+  fetch.queueJson({ token: 'session-token', username: 'api', success: true });
+  const result = await handlers[METHOD_LOGIN_FULL]({}, buildCtx({ bindings: { fetch }, secrets: { username: '', password: '', apiToken: 'api-secret' } }));
   assert.deepEqual(JSON.parse(fetch.calls[0].init.body), { api_token: 'api-secret' });
+  assert.equal(result.result[0].token, 'session-token');
 });
 
 test('payload conversion and session normalization cover protobuf shapes', () => {

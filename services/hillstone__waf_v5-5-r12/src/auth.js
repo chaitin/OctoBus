@@ -14,7 +14,11 @@ function getCredentialSource(ctx, input = {}) {
 }
 
 function normalizeSession(result, fallbackUsername) {
-  const first = Array.isArray(result?.result) ? result.result[0] : null;
+  const first = Array.isArray(result?.result)
+    ? result.result[0]
+    : result?.result && typeof result.result === 'object' && result.result.token
+      ? result.result
+      : result;
   if (!first?.token) throw unauthenticated('Login did not return a valid token');
   return {
     token: first.token,
