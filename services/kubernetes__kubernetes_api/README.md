@@ -22,6 +22,10 @@ OctoBus service package for read-only Kubernetes API operations.
 | `timeoutMs` | integer | No | HTTP timeout in milliseconds (default: 15000) |
 | `skipTlsVerify` | boolean | No | Skip TLS certificate verification |
 
+The package requires Node.js 20.18.1 or newer because TLS dispatcher support
+is provided by undici 7. Use `skipTlsVerify` only for a trusted cluster whose
+certificate cannot be verified through the runtime trust store.
+
 ## Secrets
 
 | Field | Type | Required | Description |

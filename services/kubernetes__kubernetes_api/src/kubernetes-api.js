@@ -338,7 +338,9 @@ const handleGetPodLogs = async (req = {}, ctx = {}) => {
   if (toBool(req.previous)) params.previous = 'true';
   if (toBool(req.timestamps)) params.timestamps = 'true';
   const url = `${baseUrl}/api/v1/namespaces/${encodeURIComponent(ns)}/pods/${encodeURIComponent(name)}/log${buildQuery(params)}`;
-  const headers = { ...buildAuthHeaders(callCtx.bindings), Accept: 'text/plain' };
+  // The pod log subresource returns text, but kube-apiserver content negotiation
+  // rejects `Accept: text/plain`; use the wildcard accepted by the official API.
+  const headers = { ...buildAuthHeaders(callCtx.bindings), Accept: '*/*' };
   const result = await executeRequest(url, callCtx, { headers, action: 'GetPodLogs' });
   ensureSuccess(result, 'GetPodLogs');
   return { logs: result.httpBody || '', raw_body: result.httpBody };

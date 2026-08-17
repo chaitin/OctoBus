@@ -93,6 +93,7 @@ test('GetPodLogs', async () => {
     const result = await call('Kubernetes_API.Kubernetes_API/GetPodLogs', { namespace: 'default', name: 'nginx-pod', container: 'nginx', tail_lines: 10, since_seconds: 60, previous: true, timestamps: true }, { config: { baseUrl } });
     assert.ok(result.logs.includes('Server started'));
     assert.deepEqual(mock.requests.at(-1).query, { container: 'nginx', tailLines: '10', sinceSeconds: '60', previous: 'true', timestamps: 'true' });
+    assert.equal(mock.requests.at(-1).headers.accept, '*/*');
   } finally { await mock.close(); }
 });
 
