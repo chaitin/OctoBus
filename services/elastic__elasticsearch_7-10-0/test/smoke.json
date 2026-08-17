@@ -1,12 +1,18 @@
 {
-  "method": "Elasticsearch_7_10_0.Elasticsearch_7_10_0/ClusterHealth",
-  "request": {},
+  "method": "Elasticsearch_7_10_0.Elasticsearch_7_10_0/SearchDocuments",
+  "request": {"index": "smoke-index"},
+  "grpcRequest": {"index": "smoke-index", "size": 0},
   "expectUpstream": true,
   "requireBusinessSuccess": true,
   "requireUpstreamPerProtocol": true,
-  "protocols": ["connect", "grpc", "mcp"],
+  "protocols": ["connect", "grpc"],
   "upstream": {
-    "method": "GET",
-    "path": "/_cluster/health"
-  }
+    "method": "POST",
+    "path": "/smoke-index/_search",
+    "body": {"size": 10}
+  },
+  "upstreamAll": [
+    {"method": "POST", "path": "/smoke-index/_search", "body": {"size": 10}},
+    {"method": "POST", "path": "/smoke-index/_search", "body": {"size": 0}}
+  ]
 }

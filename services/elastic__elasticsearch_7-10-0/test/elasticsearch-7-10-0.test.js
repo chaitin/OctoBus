@@ -595,6 +595,10 @@ test('preserves multi-index separators while encoding individual index names', a
   await handlers[METHOD_SEARCH_DOCUMENTS_FULL]({ index: 'logs-1,logs 2' }, buildCtx());
   assert.match(captured, /\/logs-1,logs%202\/_search$/);
   assert.doesNotMatch(captured, /%2C/);
+  assert.equal(
+    _test.encodeIndexExpression('_all,<logs-{now/d-1d}>'),
+    '_all,%3Clogs-%7Bnow%2Fd-1d%7D%3E',
+  );
 });
 
 test('rejects credential-bearing base URLs and redacts credentials from logs', async () => {

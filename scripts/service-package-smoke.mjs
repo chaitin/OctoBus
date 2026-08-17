@@ -6,9 +6,13 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
+import { createRequire } from "node:module";
 
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const servicesRoot = path.join(repoRoot, "services");
+const requireFromServices = createRequire(path.join(servicesRoot, "package.json"));
+const grpc = requireFromServices("@grpc/grpc-js");
+const protoLoader = requireFromServices("@grpc/proto-loader");
 const octobusBin = path.join(repoRoot, "bin", "octobus");
 
 const options = parseArgs(process.argv.slice(2));
@@ -153,7 +157,9 @@ async function smokeService({ index, serviceDir, addr, mock }) {
         throw new Error(`catalog did not expose a gRPC method for ${result.method}`);
       }
       const beforeProtocol = mock.hitCount;
-      await grpcInvoke(addr, grpc.method_full_name, capsetID, instanceID, options.callTimeoutMs);
+      const grpcRequest = fixture?.grpcRequest ?? request;
+      const serializedRequest = serializeGrpcRequest(manifest, serviceDir, grpc.method_full_name, grpcRequest);
+      await grpcInvoke(addr, grpc.method_full_name, capsetID, instanceID, serializedRequest, options.callTimeoutMs);
       result.protocols.grpc = true;
       result.protocols.grpc_upstream = mock.hitCount > beforeProtocol;
       if (requireUpstreamPerProtocol && !result.protocols.grpc_upstream) {
@@ -176,6 +182,9 @@ async function smokeService({ index, serviceDir, addr, mock }) {
     result.mock_hits = mock.hitCount - beforeHits;
     result.expect_upstream = expectUpstream;
     assertUpstreamExpectation(fixture?.upstream, mock.requests.slice(beforeHits));
+    for (const expectation of fixture?.upstreamAll ?? []) {
+      assertUpstreamExpectation(expectation, mock.requests.slice(beforeHits));
+    }
     const connectOK = fixture?.requireBusinessSuccess ? result.business_success : isAcceptableConnectResult(response.status, body);
     result.chain_ok = (!expectUpstream || result.mock_hits > 0) && connectOK && protocols.every((protocol) => result.protocols[protocol]);
   } catch (error) {
@@ -218,6 +227,12 @@ function readSmokeFixture(serviceDir) {
   }
   if (fixture.upstream !== undefined && (fixture.upstream == null || typeof fixture.upstream !== "object" || Array.isArray(fixture.upstream))) {
     throw new Error(`${fixturePath}: upstream must be an object`);
+  }
+  if (fixture.grpcRequest !== undefined && (fixture.grpcRequest == null || typeof fixture.grpcRequest !== "object" || Array.isArray(fixture.grpcRequest))) {
+    throw new Error(`${fixturePath}: grpcRequest must be an object`);
+  }
+  if (fixture.upstreamAll !== undefined && (!Array.isArray(fixture.upstreamAll) || fixture.upstreamAll.some((item) => item == null || typeof item !== "object" || Array.isArray(item)))) {
+    throw new Error(`${fixturePath}: upstreamAll must be a list of objects`);
   }
   return fixture;
 }
@@ -393,7 +408,19 @@ async function cliJSON(addr, args, options) {
   return JSON.parse(result.stdout);
 }
 
-function grpcInvoke(addr, method, capsetID, instanceID, timeoutMs) {
+function serializeGrpcRequest(manifest, serviceDir, method, request) {
+  const protoFiles = manifest.proto.files.map((file) => path.join(servicesRoot, serviceDir, file));
+  const includeDirs = manifest.proto.roots.map((root) => path.join(servicesRoot, serviceDir, root));
+  const definition = protoLoader.loadSync(protoFiles, { includeDirs, defaults: false, oneofs: true });
+  const grpcObject = grpc.loadPackageDefinition(definition);
+  const [serviceName, methodName] = String(method).replace(/^\/+/, "").split("/");
+  const service = serviceName.split(".").reduce((current, part) => current?.[part], grpcObject);
+  const serializer = service?.service?.[methodName]?.requestSerialize;
+  if (typeof serializer !== "function") throw new Error(`cannot serialize gRPC request for ${method}`);
+  return serializer(request);
+}
+
+function grpcInvoke(addr, method, capsetID, instanceID, serializedRequest, timeoutMs) {
   return new Promise((resolve, reject) => {
     const client = http2.connect(`http://${addr}`);
     const timer = setTimeout(() => finish(new Error(`gRPC ${method} timed out after ${timeoutMs}ms`)), timeoutMs);
@@ -427,7 +454,11 @@ function grpcInvoke(addr, method, capsetID, instanceID, timeoutMs) {
       }
       finish();
     });
-    stream.end(Buffer.from([0, 0, 0, 0, 0]));
+    const frame = Buffer.allocUnsafe(5 + serializedRequest.length);
+    frame[0] = 0;
+    frame.writeUInt32BE(serializedRequest.length, 1);
+    serializedRequest.copy(frame, 5);
+    stream.end(frame);
   });
 }
 
