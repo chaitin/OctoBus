@@ -65,7 +65,7 @@ message QemuVMInfo {
   int64 maxdisk = 8;
   int64 uptime = 9;
   string node = 10;
-  string template = 11;
+  bool template = 11;
   google.protobuf.Value raw = 12;
   double cpu = 13;
   int64 disk_read = 14;
@@ -153,7 +153,7 @@ message LXCInfo {
   int64 maxdisk = 8;
   int64 uptime = 9;
   string node = 10;
-  string template = 11;
+  bool template = 11;
   google.protobuf.Value raw = 12;
   double cpu = 13;
   int64 disk_read = 14;

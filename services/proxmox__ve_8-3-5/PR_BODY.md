@@ -1,10 +1,13 @@
-## 联调证据：ListNodes 跑通
+## Mock 联调记录：ListNodes
+
+以下内容来自 `test/mock_upstream.js`，仅验证请求构造和响应解析，不是
+Proxmox VE 8.3.5 真实环境兼容性证据。
 
 # Request
+```
 GET https://<pve-host>:8006/api2/json/nodes
-PVEAPIToken=root@pam!automation:11111111-2222-3333-4444-555555555555
-
-
+Authorization: PVEAPIToken=root@pam!automation=<redacted>
+```
 
 # Response   HTTP/1.1 200 OK
 ```json

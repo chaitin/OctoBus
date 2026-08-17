@@ -219,9 +219,12 @@ const shouldSkipTls = (bindings = {}) => {
   return value === true;
 };
 
-const buildTlsDispatcher = (bindings = {}) => shouldSkipTls(bindings)
-  ? new Agent({ connect: { rejectUnauthorized: false } })
-  : undefined;
+let insecureTlsDispatcher;
+const buildTlsDispatcher = (bindings = {}) => {
+  if (!shouldSkipTls(bindings)) return undefined;
+  insecureTlsDispatcher ??= new Agent({ connect: { rejectUnauthorized: false } });
+  return insecureTlsDispatcher;
+};
 
 const buildHeaders = (bindings = {}, authHeader) => ({
   ...sanitizeHeaders(bindings.headers),
@@ -346,7 +349,6 @@ const proxmoxRequest = async (ctx, segments, { method = 'GET', query, allowHttp 
     throw engineError('UNAVAILABLE', `upstream ${reason}`);
   } finally {
     clearTimeout(timer);
-    if (dispatcher) await dispatcher.close();
   }
 };
 
@@ -425,6 +427,8 @@ const buildNodeInfo = (entry) => {
 
 const buildQemuVMInfo = (entry) => {
   const raw = entry && typeof entry === 'object' ? entry : {};
+  // Proxmox VE 8.x apidoc.js defines PSI keys without separators, for example
+  // `pressurecpufull` and `pressurememorysome`.
   return {
     vmid: resolveVmidString(raw.vmid),
     name: pickString(raw.name),
@@ -436,7 +440,7 @@ const buildQemuVMInfo = (entry) => {
     maxdisk: valueOrZeroLong(raw.maxdisk),
     uptime: valueOrZeroLong(raw.uptime),
     node: pickString(raw.node),
-    template: pickString(raw.template),
+    template: pickBoolean(raw.template) ?? false,
     raw: asJsonValue(raw),
     cpu: valueOrZeroDouble(raw.cpu),
     disk_read: valueOrZeroLong(raw.diskread),
@@ -473,7 +477,7 @@ const buildLXCInfo = (entry) => {
     maxdisk: valueOrZeroLong(raw.maxdisk),
     uptime: valueOrZeroLong(raw.uptime),
     node: pickString(raw.node),
-    template: pickString(raw.template),
+    template: pickBoolean(raw.template) ?? false,
     raw: asJsonValue(raw),
     cpu: valueOrZeroDouble(raw.cpu),
     disk_read: valueOrZeroLong(raw.diskread),

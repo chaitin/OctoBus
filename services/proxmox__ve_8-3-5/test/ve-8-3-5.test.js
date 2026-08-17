@@ -522,7 +522,7 @@ test('helper functions cover normalization, mapping, and validation', async () =
   assert.equal(_test.buildTlsDispatcher({}), undefined);
   const dispatcher = _test.buildTlsDispatcher({ skipTlsVerify: true });
   assert.equal(typeof dispatcher.dispatch, 'function');
-  await dispatcher.close();
+  assert.equal(_test.buildTlsDispatcher({ tlsInsecureSkipVerify: true }), dispatcher);
   assert.equal(_test.shouldSkipTls({ tlsInsecureSkipVerify: 'on' }), true);
   assert.equal(_test.shouldSkipTls({ tls_skip_verify: 'yes' }), true);
   assert.equal(_test.shouldSkipTls({}), false);
@@ -579,12 +579,18 @@ test('helper functions cover normalization, mapping, and validation', async () =
   assert.equal(_test.buildQemuVMInfo({ vmid: 100 }).net_in, 0);
   assert.equal(_test.buildQemuVMInfo({ vmid: 100, 'running-machine': 'pc-q35-9.0' }).running_machine, 'pc-q35-9.0');
   assert.equal(_test.buildQemuVMInfo({ vmid: 100, pressurecpufull: 0.5 }).pressure_cpu_full, 0.5);
+  assert.equal(_test.buildQemuVMInfo({ vmid: 100, pressurecpusome: 0.4, pressureiofull: 0.3, pressureiosome: 0.2, pressurememoryfull: 0.1, pressurememorysome: 0.05 }).pressure_memory_some, 0.05);
   assert.equal(_test.buildQemuVMInfo({ vmid: 100 }).pressure_cpu_full, 0);
+  assert.equal(_test.buildQemuVMInfo({ vmid: 100, template: 0 }).template, false);
+  assert.equal(_test.buildQemuVMInfo({ vmid: 101, template: 1 }).template, true);
 
   // LXCInfo: extended fields
   assert.equal(_test.buildLXCInfo({ vmid: 200, name: 'lxc', maxswap: 4096, tags: 'web' }).max_swap, 4096);
   assert.equal(_test.buildLXCInfo({ vmid: 200 }).max_swap, 0);
   assert.equal(_test.buildLXCInfo({ vmid: 200, pressureiosome: 0.3 }).pressure_io_some, 0.3);
+  assert.equal(_test.buildLXCInfo({ vmid: 200, pressurecpufull: 0.6, pressurecpusome: 0.5, pressureiofull: 0.4, pressurememoryfull: 0.2, pressurememorysome: 0.1 }).pressure_memory_some, 0.1);
+  assert.equal(_test.buildLXCInfo({ vmid: 200, template: '0' }).template, false);
+  assert.equal(_test.buildLXCInfo({ vmid: 201, template: '1' }).template, true);
 
   // StorageInfo: formats_json and select_existing
   const si = _test.buildStorageInfo({ storage: 's1', type: 'dir', total: 100, used: 25, shared: 1, formats: { supported: ['qcow2', 'raw'], default: 'qcow2' }, select_existing: 1 });

@@ -8,7 +8,8 @@ Recommended first checks:
 - `ListNodes`
 - `ListQemuVMs`
 
-Replace placeholder values in `config.example.json` with the
-customer's actual baseUrl, username/password (or bearer token) before
-running the service entry. The bundled SDK is the same version used to
-build the service package and ships in `sdk/chaitin-ai-octobus-sdk-0.5.0.tgz`.
+Replace placeholder values in `config.example.json` with the customer's actual
+base URL. Configure `tokenId` and `tokenSecret` using a read-only Proxmox API
+token; username/password and bearer-token authentication are not supported.
+Install the package dependencies declared in `package.json`, including
+`@chaitin-ai/octobus-sdk` 0.6.x, before running the service entry.

@@ -2,7 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["baseUrl"],
+  "anyOf": [
+    { "required": ["baseUrl"] },
+    { "required": ["base_url"] },
+    { "required": ["host"] },
+    { "required": ["restBaseUrl"] },
+    { "required": ["url"] }
+  ],
   "properties": {
     "baseUrl": {
       "type": "string",
