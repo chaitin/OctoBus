@@ -2,10 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  METHOD_QUERY_AUDIT_LOG_FULL,
+  METHOD_QUERY_BEHAVIOR_LOG_FULL,
+  METHOD_QUERY_FLOW_ANALYSIS_FULL,
+  METHOD_QUERY_REFERENCE_DATA_FULL,
   METHOD_LIST_POLICY_OBJECTS_FULL,
   METHOD_GET_USER_INFO_FULL,
   METHOD_QUERY_RESOURCE_METRIC_FULL,
   METHOD_QUERY_SECURITY_LOG_FULL,
+  METHOD_QUERY_SECURITY_STATISTIC_FULL,
   _test,
   handlers,
 } from "../src/huayulab-ngaf.js";
@@ -51,11 +56,15 @@ test("normalizes website and API endpoint URLs", () => {
 
 test("rejects plain HTTP unless explicitly allowed", () => {
   assert.throws(
-    () => _test.normalizeEndpoint("http://127.0.0.1:8080/api.php", false),
+    () => _test.normalizeEndpoint("http://device.example:8080/api.php", false),
     /plain HTTP endpoints are disabled/,
   );
   assert.equal(
     _test.normalizeEndpoint("http://127.0.0.1:8080/api.php", true),
+    "http://127.0.0.1:8080/api.php",
+  );
+  assert.equal(
+    _test.normalizeEndpoint("http://127.0.0.1:8080/api.php", false),
     "http://127.0.0.1:8080/api.php",
   );
 });
@@ -442,4 +451,90 @@ test("read-only queries reject unsupported types and unsafe filter shapes", asyn
       }),
     /must contain scalar values only/,
   );
+});
+
+test("all read-only RPC families dispatch only to their fixed endpoint maps", async () => {
+  const upstream = await createMockUpstream();
+  const cases = [
+    [METHOD_QUERY_BEHAVIOR_LOG_FULL, "BEHAVIOR_LOG_ALL", "/reporter/behaviorlog/AllBehaviorLog/getList"],
+    [METHOD_QUERY_AUDIT_LOG_FULL, "AUDIT_LOG_HTTP", "/reporter/nsaslog/NsasHttpLog/getList"],
+    [METHOD_QUERY_SECURITY_STATISTIC_FULL, "SECURITY_STATISTIC_IPS_HOLE_TOP10", "/reporter/safelog/IpsLog/getHoleIdStaticTop10"],
+    [METHOD_QUERY_FLOW_ANALYSIS_FULL, "FLOW_ANALYSIS_USER", "/reporter/flowanalysis/UserTt/getList"],
+    [METHOD_QUERY_REFERENCE_DATA_FULL, "REFERENCE_DATA_TIME_OBJECT", "/netmanage/object/TimePlanObject/getTimePlanSel"],
+  ];
+  try {
+    for (const [method, type, expectedPath] of cases) {
+      const response = await handlers[method]({
+        ...contextFor(upstream.baseUrl),
+        req: { type, query: { page: 1, pageSize: 10 } },
+      });
+      assert.equal(response.code, 0);
+      assert.equal(response.upstreamPath, expectedPath);
+    }
+  } finally {
+    await upstream.close();
+  }
+});
+
+test("request validation rejects malformed endpoints, paging, filters, and ordering", () => {
+  assert.throws(() => _test.normalizeEndpoint("not a URL", false), /valid URL/);
+  assert.throws(() => _test.normalizeEndpoint("file:///tmp/device", false), /http or https/);
+  assert.throws(
+    () => _test.resolveConfig({ config: { endpoint: "https://device.test", lan: "xx_YY" }, secret: { username: "u", apiSecret: "s" } }),
+    /unsupported lan/,
+  );
+  assert.throws(() => _test.queryParamsFromRequest({ page: 0 }), /positive integer/);
+  assert.throws(() => _test.queryParamsFromRequest({ query: { startTime: "2026-01-01" } }), /provided together/);
+  assert.throws(() => _test.queryParamsFromRequest({ query: { order: "random" } }), /asc or desc/);
+  assert.throws(() => _test.queryParamsFromRequest({ query: { filtersJson: "[]" } }), /JSON object/);
+  assert.throws(() => _test.queryParamsFromRequest({ query: { filtersJson: "{" } }), /valid JSON object/);
+  assert.throws(
+    () => _test.queryParamsFromRequest({ query: { filtersJson: JSON.stringify({ "bad key!": "x" }) } }),
+    /invalid key/,
+  );
+  assert.throws(
+    () => _test.queryParamsFromRequest({ query: { filtersJson: JSON.stringify({ values: Array(21).fill("x") }) } }),
+    /too many values/,
+  );
+});
+
+test("configuration and request aliases normalize to bounded canonical values", () => {
+  const config = _test.resolveConfig({
+    env: {
+      endpoint: "http://127.0.0.1:8080",
+      allowInsecureHttp: "yes",
+      username: " env-user ",
+      api_secret: " env-secret ",
+      timeoutMs: "999999",
+      skipTlsVerify: "on",
+      lan: "en_US",
+    },
+  });
+  assert.equal(config.endpoint, "http://127.0.0.1:8080/api.php");
+  assert.equal(config.username, "env-user");
+  assert.equal(config.apiSecret, "env-secret");
+  assert.equal(config.timeoutMs, 30000);
+  assert.equal(config.skipTlsVerify, true);
+  assert.equal(config.lan, "en_US");
+
+  assert.equal(
+    _test.resolveEndpoint(_test.RESOURCE_METRIC_ENDPOINTS, "resource_metric_cpu", "type").typeName,
+    "RESOURCE_METRIC_CPU",
+  );
+  assert.equal(
+    _test.resolveEndpoint(_test.RESOURCE_METRIC_ENDPOINTS, 1, "type").typeName,
+    "RESOURCE_METRIC_CPU",
+  );
+
+  const params = _test.queryParamsFromRequest({
+    page_size: 999,
+    start_time: "a",
+    end_time: "b",
+    keyword: "needle",
+    filters_json: JSON.stringify({ enabled: true, optional: null }),
+  });
+  assert.equal(params.get("pageSize"), "200");
+  assert.equal(params.get("keyword"), "needle");
+  assert.equal(params.get("enabled"), "true");
+  assert.equal(params.get("optional"), "");
 });

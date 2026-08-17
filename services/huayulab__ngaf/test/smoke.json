@@ -1,0 +1,10 @@
+{
+  "method": "HUAYULAB_NGAF.HUAYULAB_NGAF/GetUserInfo",
+  "request": {},
+  "protocols": ["connect", "grpc", "mcp"],
+  "requireUpstreamPerProtocol": true,
+  "upstream": {
+    "method": "POST",
+    "path": "/api.php/Login/uInterlogin"
+  }
+}
