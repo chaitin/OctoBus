@@ -250,10 +250,13 @@ const logFlow = (ctx = {}, action, details = {}) => {
   console.log(prefix, JSON.stringify(redactSensitive(details)));
 };
 
-const isSemanticSuccess = (json) => json?.success === true
-  || json?.ok === true
-  || Number(json?.code) === 0
-  || String(json?.msgType || '').trim().toLowerCase() === 'success';
+const isSemanticSuccess = (json) => {
+  if (json === null || json === undefined) return false;
+  if (typeof json.success === 'boolean') return json.success;
+  return json.ok === true
+    || Number(json.code) === 0
+    || String(json.msgType || '').trim().toLowerCase() === 'success';
+};
 
 // ---- session ----
 
@@ -340,8 +343,8 @@ const toMutationResult = (json, text) => ({
 const buildAttackLogPayload = (req = {}) => {
   const payload = {
     method: 'query',
-    page: requirePage(pickInt(req, ['page'], 1) || 1),
-    count: requirePageSize(pickInt(req, ['count'], 10) || 10),
+    page: requirePage(pickInt(req, ['page'], 1)),
+    count: requirePageSize(pickInt(req, ['count'], 10)),
   };
   const typeMask = pickIntList(req.type_mask ?? req.typeMask);
   if (typeMask) payload.type_mask = typeMask;
@@ -372,8 +375,8 @@ const buildIPListPayload = (req = {}) => {
   const dir = pickInt(req, ['dir'], 2);
   if (![0, 1, 2].includes(dir)) throw errorWithCode('INVALID_ARGUMENT', 'dir must be 0, 1, or 2');
   const payload = {
-    page: requirePage(pickInt(req, ['page'], 1) || 1),
-    count: requirePageSize(pickInt(req, ['count'], 10) || 10),
+    page: requirePage(pickInt(req, ['page'], 1)),
+    count: requirePageSize(pickInt(req, ['count'], 10)),
     color,
     dir,
   };
@@ -390,8 +393,8 @@ const buildIPListPayload = (req = {}) => {
 
 const buildIntelQueryPayload = (req = {}) => {
   const payload = {
-    page: requirePage(pickInt(req, ['page'], 1) || 1),
-    count: requirePageSize(pickInt(req, ['count'], 10) || 10),
+    page: requirePage(pickInt(req, ['page'], 1)),
+    count: requirePageSize(pickInt(req, ['count'], 10)),
   };
   const sourceId = pickInt(req, ['source_id', 'sourceId'], 0);
   if (sourceId) payload.source_id = sourceId;

@@ -116,6 +116,8 @@ test('iplist color/dir validation', () => {
   assert.throws(() => _test.buildIPListPayload({ color: 0, dir: 5 }), (e) => e.legacyCode === 'INVALID_ARGUMENT');
   assert.deepEqual(_test.buildIPListPayload({}), { page: 1, count: 10, color: 0, dir: 2 });
   assert.throws(() => _test.buildAttackLogPayload({ page: -1 }), (e) => e.legacyCode === 'INVALID_ARGUMENT');
+  assert.throws(() => _test.buildAttackLogPayload({ page: 0 }), (e) => e.legacyCode === 'INVALID_ARGUMENT');
+  assert.throws(() => _test.buildIPListPayload({ count: 0 }), (e) => e.legacyCode === 'INVALID_ARGUMENT');
   assert.throws(() => _test.buildIntelQueryPayload({ page: 10001 }), (e) => e.legacyCode === 'OUT_OF_RANGE');
   assert.throws(() => _test.buildIPListPayload({ count: 11 }), (e) => e.legacyCode === 'INVALID_ARGUMENT');
   assert.throws(() => _test.buildIntelQueryPayload({ count: 15 }), (e) => e.legacyCode === 'INVALID_ARGUMENT');
@@ -166,6 +168,17 @@ test('business semantic failure → FAILED_PRECONDITION', async () => {
   });
   await assert.rejects(() => invoke(METHOD_ADD_INTEL_FULL, { ip: '1.2.3.4', type: 1, severity: 1 }, buildCtx({ host: 'https://k01:443', user: 'u', password: 'p' })),
     (e) => e.legacyCode === 'FAILED_PRECONDITION' && /参数错误/.test(e.message));
+});
+
+test('explicit mutation success false wins over conflicting success envelope fields', async () => {
+  withFetch(async (url) => {
+    const u = String(url);
+    if (u.endsWith('/login')) return fakeResponse(200, JSON.stringify({ success: true, token: { access_token: 't' } }));
+    if (u.endsWith('/logout')) return fakeResponse(200, 'bye');
+    return fakeResponse(200, JSON.stringify({ success: false, msgType: 'success', code: 0, msg: '写入未生效' }));
+  });
+  await assert.rejects(() => invoke(METHOD_ADD_INTEL_FULL, { ip: '1.2.3.4', type: 1, severity: 1 }, buildCtx({ host: 'https://k01:443', user: 'u', password: 'p' })),
+    (e) => e.legacyCode === 'FAILED_PRECONDITION' && /写入未生效/.test(e.message));
 });
 
 test('network error → UNAVAILABLE; empty/invalid body → UNKNOWN', async () => {
@@ -236,6 +249,7 @@ test('helper coverage', () => {
   assert.ok(h.errorWithCode('UNAVAILABLE', 'x') instanceof GrpcError);
   assert.equal(h.isSemanticSuccess({ msgType: 'SUCCESS' }), true);
   assert.equal(h.isSemanticSuccess({ success: false, msgType: 'err' }), false);
+  assert.equal(h.isSemanticSuccess({ success: false, msgType: 'success', code: 0 }), false);
   assert.equal(h.throwForHttpStatus ? true : false, true);
   assert.throws(() => h.throwForHttpStatus(404), (e) => e.legacyCode === 'FAILED_PRECONDITION');
   assert.throws(() => h.throwForHttpStatus(503), (e) => e.legacyCode === 'UNAVAILABLE');
