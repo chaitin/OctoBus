@@ -315,12 +315,16 @@ const errorSummary = (text, sensitiveValues = []) => {
   let candidate = source;
   try {
     const parsed = JSON.parse(source);
+    const errors = Array.isArray(parsed?.errors) ? parsed.errors[0] : parsed?.errors;
+    const error = parsed?.error;
     candidate = pickFirstString([
       parsed?.message,
-      parsed?.error,
-      parsed?.errors,
+      typeof error === 'string' ? error : error?.msg,
+      error?.message,
+      typeof errors === 'string' ? errors : errors?.msg,
+      errors?.message,
       typeof parsed?.data === 'string' ? parsed.data : '',
-    ]);
+    ]) || source;
   } catch {
     // Plain-text Proxmox errors are common; sanitize them below.
   }

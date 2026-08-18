@@ -552,6 +552,8 @@ test('helper functions cover normalization, mapping, and validation', async () =
   assert.equal(_test.errorSummary('authorization=secret\nupstream failure'), '[redacted] upstream failure');
   assert.equal(_test.errorSummary(''), '');
   assert.equal(_test.errorSummary('{"error":"failed"}'), 'failed');
+  assert.equal(_test.errorSummary('{"errors":[{"msg":"node gone not found"}]}'), 'node gone not found');
+  assert.equal(_test.mapHttpStatus(500, _test.errorSummary('{"errors":[{"msg":"node gone not found"}]}')), 'NOT_FOUND');
   assert.equal(_test.errorSummary('secret-value', ['secret-value']), '[redacted]');
   assert.equal(_test.pickAgentEnabled(undefined), false);
   assert.equal(_test.pickAgentEnabled('enabled=1'), true);
