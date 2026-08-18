@@ -34,6 +34,7 @@ const METHOD_PATHS = {
 const grpcCodeFor = (code) => ({
   FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
   INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT,
+  NOT_FOUND: grpcStatus.NOT_FOUND,
   PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED,
   UNAVAILABLE: grpcStatus.UNAVAILABLE,
   UNKNOWN: grpcStatus.UNKNOWN,
@@ -109,6 +110,18 @@ const pickFirstBoolean = (values = []) => {
     if (bool !== undefined) return bool;
   }
   return undefined;
+};
+
+const pickAgentEnabled = (value) => {
+  const raw = unwrapScalar(value);
+  const direct = pickBoolean(raw);
+  if (direct !== undefined) return direct;
+  if (typeof raw !== 'string') return false;
+  const options = Object.fromEntries(raw.split(',').flatMap((part) => {
+    const [key, optionValue] = part.split('=', 2).map((item) => item?.trim().toLowerCase());
+    return key && optionValue !== undefined ? [[key, optionValue]] : [];
+  }));
+  return pickBoolean(options.enabled) ?? false;
 };
 
 const HEADER_NAME_RE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
@@ -189,7 +202,7 @@ const resolveToken = (bindings = {}) => {
   if (!tokenSecret) {
     throw engineError('INVALID_ARGUMENT', 'secret.tokenSecret is required');
   }
-  if (!/^[^=\r\n!]+![^=\r\n!]+$/.test(tokenId)) {
+  if (!/^[^@\s=!]+@[^@\s=!]+![^\s=!]+$/.test(tokenId)) {
     throw engineError('INVALID_ARGUMENT', 'secret.tokenId must be in the form USER@REALM!TOKENID');
   }
   if (/[\r\n]/.test(tokenSecret)) throw engineError('INVALID_ARGUMENT', 'secret.tokenSecret contains an invalid character');
@@ -296,10 +309,44 @@ const buildUrl = (baseUrl, segments = [], query = {}) => {
   return `${base}${path}${queryString}`;
 };
 
-const mapHttpStatus = (status) => {
+const errorSummary = (text, sensitiveValues = []) => {
+  const source = String(text ?? '').trim();
+  if (!source) return '';
+  let candidate = source;
+  try {
+    const parsed = JSON.parse(source);
+    candidate = pickFirstString([
+      parsed?.message,
+      parsed?.error,
+      parsed?.errors,
+      typeof parsed?.data === 'string' ? parsed.data : '',
+    ]);
+  } catch {
+    // Plain-text Proxmox errors are common; sanitize them below.
+  }
+  let sanitized = String(candidate);
+  for (const value of sensitiveValues) {
+    const secret = String(value ?? '');
+    if (secret) sanitized = sanitized.split(secret).join('[redacted]');
+  }
+  return sanitized
+    .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+    .replace(/PVEAPIToken\s*=\s*\S+/gi, '[redacted]')
+    .replace(/\b(?:token|secret|authorization)\s*[=:]\s*\S+/gi, '[redacted]')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 256);
+};
+
+const isResourceNotFound = (status, summary) => status === 500
+  && /(?:not found|does not exist|no such|unknown (?:node|resource)|unable to find)/i.test(summary);
+
+const mapHttpStatus = (status, summary = '') => {
   if (status === 401 || status === 403) return 'PERMISSION_DENIED';
+  if (isResourceNotFound(status, summary)) return 'NOT_FOUND';
   if (status >= 400 && status < 500) return 'FAILED_PRECONDITION';
-  return 'UNAVAILABLE';
+  if ([502, 503, 504].includes(status)) return 'UNAVAILABLE';
+  return 'FAILED_PRECONDITION';
 };
 
 const parseJsonBody = (text) => {
@@ -339,7 +386,9 @@ const proxmoxRequest = async (ctx, segments, { method = 'GET', query, allowHttp 
     logFlow(callCtx, 'fetch:response', { url, httpStatus, bodyLength: Buffer.byteLength(text, 'utf8') });
 
     if (!response.ok) {
-      throw engineError(mapHttpStatus(httpStatus), `upstream http ${httpStatus}`);
+      const summary = errorSummary(text, [token.tokenId, token.tokenSecret, authHeader]);
+      const detail = summary ? `: ${summary}` : '';
+      throw engineError(mapHttpStatus(httpStatus, summary), `upstream http ${httpStatus}${detail}`);
     }
     return { httpStatus, text, json: parseJsonBody(text) };
   } catch (err) {
@@ -455,12 +504,12 @@ const buildQemuVMInfo = (entry) => {
     serial: valueOrZeroLong(raw.serial),
     lock_status: pickString(raw.lock),
     tags: pickString(raw.tags),
-    pressure_cpu_full: valueOrZeroDouble(raw.pressurecpufull),
-    pressure_cpu_some: valueOrZeroDouble(raw.pressurecpusome),
-    pressure_io_full: valueOrZeroDouble(raw.pressureiofull),
-    pressure_io_some: valueOrZeroDouble(raw.pressureiosome),
-    pressure_memory_full: valueOrZeroDouble(raw.pressurememoryfull),
-    pressure_memory_some: valueOrZeroDouble(raw.pressurememorysome),
+    pressure_cpu_full: valueOrZeroDouble(raw.pressurecpufull ?? raw['pressure-cpu-full']),
+    pressure_cpu_some: valueOrZeroDouble(raw.pressurecpusome ?? raw['pressure-cpu-some']),
+    pressure_io_full: valueOrZeroDouble(raw.pressureiofull ?? raw['pressure-io-full']),
+    pressure_io_some: valueOrZeroDouble(raw.pressureiosome ?? raw['pressure-io-some']),
+    pressure_memory_full: valueOrZeroDouble(raw.pressurememoryfull ?? raw['pressure-memory-full']),
+    pressure_memory_some: valueOrZeroDouble(raw.pressurememorysome ?? raw['pressure-memory-some']),
   };
 };
 
@@ -487,12 +536,12 @@ const buildLXCInfo = (entry) => {
     net_out: valueOrZeroLong(raw.netout),
     lock_status: pickString(raw.lock),
     tags: pickString(raw.tags),
-    pressure_cpu_full: valueOrZeroDouble(raw.pressurecpufull),
-    pressure_cpu_some: valueOrZeroDouble(raw.pressurecpusome),
-    pressure_io_full: valueOrZeroDouble(raw.pressureiofull),
-    pressure_io_some: valueOrZeroDouble(raw.pressureiosome),
-    pressure_memory_full: valueOrZeroDouble(raw.pressurememoryfull),
-    pressure_memory_some: valueOrZeroDouble(raw.pressurememorysome),
+    pressure_cpu_full: valueOrZeroDouble(raw.pressurecpufull ?? raw['pressure-cpu-full']),
+    pressure_cpu_some: valueOrZeroDouble(raw.pressurecpusome ?? raw['pressure-cpu-some']),
+    pressure_io_full: valueOrZeroDouble(raw.pressureiofull ?? raw['pressure-io-full']),
+    pressure_io_some: valueOrZeroDouble(raw.pressureiosome ?? raw['pressure-io-some']),
+    pressure_memory_full: valueOrZeroDouble(raw.pressurememoryfull ?? raw['pressure-memory-full']),
+    pressure_memory_some: valueOrZeroDouble(raw.pressurememorysome ?? raw['pressure-memory-some']),
   };
 };
 
@@ -582,14 +631,17 @@ const buildQemuVMConfig = (raw, node, vmid) => {
     tags: pickString(data.tags),
     template: pickBoolean(data.template) ?? false,
     onboot: pickBoolean(data.onboot) ?? false,
-    autostart: pickBoolean(data.autostart) ?? false,
+    // Proxmox represents boot-time start with `onboot`; retain the public
+    // `autostart` field as a compatibility alias instead of reading a
+    // non-existent QEMU config key.
+    autostart: pickBoolean(data.onboot) ?? false,
     cpu: pickString(data.cpu),
     cpulimit: valueOrZeroDouble(data.cpulimit),
     cpuunits: valueOrZeroLong(data.cpuunits),
     bios: pickString(data.bios),
     machine: pickString(data.machine),
     arch: pickString(data.arch),
-    agent: pickBoolean(data.agent) ?? false,
+    agent: pickAgentEnabled(data.agent),
     hugepages: pickString(data.hugepages),
     keephugepages: pickBoolean(data.keephugepages) ?? false,
     vmgenid: pickString(data.vmgenid),
@@ -768,11 +820,14 @@ export const _test = {
   isValidVmid,
   logFlow,
   mapHttpStatus,
+  errorSummary,
+  isResourceNotFound,
   normalizeBaseUrl,
   parseJsonBody,
   pickBoolean,
   pickDouble,
   pickFirstBoolean,
+  pickAgentEnabled,
   pickFirstString,
   pickInt,
   pickLong,

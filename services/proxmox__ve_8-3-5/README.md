@@ -60,7 +60,7 @@ The header is built from `tokenId` and `tokenSecret`. Plain `PVEAuthCookie` tick
 - `ListNodes` does not need a `node` argument; everything else uses `req.node` (or `bindings.defaultNode`).
 - `GetQemuVMConfig` requires both `node` and `vmid`.
 - Responses are decoded from Proxmox's `{ "data": ... }` envelope and projected to compact proto messages. The raw upstream body and HTTP status are also returned for callers that need the full payload.
-- HTTP `401` / `403` map to `PERMISSION_DENIED`; other `4xx` map to `FAILED_PRECONDITION`; `5xx` and network failures map to `UNAVAILABLE`; non-JSON or empty responses map to `UNKNOWN`.
+- HTTP `401` / `403` map to `PERMISSION_DENIED`; other `4xx` map to `FAILED_PRECONDITION`. Proxmox's HTTP 500 "resource does not exist" response maps to `NOT_FOUND`, other permanent `500`/`501` failures map to `FAILED_PRECONDITION`, and `502`/`503`/`504` plus network failures map to `UNAVAILABLE`. A sanitized, bounded upstream error summary is retained for diagnosis; non-JSON or empty successful responses map to `UNKNOWN`.
 
 ## Validation
 

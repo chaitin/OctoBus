@@ -72,6 +72,7 @@ const expectGrpcError = async (fn, legacyCode, checker = () => {}) => {
   const codes = {
     FAILED_PRECONDITION: grpcStatus.FAILED_PRECONDITION,
     INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT,
+    NOT_FOUND: grpcStatus.NOT_FOUND,
     PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED,
     UNAVAILABLE: grpcStatus.UNAVAILABLE,
     UNKNOWN: grpcStatus.UNKNOWN,
@@ -197,9 +198,16 @@ test('ListQemuVMs missing node returns INVALID_ARGUMENT', async () => {
   );
 });
 
-test('ListQemuVMs http 500 maps to UNAVAILABLE', async () => {
-  setFetch(async () => responseOf(500, 'broken'));
-  await expectGrpcError(() => handlers[METHOD_LIST_QEMU_VMS_FULL]({ node: 'pve-node-1' }, buildCtx()), 'UNAVAILABLE');
+test('ListQemuVMs maps permanent node errors to NOT_FOUND with a safe summary', async () => {
+  setFetch(async () => responseOf(500, { message: "node 'missing' does not exist", token: 'must-not-leak' }));
+  await expectGrpcError(
+    () => handlers[METHOD_LIST_QEMU_VMS_FULL]({ node: 'pve-node-1' }, buildCtx()),
+    'NOT_FOUND',
+    (err) => {
+      assert.match(err.message, /does not exist/);
+      assert.doesNotMatch(err.message, /must-not-leak/);
+    },
+  );
 });
 
 test('GetQemuVMConfig happy path includes vmid in URL and config in response', async () => {
@@ -505,6 +513,8 @@ test('helper functions cover normalization, mapping, and validation', async () =
   assert.equal(_test.requireNodeName({}, { defaultNode: 'b' }, 'X'), 'b');
   assert.equal(_test.resolveToken({ tokenId: 'a@b!c', tokenSecret: 's' }).tokenId, 'a@b!c');
   assert.throws(() => _test.resolveToken({ tokenId: 'a', tokenSecret: 's' }), /USER@REALM/);
+  assert.throws(() => _test.resolveToken({ tokenId: 'root!token', tokenSecret: 's' }), /USER@REALM/);
+  assert.throws(() => _test.resolveToken({ tokenId: 'root @pam!token', tokenSecret: 's' }), /USER@REALM/);
   assert.throws(() => _test.resolveToken({ tokenId: '', tokenSecret: 's' }), /tokenId/);
   assert.throws(() => _test.resolveToken({ tokenId: 'a@b!c', tokenSecret: '' }), /tokenSecret/);
   assert.throws(() => _test.buildAuthHeader({ tokenId: '', tokenSecret: 's' }), /INVALID_ARGUMENT/);
@@ -535,8 +545,18 @@ test('helper functions cover normalization, mapping, and validation', async () =
   assert.equal(_test.mapHttpStatus(403), 'PERMISSION_DENIED');
   assert.equal(_test.mapHttpStatus(400), 'FAILED_PRECONDITION');
   assert.equal(_test.mapHttpStatus(404), 'FAILED_PRECONDITION');
-  assert.equal(_test.mapHttpStatus(500), 'UNAVAILABLE');
+  assert.equal(_test.mapHttpStatus(500), 'FAILED_PRECONDITION');
+  assert.equal(_test.mapHttpStatus(500, "node 'gone' does not exist"), 'NOT_FOUND');
   assert.equal(_test.mapHttpStatus(502), 'UNAVAILABLE');
+  assert.equal(_test.errorSummary('{"message":"node missing","token":"secret"}'), 'node missing');
+  assert.equal(_test.errorSummary('authorization=secret\nupstream failure'), '[redacted] upstream failure');
+  assert.equal(_test.errorSummary(''), '');
+  assert.equal(_test.errorSummary('{"error":"failed"}'), 'failed');
+  assert.equal(_test.errorSummary('secret-value', ['secret-value']), '[redacted]');
+  assert.equal(_test.pickAgentEnabled(undefined), false);
+  assert.equal(_test.pickAgentEnabled('enabled=1'), true);
+  assert.equal(_test.pickAgentEnabled('enabled=off'), false);
+  assert.equal(_test.pickAgentEnabled('malformed'), false);
   assert.throws(() => _test.parseJsonBody('not json'), /INVALID_ARGUMENT|UNKNOWN/);
   assert.throws(() => _test.parseJsonBody(''), /UNKNOWN/);
   assert.deepEqual(_test.parseJsonBody('{"a":1}'), { a: 1 });
@@ -579,6 +599,7 @@ test('helper functions cover normalization, mapping, and validation', async () =
   assert.equal(_test.buildQemuVMInfo({ vmid: 100 }).net_in, 0);
   assert.equal(_test.buildQemuVMInfo({ vmid: 100, 'running-machine': 'pc-q35-9.0' }).running_machine, 'pc-q35-9.0');
   assert.equal(_test.buildQemuVMInfo({ vmid: 100, pressurecpufull: 0.5 }).pressure_cpu_full, 0.5);
+  assert.equal(_test.buildQemuVMInfo({ vmid: 100, 'pressure-cpu-full': 0.6 }).pressure_cpu_full, 0.6);
   assert.equal(_test.buildQemuVMInfo({ vmid: 100, pressurecpusome: 0.4, pressureiofull: 0.3, pressureiosome: 0.2, pressurememoryfull: 0.1, pressurememorysome: 0.05 }).pressure_memory_some, 0.05);
   assert.equal(_test.buildQemuVMInfo({ vmid: 100 }).pressure_cpu_full, 0);
   assert.equal(_test.buildQemuVMInfo({ vmid: 100, template: 0 }).template, false);
@@ -588,6 +609,7 @@ test('helper functions cover normalization, mapping, and validation', async () =
   assert.equal(_test.buildLXCInfo({ vmid: 200, name: 'lxc', maxswap: 4096, tags: 'web' }).max_swap, 4096);
   assert.equal(_test.buildLXCInfo({ vmid: 200 }).max_swap, 0);
   assert.equal(_test.buildLXCInfo({ vmid: 200, pressureiosome: 0.3 }).pressure_io_some, 0.3);
+  assert.equal(_test.buildLXCInfo({ vmid: 200, 'pressure-io-some': 0.35 }).pressure_io_some, 0.35);
   assert.equal(_test.buildLXCInfo({ vmid: 200, pressurecpufull: 0.6, pressurecpusome: 0.5, pressureiofull: 0.4, pressurememoryfull: 0.2, pressurememorysome: 0.1 }).pressure_memory_some, 0.1);
   assert.equal(_test.buildLXCInfo({ vmid: 200, template: '0' }).template, false);
   assert.equal(_test.buildLXCInfo({ vmid: 201, template: '1' }).template, true);
@@ -639,6 +661,9 @@ test('helper functions cover normalization, mapping, and validation', async () =
   assert.equal(qc.machine, 'pc-q35-9.0');
   assert.equal(qc.arch, 'x86_64');
   assert.equal(qc.agent, true);
+  assert.equal(_test.buildQemuVMConfig({ agent: 'enabled=1,fstrim_cloned_disks=1', onboot: '1' }, 'pve-1', 7).agent, true);
+  assert.equal(_test.buildQemuVMConfig({ agent: 'enabled=0,fstrim_cloned_disks=1', onboot: '0' }, 'pve-1', 7).agent, false);
+  assert.equal(_test.buildQemuVMConfig({ autostart: 1, onboot: '0' }, 'pve-1', 7).autostart, false);
   assert.equal(qc.hugepages, '1024');
   assert.equal(qc.keephugepages, true);
   assert.equal(qc.vmgenid, 'g1');
@@ -789,7 +814,10 @@ test('upstream bodies and unsafe base URLs never become error or redirect target
   await expectGrpcError(
     () => handlers[METHOD_LIST_NODES_FULL]({}, buildCtx()),
     'UNAVAILABLE',
-    (err) => assert.equal(err.message, 'UNAVAILABLE: upstream http 502'),
+    (err) => {
+      assert.equal(err.message, 'UNAVAILABLE: upstream http 502: server echoed [redacted]');
+      assert.doesNotMatch(err.message, new RegExp(TOKEN_SECRET));
+    },
   );
   for (const baseUrl of [
     'https://user:password@pve.example.com:8006',
