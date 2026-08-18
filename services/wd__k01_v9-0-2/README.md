@@ -71,9 +71,10 @@
 | --- | --- |
 | 缺 host/账号/密码、ip 非法、type/severity/id ≤0、color/dir 越界 | `INVALID_ARGUMENT` |
 | 登录失败 / 业务 msgType 非 success | `FAILED_PRECONDITION` |
-| 上游 401 / 403 | `PERMISSION_DENIED` |
+| 上游 401 | `UNAUTHENTICATED` |
+| 上游 403 | `PERMISSION_DENIED` |
 | 网络错误 / 5xx | `UNAVAILABLE` |
-| 超时 / 重定向 | `DEADLINE_EXCEEDED` / `UNAVAILABLE` |
+| 超时 / 重定向 | `UNAVAILABLE` |
 | 响应空体 / 非 JSON | `UNKNOWN` |
 
 ## 建议 capset
