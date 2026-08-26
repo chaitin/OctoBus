@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "host": {
+      "type": "string",
+      "description": "WD K01 Web API base URL, including scheme and optional port."
+    },
+    "restBaseUrl": {
+      "type": "string",
+      "description": "Alias for host."
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "Alias for host."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 60000,
+      "default": 1500,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for private deployments."
+    },
+    "tlsInsecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Legacy alias for skipTlsVerify."
+    },
+    "insecureSkipVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Legacy alias for skipTlsVerify."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional additional HTTP headers."
+    }
+  }
+}

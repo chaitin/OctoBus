@@ -605,6 +605,10 @@ const services = {
     entryFile: "../openinfra__openstack-yoga_2022-1/bin/openstack-yoga-2022-1.js",
     serviceModule: "../openinfra__openstack-yoga_2022-1/src/service.js",
   },
+  "wd-k01-v9-0-2": {
+    entryFile: "../wd__k01_v9-0-2/bin/wd-k01-v9-0-2.js",
+    serviceModule: "../wd__k01_v9-0-2/src/service.js",
+  },
 };
 
 const serviceNames = Object.keys(services);
