@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { spawn } from "node:child_process";
-import http from "node:http";
+import { execFileSync, spawn } from "node:child_process";
+import https from "node:https";
 import http2 from "node:http2";
 import fs from "node:fs";
 import net from "node:net";
@@ -31,7 +31,7 @@ const mock = await startMockUpstream();
 const addr = `127.0.0.1:${await freePort()}`;
 const daemon = spawn(octobusBin, ["serve", "--addr", addr, "--data-dir", dataDir], {
   cwd: repoRoot,
-  env: { ...process.env, OCTOBUS_ADDR: addr, OCTOBUS_DATA_DIR: dataDir },
+  env: { ...process.env, OCTOBUS_ADDR: addr, OCTOBUS_DATA_DIR: dataDir, NODE_EXTRA_CA_CERTS: mock.caFile },
   stdio: ["ignore", "pipe", "pipe"],
 });
 
@@ -280,7 +280,18 @@ function requiredValue(args, index, flag) {
 async function startMockUpstream() {
   let hitCount = 0;
   const requests = [];
-  const server = http.createServer((req, res) => {
+  const tlsDir = fs.mkdtempSync(path.join(os.tmpdir(), "octobus-smoke-tls."));
+  const keyPath = path.join(tlsDir, "key.pem");
+  const certPath = path.join(tlsDir, "cert.pem");
+  execFileSync("openssl", [
+    "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+    "-keyout", keyPath, "-out", certPath, "-days", "1",
+    "-subj", "/CN=127.0.0.1", "-addext", "subjectAltName=IP:127.0.0.1",
+  ], { stdio: "ignore" });
+  const server = https.createServer({
+    key: fs.readFileSync(keyPath),
+    cert: fs.readFileSync(certPath),
+  }, (req, res) => {
     hitCount += 1;
     const chunks = [];
     req.on("data", (chunk) => chunks.push(chunk));
@@ -341,8 +352,12 @@ async function startMockUpstream() {
     get requests() {
       return requests;
     },
-    baseURL: `http://127.0.0.1:${address.port}`,
-    close: () => new Promise((resolve) => server.close(resolve)),
+    baseURL: `https://127.0.0.1:${address.port}`,
+    caFile: certPath,
+    close: () => new Promise((resolve) => server.close(() => {
+      fs.rmSync(tlsDir, { recursive: true, force: true });
+      resolve();
+    })),
   };
 }
 

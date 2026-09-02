@@ -53,8 +53,8 @@ test('requires an Access Secret before any request is issued', async () => {
     (error) => error.code === grpcStatus.INVALID_ARGUMENT && /accessSecret is required/.test(error.message),
   );
   assert.throws(
-    () => _test.resolveSettings({ config: { baseUrl: 'ftp://example' }, secret: { accessSecret: 'a' } }),
-    /baseUrl must use http or https/,
+    () => _test.resolveSettings({ config: { baseUrl: 'http://example' }, secret: { accessSecret: 'a' } }),
+    /baseUrl must use https/,
   );
   assert.throws(
     () => _test.normalizeBaseUrl('not a url'),
@@ -492,7 +492,7 @@ test('parseResponse maps non-OK HTTP with and without a Message field', async ()
   assert.deepEqual(ok, { data: { a: 1 } });
 });
 
-test('respects config timeouts, custom headers, TLS flags, and legacy aliases', async () => {
+test('respects config timeouts, custom headers, and legacy aliases', async () => {
   let captured;
   globalThis.fetch = async (url, init) => {
     captured = { url, init };
@@ -500,23 +500,32 @@ test('respects config timeouts, custom headers, TLS flags, and legacy aliases', 
   };
   const result = await handlers[METHODS.GET_HOT_LIST]({
     config: {
-      baseUrl: 'http://localhost:18082',
+      baseUrl: 'https://localhost:18082',
       timeout_ms: 3100,
       headers: { 'X-Custom': 'value' },
-      skipTlsVerify: true,
     },
     secret: { access_secret: 'legacy-secret' },
     meta: { instance_id: 'inst', request_id: 'req' },
     request: { limit: 2 },
   });
   assert.deepEqual(result.data, {});
-  assert.equal(captured.url, 'http://localhost:18082/api/v1/content/hot_list?Limit=2');
+  assert.equal(captured.url, 'https://localhost:18082/api/v1/content/hot_list?Limit=2');
   assert.equal(captured.init.headers['X-Custom'], 'value');
   assert.equal(captured.init.headers['x-engine-instance'], 'inst');
   assert.equal(captured.init.headers['x-request-id'], 'req');
   assert.equal(captured.init.headers.Authorization, 'Bearer legacy-secret');
-  assert.equal(captured.init.dispatcher, _test.insecureTlsDispatcher);
+  assert.equal(captured.init.dispatcher, undefined);
   assert.ok(captured.init.signal instanceof AbortSignal);
+  assert.throws(
+    () => _test.resolveSettings({ config: { baseUrl: 'https://example', skipTlsVerify: true }, secret: { accessSecret: 'a' } }),
+    /TLS certificate verification cannot be disabled/,
+  );
+  for (const alias of ['tlsInsecureSkipVerify', 'insecureSkipVerify']) {
+    assert.throws(
+      () => _test.resolveSettings({ config: { baseUrl: 'https://example', [alias]: true }, secret: { accessSecret: 'a' } }),
+      /TLS certificate verification cannot be disabled/,
+    );
+  }
   const settings = _test.resolveSettings({
     config: { baseUrl: 'https://x', timeoutMs: 2000, headers: { a: 'b' } },
     secret: { accessSecret: 's' },
