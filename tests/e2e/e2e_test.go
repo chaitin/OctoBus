@@ -217,6 +217,19 @@ func TestFullUserFlowInvokesAllProtocolsAndPersistsData(t *testing.T) {
 		t.Fatalf("unexpected MCP text content: %+v", content)
 	}
 
+	var mdCall map[string]any
+	h.mcpWithHeaders(`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"calculator__calculator-test__add","arguments":{"left":20,"right":22}}}`, map[string]string{
+		"x-octobus-ext-business-request-id": "req-mcp",
+		"x-octobus-ext-username":            "carol",
+		"x-octobus-capset":                  "wrong",
+		"x-octobus-instance":                "wrong",
+	}, &mdCall)
+	mdResult := mdCall["result"].(map[string]any)["structuredContent"].(map[string]any)
+	if mdResult["businessRequestId"] != "req-mcp" {
+		t.Fatalf("MCP businessRequestId=%v in %+v", mdResult["businessRequestId"], mdResult)
+	}
+	assertBackendMetadata(t, h, "calculator-test", "req-mcp", "carol")
+
 	logs := h.mustCLI("logs", "--capset", "dev", "--instance", "calculator-test", "--service", "calculator", "--limit", "0")
 	assertAccessLogContains(t, logs, map[string]any{
 		"protocol":    "connect",

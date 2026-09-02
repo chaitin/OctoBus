@@ -93,11 +93,20 @@ func TestCalculatorOnDemandExampleInvokesAllProtocols(t *testing.T) {
 	assertBackendMetadata(t, h, "calculator-test", "od-calc-connect", "od-bob")
 
 	var mcpResp map[string]any
-	h.mcp(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"`+mcpAdd.ToolName+`","arguments":{"left":9,"right":3}}}`, &mcpResp)
+	h.mcpWithHeaders(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"`+mcpAdd.ToolName+`","arguments":{"left":9,"right":3}}}`, map[string]string{
+		"x-octobus-ext-business-request-id": "od-calc-mcp",
+		"x-octobus-ext-username":            "od-carol",
+		"x-octobus-capset":                  "wrong",
+		"x-octobus-instance":                "wrong",
+	}, &mcpResp)
 	structured := mcpResp["result"].(map[string]any)["structuredContent"].(map[string]any)
 	if math.Abs(structured["result"].(float64)-12) > 0.000001 || structured["serviceId"] != "calculator-on-demand" || structured["secretToken"] != "runtime-secret" {
 		t.Fatalf("unexpected MCP response: %+v", mcpResp)
 	}
+	if structured["businessRequestId"] != "od-calc-mcp" {
+		t.Fatalf("MCP businessRequestId=%v in %+v", structured["businessRequestId"], structured)
+	}
+	assertBackendMetadata(t, h, "calculator-test", "od-calc-mcp", "od-carol")
 
 	after := h.readDB(`SELECT pid, listen_addr FROM instances WHERE id = ?`, "calculator-test")
 	if after["pid"] != "" || after["listen_addr"] != "" {

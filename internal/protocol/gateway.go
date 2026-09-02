@@ -705,7 +705,7 @@ func (g *Gateway) HandleConnectRPC(w http.ResponseWriter, r *http.Request) {
 		connect.NewErrorWriter().Write(recorder, r, connect.NewError(connect.CodeInternal, err))
 		return
 	}
-	ctx := metadata.NewIncomingContext(r.Context(), connectForwardMetadata(r.Header))
+	ctx := metadata.NewIncomingContext(r.Context(), forwardMetadataFromHeaders(r.Header))
 	ctx = context.WithValue(ctx, connectExposedMethodKey{}, item)
 	r = r.WithContext(ctx)
 	r.URL.Path = "/" + item.Method.FullName
@@ -749,6 +749,7 @@ func (g *Gateway) HandleMCP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(recorder, http.StatusUnauthorized, mcpProtocolError(nil, err.Error()))
 		return
 	}
+	r = r.WithContext(metadata.NewIncomingContext(r.Context(), forwardMetadataFromHeaders(r.Header)))
 	r.Body = http.MaxBytesReader(recorder, r.Body, DefaultMaxRequestBytes)
 	var req struct {
 		JSONRPC string          `json:"jsonrpc"`
@@ -1896,11 +1897,11 @@ func isOctobusControlMetadata(key string) bool {
 	return strings.HasPrefix(normalized, "x-octobus-") && !strings.HasPrefix(normalized, "x-octobus-ext-")
 }
 
-func connectForwardMetadata(headers http.Header) metadata.MD {
+func forwardMetadataFromHeaders(headers http.Header) metadata.MD {
 	out := metadata.MD{}
 	for key, vals := range headers {
 		normalized := strings.ToLower(key)
-		if !isAllowedConnectForwardHeader(normalized) {
+		if !isForwardableHeader(normalized) {
 			continue
 		}
 		for _, val := range vals {
@@ -1910,7 +1911,7 @@ func connectForwardMetadata(headers http.Header) metadata.MD {
 	return out
 }
 
-func isAllowedConnectForwardHeader(key string) bool {
+func isForwardableHeader(key string) bool {
 	return key == "x-business-request-id" || strings.HasPrefix(key, "x-octobus-ext-")
 }
 
