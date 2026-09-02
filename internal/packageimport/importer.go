@@ -18,6 +18,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
+	"time"
 
 	"octobus/internal/descriptors"
 	"octobus/internal/domain"
@@ -27,6 +29,63 @@ import (
 type Importer struct {
 	DataDir string
 	Store   *store.Store
+
+	importMu    sync.Mutex
+	importLocks map[string]*serviceImportLock
+}
+
+const staleImportDirAge = 24 * time.Hour
+
+type serviceImportLock struct {
+	mu   sync.Mutex
+	refs int
+}
+
+func (i *Importer) lockService(serviceID string) func() {
+	i.importMu.Lock()
+	if i.importLocks == nil {
+		i.importLocks = make(map[string]*serviceImportLock)
+	}
+	lock := i.importLocks[serviceID]
+	if lock == nil {
+		lock = &serviceImportLock{}
+		i.importLocks[serviceID] = lock
+	}
+	lock.refs++
+	i.importMu.Unlock()
+	lock.mu.Lock()
+	return func() {
+		lock.mu.Unlock()
+		i.importMu.Lock()
+		lock.refs--
+		if lock.refs == 0 && i.importLocks[serviceID] == lock {
+			delete(i.importLocks, serviceID)
+		}
+		i.importMu.Unlock()
+	}
+}
+
+func sweepStaleImportDirs(root string) error {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return err
+	}
+	cutoff := time.Now().Add(-staleImportDirAge)
+	for _, entry := range entries {
+		if !entry.IsDir() || !(strings.HasPrefix(entry.Name(), ".staging-") || strings.Contains(entry.Name(), ".previous-")) {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if info.ModTime().Before(cutoff) {
+			if err := os.RemoveAll(filepath.Join(root, entry.Name())); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 type Options struct {
@@ -133,11 +192,15 @@ func (i *Importer) Import(ctx context.Context, opts Options) (Result, error) {
 		return Result{}, errors.New("service package source is required")
 	}
 	serviceDir := filepath.Join(i.DataDir, "artifacts", "services", opts.ServiceID)
-	staging := filepath.Join(i.DataDir, "artifacts", "services", ".staging-"+opts.ServiceID)
-	if err := os.RemoveAll(staging); err != nil {
+	stagingBase := filepath.Join(i.DataDir, "artifacts", "services")
+	if err := os.MkdirAll(stagingBase, 0o755); err != nil {
 		return Result{}, err
 	}
-	if err := os.MkdirAll(staging, 0o755); err != nil {
+	if err := sweepStaleImportDirs(stagingBase); err != nil {
+		return Result{}, err
+	}
+	staging, err := os.MkdirTemp(stagingBase, ".staging-"+opts.ServiceID+"-")
+	if err != nil {
 		return Result{}, err
 	}
 	defer os.RemoveAll(staging)
@@ -191,7 +254,9 @@ func (i *Importer) Import(ctx context.Context, opts Options) (Result, error) {
 	if err := reportImportProgress(opts, ImportProgressEvent{Type: "status", Stage: "commit_service", Message: "Committing service", ServiceID: opts.ServiceID}); err != nil {
 		return Result{}, err
 	}
+	unlockService := i.lockService(opts.ServiceID)
 	stored, err := i.commitImportedService(ctx, svc, serviceDir, commitDir)
+	unlockService()
 	if err != nil {
 		return Result{}, err
 	}
@@ -373,11 +438,15 @@ func (i *Importer) ImportRecursive(ctx context.Context, opts Options) (Recursive
 	if err != nil {
 		return RecursiveResult{}, err
 	}
-	staging := filepath.Join(i.DataDir, "artifacts", "services", ".staging-recursive-import")
-	if err := os.RemoveAll(staging); err != nil {
+	stagingBase := filepath.Join(i.DataDir, "artifacts", "services")
+	if err := os.MkdirAll(stagingBase, 0o755); err != nil {
 		return RecursiveResult{}, err
 	}
-	if err := os.MkdirAll(staging, 0o755); err != nil {
+	if err := sweepStaleImportDirs(stagingBase); err != nil {
+		return RecursiveResult{}, err
+	}
+	staging, err := os.MkdirTemp(stagingBase, ".staging-recursive-")
+	if err != nil {
 		return RecursiveResult{}, err
 	}
 	defer os.RemoveAll(staging)
@@ -478,7 +547,9 @@ func (i *Importer) ImportRecursive(ctx context.Context, opts Options) (Recursive
 		if err := reportImportProgress(opts, ImportProgressEvent{Type: "status", Stage: "commit_service", Message: "Committing service", ServiceID: candidate.ServiceID, Current: current, Total: len(candidates)}); err != nil {
 			return result, err
 		}
+		unlockService := i.lockService(candidate.ServiceID)
 		stored, err := i.commitImportedService(ctx, svc, serviceDir, commitDir)
+		unlockService()
 		if err != nil {
 			return result, fmt.Errorf("commit service %s: %w", candidate.ServiceID, err)
 		}
@@ -1502,8 +1573,11 @@ func replaceServiceDir(serviceDir, preparedDir string) (func() error, func() err
 	if err := os.MkdirAll(parent, 0o755); err != nil {
 		return nil, nil, err
 	}
-	backupDir := filepath.Join(parent, "."+filepath.Base(serviceDir)+".previous")
-	if err := os.RemoveAll(backupDir); err != nil {
+	backupDir, err := os.MkdirTemp(parent, "."+filepath.Base(serviceDir)+".previous-")
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := os.Remove(backupDir); err != nil {
 		return nil, nil, err
 	}
 	hadPrevious := false
