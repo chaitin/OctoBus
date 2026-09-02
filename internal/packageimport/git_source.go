@@ -219,13 +219,28 @@ func (i *Importer) prepareGitSource(ctx context.Context, rawSource, staging stri
 	if err != nil {
 		return preparedSource{}, err
 	}
-	runner, err := newGitRunner(src, staging)
+	var gitProxy *validatedGitProxy
+	var proxyURL string
+	if i.RemoteTargetValidator != nil {
+		gitProxy, err = startValidatedGitProxy(ctx, i.RemoteTargetValidator)
+		if err != nil {
+			return preparedSource{}, fmt.Errorf("start Git validation proxy: %w", err)
+		}
+		defer gitProxy.Close()
+		proxyURL = gitProxy.URL()
+	}
+	runner, err := newGitRunner(src, staging, proxyURL)
 	if err != nil {
 		return preparedSource{}, err
 	}
 	repoDir := filepath.Join(staging, "git")
 	if err := os.MkdirAll(repoDir, 0o755); err != nil {
 		return preparedSource{}, err
+	}
+	if i.RemoteTargetValidator != nil {
+		if err := i.RemoteTargetValidator(ctx, src.CredentialURL); err != nil {
+			return preparedSource{}, fmt.Errorf("validate Git remote: %w", err)
+		}
 	}
 	if err := runner.run(ctx, repoDir, "init", "--bare", "."); err != nil {
 		return preparedSource{}, err
@@ -271,11 +286,12 @@ func serviceRootOrDefault(serviceRoot string) string {
 }
 
 type gitRunner struct {
-	source gitSource
-	env    []string
+	source   gitSource
+	env      []string
+	proxyURL string
 }
 
-func newGitRunner(src gitSource, staging string) (*gitRunner, error) {
+func newGitRunner(src gitSource, staging string, proxyURL ...string) (*gitRunner, error) {
 	if _, err := exec.LookPath("git"); err != nil {
 		return nil, errors.New("git is required to import HTTPS Git sources; install git and ensure it is on PATH")
 	}
@@ -294,7 +310,11 @@ func newGitRunner(src gitSource, staging string) (*gitRunner, error) {
 	} else {
 		env = append(env, "GIT_TERMINAL_PROMPT=0")
 	}
-	return &gitRunner{source: src, env: env}, nil
+	runner := &gitRunner{source: src, env: env}
+	if len(proxyURL) > 0 {
+		runner.proxyURL = proxyURL[0]
+	}
+	return runner, nil
 }
 
 func writeGitAskpass(staging string, src gitSource) (string, error) {
@@ -318,7 +338,12 @@ func (r *gitRunner) run(ctx context.Context, dir string, args ...string) error {
 }
 
 func (r *gitRunner) output(ctx context.Context, dir string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", args...)
+	gitArgs := []string{"-c", "http.followRedirects=false"}
+	if r.proxyURL != "" {
+		gitArgs = append(gitArgs, "-c", "http.proxy="+r.proxyURL)
+	}
+	gitArgs = append(gitArgs, args...)
+	cmd := exec.CommandContext(ctx, "git", gitArgs...)
 	cmd.Dir = dir
 	cmd.Env = r.env
 	var out strings.Builder

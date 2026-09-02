@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -27,6 +26,11 @@ import (
 type Importer struct {
 	DataDir string
 	Store   *store.Store
+
+	// RemoteTargetValidator is configured by the daemon to enforce the
+	// network policy for server-side remote imports. Tests and local-only
+	// importers may leave it unset.
+	RemoteTargetValidator func(context.Context, string) error
 }
 
 type Options struct {
@@ -608,7 +612,7 @@ func (i *Importer) prepareSource(ctx context.Context, opts Options, staging stri
 		prepared.ServiceRoot = serviceRoot
 		return prepared, nil
 	case sourceRemoteArchive:
-		return prepareRemoteArchiveSource(ctx, source, serviceRoot, staging)
+		return i.prepareRemoteArchiveSource(ctx, source, serviceRoot, staging)
 	case sourceHTTPSGit:
 		return i.prepareGitSource(ctx, opts.Source, staging)
 	case sourceUnsupportedGit:
@@ -771,13 +775,13 @@ func hashFile(path string) (string, error) {
 	return domain.HashBytes(b), nil
 }
 
-func prepareRemoteArchiveSource(ctx context.Context, source, serviceRoot, staging string) (preparedSource, error) {
+func (i *Importer) prepareRemoteArchiveSource(ctx context.Context, source, serviceRoot, staging string) (preparedSource, error) {
 	artifactName, err := remoteArchiveArtifactName(source)
 	if err != nil {
 		return preparedSource{}, err
 	}
 	artifactPath := filepath.Join(staging, artifactName)
-	if err := downloadRemoteArchive(ctx, source, artifactPath); err != nil {
+	if err := downloadRemoteArchive(ctx, source, artifactPath, i.RemoteTargetValidator); err != nil {
 		return preparedSource{}, err
 	}
 	packageDir := filepath.Join(staging, "package")
@@ -817,34 +821,6 @@ func remoteArchiveArtifactName(source string) (string, error) {
 		return "package.tgz", nil
 	}
 	return "", fmt.Errorf("unsupported remote package source %q: must end with .tgz, .tar.gz, or .zip", redactedRemoteArchiveSource(source))
-}
-
-func downloadRemoteArchive(ctx context.Context, source, artifactPath string) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, source, nil)
-	if err != nil {
-		return fmt.Errorf("download remote package %q: %w", redactedRemoteArchiveSource(source), err)
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("download remote package %q: %w", redactedRemoteArchiveSource(source), err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("download remote package %q: HTTP %d", redactedRemoteArchiveSource(source), resp.StatusCode)
-	}
-	if err := os.MkdirAll(filepath.Dir(artifactPath), 0o755); err != nil {
-		return err
-	}
-	out, err := os.OpenFile(artifactPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	_, copyErr := io.Copy(out, resp.Body)
-	closeErr := out.Close()
-	if copyErr != nil {
-		return copyErr
-	}
-	return closeErr
 }
 
 func redactedRemoteArchiveSource(source string) string {
