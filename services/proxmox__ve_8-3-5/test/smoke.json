@@ -1,0 +1,12 @@
+{
+  "method": "Proxmox_VE_8_3_5.Proxmox_VE_8_3_5/ListNodes",
+  "request": {},
+  "expectUpstream": true,
+  "requireBusinessSuccess": true,
+  "requireUpstreamPerProtocol": true,
+  "protocols": ["connect", "grpc", "mcp"],
+  "upstream": {
+    "method": "GET",
+    "path": "/api2/json/nodes"
+  }
+}

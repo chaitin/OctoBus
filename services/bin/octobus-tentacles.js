@@ -509,6 +509,10 @@ const services = {
     entryFile: "../elastic__elasticsearch_7-10-0/bin/elasticsearch-7-10-0.js",
     serviceModule: "../elastic__elasticsearch_7-10-0/src/service.js",
   },
+  "ve-8-3-5": {
+    entryFile: "../proxmox__ve_8-3-5/bin/ve-8-3-5.js",
+    serviceModule: "../proxmox__ve_8-3-5/src/service.js",
+  },
   "wangsu-label-ip": {
     entryFile: "../wangsu__label-ip/bin/wangsu-label-ip.js",
     serviceModule: "../wangsu__label-ip/src/service.js",
