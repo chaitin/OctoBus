@@ -1,0 +1,12 @@
+{
+  "method": "VENUS_IPS.VENUS_IPS/ProbeConnectivity",
+  "request": {},
+  "expectUpstream": true,
+  "requireBusinessSuccess": true,
+  "requireUpstreamPerProtocol": true,
+  "protocols": ["connect", "grpc", "mcp"],
+  "upstream": {
+    "method": "GET",
+    "path": "/log/memorylog/ipslog.php"
+  }
+}
