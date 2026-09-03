@@ -387,7 +387,20 @@ func (h *harness) publicConnectProto(path string, body []byte, want int) []byte 
 
 func (h *harness) mcp(body string, out any) []byte {
 	h.t.Helper()
-	resp, err := h.client.Post("http://"+h.publicAddr+"/capsets/dev/mcp", "application/json", strings.NewReader(body))
+	return h.mcpWithHeaders(body, nil, out)
+}
+
+func (h *harness) mcpWithHeaders(body string, headers map[string]string, out any) []byte {
+	h.t.Helper()
+	req, err := http.NewRequest(http.MethodPost, "http://"+h.publicAddr+"/capsets/dev/mcp", strings.NewReader(body))
+	if err != nil {
+		h.t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+	resp, err := h.client.Do(req)
 	if err != nil {
 		h.t.Fatal(err)
 	}
