@@ -402,6 +402,10 @@ node bin/service.js call --data-json '{"id":"123"}'
 
 The SDK also reads the same variable from `.env` in the current working directory. It reads only that key and does not inject other `.env` variables. This variable does not affect the daemon's `--runtime serve` or `--runtime invoke` protocol. When the daemon manages instances, it continues to pass config/secret through files and file descriptors.
 
+## Secret storage
+
+Instance secrets are encrypted at rest with AES-256-GCM. Production deployments should provide `OCTOBUS_SECRET_ENCRYPTION_KEY` through a KMS/Vault-managed environment or provide `OCTOBUS_SECRET_ENCRYPTION_KEY_FILE` pointing to a separately protected 32-byte key file. If neither is configured, OctoBus creates `<database>.secret-key` with mode `0600`; this local fallback protects the database from casual inspection but does not protect against an attacker who can copy the entire data directory. Losing or changing the key is intentionally treated as a startup error when encrypted secrets exist.
+
 ## Development
 
 ### Architecture
