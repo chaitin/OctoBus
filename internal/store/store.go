@@ -22,6 +22,10 @@ type Store struct {
 	db *sql.DB
 }
 
+var ErrMCPToolNameConflict = errors.New("MCP tool name conflict")
+
+const mcpToolKeySeparator = "\x1f"
+
 type ServiceInUseError struct {
 	ServiceID  string
 	InstanceID string
@@ -107,6 +111,27 @@ func (s *Store) Migrate(ctx context.Context) error {
 		return err
 	}
 	if err := addColumnIfMissing(ctx, s.db, "services", "service_root", "TEXT NOT NULL DEFAULT '.'"); err != nil {
+		return err
+	}
+	if err := addColumnIfMissing(ctx, s.db, "capset_methods", "mcp_tool_key", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE capset_methods SET mcp_tool_key = (
+		SELECT ci.capset_id || char(31) || capset_methods.mcp_tool_name
+		FROM capset_instances ci
+		WHERE ci.id = capset_methods.capset_instance_id
+	)
+	WHERE mcp_tool_name <> ''`); err != nil {
+		return err
+	}
+	var duplicateKey string
+	var duplicateCount int
+	if err := s.db.QueryRowContext(ctx, `SELECT mcp_tool_key, COUNT(*) FROM capset_methods WHERE mcp_tool_key <> '' GROUP BY mcp_tool_key HAVING COUNT(*) > 1 LIMIT 1`).Scan(&duplicateKey, &duplicateCount); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	} else if err == nil {
+		return fmt.Errorf("MCP tool name %q has %d conflicting methods; remove or rename duplicates before restarting", duplicateKey, duplicateCount)
+	}
+	if _, err := s.db.ExecContext(ctx, `CREATE UNIQUE INDEX IF NOT EXISTS uq_capset_methods_mcp_tool_key ON capset_methods(mcp_tool_key) WHERE mcp_tool_key <> ''`); err != nil {
 		return err
 	}
 	_, err := s.db.ExecContext(ctx, `UPDATE services SET runtime_mode = 'long-running' WHERE runtime_mode = ''`)
@@ -782,8 +807,36 @@ func (s *Store) AddCapsetMethod(ctx context.Context, method domain.CapsetMethod)
 	now := time.Now().UTC()
 	method.CreatedAt = now
 	method.UpdatedAt = now
-	_, err := s.db.ExecContext(ctx, `INSERT INTO capset_methods (id, capset_instance_id, method_full_name, rest_alias, mcp_tool_name, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, method.ID, method.CapsetInstanceID, method.MethodFullName, method.RestAlias, method.MCPToolName, boolInt(method.Enabled), formatTime(method.CreatedAt), formatTime(method.UpdatedAt))
-	return err
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	toolKey := ""
+	if method.MCPToolName != "" {
+		var capsetID string
+		if err := tx.QueryRowContext(ctx, `SELECT capset_id FROM capset_instances WHERE id = ?`, method.CapsetInstanceID).Scan(&capsetID); err != nil {
+			return err
+		}
+		toolKey = capsetID + mcpToolKeySeparator + method.MCPToolName
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO capset_methods (id, capset_instance_id, method_full_name, rest_alias, mcp_tool_name, mcp_tool_key, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, method.ID, method.CapsetInstanceID, method.MethodFullName, method.RestAlias, method.MCPToolName, toolKey, boolInt(method.Enabled), formatTime(method.CreatedAt), formatTime(method.UpdatedAt))
+	if err != nil {
+		var existingID string
+		if idErr := tx.QueryRowContext(ctx, `SELECT id FROM capset_methods WHERE id = ?`, method.ID).Scan(&existingID); idErr == nil {
+			return err
+		}
+		if toolKey != "" {
+			var existingToolID string
+			if keyErr := tx.QueryRowContext(ctx, `SELECT id FROM capset_methods WHERE mcp_tool_key = ?`, toolKey).Scan(&existingToolID); keyErr == nil {
+				return ErrMCPToolNameConflict
+			}
+		}
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *Store) GetCapsetMethod(ctx context.Context, capsetInstanceID, methodFullName string) (domain.CapsetMethod, error) {
@@ -1257,6 +1310,7 @@ CREATE TABLE IF NOT EXISTS capset_methods (
   method_full_name TEXT NOT NULL,
   rest_alias TEXT NOT NULL DEFAULT '',
   mcp_tool_name TEXT NOT NULL DEFAULT '',
+  mcp_tool_key TEXT NOT NULL DEFAULT '',
   enabled INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
