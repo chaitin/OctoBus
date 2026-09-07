@@ -116,6 +116,16 @@ func (s *Store) Migrate(ctx context.Context) error {
 	if err := addColumnIfMissing(ctx, s.db, "capset_methods", "mcp_tool_key", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
+	// Older releases keyed mcp_tool_key per instance (capset_instance_id ||
+	// separator || name) and created uq_capset_methods_mcp_tool_key on that
+	// instance-scoped key. That index must be dropped before the backfill
+	// below rewrites rows to capset-scoped keys; otherwise the UPDATE violates
+	// the stale unique index on the second duplicate row and aborts before the
+	// friendly conflict check can run. The capset-scoped index is recreated
+	// after the conflict check passes.
+	if _, err := s.db.ExecContext(ctx, `DROP INDEX IF EXISTS uq_capset_methods_mcp_tool_key`); err != nil {
+		return err
+	}
 	if _, err := s.db.ExecContext(ctx, `UPDATE capset_methods SET mcp_tool_key = (
 		SELECT ci.capset_id || char(31) || capset_methods.mcp_tool_name
 		FROM capset_instances ci
@@ -129,7 +139,12 @@ func (s *Store) Migrate(ctx context.Context) error {
 	if err := s.db.QueryRowContext(ctx, `SELECT mcp_tool_key, COUNT(*) FROM capset_methods WHERE mcp_tool_key <> '' GROUP BY mcp_tool_key HAVING COUNT(*) > 1 LIMIT 1`).Scan(&duplicateKey, &duplicateCount); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	} else if err == nil {
-		return fmt.Errorf("MCP tool name %q has %d conflicting methods; remove or rename duplicates before restarting", duplicateKey, duplicateCount)
+		capsetID := ""
+		toolName := duplicateKey
+		if before, after, found := strings.Cut(duplicateKey, mcpToolKeySeparator); found {
+			capsetID, toolName = before, after
+		}
+		return fmt.Errorf("MCP tool name %q has %d conflicting methods in capset %q; remove or rename duplicates before restarting", toolName, duplicateCount, capsetID)
 	}
 	if _, err := s.db.ExecContext(ctx, `CREATE UNIQUE INDEX IF NOT EXISTS uq_capset_methods_mcp_tool_key ON capset_methods(mcp_tool_key) WHERE mcp_tool_key <> ''`); err != nil {
 		return err
