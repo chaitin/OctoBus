@@ -83,15 +83,18 @@ func TestTarExtractionEnforcesTotalExpandedSizeLimit(t *testing.T) {
 }
 
 func TestZipExtractionEnforcesEntryAndTotalSizeLimits(t *testing.T) {
-	archivePath := filepath.Join(t.TempDir(), "package.zip")
-	writeZipArchive(t, archivePath, "package/a", "abc")
-	// The entry-size check is covered independently; this archive is enough to
-	// exercise the total-size check after the first entry.
-	archivePath = filepath.Join(t.TempDir(), "package.zip")
-	writeZipArchive(t, archivePath, "package/a", "abcdef")
-	if err := unzipWithLimits(archivePath, t.TempDir(), archiveExtractionLimits{MaxFiles: 10, MaxEntryBytes: 2, MaxTotalBytes: 10}); err == nil || !strings.Contains(err.Error(), "byte limit") {
+	// Entry-size check: a single oversized entry exceeds MaxEntryBytes.
+	oversizedEntry := filepath.Join(t.TempDir(), "oversized-entry.zip")
+	writeZipArchive(t, oversizedEntry, zipEntry{name: "package/a", body: "abcdef"})
+	if err := unzipWithLimits(oversizedEntry, t.TempDir(), archiveExtractionLimits{MaxFiles: 10, MaxEntryBytes: 2, MaxTotalBytes: 10}); err == nil || !strings.Contains(err.Error(), "byte limit") {
 		t.Fatalf("zip entry size error = %v", err)
 	}
+
+	// Total-size check: two 3-byte entries each stay under MaxEntryBytes=10
+	// but total 6 bytes, which must trip the cumulative expanded-size check
+	// against MaxTotalBytes=5.
+	archivePath := filepath.Join(t.TempDir(), "package.zip")
+	writeZipArchive(t, archivePath, zipEntry{name: "package/a", body: "abc"}, zipEntry{name: "package/b", body: "def"})
 	if err := unzipWithLimits(archivePath, t.TempDir(), archiveExtractionLimits{MaxFiles: 10, MaxEntryBytes: 10, MaxTotalBytes: 5}); err == nil || !strings.Contains(err.Error(), "expanded byte limit") {
 		t.Fatalf("zip total size error = %v", err)
 	}
@@ -99,7 +102,7 @@ func TestZipExtractionEnforcesEntryAndTotalSizeLimits(t *testing.T) {
 
 func TestZipExtractionAllowsArchiveWithinLimits(t *testing.T) {
 	archivePath := filepath.Join(t.TempDir(), "package.zip")
-	writeZipArchive(t, archivePath, "package/data", "ok")
+	writeZipArchive(t, archivePath, zipEntry{name: "package/data", body: "ok"})
 	dst := t.TempDir()
 	if err := unzipWithLimits(archivePath, dst, archiveExtractionLimits{MaxFiles: 10, MaxEntryBytes: 10, MaxTotalBytes: 10}); err != nil {
 		t.Fatal(err)
