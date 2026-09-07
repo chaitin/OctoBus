@@ -26,7 +26,7 @@ before(async () => {
   server = createMockServer();
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
-  baseConfig = { baseUrl: `http://127.0.0.1:${server.address().port}`, timeoutMs: 5000 };
+  baseConfig = { baseUrl: `http://127.0.0.1:${server.address().port}`, timeoutMs: 5000, minRequestIntervalMs: 0 };
 });
 
 after(() => {
@@ -209,6 +209,103 @@ test('getPaper returns the latest version for a bare id', async () => {
   assert.equal(paper.arxivId, '0710.5765v2');
 });
 
+// arXiv semantics: a bare id means latest version; an explicit vN means that
+// exact historical version, and a non-existent version is not returned.
+test('getPaper returns the exact requested historical version', async () => {
+  const paper = await getPaper(baseConfig, '0710.5765v1');
+  assert.equal(paper.arxivId, '0710.5765v1');
+  assert.equal(paper.updated, '2007-10-30T21:18:23Z');
+});
+
+test('listPapers distinguishes a valid version from a non-existent version', async () => {
+  const mixed = await listPapers(baseConfig, ['0710.5765v1', '0710.5765v999']);
+  assert.deepEqual(mixed.papers.map((paper) => paper.arxivId), ['0710.5765v1']);
+  assert.deepEqual(mixed.missingIds, ['0710.5765v999']);
+
+  const onlyBad = await listPapers(baseConfig, ['0710.5765v999']);
+  assert.deepEqual(onlyBad.papers, []);
+  assert.deepEqual(onlyBad.missingIds, ['0710.5765v999']);
+});
+
+test('getPaper reports NOT_FOUND for a non-existent version', async () => {
+  const err = await expectLegacy(() => getPaper(baseConfig, '0710.5765v999'), 'NOT_FOUND');
+  assert.match(err.message, /0710\.5765v999/);
+});
+
+test('splitId separates bare ids from versioned ids', () => {
+  assert.deepEqual(_test.splitId('0710.5765v2'), { requested: '0710.5765v2', base: '0710.5765', version: 'v2' });
+  assert.deepEqual(_test.splitId('0710.5765'), { requested: '0710.5765', base: '0710.5765', version: null });
+  assert.deepEqual(_test.splitId('hep-ex/0307015v1'), { requested: 'hep-ex/0307015v1', base: 'hep-ex/0307015', version: 'v1' });
+  assert.deepEqual(_test.splitId(' 2609.05416V2 '), { requested: '2609.05416V2', base: '2609.05416', version: 'v2' });
+});
+
+test('listPapers enforces id count, per-id length, and combined length bounds', async () => {
+  await expectLegacy(() => listPapers(baseConfig, Array.from({ length: 2001 }, () => 'x')), 'INVALID_ARGUMENT');
+  await expectLegacy(() => listPapers(baseConfig, ['x'.repeat(129)]), 'INVALID_ARGUMENT');
+  await expectLegacy(
+    () => listPapers(baseConfig, Array.from({ length: 300 }, () => 'a'.repeat(70))),
+    'INVALID_ARGUMENT',
+  );
+  // A valid multi-id request still works.
+  const ok = await listPapers(baseConfig, ['0710.5765', 'hep-ex/0307015', '2609.04165']);
+  assert.equal(ok.papers.length, 3);
+  assert.equal(ok.missingIds.length, 0);
+});
+
+// ---------------------------------------------------------------------------
+// Request gate (serialization + arXiv 3-second interval)
+// ---------------------------------------------------------------------------
+
+test('request gate serializes concurrent calls and enforces the minimum interval', async () => {
+  const starts = [];
+  let active = 0;
+  let maxActive = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    active += 1;
+    maxActive = Math.max(maxActive, active);
+    starts.push(Date.now());
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    active -= 1;
+    return { status: 200, text: async () => wrapFeed({ entries: ENTRY_A, totalResults: 1, itemsPerPage: 1 }) };
+  };
+  const cfg = { baseUrl: 'http://127.0.0.1:1', timeoutMs: 2000, minRequestIntervalMs: 30 };
+  try {
+    const results = await Promise.all([
+      searchPapers(cfg, { searchQuery: 'a' }),
+      searchPapers(cfg, { searchQuery: 'b' }),
+      searchPapers(cfg, { searchQuery: 'c' }),
+    ]);
+    assert.equal(results.length, 3);
+    assert.equal(maxActive, 1, 'upstream requests must never overlap');
+    assert.equal(starts.length, 3);
+    for (let i = 1; i < starts.length; i += 1) {
+      assert.ok(starts[i] - starts[i - 1] >= 25, `gap between starts too small: ${starts[i] - starts[i - 1]}ms`);
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('request gate keeps working after an upstream call fails', async () => {
+  let calls = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    calls += 1;
+    if (calls === 1) throw new Error('transient socket failure');
+    return { status: 200, text: async () => wrapFeed({ entries: ENTRY_A, totalResults: 1, itemsPerPage: 1 }) };
+  };
+  const cfg = { baseUrl: 'http://127.0.0.1:1', timeoutMs: 2000, minRequestIntervalMs: 0 };
+  try {
+    await expectLegacy(() => getPaper(cfg, '0710.5765'), 'UNAVAILABLE');
+    const paper = await getPaper(cfg, '0710.5765');
+    assert.equal(paper.arxivId, '0710.5765v2');
+    assert.equal(calls, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('getPaper maps unknown ids to NOT_FOUND and blank ids to INVALID_ARGUMENT', async () => {
   const err = await expectLegacy(() => getPaper(baseConfig, '9999.99999'), 'NOT_FOUND');
   assert.match(err.message, /9999\.99999/);
@@ -332,7 +429,7 @@ test('uses the configured base URL and rejects unsafe schemes', async () => {
     return { status: 200, text: async () => wrapFeed({ entries: ENTRY_A, totalResults: 1, itemsPerPage: 1 }) };
   };
   try {
-    await searchPapers({ baseUrl: 'http://127.0.0.1:1234', timeoutMs: 100 }, { searchQuery: 'all:electron' });
+    await searchPapers({ baseUrl: 'http://127.0.0.1:1234', timeoutMs: 100, minRequestIntervalMs: 0 }, { searchQuery: 'all:electron' });
   } finally {
     globalThis.fetch = originalFetch;
   }

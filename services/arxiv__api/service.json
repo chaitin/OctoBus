@@ -4,7 +4,7 @@
   "displayName": "arXiv API",
   "description": "arXiv e-print repository wrapper — full-text search with the arXiv query syntax, paper metadata lookup by arXiv id (search, list, get), and Atom feed parsing.",
   "runtime": {
-    "mode": "on-demand"
+    "mode": "long-running"
   },
   "proto": {
     "roots": [

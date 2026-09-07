@@ -27,7 +27,9 @@ message SearchPapersRequest {
   string search_query = 1 [json_name = "searchQuery"];
   // 0-based index of the first result to return. Default 0.
   int32 start = 2;
-  // Number of results to return. Default 10, clamped to [1, 2000].
+  // Number of results to return. 0 means "not provided". The service accepts
+  // 1..2000 and returns INVALID_ARGUMENT outside that range (2000 is the
+  // service-side cap; arXiv documents 30000 max in slices of at most 2000).
   int32 max_results = 3 [json_name = "maxResults"];
   // Sort field: "relevance", "lastUpdatedDate" or "submittedDate".
   // Default "relevance".
@@ -51,7 +53,10 @@ message GetPaperResponse {
 }
 
 message ListPapersRequest {
-  // arXiv ids, optionally versioned, e.g. ["0710.5765", "hep-ex/0307015"].
+  // arXiv ids, optionally versioned. A bare id (e.g. "0710.5765") fetches the
+  // latest version; an explicit version (e.g. "0710.5765v2") fetches that
+  // exact historical version. At most 2000 ids per request, each at most 128
+  // characters, combined length at most 20000 characters.
   repeated string ids = 1;
 }
 

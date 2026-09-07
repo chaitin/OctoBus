@@ -12,9 +12,10 @@
     },
     "timeoutMs": {
       "type": "integer",
-      "minimum": 1,
-      "default": 30000,
-      "description": "HTTP request timeout in milliseconds."
+      "minimum": 1000,
+      "maximum": 300000,
+      "default": 60000,
+      "description": "HTTP request timeout in milliseconds. The service is long-running, so this is the request-scoped upstream timeout; arXiv responses for large result sets can take tens of seconds."
     },
     "userAgent": {
       "type": "string",

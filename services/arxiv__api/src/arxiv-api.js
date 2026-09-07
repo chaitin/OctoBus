@@ -28,10 +28,23 @@ export const METHODS = {
 // ---------------------------------------------------------------------------
 
 const DEFAULT_BASE_URL = 'https://export.arxiv.org';
-const DEFAULT_TIMEOUT_MS = 30000;
+// arXiv legacy API Terms of Use: at most one request every three seconds and a
+// single connection at a time across all machines under the caller's control.
+// This package enforces that inside one running instance (see requestGate);
+// run a single instance per arXiv account/network to keep the guarantee.
+const DEFAULT_MIN_REQUEST_INTERVAL_MS = 3000;
+// Kept comfortably below a client's gRPC deadline; large arXiv result pages
+// can take a while, so this is decoupled from the old on-demand 30s limit.
+const DEFAULT_TIMEOUT_MS = 60000;
 const DEFAULT_USER_AGENT = 'octobus-arxiv-api/0.1 (https://arxiv.org/help/api)';
 const DEFAULT_MAX_RESULTS = 10;
+// OctoBus service-level cap. arXiv itself hard-limits max_results at 30000 in
+// slices of at most 2000; we deliberately stay inside the documented slice.
 const MAX_MAX_RESULTS = 2000;
+// Guard rails so a caller cannot build unbounded /api/query URLs via id_list.
+const MAX_IDS_PER_REQUEST = 2000;
+const MAX_ID_LENGTH = 128;
+const MAX_ID_LIST_LENGTH = 20000;
 
 const SORT_BY_VALUES = ['relevance', 'lastUpdatedDate', 'submittedDate'];
 const SORT_ORDER_VALUES = ['ascending', 'descending'];
@@ -108,11 +121,19 @@ const resolveBaseUrl = (config = {}) => {
   return raw.replace(/\/+$/, '');
 };
 
-const resolveConfig = (config = {}) => ({
-  baseUrl: resolveBaseUrl(config),
-  timeoutMs: toInt(firstDefined(config.timeoutMs, DEFAULT_TIMEOUT_MS), DEFAULT_TIMEOUT_MS),
-  userAgent: cleanText(config.userAgent) || DEFAULT_USER_AGENT,
-});
+const resolveConfig = (config = {}) => {
+  const rawTimeout = toInt(firstDefined(config.timeoutMs, DEFAULT_TIMEOUT_MS), DEFAULT_TIMEOUT_MS);
+  const rawInterval = toInt(firstDefined(config.minRequestIntervalMs, DEFAULT_MIN_REQUEST_INTERVAL_MS), DEFAULT_MIN_REQUEST_INTERVAL_MS);
+  return {
+    baseUrl: resolveBaseUrl(config),
+    // Non-positive timeouts abort immediately; treat them as unset.
+    timeoutMs: rawTimeout > 0 ? rawTimeout : DEFAULT_TIMEOUT_MS,
+    userAgent: cleanText(config.userAgent) || DEFAULT_USER_AGENT,
+    // Tests / isolated mirrors may relax the gap (0 disables it). The arXiv
+    // Terms of Use require >= 3000 against the public endpoint.
+    minRequestIntervalMs: rawInterval >= 0 ? rawInterval : DEFAULT_MIN_REQUEST_INTERVAL_MS,
+  };
+};
 
 // ---------------------------------------------------------------------------
 // Query parameter validation / construction
@@ -178,6 +199,38 @@ export const buildQueryUrl = (config, params = {}) => {
 // HTTP client
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Serialized upstream request gate
+//
+// The arXiv legacy API Terms of Use allow no more than one request every
+// three seconds and only a single connection at a time. Every upstream call
+// made by this process goes through requestGate, which serializes calls and
+// enforces a minimum gap between the starts of consecutive requests. The gate
+// only covers the process it runs in, so a single instance must be used
+// against the public arXiv endpoint (see README for the deployment caveat).
+// ---------------------------------------------------------------------------
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+let gateTail = Promise.resolve();
+let lastRequestStartedAt = 0;
+
+export const requestGate = (config = {}, fn) => {
+  const intervalMs = resolveConfig(config).minRequestIntervalMs;
+  const run = async () => {
+    if (intervalMs > 0) {
+      const waitMs = Math.max(0, lastRequestStartedAt + intervalMs - Date.now());
+      if (waitMs > 0) await sleep(waitMs);
+    }
+    lastRequestStartedAt = Date.now();
+    return fn();
+  };
+  const attempt = gateTail.then(run, run);
+  // Keep the chain alive even when an individual call rejects.
+  gateTail = attempt.then(() => undefined, () => undefined);
+  return attempt;
+};
+
 const extractFeedErrorDetail = (body) => {
   try {
     const feed = (typeof body === 'string' ? parser.parse(body) : body)?.feed;
@@ -189,7 +242,7 @@ const extractFeedErrorDetail = (body) => {
   }
 };
 
-const fetchAtomText = async (config, params = {}) => {
+const fetchAtomTextNow = async (config, params = {}) => {
   const { timeoutMs, userAgent } = resolveConfig(config);
   const url = buildQueryUrl(config, params);
 
@@ -237,6 +290,9 @@ const fetchAtomText = async (config, params = {}) => {
     clearTimeout(timer);
   }
 };
+
+// Rate-limited entry point: every upstream request is queued behind the gate.
+const fetchAtomText = (config, params = {}) => requestGate(config, () => fetchAtomTextNow(config, params));
 
 // ---------------------------------------------------------------------------
 // Atom feed parsing / response mapping
@@ -374,27 +430,59 @@ export const searchPapers = async (config, request = {}) => {
   return { meta, papers };
 };
 
-// Splits arXiv ids and matches returned papers back to the requested ids,
-// reporting ids (without their version suffix) that could not be found.
-export const listPapers = async (config, ids = []) => {
-  const cleanIds = asList(ids)
+// Splits an arXiv id into its bare id and optional version suffix. A bare id
+// (no trailing vN) means "latest version"; an explicit vN requests that exact
+// historical version (see arXiv API User's Manual §5.1.1).
+export const splitId = (id) => {
+  const text = asString(id);
+  const match = text.match(/^(.*?)(v\d+)$/i);
+  return match
+    ? { requested: text, base: match[1], version: match[2].toLowerCase() }
+    : { requested: text, base: text, version: null };
+};
+
+const validateIds = (rawIds) => {
+  const cleanIds = asList(rawIds)
     .map(cleanText)
     .filter(Boolean);
   if (cleanIds.length === 0) {
     throw errorWithCode('INVALID_ARGUMENT', 'at least one id is required');
   }
+  if (cleanIds.length > MAX_IDS_PER_REQUEST) {
+    throw errorWithCode('INVALID_ARGUMENT', `at most ${MAX_IDS_PER_REQUEST} ids per request`);
+  }
+  const tooLong = cleanIds.find((id) => id.length > MAX_ID_LENGTH);
+  if (tooLong) {
+    throw errorWithCode('INVALID_ARGUMENT', `id is too long (max ${MAX_ID_LENGTH} characters): ${tooLong.slice(0, 64)}`);
+  }
+  const joined = cleanIds.join(',');
+  if (joined.length > MAX_ID_LIST_LENGTH) {
+    throw errorWithCode('INVALID_ARGUMENT', `combined id_list is too long (max ${MAX_ID_LIST_LENGTH} characters)`);
+  }
+  return { cleanIds, joined };
+};
+
+// Fetches several papers by arXiv id and reports which requested ids could
+// not be found. Bare ids match the returned (latest) version; versioned ids
+// must match the exact returned version.
+export const listPapers = async (config, ids = []) => {
+  const { cleanIds, joined } = validateIds(ids);
 
   const { papers } = await queryArxiv(config, {
     search_query: '',
-    id_list: cleanIds.join(','),
+    id_list: joined,
     start: '0',
     max_results: String(cleanIds.length),
   });
 
-  const stripVersion = (id) => asString(id).replace(/v\d+$/i, '');
-  const found = new Set(papers.map((paper) => stripVersion(paper.arxivId)));
-  const requested = new Set(cleanIds.map(stripVersion));
-  const missingIds = [...requested].filter((id) => !found.has(id));
+  const returnedFull = new Set(papers.map((paper) => asString(paper.arxivId).toLowerCase()));
+  const returnedBase = new Set(papers.map((paper) => splitId(paper.arxivId).base.toLowerCase()));
+  const missingIds = cleanIds.filter((id) => {
+    const { requested, base, version } = splitId(id);
+    return version
+      ? !returnedFull.has(requested.toLowerCase())
+      : !returnedBase.has(base.toLowerCase());
+  });
 
   return { papers, missingIds };
 };
@@ -402,8 +490,8 @@ export const listPapers = async (config, ids = []) => {
 export const getPaper = async (config, id) => {
   const text = cleanText(id);
   if (!text) throw errorWithCode('INVALID_ARGUMENT', 'id is required');
-  const { papers, missingIds } = await listPapers(config, [text]);
-  if (papers.length === 0 || missingIds.includes(text.replace(/v\d+$/i, ''))) {
+  const { papers } = await listPapers(config, [text]);
+  if (papers.length === 0) {
     throw errorWithCode('NOT_FOUND', `paper not found: ${text}`);
   }
   return papers[0];
@@ -450,7 +538,10 @@ export const _test = {
   mapFeedMeta,
   mapPaper,
   parseFeedResponse,
+  requestGate,
   resolveBaseUrl,
   resolveConfig,
+  splitId,
   toInt,
+  validateIds,
 };

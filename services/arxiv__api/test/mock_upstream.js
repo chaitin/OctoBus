@@ -36,7 +36,24 @@ export const ENTRY_A = `
   <link rel="related" href="https://doi.org/10.1088/0004-6256/135/3/922" title="doi"/>
 </entry>`;
 
-export const ENTRY_B = `
+export const ENTRY_A_V1 = `
+<entry>
+  <id>http://arxiv.org/abs/0710.5765v1</id>
+  <title>Halo Gas Cross Sections And Covering Fractions of MgII Absorption Selected Galaxies</title>
+  <updated>2007-10-30T21:18:23Z</updated>
+  <link href="https://arxiv.org/abs/0710.5765v1" rel="alternate" type="text/html"/>
+  <link href="https://arxiv.org/pdf/0710.5765v1" rel="related" type="application/pdf" title="pdf"/>
+  <summary>First submitted version of the halo gas study.</summary>
+  <category term="astro-ph" scheme="http://arxiv.org/schemas/atom"/>
+  <published>2007-10-30T21:18:23Z</published>
+  <arxiv:primary_category term="astro-ph"/>
+  <author>
+    <name>G. G. Kacprzak</name>
+    <arxiv:affiliation>NMSU</arxiv:affiliation>
+  </author>
+</entry>`;
+
+const ENTRY_B = `
 <entry>
   <id>http://arxiv.org/abs/2609.04165v1</id>
   <title>Parameterised graph theory for tensor networks</title>
@@ -101,6 +118,7 @@ const ERROR_FEED = `<?xml version="1.0" encoding="UTF-8"?>
 
 const KNOWN_IDS = new Map([
   ['0710.5765', ENTRY_A],
+  ['0710.5765v1', ENTRY_A_V1],
   ['0710.5765v2', ENTRY_A],
   ['2609.04165', ENTRY_B],
   ['hep-ex/0307015', ENTRY_C],
