@@ -19,7 +19,8 @@ import (
 )
 
 type Store struct {
-	db *sql.DB
+	db        *sql.DB
+	secretKey []byte
 }
 
 type ServiceInUseError struct {
@@ -63,7 +64,23 @@ func Open(path string) (*Store, error) {
 		_ = db.Close()
 		return nil, err
 	}
-	s := &Store{db: db}
+	secretKey, err := loadSecretKey(path, func() (bool, error) {
+		var encrypted int
+		err := db.QueryRowContext(context.Background(), `SELECT EXISTS(SELECT 1 FROM instances WHERE substr(secret_json, 1, ?) = ?)`, len(encryptedSecretPrefix), encryptedSecretPrefix).Scan(&encrypted)
+		if err != nil && strings.Contains(err.Error(), "no such table") {
+			return false, nil
+		}
+		return encrypted == 1, err
+	})
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	s := &Store{db: db, secretKey: secretKey}
+	if err := s.validateSecretKey(context.Background()); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	if err := s.Migrate(context.Background()); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -107,6 +124,9 @@ func (s *Store) Migrate(ctx context.Context) error {
 		return err
 	}
 	if err := addColumnIfMissing(ctx, s.db, "services", "service_root", "TEXT NOT NULL DEFAULT '.'"); err != nil {
+		return err
+	}
+	if err := s.encryptLegacySecrets(ctx); err != nil {
 		return err
 	}
 	_, err := s.db.ExecContext(ctx, `UPDATE services SET runtime_mode = 'long-running' WHERE runtime_mode = ''`)
@@ -301,11 +321,15 @@ func (s *Store) UpsertInstance(ctx context.Context, inst domain.Instance) error 
 	if inst.SecretSHA256 == "" {
 		inst.SecretSHA256 = domain.HashBytes(inst.SecretJSON)
 	}
+	encryptedSecret, err := encryptSecret(s.secretKey, inst.SecretJSON)
+	if err != nil {
+		return err
+	}
 	var pid any
 	if inst.PID != nil {
 		pid = *inst.PID
 	}
-	_, err := s.db.ExecContext(ctx, `
+	_, err = s.db.ExecContext(ctx, `
 INSERT INTO instances (id, service_id, name, enabled, status, pid, listen_addr, node_entry, config_json, config_sha256, secret_json, secret_sha256, created_at, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
@@ -320,16 +344,28 @@ ON CONFLICT(id) DO UPDATE SET
   config_sha256=excluded.config_sha256,
   secret_json=excluded.secret_json,
   secret_sha256=excluded.secret_sha256,
-  updated_at=excluded.updated_at`, inst.ID, inst.ServiceID, inst.Name, boolInt(inst.Enabled), string(inst.Status), pid, inst.ListenAddr, inst.NodeEntry, string(inst.ConfigJSON), inst.ConfigSHA256, string(inst.SecretJSON), inst.SecretSHA256, formatTime(inst.CreatedAt), formatTime(inst.UpdatedAt))
+  updated_at=excluded.updated_at`, inst.ID, inst.ServiceID, inst.Name, boolInt(inst.Enabled), string(inst.Status), pid, inst.ListenAddr, inst.NodeEntry, string(inst.ConfigJSON), inst.ConfigSHA256, encryptedSecret, inst.SecretSHA256, formatTime(inst.CreatedAt), formatTime(inst.UpdatedAt))
 	return err
 }
 
 func (s *Store) GetInstance(ctx context.Context, id string) (domain.Instance, error) {
 	row := s.db.QueryRowContext(ctx, `SELECT id, service_id, name, enabled, status, pid, listen_addr, node_entry, config_json, config_sha256, secret_json, secret_sha256, created_at, updated_at FROM instances WHERE id = ?`, id)
-	return scanInstance(row)
+	return s.scanInstance(row)
 }
 
 func scanInstance(scanner interface {
+	Scan(dest ...any) error
+}) (domain.Instance, error) {
+	return scanInstanceWithKey(nil, scanner)
+}
+
+func (s *Store) scanInstance(scanner interface {
+	Scan(dest ...any) error
+}) (domain.Instance, error) {
+	return scanInstanceWithKey(s.secretKey, scanner)
+}
+
+func scanInstanceWithKey(secretKey []byte, scanner interface {
 	Scan(dest ...any) error
 }) (domain.Instance, error) {
 	var inst domain.Instance
@@ -346,7 +382,11 @@ func scanInstance(scanner interface {
 		inst.PID = &p
 	}
 	inst.ConfigJSON = json.RawMessage(config)
-	inst.SecretJSON = json.RawMessage(secret)
+	decryptedSecret, err := decryptSecret(secretKey, secret)
+	if err != nil {
+		return domain.Instance{}, err
+	}
+	inst.SecretJSON = json.RawMessage(decryptedSecret)
 	inst.CreatedAt = parseTime(created)
 	inst.UpdatedAt = parseTime(updated)
 	return inst, nil
@@ -360,7 +400,7 @@ func (s *Store) ListInstances(ctx context.Context) ([]domain.Instance, error) {
 	defer rows.Close()
 	var out []domain.Instance
 	for rows.Next() {
-		inst, err := scanInstance(rows)
+		inst, err := s.scanInstance(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -377,7 +417,7 @@ func (s *Store) ListEnabledInstancesByService(ctx context.Context, serviceID str
 	defer rows.Close()
 	var out []domain.Instance
 	for rows.Next() {
-		inst, err := scanInstance(rows)
+		inst, err := s.scanInstance(rows)
 		if err != nil {
 			return nil, err
 		}
