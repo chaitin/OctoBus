@@ -196,8 +196,13 @@ func (s *Server) handleAccessLogs(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	var out bytes.Buffer
+	var out boundedLogBuffer
+	out.Remaining = accesslog.MaxResponseBytes
 	if err := accesslog.ReadFile(path, filter, &out); err != nil {
+		if errors.Is(err, errAccessLogResponseTooLarge) {
+			writeError(w, http.StatusRequestEntityTooLarge, err.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -222,6 +227,9 @@ func parseAccessLogQuery(r *http.Request) (accesslog.Filter, error) {
 		if err != nil || limit < 0 {
 			return accesslog.Filter{}, fmt.Errorf("limit must be non-negative")
 		}
+		if limit > accesslog.MaxFilterEntries {
+			return accesslog.Filter{}, fmt.Errorf("limit must not exceed %d", accesslog.MaxFilterEntries)
+		}
 		filter.Limit = limit
 		filter.LimitSet = true
 	}
@@ -233,6 +241,9 @@ func parseAccessLogQuery(r *http.Request) (accesslog.Filter, error) {
 		tail, err := strconv.Atoi(raw)
 		if err != nil || tail < 0 {
 			return accesslog.Filter{}, fmt.Errorf("tail must be non-negative")
+		}
+		if tail > accesslog.MaxFilterEntries {
+			return accesslog.Filter{}, fmt.Errorf("tail must not exceed %d", accesslog.MaxFilterEntries)
 		}
 		filter.Tail = tail
 		filter.TailSet = true
@@ -260,6 +271,21 @@ func parseAccessLogQuery(r *http.Request) (accesslog.Filter, error) {
 func (s *Server) echoAccessLogs(c *echo.Context) error {
 	s.handleAccessLogs(c.Response(), c.Request())
 	return nil
+}
+
+var errAccessLogResponseTooLarge = errors.New("access log response exceeds configured size limit")
+
+type boundedLogBuffer struct {
+	bytes.Buffer
+	Remaining int64
+}
+
+func (b *boundedLogBuffer) Write(p []byte) (int, error) {
+	if int64(len(p)) > b.Remaining {
+		return 0, errAccessLogResponseTooLarge
+	}
+	b.Remaining -= int64(len(p))
+	return b.Buffer.Write(p)
 }
 
 type flushResponseWriter struct {
