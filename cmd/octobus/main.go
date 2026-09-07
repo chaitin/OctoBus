@@ -125,7 +125,7 @@ func serve(opts serveOptions) error {
 	if err := startupInventory(ctx, logger, st); err != nil {
 		return err
 	}
-	adminServer := &admin.Server{Store: st, Importer: &packageimport.Importer{DataDir: dataDir, Store: st}, Supervisor: sup, Gateway: gateway, AccessLogPath: filepath.Join(dataDir, accesslog.FileName), Logger: logger}
+	adminServer := &admin.Server{Store: st, Importer: &packageimport.Importer{DataDir: dataDir, Store: st, RemoteTargetValidator: packageimport.DefaultRemoteTargetValidator}, Supervisor: sup, Gateway: gateway, AccessLogPath: filepath.Join(dataDir, accesslog.FileName), Logger: logger}
 	grpcServer := protocol.GRPCServer(gateway)
 	publicServer := admin.NewHTTPServer(opts.addr, h2c.NewHandler(server.CombinedHandler(adminServer.Handler(), grpcServer, gateway), &http2.Server{}))
 	publicListener, err := net.Listen("tcp", opts.addr)
