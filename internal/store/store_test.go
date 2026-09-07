@@ -935,14 +935,14 @@ func TestFindToolAmbiguousAndStreamingCustomNames(t *testing.T) {
 	if err := s.AddCapsetInstance(ctx, domain.CapsetInstance{ID: "dev:echo-copy", CapsetID: "dev", ServiceID: "echo", InstanceID: "echo-copy", IncludeAllMethods: false, Enabled: true}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.AddCapsetMethod(ctx, domain.CapsetMethod{CapsetInstanceID: "dev:echo-copy", MethodFullName: "echo.v1.EchoService/Echo", MCPToolName: "echo_tool", Enabled: true}); err != nil {
-		t.Fatal(err)
+	if err := s.AddCapsetMethod(ctx, domain.CapsetMethod{CapsetInstanceID: "dev:echo-copy", MethodFullName: "echo.v1.EchoService/Echo", MCPToolName: "echo_tool", Enabled: true}); !errors.Is(err, ErrMCPToolNameConflict) {
+		t.Fatalf("expected duplicate MCP tool error, got %v", err)
 	}
-	if _, err := s.FindTool(ctx, "dev", "echo_tool"); err == nil || !strings.Contains(err.Error(), "ambiguous MCP tool name") {
-		t.Fatalf("expected ambiguous MCP tool error, got %v", err)
+	if _, err := s.FindTool(ctx, "dev", "echo_tool"); err != nil {
+		t.Fatalf("FindTool existing unique name error = %v", err)
 	}
-	if exists, err := s.MCPToolNameExists(ctx, "dev", "echo_tool"); err == nil || !strings.Contains(err.Error(), "ambiguous MCP tool name") || exists {
-		t.Fatalf("MCPToolNameExists ambiguous exists=%v err=%v", exists, err)
+	if exists, err := s.MCPToolNameExists(ctx, "dev", "echo_tool"); err != nil || !exists {
+		t.Fatalf("MCPToolNameExists exists=%v err=%v", exists, err)
 	}
 
 	if err := s.AddCapsetMethod(ctx, domain.CapsetMethod{CapsetInstanceID: "dev:echo-copy", MethodFullName: "echo.v1.EchoService/ServerStream", MCPToolName: "stream_custom", Enabled: true}); err != nil {
