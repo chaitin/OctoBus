@@ -97,9 +97,14 @@ func TestLockServiceAllowsDifferentServicesInParallel(t *testing.T) {
 	close(releaseA)
 }
 
-// TestLockServiceSurvivesSerializedContentionOnSameService checks that lock
-// acquisitions queue correctly even when many waiters pile up on one service
-// while other services stay independent.
+// TestLockServiceSurvivesSerializedContentionOnSameService checks the
+// reference-counted lock degrades gracefully under heavy contention on one
+// service: every waiter eventually acquires and releases without deadlock or
+// livelock, and the map entry is recycled once all holders are gone. Note
+// mutual exclusion itself (at most one holder inside the critical section) is
+// asserted by TestLockServiceSerializesSameService via a concurrency upper
+// bound; this test cannot distinguish a pure reference count from a real
+// per-service lock, so it deliberately focuses on liveness and cleanup.
 func TestLockServiceSurvivesSerializedContentionOnSameService(t *testing.T) {
 	imp := &Importer{}
 	const waiters = 8
