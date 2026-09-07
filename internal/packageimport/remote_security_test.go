@@ -269,3 +269,84 @@ func TestGitProxyCONNECTWritesRealCRLF200Status(t *testing.T) {
 		t.Fatalf("tunneled reply = %q", reply)
 	}
 }
+
+// staticResolver resolves every hostname to a fixed address list.
+type staticResolver struct {
+	ips []net.IPAddr
+}
+
+func (s staticResolver) LookupIPAddr(_ context.Context, _ string) ([]net.IPAddr, error) {
+	return s.ips, nil
+}
+
+// TestDialValidatedRemoteSkipsForbiddenAndConnectsAllowed exercises the real
+// dialValidatedRemote address-selection loop: forbidden addresses from the
+// resolution list must be skipped and the first allowed one dialed.
+func TestDialValidatedRemoteSkipsForbiddenAndConnectsAllowed(t *testing.T) {
+	ctx := context.Background()
+	var dialed []string
+	dial := func(_ context.Context, network, address string) (net.Conn, error) {
+		dialed = append(dialed, address)
+		conn, _ := net.Pipe()
+		return conn, nil
+	}
+	resolver := staticResolver{ips: []net.IPAddr{
+		{IP: net.ParseIP("127.0.0.1")},     // loopback: forbidden
+		{IP: net.ParseIP("10.0.0.5")},      // RFC1918: forbidden
+		{IP: net.ParseIP("203.0.113.7")},   // TEST-NET-3: forbidden
+		{IP: net.ParseIP("93.184.216.34")}, // example.com: allowed
+	}}
+	allowAll := func(_ context.Context, _ string) error { return nil }
+	conn, err := dialValidatedRemoteWith(ctx, "allowed.example:443", allowAll, resolver, dial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if len(dialed) != 1 || dialed[0] != "93.184.216.34:443" {
+		t.Fatalf("dialed addresses = %v, want only the allowed 93.184.216.34:443", dialed)
+	}
+}
+
+// TestDialValidatedRemoteFailsWhenEveryAddressIsForbidden locks the error
+// contract when DNS returns only addresses that must never be dialed.
+func TestDialValidatedRemoteFailsWhenEveryAddressIsForbidden(t *testing.T) {
+	ctx := context.Background()
+	resolver := staticResolver{ips: []net.IPAddr{
+		{IP: net.ParseIP("127.0.0.1")},
+		{IP: net.ParseIP("::1")},
+	}}
+	var dialed []string
+	dial := func(_ context.Context, network, address string) (net.Conn, error) {
+		dialed = append(dialed, address)
+		conn, _ := net.Pipe()
+		return conn, nil
+	}
+	allowAll := func(_ context.Context, _ string) error { return nil }
+	_, err := dialValidatedRemoteWith(ctx, "loopback.test:443", allowAll, resolver, dial)
+	if err == nil || !strings.Contains(err.Error(), "unable to connect to allowed address") {
+		t.Fatalf("all-forbidden error = %v", err)
+	}
+	if len(dialed) != 0 {
+		t.Fatalf("dialed %d forbidden addresses: %v", len(dialed), dialed)
+	}
+}
+
+// TestDialValidatedRemoteHonorsValidatorFailure checks that a policy rejection
+// aborts before any DNS resolution or dial happens.
+func TestDialValidatedRemoteHonorsValidatorFailure(t *testing.T) {
+	ctx := context.Background()
+	reject := func(_ context.Context, raw string) error { return fmt.Errorf("policy rejects %s", raw) }
+	var dialed bool
+	dial := func(_ context.Context, network, address string) (net.Conn, error) {
+		dialed = true
+		conn, _ := net.Pipe()
+		return conn, nil
+	}
+	_, err := dialValidatedRemoteWith(ctx, "denied.example:443", reject, staticResolver{}, dial)
+	if err == nil || !strings.Contains(err.Error(), "policy rejects") {
+		t.Fatalf("validator error = %v", err)
+	}
+	if dialed {
+		t.Fatal("dialed despite validator rejection")
+	}
+}

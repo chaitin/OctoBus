@@ -237,7 +237,21 @@ func (p *validatedGitProxy) dialToValidatedRemote(address string) (net.Conn, err
 	return dialValidatedRemote(p.ctx, address, p.validate)
 }
 
+// ipResolver resolves a hostname to addresses; *net.Resolver implements it.
+type ipResolver interface {
+	LookupIPAddr(ctx context.Context, host string) ([]net.IPAddr, error)
+}
+
 func dialValidatedRemote(ctx context.Context, address string, validate func(context.Context, string) error) (net.Conn, error) {
+	return dialValidatedRemoteWith(ctx, address, validate, nil, nil)
+}
+
+// dialValidatedRemoteWith is dialValidatedRemote with swappable resolver and
+// dial functions so tests can exercise the allowed-address selection loop —
+// skipping forbidden addresses from the resolution list and dialing the first
+// allowed one — without real DNS or network access. Nil resolver and dial
+// fall back to the process defaults.
+func dialValidatedRemoteWith(ctx context.Context, address string, validate func(context.Context, string) error, resolver ipResolver, dial func(ctx context.Context, network, address string) (net.Conn, error)) (net.Conn, error) {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, err
@@ -248,16 +262,21 @@ func dialValidatedRemote(ctx context.Context, address string, validate func(cont
 	if err := validate(ctx, "https://"+net.JoinHostPort(host, port)); err != nil {
 		return nil, err
 	}
-	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if resolver == nil {
+		resolver = net.DefaultResolver
+	}
+	if dial == nil {
+		dial = (&net.Dialer{}).DialContext
+	}
+	ips, err := resolver.LookupIPAddr(ctx, host)
 	if err != nil {
 		return nil, err
 	}
-	dialer := &net.Dialer{}
 	for _, item := range ips {
 		if isForbiddenRemoteIP(item.IP) {
 			continue
 		}
-		conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(item.IP.String(), port))
+		conn, err := dial(ctx, "tcp", net.JoinHostPort(item.IP.String(), port))
 		if err == nil {
 			return conn, nil
 		}
