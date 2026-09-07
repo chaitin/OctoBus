@@ -1056,6 +1056,21 @@ test('request-level username/password takes priority for Manager JWT auth', asyn
   assert.equal(decoded, 'override-user:override-pass');
 });
 
+test('empty request credentials fall back to Manager secret', async () => {
+  const { _test } = await import('../src/wazuh-siem.js');
+  _test.clearJwtCache();
+
+  const calls = mockWithAuth('secret-cred-token');
+  const handler = await loadHandler(listAgentsPath, {
+    username: '',
+    password: '',
+  }, defaultManagerSecretCtx);
+  await handler();
+
+  const decoded = Buffer.from(calls.auth[0].init.headers['Authorization'].slice(6), 'base64').toString();
+  assert.equal(decoded, 'wazuh:wazuh');
+});
+
 test('timeoutMs reads from bindings (config) before falling back to limits', async () => {
   const { _test } = await import('../src/wazuh-siem.js');
   // mergedBindings merges config into bindings, so config.timeoutMs takes priority
