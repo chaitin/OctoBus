@@ -73,6 +73,19 @@ func TestOpenFailsWhenSecretKeyIsMissingForEncryptedData(t *testing.T) {
 	}
 }
 
+func TestExplicitKeyFileMissingFailsInsteadOfGenerating(t *testing.T) {
+	t.Setenv(secretKeyEnv, "")
+	missing := t.TempDir() + "/keys/missing.key"
+	t.Setenv(secretKeyFileEnv, missing)
+	dbPath := t.TempDir() + "/octobus.db"
+	if _, err := Open(dbPath); err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Fatalf("explicit missing key file error = %v", err)
+	}
+	if _, err := os.Stat(missing); !os.IsNotExist(err) {
+		t.Fatalf("explicit key file must not be auto-created, stat error = %v", err)
+	}
+}
+
 func TestLegacyInstanceSecretsAreEncryptedDuringMigration(t *testing.T) {
 	dbPath := t.TempDir() + "/octobus.db"
 	ctx := context.Background()

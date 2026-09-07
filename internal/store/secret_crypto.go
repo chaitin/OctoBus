@@ -46,6 +46,10 @@ func loadSecretKey(dbPath string, hasEncryptedSecrets func() (bool, error)) ([]b
 	if !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
+	explicitKeyFile := os.Getenv(secretKeyFileEnv) != ""
+	if explicitKeyFile {
+		return nil, fmt.Errorf("secret key file %q from %s does not exist", keyPath, secretKeyFileEnv)
+	}
 	if hasEncryptedSecrets != nil {
 		encrypted, checkErr := hasEncryptedSecrets()
 		if checkErr != nil {
