@@ -151,19 +151,26 @@ func safeRemoteDialContext(validate func(context.Context, string) error) func(co
 // validatedGitProxy forces the git subprocess to use the target policy while
 // retaining the original hostname for HTTPS certificate verification.
 type validatedGitProxy struct {
-	listener  net.Listener
-	ctx       context.Context
-	validate  func(context.Context, string) error
+	listener net.Listener
+	ctx      context.Context
+	validate func(context.Context, string) error
+	// dial is the connection factory used for the CONNECT target. When nil,
+	// dialValidatedRemote is used; tests may inject a stub to exercise the
+	// success path without contacting an external host.
+	dial      func(ctx context.Context, address string, validate func(context.Context, string) error) (net.Conn, error)
 	done      chan struct{}
 	closeOnce sync.Once
 }
 
-func startValidatedGitProxy(ctx context.Context, validate func(context.Context, string) error) (*validatedGitProxy, error) {
+func startValidatedGitProxy(ctx context.Context, validate func(context.Context, string) error, dial ...func(ctx context.Context, address string, validate func(context.Context, string) error) (net.Conn, error)) (*validatedGitProxy, error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, err
 	}
 	proxy := &validatedGitProxy{listener: listener, ctx: ctx, validate: validate, done: make(chan struct{})}
+	if len(dial) > 0 {
+		proxy.dial = dial[0]
+	}
 	go proxy.serve()
 	return proxy, nil
 }
@@ -200,7 +207,7 @@ func (p *validatedGitProxy) handle(client net.Conn) {
 		_, _ = io.WriteString(client, "HTTP/1.1 405 Method Not Allowed\r\nConnection: close\r\n\r\n")
 		return
 	}
-	remote, err := dialValidatedRemote(p.ctx, request.Host, p.validate)
+	remote, err := p.dialToValidatedRemote(request.Host)
 	if err != nil {
 		_, _ = io.WriteString(client, "HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n")
 		return
@@ -221,6 +228,13 @@ func (p *validatedGitProxy) Close() error {
 	p.closeOnce.Do(func() { err = p.listener.Close() })
 	<-p.done
 	return err
+}
+
+func (p *validatedGitProxy) dialToValidatedRemote(address string) (net.Conn, error) {
+	if p.dial != nil {
+		return p.dial(p.ctx, address, p.validate)
+	}
+	return dialValidatedRemote(p.ctx, address, p.validate)
 }
 
 func dialValidatedRemote(ctx context.Context, address string, validate func(context.Context, string) error) (net.Conn, error) {

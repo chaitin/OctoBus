@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -74,17 +75,34 @@ func TestPrepareGitSourceRejectsPrivateRemoteBeforeGitFetch(t *testing.T) {
 	}
 }
 
+// recordedCalls collects the URLs passed to a RemoteTargetValidator. The
+// validator is invoked from the proxy's serving goroutine, so reads from the
+// test goroutine must go through snapshot to stay race-free.
+type recordedCalls struct {
+	mu    sync.Mutex
+	calls []string
+}
+
+func (r *recordedCalls) add(raw string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.calls = append(r.calls, raw)
+}
+
+func (r *recordedCalls) snapshot() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]string(nil), r.calls...)
+}
+
 // hostAllowlistValidator implements the documented host-level contract for
 // RemoteTargetValidator: it decides on scheme, host, and port and must not
 // depend on a path, because Git CONNECT validation receives a synthetic
 // "https://host:port" URL.
-func hostAllowlistValidator(allowedHost string) (func(context.Context, string) error, *[]string) {
-	var seen sync.Mutex
-	var calls []string
+func hostAllowlistValidator(allowedHost string) (func(context.Context, string) error, *recordedCalls) {
+	seen := &recordedCalls{}
 	return func(_ context.Context, raw string) error {
-		seen.Lock()
-		calls = append(calls, raw)
-		seen.Unlock()
+		seen.add(raw)
 		u, err := url.Parse(raw)
 		if err != nil {
 			return err
@@ -93,7 +111,47 @@ func hostAllowlistValidator(allowedHost string) (func(context.Context, string) e
 			return fmt.Errorf("remote host %q is not allowed", u.Hostname())
 		}
 		return nil
-	}, &calls
+	}, seen
+}
+
+// readStatusLine reads one HTTP response status line and fails the test if
+// the proxy never terminates it with a real CRLF (a literal backslash-r
+// backslash-n cannot be parsed by git and stalls until EOF).
+func readStatusLine(t *testing.T, conn net.Conn) string {
+	t.Helper()
+	status, err := bufio.NewReader(conn).ReadString('\n')
+	if err != nil {
+		t.Fatalf("read status line: %v", err)
+	}
+	if !strings.HasSuffix(status, "\r\n") {
+		t.Fatalf("status line %q is not terminated by CRLF", status)
+	}
+	return strings.TrimSuffix(status, "\r\n")
+}
+
+// TestGitProxyRejectsNonCONNECTWith405 covers the 405 status line (and its
+// CRLF termination) written when a connection is not a CONNECT request.
+func TestGitProxyRejectsNonCONNECTWith405(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	validate, _ := hostAllowlistValidator("allowed.example.com")
+	proxy, err := startValidatedGitProxy(ctx, validate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer proxy.Close()
+
+	conn, err := net.DialTimeout("tcp", proxy.listener.Addr().String(), 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if _, err := fmt.Fprintf(conn, "GET / HTTP/1.1\r\nHost: allowed.example.com\r\n\r\n"); err != nil {
+		t.Fatal(err)
+	}
+	if got := readStatusLine(t, conn); got != "HTTP/1.1 405 Method Not Allowed" {
+		t.Fatalf("CONNECT status = %q, want 405", got)
+	}
 }
 
 // TestGitProxyCONNECTRejectsNonAllowlistedHost exercises the CONNECT
@@ -117,12 +175,8 @@ func TestGitProxyCONNECTRejectsNonAllowlistedHost(t *testing.T) {
 	if _, err := fmt.Fprintf(conn, "CONNECT denied.example.com:443 HTTP/1.1\r\nHost: denied.example.com:443\r\n\r\n"); err != nil {
 		t.Fatal(err)
 	}
-	status, err := bufio.NewReader(conn).ReadString('\n')
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(status, "403") {
-		t.Fatalf("CONNECT status = %q, want 403", strings.TrimSpace(status))
+	if got := readStatusLine(t, conn); !strings.Contains(got, "403") {
+		t.Fatalf("CONNECT status = %q, want 403", got)
 	}
 }
 
@@ -148,14 +202,70 @@ func TestGitProxyCONNECTNeverRelaxesIPPinAndUsesSyntheticURL(t *testing.T) {
 	if _, err := fmt.Fprintf(conn, "CONNECT localhost:443 HTTP/1.1\r\nHost: localhost:443\r\n\r\n"); err != nil {
 		t.Fatal(err)
 	}
-	status, err := bufio.NewReader(conn).ReadString('\n')
+	if got := readStatusLine(t, conn); !strings.Contains(got, "403") {
+		t.Fatalf("CONNECT status = %q, want 403 for loopback resolution", got)
+	}
+	seen := calls.snapshot()
+	if len(seen) == 0 || !strings.HasPrefix(seen[0], "https://localhost:443") {
+		t.Fatalf("validator calls = %v, want synthetic https://localhost:443 URL", seen)
+	}
+}
+
+// TestGitProxyCONNECTWritesRealCRLF200Status covers the most security-relevant
+// status line: the 200 Connection Established response that git must parse to
+// proceed with the TLS tunnel. A literal "\r\n" (backslash r backslash n)
+// regression fails this test with an io.EOF from ReadString('\n').
+func TestGitProxyCONNECTWritesRealCRLF200Status(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	validate, _ := hostAllowlistValidator("target.invalid")
+	// Do not dial an external target: hand the proxy a pipe whose peer is
+	// held by this test, standing in for the CONNECT destination.
+	tunneled, remotePeer := net.Pipe()
+	defer remotePeer.Close()
+	proxy, err := startValidatedGitProxy(ctx, validate, func(_ context.Context, address string, _ func(context.Context, string) error) (net.Conn, error) {
+		if address != "target.invalid:443" {
+			t.Errorf("dial address = %q, want target.invalid:443", address)
+		}
+		return tunneled, nil
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(status, "403") {
-		t.Fatalf("CONNECT status = %q, want 403 for loopback resolution", strings.TrimSpace(status))
+	defer proxy.Close()
+
+	conn, err := net.DialTimeout("tcp", proxy.listener.Addr().String(), 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if len(*calls) == 0 || !strings.HasPrefix((*calls)[0], "https://localhost:443") {
-		t.Fatalf("validator calls = %v, want synthetic https://localhost:443 URL", *calls)
+	defer conn.Close()
+	if _, err := fmt.Fprintf(conn, "CONNECT target.invalid:443 HTTP/1.1\r\nHost: target.invalid:443\r\n\r\n"); err != nil {
+		t.Fatal(err)
+	}
+	if got := readStatusLine(t, conn); got != "HTTP/1.1 200 Connection Established" {
+		t.Fatalf("CONNECT status = %q, want 200 Connection Established", got)
+	}
+
+	// Verify the established tunnel carries bytes in both directions.
+	clientReader := bufio.NewReader(conn)
+	if _, err := fmt.Fprintf(conn, "hello through tunnel"); err != nil {
+		t.Fatal(err)
+	}
+	buf := make([]byte, len("hello through tunnel"))
+	if _, err := remotePeer.Read(buf); err != nil {
+		t.Fatalf("read tunneled bytes: %v", err)
+	}
+	if string(buf) != "hello through tunnel" {
+		t.Fatalf("tunneled bytes = %q", buf)
+	}
+	if _, err := remotePeer.Write([]byte("reply from origin")); err != nil {
+		t.Fatal(err)
+	}
+	reply := make([]byte, len("reply from origin"))
+	if _, err := io.ReadFull(clientReader, reply); err != nil {
+		t.Fatalf("read tunneled reply: %v", err)
+	}
+	if string(reply) != "reply from origin" {
+		t.Fatalf("tunneled reply = %q", reply)
 	}
 }
