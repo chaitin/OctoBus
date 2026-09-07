@@ -1,0 +1,37 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "arxiv-api",
+  "displayName": "arXiv API",
+  "description": "arXiv e-print repository wrapper — full-text search with the arXiv query syntax, paper metadata lookup by arXiv id (search, list, get), and Atom feed parsing.",
+  "runtime": {
+    "mode": "on-demand"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/arxiv.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "arxiv.v1.ArxivService/SearchPapers": {
+          "name": "search-papers",
+          "description": "Search arXiv e-prints using the arXiv query syntax and return paged results."
+        },
+        "arxiv.v1.ArxivService/GetPaper": {
+          "name": "get-paper",
+          "description": "Fetch metadata for a single arXiv paper by id (optionally versioned)."
+        },
+        "arxiv.v1.ArxivService/ListPapers": {
+          "name": "list-papers",
+          "description": "Fetch metadata for several arXiv papers by id and report any missing ids."
+        }
+      }
+    }
+  }
+}

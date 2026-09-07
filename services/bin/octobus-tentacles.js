@@ -609,6 +609,10 @@ const services = {
     entryFile: "../zhihu__open-api/bin/zhihu-open-api.js",
     serviceModule: "../zhihu__open-api/src/service.js",
   },
+  "arxiv-api": {
+    entryFile: "../arxiv__api/bin/arxiv-api.js",
+    serviceModule: "../arxiv__api/src/service.js",
+  },
 };
 
 const serviceNames = Object.keys(services);

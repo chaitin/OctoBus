@@ -152,7 +152,8 @@
     "security-engine": "bin/security-engine.js",
     "kubernetes-api": "bin/kubernetes-api.js",
     "openstack-yoga-2022-1": "bin/openstack-yoga-2022-1.js",
-    "zhihu-open-api": "bin/zhihu-open-api.js"
+    "zhihu-open-api": "bin/zhihu-open-api.js",
+    "arxiv-api": "bin/arxiv-api.js"
   },
   "files": [
     "bin/huawei-ccm.js",
@@ -452,7 +453,9 @@
     "bin/openstack-yoga-2022-1.js",
     "openinfra__openstack-yoga_2022-1",
     "bin/zhihu-open-api.js",
-    "zhihu__open-api"
+    "zhihu__open-api",
+    "bin/arxiv-api.js",
+    "arxiv__api"
   ],
   "scripts": {
     "validate": "node scripts/validate-service-package.mjs",
@@ -467,6 +470,7 @@
     "@alicloud/pop-core": "^1.8.0",
     "@alicloud/swas-open20200601": "^4.0.0",
     "@chaitin-ai/octobus-sdk": "^0.6.0",
+    "fast-xml-parser": "^5.0.0",
     "commander": "^12.1.0",
     "undici": "^7.16.0"
   },
@@ -475,6 +479,7 @@
     "@alicloud/pop-core",
     "@alicloud/swas-open20200601",
     "@chaitin-ai/octobus-sdk",
+    "fast-xml-parser",
     "commander",
     "undici"
   ]

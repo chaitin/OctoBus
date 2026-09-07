@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https?://",
+      "default": "https://export.arxiv.org",
+      "description": "arXiv API base URL. Override only for compatible gateways or testing."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 30000,
+      "description": "HTTP request timeout in milliseconds."
+    },
+    "userAgent": {
+      "type": "string",
+      "minLength": 1,
+      "default": "octobus-arxiv-api/0.1 (https://arxiv.org/help/api)",
+      "description": "User-Agent header sent to the arXiv API."
+    }
+  }
+}

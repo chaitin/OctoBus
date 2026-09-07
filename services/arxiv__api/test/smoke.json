@@ -1,0 +1,5 @@
+{
+  "method": "arxiv.v1.ArxivService/GetPaper",
+  "request": { "id": "0710.5765" },
+  "expectUpstream": true
+}
