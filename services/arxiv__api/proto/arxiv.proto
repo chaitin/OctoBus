@@ -1,0 +1,126 @@
+syntax = "proto3";
+
+package arxiv.v1;
+
+// ArxivService wraps the public arXiv API (https://arxiv.org/help/api).
+// It queries the Atom 1.0 search/query endpoint at
+// https://export.arxiv.org/api/query and exposes a small, unary,
+// agent/tool-friendly surface for searching e-prints and fetching
+// paper metadata by arXiv id.
+service ArxivService {
+  // SearchPapers runs a full-text arXiv search using the arXiv query
+  // syntax (field prefixes and AND/OR/ANDNOT). Returns paged results
+  // together with feed-level metadata (total results, start index, ...).
+  rpc SearchPapers(SearchPapersRequest) returns (SearchPapersResponse);
+  // GetPaper fetches a single paper by arXiv id (optionally versioned).
+  // Returns NOT_FOUND when the id does not exist on arXiv.
+  rpc GetPaper(GetPaperRequest) returns (GetPaperResponse);
+  // ListPapers fetches metadata for several arXiv ids in one call and
+  // reports which requested ids could not be found.
+  rpc ListPapers(ListPapersRequest) returns (ListPapersResponse);
+}
+
+message SearchPapersRequest {
+  // arXiv search query using arXiv syntax, e.g.
+  // "au:del_maestro AND ti:checkerboard" or "all:quantum computing".
+  // Spaces between terms are treated as separators.
+  string search_query = 1 [json_name = "searchQuery"];
+  // 0-based index of the first result to return. Default 0.
+  int32 start = 2;
+  // Number of results to return. 0 means "not provided". The service accepts
+  // 1..2000 and returns INVALID_ARGUMENT outside that range (2000 is the
+  // service-side cap; arXiv documents 30000 max in slices of at most 2000).
+  int32 max_results = 3 [json_name = "maxResults"];
+  // Sort field: "relevance", "lastUpdatedDate" or "submittedDate".
+  // Default "relevance".
+  string sort_by = 4 [json_name = "sortBy"];
+  // Sort direction: "ascending" or "descending". Default "descending".
+  string sort_order = 5 [json_name = "sortOrder"];
+}
+
+message SearchPapersResponse {
+  FeedMeta meta = 1;
+  repeated Paper papers = 2;
+}
+
+message GetPaperRequest {
+  // arXiv id, optionally versioned, e.g. "0710.5765" or "0710.5765v2".
+  string id = 1;
+}
+
+message GetPaperResponse {
+  Paper paper = 1;
+}
+
+message ListPapersRequest {
+  // arXiv ids, optionally versioned. A bare id (e.g. "0710.5765") fetches the
+  // latest version; an explicit version (e.g. "0710.5765v2") fetches that
+  // exact historical version. At most 2000 ids per request, each at most 128
+  // characters, combined length at most 20000 characters.
+  repeated string ids = 1;
+}
+
+message ListPapersResponse {
+  repeated Paper papers = 1;
+  // Requested ids that could not be found on arXiv.
+  repeated string missing_ids = 2 [json_name = "missingIds"];
+}
+
+// FeedMeta mirrors the feed-level (OpenSearch) metadata of an Atom response.
+message FeedMeta {
+  int32 total_results = 1 [json_name = "totalResults"];
+  int32 start_index = 2 [json_name = "startIndex"];
+  int32 items_per_page = 3 [json_name = "itemsPerPage"];
+  // Unique id assigned by arXiv to this query.
+  string feed_id = 4 [json_name = "feedId"];
+  // Canonicalized query title returned by arXiv.
+  string feed_title = 5 [json_name = "feedTitle"];
+  // Last time the search results were updated.
+  string updated = 6;
+  // URL that re-issues this query via GET.
+  string self_link = 7 [json_name = "selfLink"];
+}
+
+// Paper holds the metadata arXiv publishes for one e-print.
+message Paper {
+  // Canonical abstract page URL, e.g. "https://arxiv.org/abs/0710.5765v2".
+  string id = 1;
+  // arXiv id including the version suffix when present, e.g. "0710.5765v2".
+  string arxiv_id = 2 [json_name = "arxivId"];
+  string title = 3;
+  // Abstract text.
+  string summary = 4;
+  // ISO-8601 timestamp of the first submitted version.
+  string published = 5;
+  // ISO-8601 timestamp of the retrieved version.
+  string updated = 6;
+  repeated Author authors = 7;
+  // Author comments when present, e.g. "23 pages, 8 figures".
+  string comment = 8;
+  // Journal reference when present.
+  string journal_ref = 9 [json_name = "journalRef"];
+  // DOI string when present, e.g. "10.1088/0004-6256/135/3/922".
+  string doi = 10;
+  // Primary arXiv subject category, e.g. "astro-ph".
+  string primary_category = 11 [json_name = "primaryCategory"];
+  // All secondary classifications (arXiv cross-lists, ACM, MSC) as
+  // returned by arXiv.
+  repeated Category categories = 12;
+  // Abstract page URL.
+  string abstract_url = 13 [json_name = "abstractUrl"];
+  // PDF download URL.
+  string pdf_url = 14 [json_name = "pdfUrl"];
+  // Resolved DOI URL when a DOI is present.
+  string doi_url = 15 [json_name = "doiUrl"];
+}
+
+message Author {
+  string name = 1;
+  // Affiliations when the author supplied them (may be empty).
+  repeated string affiliations = 2;
+}
+
+message Category {
+  string term = 1;
+  string scheme = 2;
+}

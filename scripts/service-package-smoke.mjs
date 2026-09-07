@@ -304,9 +304,41 @@ async function startMockUpstream() {
         && req.url === "/ips/eventList/detail/false/dns/false"
         && req.headers.cookie === "smoke-secret"
         && req.headers["x-requested-with"] === "XMLHttpRequest";
+      const arxivQueryRequest = req.method === "GET"
+        && (req.url.startsWith("/api/query?") || req.url === "/api/query")
+        && (req.url.includes("id_list=") || req.url.includes("search_query="));
       if (nsfocusIDSRequest) {
         res.setHeader("Content-Type", "text/html; charset=utf-8");
         res.end('<table id="mytable"><tr data-smoke="true" class="even"><td><img title="低危险程度"><img title="允许"></td><td>2026-01-02 03:04:05</td><td><a>[1]&nbsp;smoke event</a></td><td>198.51.100.1:1</td><td>203.0.113.1:2</td></tr></table>');
+        return;
+      }
+      if (arxivQueryRequest) {
+        res.setHeader("Content-Type", "application/atom+xml; charset=utf-8");
+        res.end(`<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>http://arxiv.org/api/smoke</id>
+  <title>arXiv Query: smoke</title>
+  <updated>2026-09-06T00:00:00Z</updated>
+  <link href="http://${req.headers.host}/api/query" type="application/atom+xml"/>
+  <opensearch:itemsPerPage>1</opensearch:itemsPerPage>
+  <opensearch:totalResults>1</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <entry>
+    <id>http://arxiv.org/abs/0710.5765v2</id>
+    <title>Halo Gas Cross Sections And Covering Fractions of MgII Absorption Selected Galaxies</title>
+    <updated>2008-02-07T23:18:45Z</updated>
+    <link href="https://arxiv.org/abs/0710.5765v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/0710.5765v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Smoke abstract for the arXiv API service.</summary>
+    <category term="astro-ph" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2007-10-30T21:18:23Z</published>
+    <arxiv:primary_category term="astro-ph"/>
+    <author>
+      <name>G. G. Kacprzak</name>
+      <arxiv:affiliation>NMSU</arxiv:affiliation>
+    </author>
+  </entry>
+</feed>`);
         return;
       }
       res.end(JSON.stringify(cloudLockRequest ? {

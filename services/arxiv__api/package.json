@@ -1,0 +1,18 @@
+{
+  "name": "arxiv-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "arxiv-api": "bin/arxiv-api.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.6.0",
+    "fast-xml-parser": "^5.0.0"
+  },
+  "scripts": {
+    "validate": "octobus-sdk validate --strict",
+    "test": "node --test",
+    "pack:check": "npm pack --dry-run"
+  }
+}

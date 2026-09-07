@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https?://",
+      "default": "https://export.arxiv.org",
+      "description": "arXiv API base URL. Override only for compatible gateways or testing."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1000,
+      "maximum": 300000,
+      "default": 60000,
+      "description": "HTTP request timeout in milliseconds. The service is long-running, so this is the request-scoped upstream timeout; arXiv responses for large result sets can take tens of seconds."
+    },
+    "userAgent": {
+      "type": "string",
+      "minLength": 1,
+      "default": "octobus-arxiv-api/0.1 (https://arxiv.org/help/api)",
+      "description": "User-Agent header sent to the arXiv API."
+    }
+  }
+}
