@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"syscall"
 	"time"
 
 	"octobus/internal/daemonlog"
@@ -672,7 +673,29 @@ func (s *Supervisor) writeInstanceConfig(instanceID string, config []byte) error
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmpPath, filepath.Join(workdir, "config.json"))
+	if err := os.Rename(tmpPath, filepath.Join(workdir, "config.json")); err != nil {
+		return err
+	}
+	// Sync the parent directory so the rename itself is durable: without it a
+	// crash right after a config update can roll the file back to its previous
+	// content even though the database already holds the new config.
+	return syncDirectory(workdir)
+}
+
+// syncDirectory fsyncs a directory so recently renamed entries survive a
+// crash. Filesystems that do not support directory fsync report an error;
+// those errors are ignored because the directory entry is typically still
+// journaled by the filesystem.
+func syncDirectory(dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	if err := d.Sync(); err != nil && !errors.Is(err, syscall.EINVAL) && !errors.Is(err, syscall.ENOTSUP) && !errors.Is(err, syscall.EBADF) {
+		return err
+	}
+	return nil
 }
 
 func secretReadFile(secret []byte) (*os.File, func(), error) {
