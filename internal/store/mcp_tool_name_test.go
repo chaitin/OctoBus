@@ -104,6 +104,22 @@ func TestMigrateReportsCrossInstanceConflictsWithLegacyIndex(t *testing.T) {
 	if strings.Contains(err.Error(), string(rune(31))) {
 		t.Fatalf("migration conflict error leaks the internal key separator: %v", err)
 	}
+
+	// The conflict must be detected before any destructive step: the legacy
+	// instance-scoped index and the instance-scoped keys must be untouched so
+	// the database can be rolled back losslessly and still rejects duplicate
+	// mcp_tool_key writes.
+	var indexName string
+	if err := st.DB().QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'uq_capset_methods_mcp_tool_key'`).Scan(&indexName); err != nil {
+		t.Fatalf("legacy unique index was dropped by the failed migration: %v", err)
+	}
+	var legacyKey string
+	if err := st.DB().QueryRowContext(ctx, `SELECT mcp_tool_key FROM capset_methods WHERE id = 'legacy-echo.Echo/Call'`).Scan(&legacyKey); err != nil {
+		t.Fatal(err)
+	}
+	if legacyKey != "dev:echo-instance"+string(rune(31))+"shared_tool" {
+		t.Fatalf("failed migration rewrote instance-scoped key to %q", legacyKey)
+	}
 }
 
 func TestAddCapsetMethodEnforcesToolNameUniquenessWithinCapset(t *testing.T) {
