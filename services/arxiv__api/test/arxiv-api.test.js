@@ -306,6 +306,80 @@ test('request gate keeps working after an upstream call fails', async () => {
   }
 });
 
+test('request gate rejects calls beyond its capacity with RESOURCE_EXHAUSTED', async () => {
+  let active = 0;
+  let maxActive = 0;
+  let calls = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    active += 1;
+    maxActive = Math.max(maxActive, active);
+    calls += 1;
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    active -= 1;
+    return { status: 200, text: async () => wrapFeed({ entries: ENTRY_A, totalResults: 1, itemsPerPage: 1 }) };
+  };
+  const cfg = {
+    baseUrl: 'http://127.0.0.1:1',
+    timeoutMs: 2000,
+    minRequestIntervalMs: 0,
+    maxPendingRequests: 2,
+    queueTimeoutMs: 2000,
+  };
+  try {
+    const settled = await Promise.allSettled([
+      searchPapers(cfg, { searchQuery: 'a' }),
+      searchPapers(cfg, { searchQuery: 'b' }),
+      searchPapers(cfg, { searchQuery: 'c' }),
+    ]);
+    const fulfilled = settled.filter((item) => item.status === 'fulfilled');
+    const rejected = settled.filter((item) => item.status === 'rejected');
+    assert.equal(fulfilled.length, 2, 'two requests fit within capacity');
+    assert.equal(rejected.length, 1, 'third request is rejected');
+    assert.ok(rejected[0].reason instanceof GrpcError);
+    assert.equal(rejected[0].reason.legacyCode, 'RESOURCE_EXHAUSTED');
+    assert.equal(maxActive, 1, 'upstream stays serialized');
+    assert.equal(calls, 2, 'the rejected request must not reach the upstream');
+
+    // Capacity recovers once the in-flight work has drained.
+    const retry = await searchPapers(cfg, { searchQuery: 'd' });
+    assert.equal(retry.papers.length, 1);
+    assert.equal(calls, 3);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('request gate abandons a queued call that waits too long without calling upstream', async () => {
+  let calls = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    calls += 1;
+    // First (head) request holds the gate long enough that the second call's
+    // queue timeout fires while it is still waiting.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    return { status: 200, text: async () => wrapFeed({ entries: ENTRY_A, totalResults: 1, itemsPerPage: 1 }) };
+  };
+  const cfg = {
+    baseUrl: 'http://127.0.0.1:1',
+    timeoutMs: 2000,
+    minRequestIntervalMs: 0,
+    maxPendingRequests: 4,
+    queueTimeoutMs: 50,
+  };
+  try {
+    const head = searchPapers(cfg, { searchQuery: 'slow-head' });
+    await new Promise((resolve) => setTimeout(resolve, 20)); // let the head go active
+    const queuedStart = Date.now();
+    await expectLegacy(() => searchPapers(cfg, { searchQuery: 'stale' }), 'UNAVAILABLE');
+    assert.ok(Date.now() - queuedStart < 250, 'queued call should fail fast on its queue timeout');
+    await head; // head still completes normally
+    assert.equal(calls, 1, 'the abandoned queued call must never reach the upstream');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('getPaper maps unknown ids to NOT_FOUND and blank ids to INVALID_ARGUMENT', async () => {
   const err = await expectLegacy(() => getPaper(baseConfig, '9999.99999'), 'NOT_FOUND');
   assert.match(err.message, /9999\.99999/);

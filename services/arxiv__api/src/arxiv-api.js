@@ -45,6 +45,11 @@ const MAX_MAX_RESULTS = 2000;
 const MAX_IDS_PER_REQUEST = 2000;
 const MAX_ID_LENGTH = 128;
 const MAX_ID_LIST_LENGTH = 20000;
+// requestGate admission/backpressure bounds. These are internal safety limits
+// (not declared in config.schema) so the public arXiv endpoint always runs
+// with conservative defaults; they can be lowered from direct code/tests.
+const DEFAULT_MAX_PENDING_REQUESTS = 8;
+const DEFAULT_QUEUE_TIMEOUT_MS = 30000;
 
 const SORT_BY_VALUES = ['relevance', 'lastUpdatedDate', 'submittedDate'];
 const SORT_ORDER_VALUES = ['ascending', 'descending'];
@@ -62,6 +67,7 @@ const grpcCodeFor = (code) => ({
   INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT,
   NOT_FOUND: grpcStatus.NOT_FOUND,
   PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED,
+  RESOURCE_EXHAUSTED: grpcStatus.RESOURCE_EXHAUSTED,
   UNAVAILABLE: grpcStatus.UNAVAILABLE,
 })[code] ?? grpcStatus.UNKNOWN;
 
@@ -212,23 +218,90 @@ export const buildQueryUrl = (config, params = {}) => {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-let gateTail = Promise.resolve();
+// -- bounded serial queue state -----------------------------------------------
+// arXiv requires strictly serial requests spaced >= 3s apart, so upstream work
+// cannot run concurrently. To avoid an unbounded backlog (head-of-line
+// blocking, stale requests firing after their clients gave up) the gate:
+//   * admits at most maxPendingRequests requests (active + queued) and fails
+//     fast with RESOURCE_EXHAUSTED beyond that;
+//   * abandons a request that is still queued after queueTimeoutMs and removes
+//     it without ever touching the upstream API (client receives UNAVAILABLE).
+// -----------------------------------------------------------------------------
+
+const gateLimits = (config = {}) => {
+  const interval = toInt(firstDefined(config.minRequestIntervalMs, DEFAULT_MIN_REQUEST_INTERVAL_MS), DEFAULT_MIN_REQUEST_INTERVAL_MS);
+  const maxPending = toInt(firstDefined(config.maxPendingRequests, DEFAULT_MAX_PENDING_REQUESTS), DEFAULT_MAX_PENDING_REQUESTS);
+  const queueTimeout = toInt(firstDefined(config.queueTimeoutMs, DEFAULT_QUEUE_TIMEOUT_MS), DEFAULT_QUEUE_TIMEOUT_MS);
+  return {
+    minIntervalMs: interval >= 0 ? interval : DEFAULT_MIN_REQUEST_INTERVAL_MS,
+    maxPendingRequests: maxPending > 0 ? maxPending : DEFAULT_MAX_PENDING_REQUESTS,
+    queueTimeoutMs: queueTimeout > 0 ? queueTimeout : DEFAULT_QUEUE_TIMEOUT_MS,
+  };
+};
+
+let queued = [];
+let activeCount = 0;
 let lastRequestStartedAt = 0;
+let workerRunning = false;
+
+const abandonQueued = (entry, queueTimeoutMs) => {
+  if (entry.abandoned) return;
+  const index = queued.indexOf(entry);
+  if (index === -1) return; // already dequeued and running
+  queued.splice(index, 1);
+  entry.abandoned = true;
+  entry.reject(errorWithCode('UNAVAILABLE', `request timed out waiting in the upstream queue after ${queueTimeoutMs}ms`));
+};
+
+async function drainQueue() {
+  if (workerRunning) return;
+  workerRunning = true;
+  try {
+    while (queued.length > 0) {
+      const entry = queued.shift();
+      if (entry.abandoned) continue; // removed by its queue-timeout timer
+      clearTimeout(entry.timer);
+      // The entry is committed from here on: count it as in-flight so the
+      // admission check never over-admits while it waits out its interval.
+      activeCount += 1;
+      try {
+        const waitMs = Math.max(0, lastRequestStartedAt + entry.minIntervalMs - Date.now());
+        if (waitMs > 0) await sleep(waitMs);
+        lastRequestStartedAt = Date.now();
+        const value = await entry.fn();
+        entry.resolve(value);
+      } catch (err) {
+        entry.reject(err);
+      } finally {
+        activeCount -= 1;
+      }
+    }
+  } finally {
+    workerRunning = false;
+    if (queued.length > 0) drainQueue(); // safety net for a late enqueue race
+  }
+}
 
 export const requestGate = (config = {}, fn) => {
-  const intervalMs = resolveConfig(config).minRequestIntervalMs;
-  const run = async () => {
-    if (intervalMs > 0) {
-      const waitMs = Math.max(0, lastRequestStartedAt + intervalMs - Date.now());
-      if (waitMs > 0) await sleep(waitMs);
-    }
-    lastRequestStartedAt = Date.now();
-    return fn();
-  };
-  const attempt = gateTail.then(run, run);
-  // Keep the chain alive even when an individual call rejects.
-  gateTail = attempt.then(() => undefined, () => undefined);
-  return attempt;
+  const limits = gateLimits(config);
+  // Admission control: fail fast instead of growing an unbounded backlog.
+  if (activeCount + queued.length >= limits.maxPendingRequests) {
+    return Promise.reject(errorWithCode('RESOURCE_EXHAUSTED',
+      `upstream request queue is full (max ${limits.maxPendingRequests} pending); retry later`));
+  }
+  return new Promise((resolve, reject) => {
+    const entry = {
+      fn,
+      resolve,
+      reject,
+      timer: null,
+      abandoned: false,
+      minIntervalMs: limits.minIntervalMs,
+    };
+    entry.timer = setTimeout(() => abandonQueued(entry, limits.queueTimeoutMs), limits.queueTimeoutMs);
+    queued.push(entry);
+    drainQueue();
+  });
 };
 
 const extractFeedErrorDetail = (body) => {

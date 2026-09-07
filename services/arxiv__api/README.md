@@ -59,6 +59,18 @@ queue and would not be coordinated with each other; the Terms of Use limit appli
 of arXiv as a whole. If your use case needs a higher rate, arXiv asks you to contact their
 support team rather than scale out.
 
+The request gate is **bounded** so a burst of concurrent calls cannot create an unbounded
+backlog or let stale requests keep consuming arXiv's shared quota after their clients have
+given up:
+
+- admission is limited to 8 pending requests (active + queued) per instance; calls beyond that
+  fail fast with `RESOURCE_EXHAUSTED`;
+- a request that is still waiting in the queue after 30 seconds is abandoned (`UNAVAILABLE`)
+  and removed without ever calling arXiv.
+
+These bounds are conservative service-internal safety limits, not tunable through instance
+config, and are only relaxed inside the unit tests against the local mock.
+
 Notes on limits (from the [user manual](https://info.arxiv.org/help/api/user-manual.html)):
 
 - arXiv documents `max_results` up to 30000 in slices of at most 2000. This service keeps its
