@@ -30,6 +30,15 @@ type Importer struct {
 	// RemoteTargetValidator is configured by the daemon to enforce the
 	// network policy for server-side remote imports. Tests and local-only
 	// importers may leave it unset.
+	//
+	// The validator is a host-level network policy: it is called with the
+	// complete source URL (including path and credentials) for archive
+	// downloads, HTTP redirects, and the initial Git source check, and it is
+	// also called with a synthetic "https://host:port" URL for every Git
+	// CONNECT request (a CONNECT tunnel only exposes host:port and cannot
+	// carry the original path). Implementations must not require a specific
+	// path or credentials; allow/deny decisions must be based on scheme,
+	// host, and port only.
 	RemoteTargetValidator func(context.Context, string) error
 }
 

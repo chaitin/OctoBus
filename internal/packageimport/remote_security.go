@@ -195,16 +195,18 @@ func (p *validatedGitProxy) handle(client net.Conn) {
 	reader := bufio.NewReader(client)
 	request, err := http.ReadRequest(reader)
 	if err != nil || request.Method != http.MethodConnect {
-		_, _ = io.WriteString(client, "HTTP/1.1 405 Method Not Allowed\\r\\nConnection: close\\r\\n\\r\\n")
+		// Status lines below must use real CRLF; a literal "\r\n" text is not
+		// parseable by git and would fail every proxied fetch.
+		_, _ = io.WriteString(client, "HTTP/1.1 405 Method Not Allowed\r\nConnection: close\r\n\r\n")
 		return
 	}
 	remote, err := dialValidatedRemote(p.ctx, request.Host, p.validate)
 	if err != nil {
-		_, _ = io.WriteString(client, "HTTP/1.1 403 Forbidden\\r\\nConnection: close\\r\\n\\r\\n")
+		_, _ = io.WriteString(client, "HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n")
 		return
 	}
 	defer remote.Close()
-	if _, err := io.WriteString(client, "HTTP/1.1 200 Connection Established\\r\\n\\r\\n"); err != nil {
+	if _, err := io.WriteString(client, "HTTP/1.1 200 Connection Established\r\n\r\n"); err != nil {
 		return
 	}
 	go func() {
