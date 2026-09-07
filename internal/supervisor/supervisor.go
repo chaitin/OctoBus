@@ -678,8 +678,16 @@ func (s *Supervisor) writeInstanceConfig(instanceID string, config []byte) error
 	}
 	// Sync the parent directory so the rename itself is durable: without it a
 	// crash right after a config update can roll the file back to its previous
-	// content even though the database already holds the new config.
-	return syncDirectory(workdir)
+	// content even though the database already holds the new config. A failed
+	// directory sync must not surface as a write error: the rename already
+	// committed and the file content was synced before it, so callers would
+	// wrongly conclude the config was never written and skip the authoritative
+	// database update, leaving disk (new) and DB (old) inconsistent. Degrade to
+	// a warning instead; the next start rewrites the file from the database.
+	if err := syncDirectory(workdir); err != nil {
+		s.logger().Warn("config_dir_sync_failed", "instance_id", instanceID, "error", err)
+	}
+	return nil
 }
 
 // syncDirectory fsyncs a directory so recently renamed entries survive a
