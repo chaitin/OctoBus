@@ -29,10 +29,19 @@ func TestBoundedBufferCapsOutputWithoutBlockingProcess(t *testing.T) {
 	}
 }
 
+// onlyReader hides an underlying reader's io.WriterTo so io.Copy must check
+// the destination's io.ReaderFrom (the old embedded bytes.Buffer promoted
+// ReadFrom and bypassed the limit) or fall back to the generic Write loop.
+type onlyReader struct {
+	r io.Reader
+}
+
+func (o onlyReader) Read(p []byte) (int, error) { return o.r.Read(p) }
+
 func TestBoundedBufferCapsIoCopyFastPath(t *testing.T) {
 	var buf boundedBuffer
 	buf.Limit = 4
-	if _, err := io.Copy(&buf, strings.NewReader("oversized")); err != nil {
+	if _, err := io.Copy(&buf, onlyReader{strings.NewReader("oversized")}); err != nil {
 		t.Fatal(err)
 	}
 	if !buf.Truncated || !bytes.Equal(buf.Bytes(), []byte("over")) {
