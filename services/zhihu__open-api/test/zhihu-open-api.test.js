@@ -526,6 +526,23 @@ test('respects config timeouts, custom headers, and legacy aliases', async () =>
       /TLS certificate verification cannot be disabled/,
     );
   }
+  // Regression: an explicit false in a leading flag must not shadow a later
+  // legacy alias set to true. Under the old firstDefined(...) === true guard
+  // these combinations silently bypassed the TLS check.
+  const frontFalseCombos = [
+    { config: { skipTlsVerify: false, tlsInsecureSkipVerify: true } },
+    { config: { skipTlsVerify: false, insecureSkipVerify: true } },
+    { bindings: { skipTlsVerify: false, tlsInsecureSkipVerify: true } },
+    { bindings: { skipTlsVerify: false, insecureSkipVerify: true } },
+    { config: { skipTlsVerify: false }, bindings: { tlsInsecureSkipVerify: true } },
+  ];
+  for (const extra of frontFalseCombos) {
+    assert.throws(
+      () => _test.resolveSettings({ baseUrl: 'https://example', secret: { accessSecret: 'a' }, ...extra }),
+      /TLS certificate verification cannot be disabled/,
+      `combo not rejected: ${JSON.stringify(extra)}`,
+    );
+  }
   const settings = _test.resolveSettings({
     config: { baseUrl: 'https://x', timeoutMs: 2000, headers: { a: 'b' } },
     secret: { accessSecret: 's' },
