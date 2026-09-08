@@ -1,0 +1,251 @@
+syntax = "proto3";
+
+package Proxmox_VE_8_3_5;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Proxmox_VE_8_3_5";
+
+service Proxmox_VE_8_3_5 {
+  // GET /api2/json/nodes
+  rpc ListNodes(Empty) returns (ListNodesResponse);
+
+  // GET /api2/json/nodes/{node}/qemu
+  rpc ListQemuVMs(ListQemuVMsRequest) returns (ListQemuVMsResponse);
+
+  // GET /api2/json/nodes/{node}/qemu/{vmid}/config
+  rpc GetQemuVMConfig(GetQemuVMConfigRequest) returns (GetQemuVMConfigResponse);
+
+  // GET /api2/json/nodes/{node}/lxc
+  rpc ListLXCs(ListLXCsRequest) returns (ListLXCsResponse);
+
+  // GET /api2/json/nodes/{node}/storage
+  rpc ListStorage(ListStorageRequest) returns (ListStorageResponse);
+
+  // GET /api2/json/nodes/{node}/status
+  rpc GetNodeStatus(GetNodeStatusRequest) returns (GetNodeStatusResponse);
+}
+
+message Empty {}
+
+message NodeInfo {
+  string node = 1;
+  string status = 2;
+  double cpu_usage = 3;
+  int64 cpu_count = 4;
+  int64 max_cpu = 5;
+  int64 mem_total = 6;
+  int64 mem_used = 7;
+  int64 disk_total = 8;
+  int64 disk_used = 9;
+  int64 uptime = 10;
+  string level = 11;
+  string ip = 12;
+  int64 maxmem = 13;
+  int64 maxdisk = 14;
+  google.protobuf.Value raw = 15;
+  string ssl_fingerprint = 16;
+}
+
+message ListNodesResponse {
+  int32 http_status = 1;
+  string raw_body = 2;
+  google.protobuf.Value raw_json = 3;
+  repeated NodeInfo nodes = 4;
+}
+
+message QemuVMInfo {
+  int64 vmid = 1;
+  string name = 2;
+  string status = 3;
+  int64 cpus = 4;
+  int64 maxmem = 5;
+  int64 mem = 6;
+  int64 disk = 7;
+  int64 maxdisk = 8;
+  int64 uptime = 9;
+  string node = 10;
+  bool template = 11;
+  google.protobuf.Value raw = 12;
+  double cpu = 13;
+  int64 disk_read = 14;
+  int64 disk_write = 15;
+  int64 memhost = 16;
+  int64 net_in = 17;
+  int64 net_out = 18;
+  int64 pid = 19;
+  string qmpstatus = 20;
+  string running_machine = 21;
+  string running_qemu = 22;
+  int64 serial = 23;
+  string lock_status = 24;
+  string tags = 25;
+  double pressure_cpu_full = 26;
+  double pressure_cpu_some = 27;
+  double pressure_io_full = 28;
+  double pressure_io_some = 29;
+  double pressure_memory_full = 30;
+  double pressure_memory_some = 31;
+}
+
+message ListQemuVMsRequest {
+  string node = 1;
+}
+
+message ListQemuVMsResponse {
+  int32 http_status = 1;
+  string raw_body = 2;
+  google.protobuf.Value raw_json = 3;
+  repeated QemuVMInfo vms = 4;
+}
+
+message GetQemuVMConfigRequest {
+  string node = 1;
+  int64 vmid = 2;
+}
+
+message GetQemuVMConfigResponse {
+  int32 http_status = 1;
+  string raw_body = 2;
+  google.protobuf.Value raw_json = 3;
+  int64 vmid = 4;
+  string node = 5;
+  string name = 6;
+  int64 memory = 7;
+  int64 cores = 8;
+  int64 sockets = 9;
+  string ostype = 10;
+  string scsihw = 11;
+  string boot = 12;
+  google.protobuf.Value raw_config = 13;
+  string description = 14;
+  string tags = 15;
+  bool template = 16;
+  bool onboot = 17;
+  bool autostart = 18;
+  string cpu = 19;
+  double cpulimit = 20;
+  int64 cpuunits = 21;
+  string bios = 22;
+  string machine = 23;
+  string arch = 24;
+  bool agent = 25;
+  string hugepages = 26;
+  bool keephugepages = 27;
+  string vmgenid = 28;
+  bool protection = 29;
+  string lock_status = 30;
+  int64 balloon = 31;
+  string digest = 32;
+  string hotplug = 33;
+  string keyboard = 34;
+  bool kvm = 35;
+}
+
+message LXCInfo {
+  int64 vmid = 1;
+  string name = 2;
+  string status = 3;
+  int64 cpus = 4;
+  int64 maxmem = 5;
+  int64 mem = 6;
+  int64 disk = 7;
+  int64 maxdisk = 8;
+  int64 uptime = 9;
+  string node = 10;
+  bool template = 11;
+  google.protobuf.Value raw = 12;
+  double cpu = 13;
+  int64 disk_read = 14;
+  int64 disk_write = 15;
+  int64 max_swap = 16;
+  int64 net_in = 17;
+  int64 net_out = 18;
+  string lock_status = 19;
+  string tags = 20;
+  double pressure_cpu_full = 21;
+  double pressure_cpu_some = 22;
+  double pressure_io_full = 23;
+  double pressure_io_some = 24;
+  double pressure_memory_full = 25;
+  double pressure_memory_some = 26;
+}
+
+message ListLXCsRequest {
+  string node = 1;
+}
+
+message ListLXCsResponse {
+  int32 http_status = 1;
+  string raw_body = 2;
+  google.protobuf.Value raw_json = 3;
+  repeated LXCInfo containers = 4;
+}
+
+message StorageInfo {
+  string storage = 1;
+  string type = 2;
+  int64 total = 3;
+  int64 used = 4;
+  int64 avail = 5;
+  double used_fraction = 6;
+  string content = 7;
+  string active = 8;
+  string enabled = 9;
+  bool shared = 10;
+  google.protobuf.Value raw = 11;
+  string formats_json = 12;
+  bool select_existing = 13;
+}
+
+message ListStorageRequest {
+  string node = 1;
+}
+
+message ListStorageResponse {
+  int32 http_status = 1;
+  string raw_body = 2;
+  google.protobuf.Value raw_json = 3;
+  repeated StorageInfo storages = 4;
+}
+
+message GetNodeStatusRequest {
+  string node = 1;
+}
+
+message GetNodeStatusResponse {
+  int32 http_status = 1;
+  string raw_body = 2;
+  google.protobuf.Value raw_json = 3;
+  string node = 4;
+  string status = 5;
+  int64 uptime = 6;
+  double load_average_1m = 7;
+  double load_average_5m = 8;
+  double load_average_15m = 9;
+  int64 cpu_count = 10;
+  double cpu_usage = 11;
+  int64 memory_total = 12;
+  int64 memory_used = 13;
+  int64 memory_free = 14;
+  int64 swap_total = 15;
+  int64 swap_used = 16;
+  int64 swap_free = 17;
+  string kernel_version = 18;
+  string pve_version = 19;
+  google.protobuf.Value cpuinfo = 20;
+  string boot_info_mode = 21;
+  bool boot_info_secureboot = 22;
+  string current_kernel_sysname = 23;
+  string current_kernel_release = 24;
+  string current_kernel_version = 25;
+  string current_kernel_machine = 26;
+  int64 memory_available = 27;
+  int64 rootfs_total = 28;
+  int64 rootfs_used = 29;
+  int64 rootfs_free = 30;
+  int64 rootfs_available = 31;
+  int64 idle = 32;
+  int64 ksm_shared = 33;
+  double wait = 34;
+}
