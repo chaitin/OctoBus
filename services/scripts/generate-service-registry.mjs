@@ -6,6 +6,7 @@ import {
   readFile,
   readdir,
   stat,
+  unlink,
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
@@ -264,6 +265,25 @@ async function writeGeneratedFile(filePath, contents, executable, validateConten
   }
 }
 
+async function findUnexpectedRootWrappers(root, generatedFiles) {
+  const binPath = path.join(root, "bin");
+  if (!(await fileStatus(binPath))) {
+    return [];
+  }
+  const expectedNames = new Set(
+    generatedFiles
+      .filter((generated) => path.dirname(generated.path) === binPath)
+      .map((generated) => path.basename(generated.path)),
+  );
+  const entries = await readdir(binPath, { withFileTypes: true });
+  return entries
+    .filter(
+      (entry) => entry.isFile() && entry.name.endsWith(".js") && !expectedNames.has(entry.name),
+    )
+    .map((entry) => path.join(binPath, entry.name))
+    .sort((a, b) => a.localeCompare(b));
+}
+
 export async function generateServiceRegistry({ servicesRoot, check = false } = {}) {
   const defaultRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
   const root = path.resolve(servicesRoot ?? defaultRoot);
@@ -292,6 +312,7 @@ export async function generateServiceRegistry({ servicesRoot, check = false } = 
       validateContents: (contents) => isValidWrapperContents(contents, service),
     })),
   ];
+  const unexpectedRootWrappers = await findUnexpectedRootWrappers(root, generatedFiles);
 
   if (check) {
     const stale = [];
@@ -306,6 +327,9 @@ export async function generateServiceRegistry({ servicesRoot, check = false } = 
         stale.push(`${path.relative(root, generated.path)} (${reason})`);
       }
     }
+    for (const unexpected of unexpectedRootWrappers) {
+      stale.push(`${path.relative(root, unexpected)} (unexpected generated file)`);
+    }
     if (stale.length > 0) {
       throw new Error(`service registry is out of date:\n- ${stale.join("\n- ")}`);
     }
@@ -319,6 +343,9 @@ export async function generateServiceRegistry({ servicesRoot, check = false } = 
       generated.executable,
       generated.validateContents,
     );
+  }
+  for (const unexpected of unexpectedRootWrappers) {
+    await unlink(unexpected);
   }
   return { generated: generatedFiles.length, services: services.length };
 }

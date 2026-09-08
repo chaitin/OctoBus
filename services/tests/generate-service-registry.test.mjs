@@ -90,6 +90,19 @@ test("generates a deterministic aggregate registry from service packages", async
   );
 });
 
+test("generate mode creates the root bin directory when it is missing", async () => {
+  const root = await createServicesRoot();
+  await addService(root, "vendor__alpha", "alpha");
+  await rm(path.join(root, "bin"), { recursive: true });
+
+  await generateServiceRegistry({ servicesRoot: root });
+
+  assert.match(
+    await readFile(path.join(root, "bin", "alpha.js"), "utf8"),
+    /\.\.\/vendor__alpha\/src\/service\.js/,
+  );
+});
+
 test("check mode reports stale generated files without modifying them", async () => {
   const root = await createServicesRoot();
   await addService(root, "vendor__alpha", "alpha");
@@ -104,6 +117,47 @@ test("check mode reports stale generated files without modifying them", async ()
 
   await generateServiceRegistry({ servicesRoot: root });
   await generateServiceRegistry({ servicesRoot: root, check: true });
+});
+
+test("check mode reports an unexpected root wrapper without removing it", async () => {
+  const root = await createServicesRoot();
+  await addService(root, "vendor__alpha", "alpha");
+  await addService(root, "vendor__removed", "removed-service");
+  await generateServiceRegistry({ servicesRoot: root });
+  const staleWrapperPath = path.join(root, "bin", "removed-service.js");
+  const staleWrapper = await readFile(staleWrapperPath, "utf8");
+  await rm(path.join(root, "vendor__removed"), { recursive: true });
+
+  await assert.rejects(
+    generateServiceRegistry({ servicesRoot: root, check: true }),
+    /service registry is out of date.*bin\/removed-service\.js \(unexpected generated file\)/s,
+  );
+  assert.equal(await readFile(staleWrapperPath, "utf8"), staleWrapper);
+});
+
+test("generate mode removes unexpected root wrappers", async () => {
+  const root = await createServicesRoot();
+  await addService(root, "vendor__alpha", "alpha");
+  await addService(root, "vendor__removed", "removed-service");
+  await generateServiceRegistry({ servicesRoot: root });
+  const staleWrapperPath = path.join(root, "bin", "removed-service.js");
+  await rm(path.join(root, "vendor__removed"), { recursive: true });
+
+  await generateServiceRegistry({ servicesRoot: root });
+
+  await assert.rejects(readFile(staleWrapperPath, "utf8"), { code: "ENOENT" });
+});
+
+test("generate mode preserves non-JavaScript files in the root bin directory", async () => {
+  const root = await createServicesRoot();
+  await addService(root, "vendor__alpha", "alpha");
+  const helperPath = path.join(root, "bin", "manual-helper.sh");
+  const helper = "#!/bin/sh\nexit 0\n";
+  await writeFile(helperPath, helper);
+
+  await generateServiceRegistry({ servicesRoot: root });
+
+  assert.equal(await readFile(helperPath, "utf8"), helper);
 });
 
 test("rejects duplicate service names", async () => {
