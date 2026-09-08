@@ -119,23 +119,27 @@ test("check mode reports stale generated files without modifying them", async ()
   await generateServiceRegistry({ servicesRoot: root, check: true });
 });
 
-test("check mode reports an unexpected root wrapper without removing it", async () => {
+test("check mode reports a stale generated wrapper without removing it", async () => {
   const root = await createServicesRoot();
   await addService(root, "vendor__alpha", "alpha");
   await addService(root, "vendor__removed", "removed-service");
   await generateServiceRegistry({ servicesRoot: root });
   const staleWrapperPath = path.join(root, "bin", "removed-service.js");
-  const staleWrapper = await readFile(staleWrapperPath, "utf8");
+  const staleWrapper = (await readFile(staleWrapperPath, "utf8")).replace(
+    "runServiceMain(service, {",
+    'await Promise.resolve("custom setup");\n\nrunServiceMain(service, {',
+  );
+  await writeFile(staleWrapperPath, staleWrapper);
   await rm(path.join(root, "vendor__removed"), { recursive: true });
 
   await assert.rejects(
     generateServiceRegistry({ servicesRoot: root, check: true }),
-    /service registry is out of date.*bin\/removed-service\.js \(unexpected generated file\)/s,
+    /service registry is out of date.*bin\/removed-service\.js \(stale generated wrapper\)/s,
   );
   assert.equal(await readFile(staleWrapperPath, "utf8"), staleWrapper);
 });
 
-test("generate mode removes unexpected root wrappers", async () => {
+test("generate mode removes stale generated wrappers", async () => {
   const root = await createServicesRoot();
   await addService(root, "vendor__alpha", "alpha");
   await addService(root, "vendor__removed", "removed-service");
@@ -148,6 +152,22 @@ test("generate mode removes unexpected root wrappers", async () => {
   await assert.rejects(readFile(staleWrapperPath, "utf8"), { code: "ENOENT" });
 });
 
+test("reports a stale wrapper when its service root is replaced by a file", async () => {
+  const root = await createServicesRoot();
+  await addService(root, "vendor__alpha", "alpha");
+  await addService(root, "vendor__removed", "removed-service");
+  await generateServiceRegistry({ servicesRoot: root });
+  const staleWrapperPath = path.join(root, "bin", "removed-service.js");
+  await rm(path.join(root, "vendor__removed"), { recursive: true });
+  await writeFile(path.join(root, "vendor__removed"), "not a service directory\n");
+
+  await assert.rejects(
+    generateServiceRegistry({ servicesRoot: root, check: true }),
+    /service registry is out of date.*bin\/removed-service\.js \(stale generated wrapper\)/s,
+  );
+  assert.equal((await stat(staleWrapperPath)).isFile(), true);
+});
+
 test("generate mode preserves non-JavaScript files in the root bin directory", async () => {
   const root = await createServicesRoot();
   await addService(root, "vendor__alpha", "alpha");
@@ -158,6 +178,60 @@ test("generate mode preserves non-JavaScript files in the root bin directory", a
   await generateServiceRegistry({ servicesRoot: root });
 
   assert.equal(await readFile(helperPath, "utf8"), helper);
+});
+
+test("preserves an unrecognized manual JavaScript file in check and generate modes", async () => {
+  const root = await createServicesRoot();
+  await addService(root, "vendor__alpha", "alpha");
+  const helperPath = path.join(root, "bin", "manual-helper.js");
+  const helper = "#!/usr/bin/env node\nconsole.log(\"manual helper\");\n";
+  await writeFile(helperPath, helper);
+
+  await generateServiceRegistry({ servicesRoot: root });
+  const result = await generateServiceRegistry({ servicesRoot: root, check: true });
+  assert.equal(result.services, 1);
+
+  await generateServiceRegistry({ servicesRoot: root });
+  assert.equal(await readFile(helperPath, "utf8"), helper);
+});
+
+test("preserves a JavaScript file that uses runServiceMain without the generated wrapper shape", async () => {
+  const root = await createServicesRoot();
+  await addService(root, "vendor__alpha", "alpha");
+  const helperPath = path.join(root, "bin", "manual-runner.js");
+  const helper = [
+    "#!/usr/bin/env node",
+    "",
+    'import { fileURLToPath } from "node:url";',
+    'import { runServiceMain } from "@chaitin-ai/octobus-sdk";',
+    "",
+    'import { service } from "../vendor__alpha/src/service.js";',
+    "",
+    "runServiceMain({}, { entryFile: process.argv[1] });",
+    "",
+  ].join("\n");
+  await writeFile(helperPath, helper);
+
+  await generateServiceRegistry({ servicesRoot: root });
+  await generateServiceRegistry({ servicesRoot: root, check: true });
+  await generateServiceRegistry({ servicesRoot: root });
+
+  assert.equal(await readFile(helperPath, "utf8"), helper);
+});
+
+test("preserves a generated-shaped JavaScript file with a mismatched wrapper filename", async () => {
+  const root = await createServicesRoot();
+  await addService(root, "vendor__alpha", "alpha");
+  await addService(root, "vendor__removed", "removed-service");
+  await generateServiceRegistry({ servicesRoot: root });
+  const generatedWrapper = await readFile(path.join(root, "bin", "removed-service.js"), "utf8");
+  const helperPath = path.join(root, "bin", "manual-helper.js");
+  await writeFile(helperPath, generatedWrapper);
+  await rm(path.join(root, "vendor__removed"), { recursive: true });
+
+  await generateServiceRegistry({ servicesRoot: root });
+
+  assert.equal(await readFile(helperPath, "utf8"), generatedWrapper);
 });
 
 test("rejects duplicate service names", async () => {

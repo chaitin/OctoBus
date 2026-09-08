@@ -265,7 +265,82 @@ async function writeGeneratedFile(filePath, contents, executable, validateConten
   }
 }
 
-async function findUnexpectedRootWrappers(root, generatedFiles) {
+function parseGeneratedWrapperReferences(contents) {
+  const lines = contents.split("\n");
+  if (
+    lines[0] !== "#!/usr/bin/env node" ||
+    lines[1] !== "" ||
+    lines[2] !== 'import { fileURLToPath } from "node:url";' ||
+    lines[3] !== 'import { runServiceMain } from "@chaitin-ai/octobus-sdk";' ||
+    lines[4] !== "" ||
+    lines[5] === undefined
+  ) {
+    return undefined;
+  }
+
+  const serviceImport = lines[5].match(
+    /^import \{ service \} from ("(?:[^"\\]|\\.)+");$/,
+  );
+  if (!serviceImport) {
+    return undefined;
+  }
+
+  let servicePath;
+  try {
+    servicePath = JSON.parse(serviceImport[1]);
+  } catch {
+    return undefined;
+  }
+
+  let entryPath;
+  for (let index = 6; index < lines.length - 2; index += 1) {
+    if (lines[index] !== "runServiceMain(service, {") {
+      continue;
+    }
+    const entryMatch = lines[index + 1].match(
+      /^  entryFile: fileURLToPath\(new URL\(("(?:[^"\\]|\\.)+"), import\.meta\.url\)\),$/,
+    );
+    if (!entryMatch || lines[index + 2] !== "});") {
+      continue;
+    }
+    try {
+      entryPath = JSON.parse(entryMatch[1]);
+    } catch {
+      return undefined;
+    }
+    break;
+  }
+  if (entryPath === undefined) {
+    return undefined;
+  }
+
+  const serviceSegments = servicePath.split("/");
+  const entrySegments = entryPath.split("/");
+  if (
+    serviceSegments.length !== 4 ||
+    serviceSegments[0] !== ".." ||
+    serviceSegments[1] === "" ||
+    serviceSegments[1] === "." ||
+    serviceSegments[1] === ".." ||
+    serviceSegments[1].includes("\\") ||
+    serviceSegments[2] !== "src" ||
+    serviceSegments[3] !== "service.js" ||
+    entrySegments.length < 3 ||
+    entrySegments[0] !== ".." ||
+    entrySegments[1] !== serviceSegments[1] ||
+    entrySegments.slice(2).some((segment) => segment === "" || segment === "." || segment === "..") ||
+    entryPath.includes("\\")
+  ) {
+    return undefined;
+  }
+
+  return {
+    serviceDirectory: serviceSegments[1],
+    entryFile: entrySegments.slice(2).join("/"),
+  };
+}
+
+async function findStaleRootWrappers(root, generatedFiles) {
   const binPath = path.join(root, "bin");
   if (!(await fileStatus(binPath))) {
     return [];
@@ -276,12 +351,34 @@ async function findUnexpectedRootWrappers(root, generatedFiles) {
       .map((generated) => path.basename(generated.path)),
   );
   const entries = await readdir(binPath, { withFileTypes: true });
-  return entries
-    .filter(
-      (entry) => entry.isFile() && entry.name.endsWith(".js") && !expectedNames.has(entry.name),
-    )
-    .map((entry) => path.join(binPath, entry.name))
-    .sort((a, b) => a.localeCompare(b));
+  const stale = [];
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!entry.isFile() || !entry.name.endsWith(".js") || expectedNames.has(entry.name)) {
+      continue;
+    }
+
+    const filePath = path.join(binPath, entry.name);
+    const references = parseGeneratedWrapperReferences(await readFile(filePath, "utf8"));
+    if (!references) {
+      continue;
+    }
+    if (path.posix.basename(references.entryFile) !== entry.name) {
+      continue;
+    }
+
+    const serviceRoot = path.join(root, references.serviceDirectory);
+    const serviceRootStatus = await fileStatus(serviceRoot);
+    if (!serviceRootStatus?.isDirectory()) {
+      stale.push(filePath);
+      continue;
+    }
+
+    const entryStatus = await fileStatus(path.join(serviceRoot, references.entryFile));
+    if (!entryStatus?.isFile()) {
+      stale.push(filePath);
+    }
+  }
+  return stale;
 }
 
 export async function generateServiceRegistry({ servicesRoot, check = false } = {}) {
@@ -312,7 +409,7 @@ export async function generateServiceRegistry({ servicesRoot, check = false } = 
       validateContents: (contents) => isValidWrapperContents(contents, service),
     })),
   ];
-  const unexpectedRootWrappers = await findUnexpectedRootWrappers(root, generatedFiles);
+  const staleRootWrappers = await findStaleRootWrappers(root, generatedFiles);
 
   if (check) {
     const stale = [];
@@ -327,8 +424,8 @@ export async function generateServiceRegistry({ servicesRoot, check = false } = 
         stale.push(`${path.relative(root, generated.path)} (${reason})`);
       }
     }
-    for (const unexpected of unexpectedRootWrappers) {
-      stale.push(`${path.relative(root, unexpected)} (unexpected generated file)`);
+    for (const staleWrapper of staleRootWrappers) {
+      stale.push(`${path.relative(root, staleWrapper)} (stale generated wrapper)`);
     }
     if (stale.length > 0) {
       throw new Error(`service registry is out of date:\n- ${stale.join("\n- ")}`);
@@ -344,8 +441,8 @@ export async function generateServiceRegistry({ servicesRoot, check = false } = 
       generated.validateContents,
     );
   }
-  for (const unexpected of unexpectedRootWrappers) {
-    await unlink(unexpected);
+  for (const staleWrapper of staleRootWrappers) {
+    await unlink(staleWrapper);
   }
   return { generated: generatedFiles.length, services: services.length };
 }
