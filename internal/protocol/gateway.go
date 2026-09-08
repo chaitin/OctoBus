@@ -1515,7 +1515,7 @@ func (g *Gateway) invokeRaw(ctx context.Context, item store.ExposedMethod, req [
 	if strings.HasPrefix(item.Instance.ListenAddr, "bufconn:") {
 		return nil, status.Error(codes.Unavailable, "backend instance uses unsupported in-memory listener")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, backendUnaryTimeout())
 	defer cancel()
 	conn, err := g.backendConn(item)
 	if err != nil {
@@ -1527,6 +1527,18 @@ func (g *Gateway) invokeRaw(ctx context.Context, item store.ExposedMethod, req [
 		return nil, err
 	}
 	return out.Bytes(), nil
+}
+
+func backendUnaryTimeout() time.Duration {
+	raw := strings.TrimSpace(os.Getenv("OCTOBUS_BACKEND_UNARY_TIMEOUT"))
+	if raw == "" {
+		return 30 * time.Second
+	}
+	timeout, err := time.ParseDuration(raw)
+	if err != nil || timeout <= 0 {
+		return 30 * time.Second
+	}
+	return timeout
 }
 
 func (g *Gateway) newBackendStream(ctx context.Context, item store.ExposedMethod) (grpc.ClientStream, error) {
