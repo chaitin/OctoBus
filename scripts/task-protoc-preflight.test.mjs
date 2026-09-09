@@ -64,10 +64,9 @@ exit 23
   if (protoc === true) {
     writeExecutable(path.join(binDir, "protoc"), "#!/bin/sh\nexit 0\n");
   } else if (protoc === "non-executable") {
-    // Keep a non-executable placeholder out of PATH: some shells let
-    // `command -v` report non-executable files, so this must remain absent
-    // from command lookup to model the missing executable reliably.
-    fs.writeFileSync(path.join(binDir, "protoc"), "#!/bin/sh\nexit 0\n", { mode: 0o644 });
+    // Keep the placeholder outside PATH: some shells let `command -v` report
+    // non-executable files, so it must not share a lookup directory.
+    fs.writeFileSync(path.join(root, "protoc"), "#!/bin/sh\nexit 0\n", { mode: 0o644 });
   }
   const pathEntries = hostPath.split(path.delimiter);
   const protocDirs = new Set(pathEntries.filter((entry) => {
