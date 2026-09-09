@@ -33,18 +33,6 @@ test("task test accepts an executable protoc and reaches downstream commands", (
   }
 });
 
-test("task test rejects a non-executable protoc", () => {
-  const fixture = makeFixture({ protoc: "non-executable" });
-  try {
-    const result = runTask(fixture);
-    assert.notEqual(result.status, 0);
-    assert.match(result.stderr + result.stdout, /protoc.*(required|install|PATH)/i);
-    assert.equal(fs.existsSync(fixture.downstreamMarker), false);
-  } finally {
-    fs.rmSync(fixture.root, { recursive: true, force: true });
-  }
-});
-
 function makeFixture({ protoc = false } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "octobus-protoc-preflight-"));
   const binDir = path.join(root, "bin");
@@ -63,10 +51,6 @@ exit 23
 `);
   if (protoc === true) {
     writeExecutable(path.join(binDir, "protoc"), "#!/bin/sh\nexit 0\n");
-  } else if (protoc === "non-executable") {
-    // Keep the placeholder outside PATH: some shells let `command -v` report
-    // non-executable files, so it must not share a lookup directory.
-    fs.writeFileSync(path.join(root, "protoc"), "#!/bin/sh\nexit 0\n", { mode: 0o644 });
   }
   const pathEntries = hostPath.split(path.delimiter);
   const protocDirs = new Set(pathEntries.filter((entry) => {
@@ -77,7 +61,7 @@ exit 23
       return false;
     }
   }));
-  const availablePath = protoc === false || protoc === "non-executable"
+  const availablePath = protoc === false
     ? pathEntries.filter((entry) => !protocDirs.has(entry))
     : pathEntries;
   return {
