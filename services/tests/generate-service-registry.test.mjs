@@ -152,6 +152,26 @@ test("generate mode removes stale generated wrappers", async () => {
   await assert.rejects(readFile(staleWrapperPath, "utf8"), { code: "ENOENT" });
 });
 
+test("removes wrappers for services no longer registered", async () => {
+  const root = await createServicesRoot();
+  await addService(root, "vendor__alpha", "alpha");
+  await addService(root, "vendor__retired", "retired-service");
+  await generateServiceRegistry({ servicesRoot: root });
+  const staleWrapperPath = path.join(root, "bin", "retired-service.js");
+
+  await rm(path.join(root, "vendor__retired", "service.json"));
+
+  await assert.rejects(
+    generateServiceRegistry({ servicesRoot: root, check: true }),
+    /service registry is out of date.*bin\/retired-service\.js \(stale generated wrapper\)/s,
+  );
+  assert.equal((await stat(staleWrapperPath)).isFile(), true);
+
+  await generateServiceRegistry({ servicesRoot: root });
+
+  await assert.rejects(readFile(staleWrapperPath, "utf8"), { code: "ENOENT" });
+});
+
 test("reports a stale wrapper when its service root is replaced by a file", async () => {
   const root = await createServicesRoot();
   await addService(root, "vendor__alpha", "alpha");

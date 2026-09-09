@@ -340,11 +340,14 @@ function parseGeneratedWrapperReferences(contents) {
   };
 }
 
-async function findStaleRootWrappers(root, generatedFiles) {
+async function findStaleRootWrappers(root, generatedFiles, services) {
   const binPath = path.join(root, "bin");
   if (!(await fileStatus(binPath))) {
     return [];
   }
+  const registeredServices = new Set(
+    services.map((service) => `${service.directory}\0${service.entryFile}`),
+  );
   const expectedNames = new Set(
     generatedFiles
       .filter((generated) => path.dirname(generated.path) === binPath)
@@ -363,6 +366,11 @@ async function findStaleRootWrappers(root, generatedFiles) {
       continue;
     }
     if (path.posix.basename(references.entryFile) !== entry.name) {
+      continue;
+    }
+
+    if (!registeredServices.has(`${references.serviceDirectory}\0${references.entryFile}`)) {
+      stale.push(filePath);
       continue;
     }
 
@@ -409,7 +417,7 @@ export async function generateServiceRegistry({ servicesRoot, check = false } = 
       validateContents: (contents) => isValidWrapperContents(contents, service),
     })),
   ];
-  const staleRootWrappers = await findStaleRootWrappers(root, generatedFiles);
+  const staleRootWrappers = await findStaleRootWrappers(root, generatedFiles, services);
 
   if (check) {
     const stale = [];
