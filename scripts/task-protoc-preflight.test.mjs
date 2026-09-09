@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const taskBin = execFileSync("sh", ["-c", "command -v task"], { encoding: "utf8" }).trim();
+const hostPath = process.env.PATH ?? "";
 
 test("task test fails early with a protoc installation hint", () => {
   const fixture = makeFixture();
@@ -60,18 +61,39 @@ function makeFixture({ protoc = false } = {}) {
 printf 'started\\n' > "$DOWNSTREAM_MARKER"
 exit 23
 `);
-  if (protoc) {
+  if (protoc === true) {
     writeExecutable(path.join(binDir, "protoc"), "#!/bin/sh\nexit 0\n");
-    if (protoc === "non-executable") fs.chmodSync(path.join(binDir, "protoc"), 0o644);
+  } else if (protoc === "non-executable") {
+    // Keep a non-executable placeholder out of PATH: some shells let
+    // `command -v` report non-executable files, so this must remain absent
+    // from command lookup to model the missing executable reliably.
+    fs.writeFileSync(path.join(binDir, "protoc"), "#!/bin/sh\nexit 0\n", { mode: 0o644 });
   }
-  return { root, binDir, downstreamMarker };
+  const pathEntries = hostPath.split(path.delimiter);
+  const protocDirs = new Set(pathEntries.filter((entry) => {
+    try {
+      fs.accessSync(path.join(entry || ".", "protoc"), fs.constants.X_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  }));
+  const availablePath = protoc === false || protoc === "non-executable"
+    ? pathEntries.filter((entry) => !protocDirs.has(entry))
+    : pathEntries;
+  return {
+    root,
+    binDir,
+    downstreamMarker,
+    path: [binDir, ...availablePath].join(path.delimiter),
+  };
 }
 
 function runTask(fixture) {
   try {
     const stdout = execFileSync(taskBin, ["--dir", fixture.root, "test"], {
       cwd: fixture.root,
-      env: { ...process.env, PATH: fixture.binDir, DOWNSTREAM_MARKER: fixture.downstreamMarker },
+      env: { ...process.env, PATH: fixture.path, DOWNSTREAM_MARKER: fixture.downstreamMarker },
       encoding: "utf8",
       timeout: 10_000,
       stdio: ["ignore", "pipe", "pipe"],
