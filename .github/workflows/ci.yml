@@ -101,6 +101,10 @@ jobs:
         working-directory: services
         run: npm run validate
 
+      - name: Check generated service registry
+        working-directory: services
+        run: npm run registry:check
+
       - name: Install SDK dependencies
         working-directory: sdk
         run: npm ci
