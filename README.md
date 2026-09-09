@@ -80,6 +80,24 @@ docker run --rm \
 The container listens on `0.0.0.0:9000` by default and stores daemon state under
 `/var/lib/octobus`.
 
+The image runs as the non-root `octobus` user. The named volume example above
+is already initialized with the correct ownership. If you use a host bind mount,
+create the directory first and make it writable by the container's `octobus`
+user before starting the daemon:
+
+```bash
+mkdir -p ./octobus-data
+# Replace <uid>:<gid> with the values used by the image:
+docker run --rm --entrypoint id ghcr.io/chaitin/octobus:latest -u octobus
+docker run --rm --entrypoint id ghcr.io/chaitin/octobus:latest -g octobus
+sudo chown -R <uid>:<gid> ./octobus-data
+
+docker run --rm \
+  -p 9000:9000 \
+  -v "$PWD/octobus-data:/var/lib/octobus" \
+  ghcr.io/chaitin/octobus:latest
+```
+
 ### Build from a checkout
 
 After the first checkout, build the binary:

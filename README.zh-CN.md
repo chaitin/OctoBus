@@ -71,6 +71,23 @@ docker run --rm \
 
 容器默认监听 `0.0.0.0:9000`，daemon 状态保存在 `/var/lib/octobus`。
 
+镜像默认使用非 root 用户 `octobus` 运行。上面的 named volume 示例会自动
+使用正确的目录归属。如果改用宿主机目录 bind mount，请先创建目录，并把
+目录的所有者设置为镜像中的 `octobus` 用户，再启动 daemon：
+
+```bash
+mkdir -p ./octobus-data
+# 将 <uid>:<gid> 替换为镜像中 octobus 用户的实际 UID:GID：
+docker run --rm --entrypoint id ghcr.io/chaitin/octobus:latest -u octobus
+docker run --rm --entrypoint id ghcr.io/chaitin/octobus:latest -g octobus
+sudo chown -R <uid>:<gid> ./octobus-data
+
+docker run --rm \
+  -p 9000:9000 \
+  -v "$PWD/octobus-data:/var/lib/octobus" \
+  ghcr.io/chaitin/octobus:latest
+```
+
 ### 从 checkout 构建
 
 首次 checkout 后先构建 binary：
