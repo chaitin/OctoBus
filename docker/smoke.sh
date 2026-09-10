@@ -6,6 +6,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 container_name="octobus-smoke-$RANDOM-$$"
 volume_name="${container_name}-data"
 host_port="${OCTOBUS_SMOKE_PORT:-19000}"
+admin_token="${OCTOBUS_SMOKE_ADMIN_TOKEN:-smoke-admin-token}"
 fixture_dir="$(mktemp -d)"
 status_file="$(mktemp)"
 import_body="$(mktemp)"
@@ -43,6 +44,7 @@ docker volume create "$volume_name" >/dev/null
 docker run -d \
 	--name "$container_name" \
 	-p "127.0.0.1:${host_port}:9000" \
+	-e "OCTOBUS_BOOTSTRAP_ADMIN_TOKEN=${admin_token}" \
 	-v "$volume_name:/var/lib/octobus" \
 	-v "$fixture_dir:/fixtures/calculator-js:ro" \
 	"$image" >/dev/null
@@ -65,6 +67,7 @@ curl -sS \
 	-o "$import_body" \
 	-w '%{http_code}' \
 	-X POST "http://127.0.0.1:${host_port}/admin/v1/services/import" \
+	-H "Authorization: Bearer ${admin_token}" \
 	-H 'Content-Type: application/json' \
 	-d '{"service_id":"calculator","source":"/fixtures/calculator-js","build":"auto"}' >"$import_status"
 
@@ -78,9 +81,9 @@ fi
 cat "$import_body"
 printf '\n'
 
-docker run --rm --network "container:$container_name" "$image" instance create --id calculator-test --service calculator --addr 127.0.0.1:9000 --config-json '{"label":"smoke"}' --secret-json '{"apiToken":"smoke-token"}'
-docker run --rm --network "container:$container_name" "$image" capset create --id dev --name DevAgent --addr 127.0.0.1:9000
-docker run --rm --network "container:$container_name" "$image" capset add-instance --capset dev --instance calculator-test --addr 127.0.0.1:9000
+docker run --rm -e "OCTOBUS_ADMIN_TOKEN=${admin_token}" --network "container:$container_name" "$image" instance create --id calculator-test --service calculator --addr 127.0.0.1:9000 --config-json '{"label":"smoke"}' --secret-json '{"apiToken":"smoke-token"}'
+docker run --rm -e "OCTOBUS_ADMIN_TOKEN=${admin_token}" --network "container:$container_name" "$image" capset create --id dev --name DevAgent --addr 127.0.0.1:9000
+docker run --rm -e "OCTOBUS_ADMIN_TOKEN=${admin_token}" --network "container:$container_name" "$image" capset add-instance --capset dev --instance calculator-test --addr 127.0.0.1:9000
 
 response="$(
 	curl -fsS \

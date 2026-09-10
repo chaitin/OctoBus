@@ -35,6 +35,11 @@ type Server struct {
 	Gateway       *protocol.Gateway
 	AccessLogPath string
 	Logger        *slog.Logger
+
+	// RequireAdminToken is enabled by the daemon for production control-plane
+	// handlers. It is explicit so lightweight in-process test servers can keep
+	// using the handler without provisioning a token store.
+	RequireAdminToken bool
 }
 
 type serviceImporter interface {
@@ -147,10 +152,14 @@ func (s *Server) adminTokenMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 		if c.Request().URL.Path == "/admin/v1/status" {
 			return next(c)
 		}
-		requires, err := s.Store.AdminRequiresToken(c.Request().Context())
-		if err != nil {
-			writeError(c.Response(), http.StatusInternalServerError, err.Error())
-			return nil
+		requires := s.RequireAdminToken
+		if !requires {
+			var err error
+			requires, err = s.Store.AdminRequiresToken(c.Request().Context())
+			if err != nil {
+				writeError(c.Response(), http.StatusInternalServerError, err.Error())
+				return nil
+			}
 		}
 		if !requires {
 			return next(c)
