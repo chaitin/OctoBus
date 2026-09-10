@@ -191,7 +191,10 @@ func initializeAdminAuth(ctx context.Context, st *store.Store) error {
 		return errors.New("admin token authentication is not initialized; set OCTOBUS_BOOTSTRAP_ADMIN_TOKEN before starting the daemon")
 	}
 	_, err = st.AddAdminToken(ctx, domain.AdminToken{ID: "bootstrap-admin", Name: "Bootstrap admin"}, secret)
-	return err
+	if err != nil {
+		return fmt.Errorf("provision bootstrap admin token: %w", err)
+	}
+	return nil
 }
 
 func logStartupInventory(ctx context.Context, logger *slog.Logger, st *store.Store) error {
