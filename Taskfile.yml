@@ -31,6 +31,9 @@ tasks:
 
   test:
     desc: Run all Go tests, including e2e tests.
+    preconditions:
+      - sh: command -v protoc >/dev/null 2>&1
+        msg: "protoc is required for task test; install protoc and ensure it is on PATH."
     cmds:
       - task: sdk:build
       - task: example:calculator:deps

@@ -483,7 +483,9 @@ task test
 task build
 ```
 
-`task test` first builds the local SDK and installs dependencies for the long-running and on-demand calculator examples, then runs Go tests with cross-package coverage, including `tests/e2e`. `task build` generates `bin/octobus` and injects build metadata for the `version` subcommand. If the current commit is exactly on an OctoBus release tag matching `v[0-9]*`, that tag is used as the displayed version. Otherwise, the version comes from the nearest reachable matching tag plus commit distance and short commit, for example `v1.2.0-12-gabc1234`; if no matching tag is reachable, it falls back to the short Git commit. Build environments without Git metadata can override the injected values with `OCTOBUS_VERSION`, `OCTOBUS_COMMIT`, and `OCTOBUS_BUILD_DATE`. You can inspect the result with:
+`task test` first checks that the `protoc` executable is installed and available on `PATH`, then builds the local SDK, installs dependencies for the long-running and on-demand calculator examples, and runs Go tests with cross-package coverage, including `tests/e2e`. If the check fails, install `protoc` and retry. The preflight applies only to `task test`; direct `go test ./...` remains unchanged and still requires the caller to provide `protoc` when needed. The isolated regression can be run with `node --test scripts/task-protoc-preflight.test.mjs`.
+
+`task build` generates `bin/octobus` and injects build metadata for the `version` subcommand. If the current commit is exactly on an OctoBus release tag matching `v[0-9]*`, that tag is used as the displayed version. Otherwise, the version comes from the nearest reachable matching tag plus commit distance and short commit, for example `v1.2.0-12-gabc1234`; if no matching tag is reachable, it falls back to the short Git commit. Build environments without Git metadata can override the injected values with `OCTOBUS_VERSION`, `OCTOBUS_COMMIT`, and `OCTOBUS_BUILD_DATE`. You can inspect the result with:
 
 ```bash
 ./bin/octobus version
