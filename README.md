@@ -483,6 +483,18 @@ task test
 task build
 ```
 
+When adding, renaming, or removing a package under `services/`, regenerate the aggregate
+service package before committing:
+
+```bash
+cd services
+npm run registry:generate
+```
+
+`npm run registry:check` verifies that the aggregate `package.json`, dispatcher, and command
+wrappers match the checked-in service packages. CI runs this check so registry drift is caught
+in pull requests.
+
 `task test` first builds the local SDK and installs dependencies for the long-running and on-demand calculator examples, then runs Go tests with cross-package coverage, including `tests/e2e`. `task build` generates `bin/octobus` and injects build metadata for the `version` subcommand. If the current commit is exactly on an OctoBus release tag matching `v[0-9]*`, that tag is used as the displayed version. Otherwise, the version comes from the nearest reachable matching tag plus commit distance and short commit, for example `v1.2.0-12-gabc1234`; if no matching tag is reachable, it falls back to the short Git commit. Build environments without Git metadata can override the injected values with `OCTOBUS_VERSION`, `OCTOBUS_COMMIT`, and `OCTOBUS_BUILD_DATE`. You can inspect the result with:
 
 ```bash
