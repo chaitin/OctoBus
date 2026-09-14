@@ -1338,7 +1338,11 @@ func (s *Server) handleCapsetPath(w http.ResponseWriter, r *http.Request, capset
 					}
 				}
 				if err := s.Store.AddCapsetMethod(r.Context(), domain.CapsetMethod{CapsetInstanceID: ci.ID, MethodFullName: method.FullName, MCPToolName: toolName, Enabled: true}); err != nil {
-					writeError(w, http.StatusBadRequest, err.Error())
+					statusCode := http.StatusBadRequest
+					if errors.Is(err, store.ErrMCPToolNameConflict) {
+						statusCode = http.StatusConflict
+					}
+					writeError(w, statusCode, err.Error())
 					return
 				}
 			}
@@ -1440,7 +1444,11 @@ func (s *Server) handleCapsetPath(w http.ResponseWriter, r *http.Request, capset
 			}
 		}
 		if err := s.Store.AddCapsetMethod(r.Context(), domain.CapsetMethod{CapsetInstanceID: ciID, MethodFullName: selected.FullName, MCPToolName: toolName, Enabled: true}); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
+			statusCode := http.StatusBadRequest
+			if errors.Is(err, store.ErrMCPToolNameConflict) {
+				statusCode = http.StatusConflict
+			}
+			writeError(w, statusCode, err.Error())
 			return
 		}
 		s.logger().Info("capset_method_selected", "capset_id", capsetID, "instance_id", req.InstanceID, "method", selected.FullName, "mcp_tool", toolName)
