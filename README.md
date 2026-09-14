@@ -402,6 +402,10 @@ node bin/service.js call --data-json '{"id":"123"}'
 
 The SDK also reads the same variable from `.env` in the current working directory. It reads only that key and does not inject other `.env` variables. This variable does not affect the daemon's `--runtime serve` or `--runtime invoke` protocol. When the daemon manages instances, it continues to pass config/secret through files and file descriptors.
 
+## Admin authentication
+
+The daemon requires an Admin Token before enabling the control plane. On a new or upgraded data directory, set `OCTOBUS_BOOTSTRAP_ADMIN_TOKEN` to a high-entropy value for the first startup. The value is hashed and is not returned by the API; remove it from the process environment after bootstrap and manage subsequent tokens through the authenticated Admin API.
+
 ## Development
 
 ### Architecture

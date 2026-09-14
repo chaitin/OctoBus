@@ -747,6 +747,22 @@ func TestAdminServiceImportMultipartRecursiveAggregateAndValidation(t *testing.T
 	})
 }
 
+func TestAdminTokenIsRequiredWhenDaemonEnablesControlPlaneAuth(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "octobus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	srv := &Server{Store: st, RequireAdminToken: true}
+	req := httptest.NewRequest(http.MethodGet, "/admin/v1/services", nil)
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status without admin token = %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
 func TestAdminServiceImportMultipartRequiresAdminToken(t *testing.T) {
 	ctx := context.Background()
 	dataDir := t.TempDir()
