@@ -1931,7 +1931,7 @@ func TestTarGzUntarAndUnzipHelpers(t *testing.T) {
 		t.Fatalf("expected unsafe tgz path error, got %v", err)
 	}
 	unsafeZip := filepath.Join(dir, "unsafe.zip")
-	writeZipArchive(t, unsafeZip, "../escape.txt", "bad")
+	writeZipArchive(t, unsafeZip, zipEntry{name: "../escape.txt", body: "bad"})
 	if err := unzip(unsafeZip, filepath.Join(dir, "unsafe-zip-out")); err == nil || !strings.Contains(err.Error(), "unsafe archive path") {
 		t.Fatalf("expected unsafe zip path error, got %v", err)
 	}
@@ -2409,7 +2409,12 @@ func writeTarArchive(t *testing.T, dst string, entries ...tarEntry) {
 	}
 }
 
-func writeZipArchive(t *testing.T, dst, name, body string) {
+type zipEntry struct {
+	name string
+	body string
+}
+
+func writeZipArchive(t *testing.T, dst string, entries ...zipEntry) {
 	t.Helper()
 	out, err := os.Create(dst)
 	if err != nil {
@@ -2418,12 +2423,14 @@ func writeZipArchive(t *testing.T, dst, name, body string) {
 	defer out.Close()
 	zw := zip.NewWriter(out)
 	defer zw.Close()
-	w, err := zw.Create(name)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := w.Write([]byte(body)); err != nil {
-		t.Fatal(err)
+	for _, entry := range entries {
+		w, err := zw.Create(entry.name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write([]byte(entry.body)); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
