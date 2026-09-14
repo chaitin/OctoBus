@@ -53,13 +53,19 @@ type Gateway struct {
 	AccessLogger accessLogger
 	Logger       *slog.Logger
 
-	mu            sync.Mutex
-	conns         map[string]*grpc.ClientConn
-	mcpToolsCache map[string][]map[string]any
-	connectCache  map[string]http.Handler
+	mu             sync.Mutex
+	conns          map[string]*grpc.ClientConn
+	mcpToolsCache  map[string][]map[string]any
+	connectCache   map[string]http.Handler
+	mcpCacheAt     map[string]time.Time
+	connectCacheAt map[string]time.Time
 }
 
-const DefaultMaxRequestBytes int64 = 1 << 20
+const (
+	DefaultMaxRequestBytes int64 = 1 << 20
+	gatewayCacheMaxEntries       = 1024
+	gatewayCacheTTL              = 10 * time.Minute
+)
 
 type Catalog struct {
 	CapsetID    string                  `json:"capset_id"`
@@ -879,6 +885,7 @@ func (g *Gateway) mcpTools(ctx context.Context, capsetID string) ([]map[string]a
 	}
 	cacheKey := mcpToolsCacheKey(capsetID, items)
 	g.mu.Lock()
+	evictExpiredCacheEntryLocked(g.mcpToolsCache, g.mcpCacheAt, cacheKey, time.Now())
 	if cached := g.mcpToolsCache[cacheKey]; cached != nil {
 		g.mu.Unlock()
 		return cloneToolList(cached), nil
@@ -924,7 +931,13 @@ func (g *Gateway) mcpTools(ctx context.Context, capsetID string) ([]map[string]a
 	if g.mcpToolsCache == nil {
 		g.mcpToolsCache = map[string][]map[string]any{}
 	}
+	g.evictExpiredCachesLocked(time.Now())
 	g.mcpToolsCache[cacheKey] = cloneToolList(tools)
+	if g.mcpCacheAt == nil {
+		g.mcpCacheAt = map[string]time.Time{}
+	}
+	g.mcpCacheAt[cacheKey] = time.Now()
+	g.pruneGatewayCachesLocked()
 	g.mu.Unlock()
 	return cloneToolList(tools), nil
 }
@@ -1254,6 +1267,7 @@ type connectExposedMethodKey struct{}
 func (g *Gateway) connectHandler(item store.ExposedMethod) (http.Handler, error) {
 	key := connectHandlerCacheKey(item)
 	g.mu.Lock()
+	evictExpiredCacheEntryLocked(g.connectCache, g.connectCacheAt, key, time.Now())
 	if g.connectCache != nil {
 		if handler := g.connectCache[key]; handler != nil {
 			g.mu.Unlock()
@@ -1301,7 +1315,13 @@ func (g *Gateway) connectHandler(item store.ExposedMethod) (http.Handler, error)
 	if g.connectCache == nil {
 		g.connectCache = map[string]http.Handler{}
 	}
+	g.evictExpiredCachesLocked(time.Now())
 	g.connectCache[key] = handler
+	if g.connectCacheAt == nil {
+		g.connectCacheAt = map[string]time.Time{}
+	}
+	g.connectCacheAt[key] = time.Now()
+	g.pruneGatewayCachesLocked()
 	g.mu.Unlock()
 	return handler, nil
 }
@@ -1803,6 +1823,67 @@ func (g *Gateway) InvalidateInstance(instanceID string) {
 		_ = conn.Close()
 		delete(g.conns, key)
 	}
+	clear(g.mcpToolsCache)
+	clear(g.connectCache)
+	clear(g.mcpCacheAt)
+	clear(g.connectCacheAt)
+}
+
+func evictExpiredCacheEntryLocked[T any](cache map[string]T, created map[string]time.Time, key string, now time.Time) {
+	if at, ok := created[key]; ok && now.Sub(at) >= gatewayCacheTTL {
+		delete(created, key)
+		delete(cache, key)
+	}
+}
+
+func (g *Gateway) evictExpiredCachesLocked(now time.Time) {
+	for key, created := range g.mcpCacheAt {
+		if now.Sub(created) >= gatewayCacheTTL {
+			delete(g.mcpCacheAt, key)
+			delete(g.mcpToolsCache, key)
+		}
+	}
+	for key, created := range g.connectCacheAt {
+		if now.Sub(created) >= gatewayCacheTTL {
+			delete(g.connectCacheAt, key)
+			delete(g.connectCache, key)
+		}
+	}
+}
+
+func (g *Gateway) pruneGatewayCachesLocked() {
+	for len(g.mcpToolsCache) > gatewayCacheMaxEntries {
+		if !deleteOldestCache(g.mcpToolsCache, g.mcpCacheAt) {
+			break
+		}
+	}
+	for len(g.connectCache) > gatewayCacheMaxEntries {
+		if !deleteOldestCache(g.connectCache, g.connectCacheAt) {
+			break
+		}
+	}
+}
+
+func deleteOldestCache[T any](cache map[string]T, created map[string]time.Time) bool {
+	var oldestKey string
+	var oldest time.Time
+	for key, at := range created {
+		if oldestKey == "" || at.Before(oldest) {
+			oldestKey = key
+			oldest = at
+		}
+	}
+	if oldestKey == "" {
+		for key := range cache {
+			delete(cache, key)
+			delete(created, key)
+			return true
+		}
+		return false
+	}
+	delete(cache, oldestKey)
+	delete(created, oldestKey)
+	return true
 }
 
 func (g *Gateway) Close() error {
@@ -1815,6 +1896,10 @@ func (g *Gateway) Close() error {
 		}
 		delete(g.conns, key)
 	}
+	clear(g.mcpToolsCache)
+	clear(g.connectCache)
+	clear(g.mcpCacheAt)
+	clear(g.connectCacheAt)
 	return err
 }
 
