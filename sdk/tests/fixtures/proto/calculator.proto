@@ -68,4 +68,78 @@ message JsonShapeResponse {
   repeated NestedShape children = 9;
   map<string, NestedShape> child_map = 10 [json_name = "childMapAlias"];
   string custom_field = 11 [json_name = "customAlias"];
+  bytes raw_payload = 12;
+  JsonShapeStatus review_status = 13;
+}
+
+// A field whose declared json_name spells another field's name. protoc accepts
+// this — it only checks that the computed json names are unique, and `foo` and
+// `bar` are — so an alias taken from the json_name would land on field `foo`'s own
+// property and replace it.
+message CollidingNames {
+  string x = 1 [json_name = "foo"];
+  string foo = 2 [json_name = "bar"];
+}
+
+// A oneof, so the alias code's assumption that a field's value lives at its own
+// localName can be checked against how protobuf-es actually stores oneof members.
+message ChoiceRequest {
+  oneof selector {
+    string by_name = 1;
+    int32 by_id = 2;
+    NestedShape by_nested = 3;
+  }
+}
+
+// One field's declared json_name is another field's declared name, so both would
+// want the same alias. protoc accepts it, because the computed json names
+// (`foo_bar` and `x`) are unique.
+message CollidingAlias {
+  string foo_bar = 1;
+  string x = 2 [json_name = "foo_bar"];
+}
+
+// Field names whose camelCase form is a member of Object.prototype. protobuf-es
+// renames the local name to `toString$` to avoid shadowing it; an alias taken from
+// the declared name must not shadow it back.
+message ProtoMemberNames {
+  string to_string = 1;
+  string value_of = 2;
+}
+
+// proto3 explicit presence. protoc gives each of these a synthetic oneof, and
+// protobuf-es ignores it: the field's value lives at its own property, not in a
+// group. Three places in the alias code depend on that, so this message is what
+// holds the assumption.
+message OptionalFields {
+  optional string maybe_value = 1;
+  optional NestedShape maybe_nested = 2;
+}
+
+// One field's declared json_name is the name of a oneof group, which is where that
+// oneof's value lives. protoc accepts it, because a group name is not one of the
+// computed json names it keeps unique.
+message GroupNameCollision {
+  oneof selector {
+    string by_name = 1;
+  }
+  string x = 2 [json_name = "selector"];
+}
+
+// One field's json_name is the local name of a message field. An unset message field
+// is not an own property of the decoded message, and no other field claims the name,
+// so only the plan says it is taken. protoc accepts it because the json names
+// (`other`, `nestedShape`) differ.
+message UnsetMessageCollision {
+  NestedShape nested_shape = 1 [json_name = "other"];
+  string x = 2 [json_name = "nestedShape"];
+}
+
+// Every name is a single word, so nothing is aliased at this level, and the only
+// message is held in a oneof. What that message carries still has to be reachable by
+// its declared names.
+message GroupOnly {
+  oneof body {
+    NestedShape shape = 1;
+  }
 }

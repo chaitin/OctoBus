@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseCliArgs, runSdkCli, sameExecutablePath } from "../src/cli.js";
+import { parseCliArgs, runSdkCli, runServiceMain, sameExecutablePath } from "../src/cli.js";
 
 const fixturesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
 
@@ -923,3 +923,27 @@ function writableBuffer() {
     },
   };
 }
+
+describe("business CLI request decoding", () => {
+  it("gives a handler the same field names as a request decoded from the wire", async () => {
+    const { default: service } = await import("./fixtures/calculator-handler.js");
+    const stdout = writableBuffer();
+
+    const result = await runServiceMain(service, {
+      argv: ["json-shape", "--data-json", '{"request_id":"r-1"}'],
+      cwd: fixturesDir,
+      stdout,
+      stderr: writableBuffer(),
+    });
+
+    // The handler reads `request.request_id`, the name its .proto declares. It throws
+    // "request_id is required" when that reads as undefined, which is what happened
+    // before the CLI path aliased its request the way the wire path does — so this
+    // test is what keeps one handler from behaving differently under the daemon and
+    // under the CLI a service author debugs with.
+    expect(result.command).toBe("cli");
+    // A handler that threw would have written nothing here, so the value is the
+    // assertion: it can only come from the proto-name read succeeding.
+    expect(stdout.data()).toContain("r-1");
+  });
+});
