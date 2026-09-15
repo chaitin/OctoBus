@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -1222,5 +1223,333 @@ func seedListFixture(t *testing.T, ctx context.Context, s *Store) {
 	}
 	if err := s.AddCapsetMethod(ctx, domain.CapsetMethod{CapsetInstanceID: "dev:echo-test", MethodFullName: "echo.v1.EchoService/ServerStream", Enabled: true}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// openTokenStore returns a store holding one capset with one token, and one
+// admin token, so the verification tests have something to authenticate against.
+func openTokenStore(t *testing.T) *Store {
+	t.Helper()
+	s, err := Open(t.TempDir() + "/octobus.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	ctx := context.Background()
+	if err := s.CreateCapset(ctx, domain.Capset{ID: "dev", Name: "Dev", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddCapsetToken(ctx, domain.CapsetToken{ID: "key", CapsetID: "dev", Name: "Primary"}, "secret"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddAdminToken(ctx, domain.AdminToken{ID: "admin-key", Name: "Primary"}, "admin-secret"); err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// countTokenWrites installs a trigger that counts UPDATEs to table, so a test
+// can assert how many writes authentication caused rather than only that it
+// succeeded.
+//
+// Reading last_used_at back cannot answer that question: a timestamp rewritten
+// with a fresh value and one that was never touched look the same to a caller
+// that only wants to know whether the token is valid.
+func countTokenWrites(t *testing.T, s *Store, table string) func() int {
+	t.Helper()
+	ctx := context.Background()
+	probe := table + "_write_probe"
+	for _, statement := range []string{
+		`CREATE TABLE IF NOT EXISTS ` + probe + ` (n INTEGER NOT NULL)`,
+		`INSERT INTO ` + probe + ` (n) VALUES (0)`,
+		`CREATE TRIGGER IF NOT EXISTS ` + table + `_count_writes AFTER UPDATE ON ` + table +
+			` BEGIN UPDATE ` + probe + ` SET n = n + 1; END`,
+	} {
+		if _, err := s.db.ExecContext(ctx, statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return func() int {
+		var n int
+		if err := s.db.QueryRowContext(ctx, `SELECT n FROM `+probe).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+}
+
+// expireTokenTouch makes every debounce entry look old enough to write again,
+// standing in for the interval elapsing without making the test wait it out.
+func expireTokenTouch(s *Store) {
+	s.touchMu.Lock()
+	defer s.touchMu.Unlock()
+	for key := range s.touched {
+		s.touched[key] = time.Now().Add(-2 * tokenTouchInterval)
+	}
+}
+
+// TestVerifyCapsetTokenDoesNotWriteOnEveryRequest pins the cost of
+// authentication.
+//
+// The check used to be an UPDATE whose affected-row count was the answer, which
+// made every authenticated request a write. On a store that admits one writer at
+// a time that is not a constant cost: concurrent requests queue behind each
+// other's bookkeeping, and a burst of N calls costs about N times what one call
+// does. Authentication has to be a read for anything in front of it to serve
+// concurrent callers at all.
+func TestVerifyCapsetTokenDoesNotWriteOnEveryRequest(t *testing.T) {
+	s := openTokenStore(t)
+	writes := countTokenWrites(t, s, "capset_tokens")
+	ctx := context.Background()
+
+	if ok, err := s.VerifyCapsetToken(ctx, "dev", "secret"); err != nil || !ok {
+		t.Fatalf("first verification ok=%v err=%v", ok, err)
+	}
+	if n := writes(); n != 1 {
+		t.Fatalf("first verification wrote %d times, want 1 — the use still has to be recorded", n)
+	}
+
+	for i := 0; i < 50; i++ {
+		if ok, err := s.VerifyCapsetToken(ctx, "dev", "secret"); err != nil || !ok {
+			t.Fatalf("verification %d ok=%v err=%v", i, ok, err)
+		}
+	}
+	if n := writes(); n != 1 {
+		t.Fatalf("50 further verifications wrote %d times, want 1 — they should reuse the recorded use", n)
+	}
+}
+
+// TestVerifyCapsetTokenRecordsUseAgainAfterTheInterval keeps the debounce
+// bounded: a token in continuous use must not stop being recorded.
+func TestVerifyCapsetTokenRecordsUseAgainAfterTheInterval(t *testing.T) {
+	s := openTokenStore(t)
+	writes := countTokenWrites(t, s, "capset_tokens")
+	ctx := context.Background()
+
+	if ok, err := s.VerifyCapsetToken(ctx, "dev", "secret"); err != nil || !ok {
+		t.Fatalf("first verification ok=%v err=%v", ok, err)
+	}
+	expireTokenTouch(s)
+	if ok, err := s.VerifyCapsetToken(ctx, "dev", "secret"); err != nil || !ok {
+		t.Fatalf("second verification ok=%v err=%v", ok, err)
+	}
+	if n := writes(); n != 2 {
+		t.Fatalf("verifications across an interval wrote %d times, want 2", n)
+	}
+	if used, err := s.GetCapsetToken(ctx, "dev", "key"); err != nil || used.LastUsedAt.IsZero() {
+		t.Fatalf("last used was not recorded: %+v err=%v", used, err)
+	}
+}
+
+// TestVerifyCapsetTokenConcurrentCallsWriteOnce is the property the interval
+// exists for, and the one a per-call check would still miss.
+//
+// Requests arriving together all read the same stale timestamp. Deciding from
+// the stored value alone would let every one of them write, which is the
+// pile-up being fixed — the decision has to be taken once, in the process.
+func TestVerifyCapsetTokenConcurrentCallsWriteOnce(t *testing.T) {
+	s := openTokenStore(t)
+	writes := countTokenWrites(t, s, "capset_tokens")
+	ctx := context.Background()
+
+	const callers = 32
+	results := make([]bool, callers)
+	errs := make([]error, callers)
+	var wg sync.WaitGroup
+	for i := range callers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			results[i], errs[i] = s.VerifyCapsetToken(ctx, "dev", "secret")
+		}()
+	}
+	wg.Wait()
+
+	for i := range callers {
+		if errs[i] != nil {
+			t.Fatalf("caller %d: %v", i, errs[i])
+		}
+		if !results[i] {
+			t.Fatalf("caller %d: token did not verify", i)
+		}
+	}
+	if n := writes(); n != 1 {
+		t.Fatalf("%d concurrent verifications wrote %d times, want 1", callers, n)
+	}
+}
+
+// TestVerifyAdminTokenDoesNotWriteOnEveryRequest covers the same defect on the
+// admin path, where the token has no capset to be scoped by.
+func TestVerifyAdminTokenDoesNotWriteOnEveryRequest(t *testing.T) {
+	s := openTokenStore(t)
+	writes := countTokenWrites(t, s, "admin_tokens")
+	ctx := context.Background()
+
+	for i := 0; i < 20; i++ {
+		if ok, err := s.VerifyAdminToken(ctx, "admin-secret"); err != nil || !ok {
+			t.Fatalf("verification %d ok=%v err=%v", i, ok, err)
+		}
+	}
+	if n := writes(); n != 1 {
+		t.Fatalf("20 verifications wrote %d times, want 1", n)
+	}
+}
+
+// TestVerifyCapsetTokenRecordsARotatedSecret covers what the claim is filed
+// under.
+//
+// Replacing a secret under an existing id is the ordinary way to rotate one. If
+// the claim named the row rather than the credential, the new secret's first use
+// would inherit the old one's claim and go unrecorded, and a token in active use
+// would read back as never used.
+func TestVerifyCapsetTokenRecordsARotatedSecret(t *testing.T) {
+	s := openTokenStore(t)
+	writes := countTokenWrites(t, s, "capset_tokens")
+	ctx := context.Background()
+
+	if ok, err := s.VerifyCapsetToken(ctx, "dev", "secret"); err != nil || !ok {
+		t.Fatalf("first verification ok=%v err=%v", ok, err)
+	}
+	if err := s.DeleteCapsetToken(ctx, "dev", "key"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddCapsetToken(ctx, domain.CapsetToken{ID: "key", CapsetID: "dev", Name: "Rotated"}, "rotated-secret"); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := s.VerifyCapsetToken(ctx, "dev", "rotated-secret"); err != nil || !ok {
+		t.Fatalf("rotated verification ok=%v err=%v", ok, err)
+	}
+	if n := writes(); n != 2 {
+		t.Fatalf("the rotated secret's first use brought the total to %d writes, want 2", n)
+	}
+}
+
+// TestVerifyCapsetTokenSurvivesAFailedBookkeepingWrite pins that recording the
+// use is bookkeeping rather than part of the answer.
+//
+// The write is the one thing here that can fail while the read succeeds: a store
+// that is out of space or opened read-only still authenticates. Letting that
+// failure reject the request would turn a display field into an outage, and it
+// would do so on exactly the requests that were fine.
+func TestVerifyCapsetTokenSurvivesAFailedBookkeepingWrite(t *testing.T) {
+	s := openTokenStore(t)
+	ctx := context.Background()
+	if _, err := s.db.ExecContext(ctx,
+		`CREATE TRIGGER refuse_capset_token_writes BEFORE UPDATE ON capset_tokens BEGIN SELECT RAISE(ABORT, 'write refused'); END`); err != nil {
+		t.Fatal(err)
+	}
+
+	ok, err := s.VerifyCapsetToken(ctx, "dev", "secret")
+	if err != nil {
+		t.Fatalf("a failed bookkeeping write failed authentication: %v", err)
+	}
+	if !ok {
+		t.Fatal("a failed bookkeeping write rejected an authentic token")
+	}
+	// The trigger has to actually refuse the write, or this test passes without
+	// having exercised anything.
+	if used, err := s.GetCapsetToken(ctx, "dev", "key"); err != nil || !used.LastUsedAt.IsZero() {
+		t.Fatalf("the write was not refused, so nothing was tested: %+v err=%v", used, err)
+	}
+}
+
+// TestVerifyCapsetTokenStampsEveryRowSharingASecret covers a regression that
+// writing back by row introduced.
+//
+// Nothing stops a capset from holding two rows with the same secret: the id is
+// the primary key and the hash index is not unique, so AddCapsetToken accepts
+// the second row. The single UPDATE this replaced matched on the credential and
+// stamped both. Selecting one row and writing it back by id stamped only that
+// one, and the other read back as never used — visible through the admin API,
+// which is where that timestamp is displayed.
+func TestVerifyCapsetTokenStampsEveryRowSharingASecret(t *testing.T) {
+	s := openTokenStore(t)
+	ctx := context.Background()
+	if _, err := s.AddCapsetToken(ctx, domain.CapsetToken{ID: "twin", CapsetID: "dev", Name: "Twin"}, "secret"); err != nil {
+		t.Fatal(err)
+	}
+
+	if ok, err := s.VerifyCapsetToken(ctx, "dev", "secret"); err != nil || !ok {
+		t.Fatalf("verification ok=%v err=%v", ok, err)
+	}
+	for _, id := range []string{"key", "twin"} {
+		used, err := s.GetCapsetToken(ctx, "dev", id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if used.LastUsedAt.IsZero() {
+			t.Errorf("token %q still reads back as never used", id)
+		}
+	}
+}
+
+// TestClaimTokenUseEvictsWhenFull covers the one branch of claimTokenUse that
+// nothing else reaches, and the behaviour it is there for.
+func TestClaimTokenUseEvictsWhenFull(t *testing.T) {
+	s := openTokenStore(t)
+	now := time.Now()
+	for i := 0; i < tokenTouchMaxEntries; i++ {
+		if !s.claimTokenUse(fmt.Sprintf("k%d", i), now) {
+			t.Fatalf("key %d was refused on a map that had room", i)
+		}
+	}
+
+	// The map is full. The next claim has to evict rather than grow, and it
+	// still has to succeed — refusing here would stop recording uses entirely.
+	if !s.claimTokenUse("overflow", now) {
+		t.Fatal("a full map refused the claim instead of evicting")
+	}
+	if held := len(s.touched); held != 1 {
+		t.Fatalf("map holds %d entries after eviction, want 1", held)
+	}
+	// Clearing is safe precisely because an evicted key can be claimed again:
+	// the cost is one extra write per credential still in use, which is the
+	// trade the cap is documented to make.
+	if !s.claimTokenUse("k0", now) {
+		t.Fatal("an evicted key was not claimable again")
+	}
+}
+
+// TestClaimTokenUseSeparatesCredentials pins the parts of the key that keep two
+// credentials' claims apart.
+//
+// CapsetTokenHash and AdminTokenHash are the same hash with no domain
+// separation, so the same secret produces the same hash on both sides; and two
+// capsets can also be given the same secret. Only the key's prefix and the
+// capset id separate them, so dropping either would silently let one credential
+// suppress another's record — and nothing else would fail.
+func TestClaimTokenUseSeparatesCredentials(t *testing.T) {
+	s := openTokenStore(t)
+	ctx := context.Background()
+	if err := s.CreateCapset(ctx, domain.Capset{ID: "dev2", Name: "Dev2", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	capsetWrites := countTokenWrites(t, s, "capset_tokens")
+	adminWrites := countTokenWrites(t, s, "admin_tokens")
+
+	if _, err := s.AddCapsetToken(ctx, domain.CapsetToken{ID: "shared", CapsetID: "dev", Name: "Shared"}, "shared-secret"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddCapsetToken(ctx, domain.CapsetToken{ID: "shared", CapsetID: "dev2", Name: "Shared"}, "shared-secret"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddAdminToken(ctx, domain.AdminToken{ID: "shared", Name: "Shared"}, "shared-secret"); err != nil {
+		t.Fatal(err)
+	}
+
+	if ok, err := s.VerifyCapsetToken(ctx, "dev", "shared-secret"); err != nil || !ok {
+		t.Fatalf("dev verification ok=%v err=%v", ok, err)
+	}
+	if ok, err := s.VerifyCapsetToken(ctx, "dev2", "shared-secret"); err != nil || !ok {
+		t.Fatalf("dev2 verification ok=%v err=%v", ok, err)
+	}
+	if ok, err := s.VerifyAdminToken(ctx, "shared-secret"); err != nil || !ok {
+		t.Fatalf("admin verification ok=%v err=%v", ok, err)
+	}
+	if n := capsetWrites(); n != 2 {
+		t.Fatalf("the two capsets recorded %d writes in total, want 2 — their claims must not collide", n)
+	}
+	if n := adminWrites(); n != 1 {
+		t.Fatalf("the admin token recorded %d writes, want 1 — its claim must not collide with a capset's", n)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"octobus/internal/descriptors"
@@ -20,6 +21,13 @@ import (
 
 type Store struct {
 	db *sql.DB
+
+	// touched debounces the bookkeeping write that records a token's last use.
+	// It holds, per credential, the last time this process decided to write that
+	// record, so that requests arriving together agree on one write instead of
+	// each issuing their own. See claimTokenUse.
+	touchMu sync.Mutex
+	touched map[string]time.Time
 }
 
 type ServiceInUseError struct {
@@ -63,7 +71,7 @@ func Open(path string) (*Store, error) {
 		_ = db.Close()
 		return nil, err
 	}
-	s := &Store{db: db}
+	s := &Store{db: db, touched: map[string]time.Time{}}
 	if err := s.Migrate(context.Background()); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -590,20 +598,91 @@ func (s *Store) CapsetRequiresToken(ctx context.Context, capsetID string) (bool,
 	return count > 0, nil
 }
 
+// tokenTouchInterval is how stale a token's recorded last use may be before the
+// store writes it again.
+//
+// Authentication used to write on every request: the check was an UPDATE and its
+// affected-row count was the answer. That put a write on the read path, and
+// because the store admits one writer at a time, concurrent requests then queued
+// behind each other's bookkeeping instead of running in parallel — the cost of a
+// call grew with how many other calls were in flight, not with the work it did.
+// The value is only ever read back for display, so it does not need to be exact.
+// One write per token per interval keeps the field useful while taking the write
+// off all but a fraction of requests.
+const tokenTouchInterval = time.Minute
+
+// tokenTouchMaxEntries bounds the debounce map. Entries are only ever dropped
+// wholesale (see claimTokenUse), so the cap trades an occasional extra write for
+// a map that cannot grow with every credential ever seen.
+const tokenTouchMaxEntries = 4096
+
+// claimTokenUse reports whether this credential's last use is worth writing, and
+// records the claim so that concurrent callers agree on the answer.
+//
+// The decision is taken here rather than from the stored timestamp alone: N
+// requests arriving together all read the same stale value, and without a shared
+// decision they would all write, which is the pile-up the interval exists to
+// prevent.
+//
+// The claim stands even if the write it authorises then fails. Releasing it
+// would put the write back on every request exactly when the store is
+// struggling, which is the condition the interval exists to relieve. The cost is
+// that last_used_at can lag by one interval after a failed write — the same
+// bound the interval already sets, and the field is read back for display only.
+//
+// The key names the credential rather than the row, so rotating a secret under
+// an existing id records the new secret's first use immediately instead of
+// inheriting the old one's claim.
+func (s *Store) claimTokenUse(key string, now time.Time) bool {
+	s.touchMu.Lock()
+	defer s.touchMu.Unlock()
+	if last, ok := s.touched[key]; ok && now.Sub(last) < tokenTouchInterval {
+		return false
+	}
+	if len(s.touched) >= tokenTouchMaxEntries {
+		// Only a debounce, so clearing costs at most one extra write per
+		// credential still in use — cheaper than letting the map grow without
+		// bound.
+		s.touched = map[string]time.Time{}
+	}
+	s.touched[key] = now
+	return true
+}
+
+// recordCapsetTokenUse stamps a token's last use. It matches on the credential
+// rather than on one row because a capset may hold two rows with the same
+// secret — the id is the primary key and the hash index is not unique — and both
+// were stamped before this became a read-then-write. It is bookkeeping: the
+// caller has already settled that the token is authentic, so a failure here is
+// not allowed to change that answer. This package has no logger, so a failure is
+// not surfaced anywhere — the timestamp simply lags until the next claim.
+func (s *Store) recordCapsetTokenUse(ctx context.Context, capsetID, hash string, now time.Time) {
+	_, _ = s.db.ExecContext(ctx, `UPDATE capset_tokens SET last_used_at = ? WHERE capset_id = ? AND token_hash = ?`, formatTime(now), capsetID, hash)
+}
+
+// VerifyCapsetToken reports whether secret authenticates the capset, recording
+// that the token was used.
+//
+// The answer comes from a read. It used to come from an UPDATE's affected-row
+// count, which made every authenticated request a write; see tokenTouchInterval
+// for what that cost.
 func (s *Store) VerifyCapsetToken(ctx context.Context, capsetID, secret string) (bool, error) {
 	if secret == "" {
 		return false, nil
 	}
 	hash := domain.CapsetTokenHash(secret)
-	res, err := s.db.ExecContext(ctx, `UPDATE capset_tokens SET last_used_at = ? WHERE capset_id = ? AND token_hash = ?`, formatTime(time.Now().UTC()), capsetID, hash)
-	if err != nil {
+	var matches int
+	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM capset_tokens WHERE capset_id = ? AND token_hash = ?`, capsetID, hash).Scan(&matches); err != nil {
 		return false, err
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return false, err
+	if matches == 0 {
+		return false, nil
 	}
-	return n > 0, nil
+	now := time.Now().UTC()
+	if s.claimTokenUse("capset\x00"+capsetID+"\x00"+hash, now) {
+		s.recordCapsetTokenUse(ctx, capsetID, hash, now)
+	}
+	return true, nil
 }
 
 func (s *Store) AddAdminToken(ctx context.Context, token domain.AdminToken, secret string) (domain.AdminToken, error) {
@@ -685,20 +764,27 @@ func (s *Store) AdminRequiresToken(ctx context.Context) (bool, error) {
 	return count > 0, nil
 }
 
+// VerifyAdminToken reports whether secret authenticates an admin token,
+// recording that the token was used. Like VerifyCapsetToken, the answer comes
+// from a read rather than from an UPDATE's affected-row count, and the
+// bookkeeping that follows is not allowed to change it.
 func (s *Store) VerifyAdminToken(ctx context.Context, secret string) (bool, error) {
 	if secret == "" {
 		return false, nil
 	}
 	hash := domain.AdminTokenHash(secret)
-	res, err := s.db.ExecContext(ctx, `UPDATE admin_tokens SET last_used_at = ? WHERE token_hash = ?`, formatTime(time.Now().UTC()), hash)
-	if err != nil {
+	var matches int
+	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM admin_tokens WHERE token_hash = ?`, hash).Scan(&matches); err != nil {
 		return false, err
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return false, err
+	if matches == 0 {
+		return false, nil
 	}
-	return n > 0, nil
+	now := time.Now().UTC()
+	if s.claimTokenUse("admin\x00"+hash, now) {
+		_, _ = s.db.ExecContext(ctx, `UPDATE admin_tokens SET last_used_at = ? WHERE token_hash = ?`, formatTime(now), hash)
+	}
+	return true, nil
 }
 
 func (s *Store) AddCapsetInstance(ctx context.Context, ci domain.CapsetInstance) error {
