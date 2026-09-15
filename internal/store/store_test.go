@@ -1393,3 +1393,61 @@ func TestVerifyAdminTokenDoesNotWriteOnEveryRequest(t *testing.T) {
 		t.Fatalf("20 verifications wrote %d times, want 1", n)
 	}
 }
+
+// TestVerifyCapsetTokenRecordsARotatedSecret covers what the claim is filed
+// under.
+//
+// Replacing a secret under an existing id is the ordinary way to rotate one. If
+// the claim named the row rather than the credential, the new secret's first use
+// would inherit the old one's claim and go unrecorded, and a token in active use
+// would read back as never used.
+func TestVerifyCapsetTokenRecordsARotatedSecret(t *testing.T) {
+	s := openTokenStore(t)
+	writes := countTokenWrites(t, s, "capset_tokens")
+	ctx := context.Background()
+
+	if ok, err := s.VerifyCapsetToken(ctx, "dev", "secret"); err != nil || !ok {
+		t.Fatalf("first verification ok=%v err=%v", ok, err)
+	}
+	if err := s.DeleteCapsetToken(ctx, "dev", "key"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddCapsetToken(ctx, domain.CapsetToken{ID: "key", CapsetID: "dev", Name: "Rotated"}, "rotated-secret"); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := s.VerifyCapsetToken(ctx, "dev", "rotated-secret"); err != nil || !ok {
+		t.Fatalf("rotated verification ok=%v err=%v", ok, err)
+	}
+	if n := writes(); n != 2 {
+		t.Fatalf("the rotated secret's first use brought the total to %d writes, want 2", n)
+	}
+}
+
+// TestVerifyCapsetTokenSurvivesAFailedBookkeepingWrite pins that recording the
+// use is bookkeeping rather than part of the answer.
+//
+// The write is the one thing here that can fail while the read succeeds: a store
+// that is out of space or opened read-only still authenticates. Letting that
+// failure reject the request would turn a display field into an outage, and it
+// would do so on exactly the requests that were fine.
+func TestVerifyCapsetTokenSurvivesAFailedBookkeepingWrite(t *testing.T) {
+	s := openTokenStore(t)
+	ctx := context.Background()
+	if _, err := s.db.ExecContext(ctx,
+		`CREATE TRIGGER refuse_capset_token_writes BEFORE UPDATE ON capset_tokens BEGIN SELECT RAISE(ABORT, 'write refused'); END`); err != nil {
+		t.Fatal(err)
+	}
+
+	ok, err := s.VerifyCapsetToken(ctx, "dev", "secret")
+	if err != nil {
+		t.Fatalf("a failed bookkeeping write failed authentication: %v", err)
+	}
+	if !ok {
+		t.Fatal("a failed bookkeeping write rejected an authentic token")
+	}
+	// The trigger has to actually refuse the write, or this test passes without
+	// having exercised anything.
+	if used, err := s.GetCapsetToken(ctx, "dev", "key"); err != nil || !used.LastUsedAt.IsZero() {
+		t.Fatalf("the write was not refused, so nothing was tested: %+v err=%v", used, err)
+	}
+}
