@@ -304,8 +304,8 @@ export function rpcdef(ctx) {
   const skipTlsVerify = Boolean(bindings.tlsInsecureSkipVerify || bindings.skipTlsVerify || bindings.skip_tls_verify || bindings.tls_insecure_skip_verify);
 
   const requestWithDefaults = (req = {}) => {
-    const username = firstDefined(req?.username, bindings.username);
-    const password = firstDefined(req?.password, bindings.password);
+    const username = req?.username || bindings.username;
+    const password = req?.password || bindings.password;
     const result = { ...req };
     if (username !== undefined && username !== null) result.username = username;
     if (password !== undefined && password !== null) result.password = password;
