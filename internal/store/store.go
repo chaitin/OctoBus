@@ -649,12 +649,15 @@ func (s *Store) claimTokenUse(key string, now time.Time) bool {
 	return true
 }
 
-// recordCapsetTokenUse stamps a token's last use. It is bookkeeping: the caller
-// has already settled that the token is authentic, so a failure here is not
-// allowed to change that answer. This package has no logger, so a failure is not
-// surfaced anywhere — the timestamp simply lags until the next claim.
-func (s *Store) recordCapsetTokenUse(ctx context.Context, capsetID, id string, now time.Time) {
-	_, _ = s.db.ExecContext(ctx, `UPDATE capset_tokens SET last_used_at = ? WHERE capset_id = ? AND id = ?`, formatTime(now), capsetID, id)
+// recordCapsetTokenUse stamps a token's last use. It matches on the credential
+// rather than on one row because a capset may hold two rows with the same
+// secret — the id is the primary key and the hash index is not unique — and both
+// were stamped before this became a read-then-write. It is bookkeeping: the
+// caller has already settled that the token is authentic, so a failure here is
+// not allowed to change that answer. This package has no logger, so a failure is
+// not surfaced anywhere — the timestamp simply lags until the next claim.
+func (s *Store) recordCapsetTokenUse(ctx context.Context, capsetID, hash string, now time.Time) {
+	_, _ = s.db.ExecContext(ctx, `UPDATE capset_tokens SET last_used_at = ? WHERE capset_id = ? AND token_hash = ?`, formatTime(now), capsetID, hash)
 }
 
 // VerifyCapsetToken reports whether secret authenticates the capset, recording
@@ -668,17 +671,16 @@ func (s *Store) VerifyCapsetToken(ctx context.Context, capsetID, secret string) 
 		return false, nil
 	}
 	hash := domain.CapsetTokenHash(secret)
-	var id string
-	err := s.db.QueryRowContext(ctx, `SELECT id FROM capset_tokens WHERE capset_id = ? AND token_hash = ?`, capsetID, hash).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
+	var matches int
+	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM capset_tokens WHERE capset_id = ? AND token_hash = ?`, capsetID, hash).Scan(&matches); err != nil {
 		return false, err
+	}
+	if matches == 0 {
+		return false, nil
 	}
 	now := time.Now().UTC()
 	if s.claimTokenUse("capset\x00"+capsetID+"\x00"+hash, now) {
-		s.recordCapsetTokenUse(ctx, capsetID, id, now)
+		s.recordCapsetTokenUse(ctx, capsetID, hash, now)
 	}
 	return true, nil
 }
@@ -771,17 +773,16 @@ func (s *Store) VerifyAdminToken(ctx context.Context, secret string) (bool, erro
 		return false, nil
 	}
 	hash := domain.AdminTokenHash(secret)
-	var id string
-	err := s.db.QueryRowContext(ctx, `SELECT id FROM admin_tokens WHERE token_hash = ?`, hash).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
+	var matches int
+	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM admin_tokens WHERE token_hash = ?`, hash).Scan(&matches); err != nil {
 		return false, err
+	}
+	if matches == 0 {
+		return false, nil
 	}
 	now := time.Now().UTC()
 	if s.claimTokenUse("admin\x00"+hash, now) {
-		_, _ = s.db.ExecContext(ctx, `UPDATE admin_tokens SET last_used_at = ? WHERE id = ?`, formatTime(now), id)
+		_, _ = s.db.ExecContext(ctx, `UPDATE admin_tokens SET last_used_at = ? WHERE token_hash = ?`, formatTime(now), hash)
 	}
 	return true, nil
 }

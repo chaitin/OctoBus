@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -1449,5 +1450,106 @@ func TestVerifyCapsetTokenSurvivesAFailedBookkeepingWrite(t *testing.T) {
 	// having exercised anything.
 	if used, err := s.GetCapsetToken(ctx, "dev", "key"); err != nil || !used.LastUsedAt.IsZero() {
 		t.Fatalf("the write was not refused, so nothing was tested: %+v err=%v", used, err)
+	}
+}
+
+// TestVerifyCapsetTokenStampsEveryRowSharingASecret covers a regression that
+// writing back by row introduced.
+//
+// Nothing stops a capset from holding two rows with the same secret: the id is
+// the primary key and the hash index is not unique, so AddCapsetToken accepts
+// the second row. The single UPDATE this replaced matched on the credential and
+// stamped both. Selecting one row and writing it back by id stamped only that
+// one, and the other read back as never used — visible through the admin API,
+// which is where that timestamp is displayed.
+func TestVerifyCapsetTokenStampsEveryRowSharingASecret(t *testing.T) {
+	s := openTokenStore(t)
+	ctx := context.Background()
+	if _, err := s.AddCapsetToken(ctx, domain.CapsetToken{ID: "twin", CapsetID: "dev", Name: "Twin"}, "secret"); err != nil {
+		t.Fatal(err)
+	}
+
+	if ok, err := s.VerifyCapsetToken(ctx, "dev", "secret"); err != nil || !ok {
+		t.Fatalf("verification ok=%v err=%v", ok, err)
+	}
+	for _, id := range []string{"key", "twin"} {
+		used, err := s.GetCapsetToken(ctx, "dev", id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if used.LastUsedAt.IsZero() {
+			t.Errorf("token %q still reads back as never used", id)
+		}
+	}
+}
+
+// TestClaimTokenUseEvictsWhenFull covers the one branch of claimTokenUse that
+// nothing else reaches, and the behaviour it is there for.
+func TestClaimTokenUseEvictsWhenFull(t *testing.T) {
+	s := openTokenStore(t)
+	now := time.Now()
+	for i := 0; i < tokenTouchMaxEntries; i++ {
+		if !s.claimTokenUse(fmt.Sprintf("k%d", i), now) {
+			t.Fatalf("key %d was refused on a map that had room", i)
+		}
+	}
+
+	// The map is full. The next claim has to evict rather than grow, and it
+	// still has to succeed — refusing here would stop recording uses entirely.
+	if !s.claimTokenUse("overflow", now) {
+		t.Fatal("a full map refused the claim instead of evicting")
+	}
+	if held := len(s.touched); held != 1 {
+		t.Fatalf("map holds %d entries after eviction, want 1", held)
+	}
+	// Clearing is safe precisely because an evicted key can be claimed again:
+	// the cost is one extra write per credential still in use, which is the
+	// trade the cap is documented to make.
+	if !s.claimTokenUse("k0", now) {
+		t.Fatal("an evicted key was not claimable again")
+	}
+}
+
+// TestClaimTokenUseSeparatesCredentials pins the parts of the key that keep two
+// credentials' claims apart.
+//
+// CapsetTokenHash and AdminTokenHash are the same hash with no domain
+// separation, so the same secret produces the same hash on both sides; and two
+// capsets can also be given the same secret. Only the key's prefix and the
+// capset id separate them, so dropping either would silently let one credential
+// suppress another's record — and nothing else would fail.
+func TestClaimTokenUseSeparatesCredentials(t *testing.T) {
+	s := openTokenStore(t)
+	ctx := context.Background()
+	if err := s.CreateCapset(ctx, domain.Capset{ID: "dev2", Name: "Dev2", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	capsetWrites := countTokenWrites(t, s, "capset_tokens")
+	adminWrites := countTokenWrites(t, s, "admin_tokens")
+
+	if _, err := s.AddCapsetToken(ctx, domain.CapsetToken{ID: "shared", CapsetID: "dev", Name: "Shared"}, "shared-secret"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddCapsetToken(ctx, domain.CapsetToken{ID: "shared", CapsetID: "dev2", Name: "Shared"}, "shared-secret"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddAdminToken(ctx, domain.AdminToken{ID: "shared", Name: "Shared"}, "shared-secret"); err != nil {
+		t.Fatal(err)
+	}
+
+	if ok, err := s.VerifyCapsetToken(ctx, "dev", "shared-secret"); err != nil || !ok {
+		t.Fatalf("dev verification ok=%v err=%v", ok, err)
+	}
+	if ok, err := s.VerifyCapsetToken(ctx, "dev2", "shared-secret"); err != nil || !ok {
+		t.Fatalf("dev2 verification ok=%v err=%v", ok, err)
+	}
+	if ok, err := s.VerifyAdminToken(ctx, "shared-secret"); err != nil || !ok {
+		t.Fatalf("admin verification ok=%v err=%v", ok, err)
+	}
+	if n := capsetWrites(); n != 2 {
+		t.Fatalf("the two capsets recorded %d writes in total, want 2 — their claims must not collide", n)
+	}
+	if n := adminWrites(); n != 1 {
+		t.Fatalf("the admin token recorded %d writes, want 1 — its claim must not collide with a capset's", n)
 	}
 }
