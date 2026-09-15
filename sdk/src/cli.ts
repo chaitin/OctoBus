@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { inspect } from "node:util";
 import * as grpc from "@grpc/grpc-js";
-import { fromJson, type DescMessage } from "@bufbuild/protobuf";
+import { type DescMessage } from "@bufbuild/protobuf";
 import { Command, CommanderError, type OutputConfiguration } from "commander";
 import type { HandlerContext } from "./context.js";
 import type { ServiceDefinition as OctobusServiceDefinition } from "./service.js";
@@ -14,7 +14,7 @@ import { GrpcError } from "./grpc-error.js";
 import { INTERNAL, INVALID_ARGUMENT, UNIMPLEMENTED } from "./status.js";
 import { addHealthService } from "./health.js";
 import { findPackageRoot, inferPackageBinName, loadServicePackage, type GrpcServiceDefinition } from "./proto-loader.js";
-import { messageJsonSchema, protobufMessageToProtoJson } from "./protobuf-json.js";
+import { decodeRequestJson, messageJsonSchema, protobufMessageToProtoJson } from "./protobuf-json.js";
 import { inspectJson, inspectSchemaJson, inspectSchemaYaml, inspectYaml, type ServiceSchemaKind } from "./inspect.js";
 import { formatValidationIssues, validateService } from "./validation.js";
 import { writeClientPackage, type ClientPackageTransport } from "./client-package.js";
@@ -1155,7 +1155,10 @@ function parseCliJson(raw: string, source: string): unknown {
 
 function decodeCliRequest(value: unknown, message: DescMessage): unknown {
   try {
-    return fromJson(message, value as never);
+    // Aliased like a request decoded from the wire, so a handler reached through
+    // the CLI sees the same field names as one reached through the daemon. See
+    // decodeRequestJson.
+    return decodeRequestJson(value, message);
   } catch (error) {
     throw new CliInputError(INVALID_ARGUMENT, error instanceof Error ? error.message : String(error));
   }

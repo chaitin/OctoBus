@@ -5,6 +5,7 @@ import path from "node:path";
 import * as grpc from "@grpc/grpc-js";
 import { create, createFileRegistry, fromBinary, fromJson, toBinary, type DescMethod, type DescMessage, type DescService, type FileRegistry, type Message } from "@bufbuild/protobuf";
 import { FileDescriptorSetSchema, type FileDescriptorSet } from "@bufbuild/protobuf/wkt";
+import { withProtoNameAliases } from "./protobuf-json.js";
 
 export interface ServiceManifest {
   schema: string;
@@ -265,7 +266,10 @@ export function createGrpcServiceDefinition(service: DescService): grpc.ServiceD
       requestStream: method.methodKind === "client_streaming" || method.methodKind === "bidi_streaming",
       responseStream: method.methodKind === "server_streaming" || method.methodKind === "bidi_streaming",
       requestSerialize: (value: unknown) => serializeMessage(method.input, value),
-      requestDeserialize: (data: Buffer) => fromBinary(method.input, data),
+      // Aliased so a handler can read the request by the field names its .proto
+      // declares — the same names OctoBus advertises — and not only by the
+      // camelCase property protobuf-es creates. See withProtoNameAliases.
+      requestDeserialize: (data: Buffer) => withProtoNameAliases(fromBinary(method.input, data), method.input),
       responseSerialize: (value: unknown) => serializeMessage(method.output, value),
       responseDeserialize: (data: Buffer) => fromBinary(method.output, data),
       originalName: method.localName,

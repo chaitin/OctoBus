@@ -99,6 +99,30 @@ describe("proto-loader", () => {
     });
   });
 
+  it("deserializes a request so a handler can read the field names its .proto declares", () => {
+    const loaded = loadServicePackage(fixturesDir);
+    const calculator = loaded.grpcServices.find((service) => service.descriptor.typeName === "calculator.v1.CalculatorService");
+    const shape = calculator?.definition.JsonShape;
+    if (!shape) {
+      throw new Error("missing JsonShape method definition");
+    }
+
+    // Serialized with the proto names, which is what a caller sends: OctoBus
+    // builds the tool schema from the field names in the descriptor. The decoded
+    // object used to carry only protobuf-es's camelCase property, so a handler
+    // reading `request_id` — the name in the .proto, in the schema, and in the
+    // service's own tests — got undefined and reported the field as missing.
+    const requestBytes = shape.requestSerialize({
+      request_id: "r-1",
+      nested: { child_name: "child" },
+    });
+    const request = shape.requestDeserialize(requestBytes) as Record<string, unknown>;
+
+    expect(request.request_id).toBe("r-1");
+    expect(request.requestId).toBe("r-1");
+    expect((request.nested as Record<string, unknown>).child_name).toBe("child");
+  });
+
   it("loads the daemon-provided descriptor set from OCTOBUS_DESCRIPTOR_PATH", () => {
     const descriptorDir = fs.mkdtempSync(path.join(os.tmpdir(), "octobus-sdk-descriptor-"));
     const descriptorPath = path.join(descriptorDir, "descriptor.protoset");
