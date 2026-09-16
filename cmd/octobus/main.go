@@ -135,6 +135,14 @@ func serve(opts serveOptions) error {
 				"detail", "live service directory is missing; this backup is the only copy, restore it or remove it by hand")
 		}
 	}
+	// Shared runtime trees are published per distinct content, so superseded
+	// ones accumulate for the life of the daemon unless reclaimed. Runs after
+	// the staging sweep so that leftovers do not keep a tree alive.
+	if removed, err := packageimport.SweepOrphanedTrees(dataDir, time.Now(), packageimport.OrphanTreeMinAge); err != nil {
+		logger.Warn("sweep_orphaned_trees_failed", "error", err)
+	} else if len(removed) > 0 {
+		logger.Info("sweep_orphaned_trees_done", "count", len(removed))
+	}
 	startupInventory := logStartupInventory
 	if opts.startupInventory != nil {
 		startupInventory = opts.startupInventory

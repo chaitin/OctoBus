@@ -795,10 +795,15 @@ func TestImporterRollsBackServiceDirWhenStoreCommitFails(t *testing.T) {
 	dataDir, s := openTestStore(t)
 	firstPkg := writeTestPackage(t, filepath.Join(t.TempDir(), "first"), `{"schema":"chaitin.octobus.service.v1","name":"echo-wrapper","proto":{"roots":["proto"],"files":["proto/echo.proto"]}}`)
 	imp := &Importer{DataDir: dataDir, Store: s}
+	// Build "never" keeps node_modules out of the picture, but the runtime tree
+	// is still shared, so package/ is a symlink into artifacts/runtimes. The
+	// marker has to live somewhere the rollback actually swaps, otherwise it
+	// lands in the shared tree and the assertion below passes without proving
+	// anything.
 	if _, err := imp.Import(ctx, Options{ServiceID: "echo", Source: firstPkg, Build: "never", Offline: true}); err != nil {
 		t.Fatal(err)
 	}
-	marker := filepath.Join(dataDir, "artifacts/services/echo/package/rollback-marker.txt")
+	marker := filepath.Join(dataDir, "artifacts/services/echo/rollback-marker.txt")
 	writeTestFile(t, marker, "old", 0o644)
 
 	if err := s.Close(); err != nil {
