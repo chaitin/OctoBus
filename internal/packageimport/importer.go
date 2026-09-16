@@ -132,6 +132,8 @@ func (i *Importer) Import(ctx context.Context, opts Options) (Result, error) {
 	if opts.Source == "" {
 		return Result{}, errors.New("service package source is required")
 	}
+	importMu.Lock()
+	defer importMu.Unlock()
 	serviceDir := filepath.Join(i.DataDir, "artifacts", "services", opts.ServiceID)
 	staging := filepath.Join(i.DataDir, "artifacts", "services", ".staging-"+opts.ServiceID)
 	if err := os.RemoveAll(staging); err != nil {
@@ -169,7 +171,7 @@ func (i *Importer) Import(ctx context.Context, opts Options) (Result, error) {
 	if err := reportImportProgress(opts, ImportProgressEvent{Type: "status", Stage: "prepare_runtime", Message: "Installing runtime dependencies", ServiceID: opts.ServiceID}); err != nil {
 		return Result{}, err
 	}
-	runtimeDir, err := prepareServiceRuntime(ctx, prepared, staging, opts)
+	runtimeTree, err := prepareServiceRuntime(ctx, i.DataDir, prepared, staging, opts)
 	if err != nil {
 		return Result{}, err
 	}
@@ -180,7 +182,7 @@ func (i *Importer) Import(ctx context.Context, opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	commitDir, finalPackageDir, err := stageServiceCommit(prepared, runtimeDir, descriptor, staging)
+	commitDir, finalPackageDir, err := stageServiceCommit(prepared, runtimeTree, descriptor, staging)
 	if err != nil {
 		return Result{}, err
 	}
@@ -228,26 +230,37 @@ func validatePreparedService(prepared preparedSource) (preparedService, error) {
 	}, nil
 }
 
-func prepareServiceRuntime(ctx context.Context, prepared preparedSource, staging string, opts Options) (string, error) {
-	runtimeDir := filepath.Join(staging, "runtime")
-	if err := copyDir(prepared.PackageDir, runtimeDir); err != nil {
-		return "", err
-	}
-	if prepared.RuntimeNodeModulesDir != "" {
-		if err := copyDir(prepared.RuntimeNodeModulesDir, filepath.Join(runtimeDir, "node_modules")); err != nil {
-			return "", err
+// prepareServiceRuntime materializes the runtime tree for one import run.
+//
+// When the tree is shareable it is published to the content-addressed store
+// and every service directory links to it; otherwise it stays in staging and
+// is copied per service as before. See shared_tree.go.
+func prepareServiceRuntime(ctx context.Context, dataDir string, prepared preparedSource, staging string, opts Options) (preparedRuntime, error) {
+	if !sharingEligible(prepared, opts) {
+		buildDir := filepath.Join(staging, "runtime")
+		if err := buildRuntimeTree(ctx, prepared, buildDir, opts); err != nil {
+			return preparedRuntime{}, err
 		}
+		return preparedRuntime{StagingDir: buildDir}, nil
 	}
-	if err := replaceLocalExampleSDK(runtimeDir); err != nil {
-		return "", err
+	storeDir := sharedTreesDir(dataDir)
+	key := runtimeTreeKey(prepared, opts)
+	// A tree already published under this key is byte-identical to the one we
+	// would build, so skip the build entirely. This is where a re-import saves
+	// its time: no copy and no npm install beyond the source preparation the
+	// caller has already done.
+	if existing, ok := existingSharedTree(storeDir, key); ok {
+		return preparedRuntime{SharedDir: existing}, nil
 	}
-	if err := prepareRuntime(ctx, runtimeDir, opts.Offline, opts.Reinstall); err != nil {
-		return "", err
+	buildDir := filepath.Join(staging, "runtime-shared")
+	if err := buildRuntimeTree(ctx, prepared, buildDir, opts); err != nil {
+		return preparedRuntime{}, err
 	}
-	if err := replaceLocalExampleSDK(runtimeDir); err != nil {
-		return "", err
+	shared, err := publishSharedTree(buildDir, storeDir, key)
+	if err != nil {
+		return preparedRuntime{}, err
 	}
-	return runtimeDir, nil
+	return preparedRuntime{SharedDir: shared}, nil
 }
 
 func compileServiceDescriptor(staging string, service preparedService) (compiledServiceDescriptor, error) {
@@ -268,7 +281,14 @@ func compileServiceDescriptorAt(descriptorPath string, service preparedService) 
 	return compiledServiceDescriptor{Path: descriptorPath, Result: compiled}, nil
 }
 
-func stageServiceCommit(prepared preparedSource, runtimeDir string, descriptor compiledServiceDescriptor, staging string) (string, string, error) {
+// stageServiceCommit assembles one service directory in staging, ready to be
+// renamed into place.
+//
+// The package tree and the runtime tree are byte-identical across every
+// service in a recursive import, so they are linked rather than copied when a
+// shared tree is available. descriptor.protoset is the only genuinely
+// per-service content, and it is still copied.
+func stageServiceCommit(prepared preparedSource, runtimeTree preparedRuntime, descriptor compiledServiceDescriptor, staging string) (string, string, error) {
 	commitDir := filepath.Join(staging, "service")
 	finalPackageDir := filepath.Join(commitDir, "package")
 	finalRuntimeDir := filepath.Join(commitDir, "runtime")
@@ -283,11 +303,23 @@ func stageServiceCommit(prepared preparedSource, runtimeDir string, descriptor c
 	if err := copyFile(prepared.ArtifactPath, finalArtifact, 0o644); err != nil {
 		return "", "", err
 	}
-	if err := copyDir(prepared.PackageDir, finalPackageDir); err != nil {
-		return "", "", err
-	}
-	if err := copyDir(runtimeDir, finalRuntimeDir); err != nil {
-		return "", "", err
+	if runtimeTree.SharedDir != "" {
+		// One tree serves as both the package tree and the runtime tree: the
+		// runtime is the package plus installed dependencies, so a second
+		// shared tree would duplicate it again.
+		if err := linkSharedTree(finalPackageDir, runtimeTree.SharedDir); err != nil {
+			return "", "", err
+		}
+		if err := linkSharedTree(finalRuntimeDir, runtimeTree.SharedDir); err != nil {
+			return "", "", err
+		}
+	} else {
+		if err := copyDir(prepared.PackageDir, finalPackageDir); err != nil {
+			return "", "", err
+		}
+		if err := copyDir(runtimeTree.StagingDir, finalRuntimeDir); err != nil {
+			return "", "", err
+		}
 	}
 	if err := copyFile(descriptor.Path, finalDescriptor, 0o644); err != nil {
 		return "", "", err
@@ -373,6 +405,8 @@ func (i *Importer) ImportRecursive(ctx context.Context, opts Options) (Recursive
 	if err != nil {
 		return RecursiveResult{}, err
 	}
+	importMu.Lock()
+	defer importMu.Unlock()
 	staging := filepath.Join(i.DataDir, "artifacts", "services", ".staging-recursive-import")
 	if err := os.RemoveAll(staging); err != nil {
 		return RecursiveResult{}, err
@@ -403,7 +437,7 @@ func (i *Importer) ImportRecursive(ctx context.Context, opts Options) (Recursive
 	if err := reportImportProgress(opts, ImportProgressEvent{Type: "status", Stage: "prepare_runtime", Message: "Installing runtime dependencies"}); err != nil {
 		return RecursiveResult{}, err
 	}
-	runtimeDir, err := prepareServiceRuntime(ctx, prepared, staging, opts)
+	runtimeTree, err := prepareServiceRuntime(ctx, i.DataDir, prepared, staging, opts)
 	if err != nil {
 		return RecursiveResult{}, err
 	}
@@ -465,7 +499,7 @@ func (i *Importer) ImportRecursive(ctx context.Context, opts Options) (Recursive
 	for idx, candidate := range candidates {
 		current := idx + 1
 		serviceDir := filepath.Join(i.DataDir, "artifacts", "services", candidate.ServiceID)
-		commitDir, finalPackageDir, err := stageServiceCommit(candidate.Prepared, runtimeDir, candidate.Descriptor, staging)
+		commitDir, finalPackageDir, err := stageServiceCommit(candidate.Prepared, runtimeTree, candidate.Descriptor, staging)
 		if err != nil {
 			return result, fmt.Errorf("stage service %s: %w", candidate.ServiceID, err)
 		}

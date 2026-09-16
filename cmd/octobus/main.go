@@ -118,6 +118,31 @@ func serve(opts serveOptions) error {
 		logger.Warn("recover_enabled_failed", "error", err)
 	}
 	logger.Info("recover_enabled_done", "count", recovered)
+	// Import staging and backup directories left behind by killed processes are
+	// reclaimed here, before the HTTP server accepts requests and while no
+	// import can be in flight.
+	if swept, err := packageimport.SweepStaleImportDirs(dataDir, time.Now(), packageimport.StaleImportDirAge); err != nil {
+		logger.Warn("sweep_stale_import_dirs_failed", "error", err)
+	} else {
+		if len(swept.Removed) > 0 {
+			logger.Info("sweep_stale_import_dirs_done", "count", len(swept.Removed))
+		}
+		// A stranded backup is the only remaining copy of a service whose live
+		// directory is missing. Say so loudly: the service is unusable until an
+		// operator restores it, and this is the only place that notices.
+		for _, path := range swept.Stranded {
+			logger.Warn("stranded_service_backup_kept", "path", path,
+				"detail", "live service directory is missing; this backup is the only copy, restore it or remove it by hand")
+		}
+	}
+	// Shared runtime trees are published per distinct content, so superseded
+	// ones accumulate for the life of the daemon unless reclaimed. Runs after
+	// the staging sweep so that leftovers do not keep a tree alive.
+	if removed, err := packageimport.SweepOrphanedTrees(dataDir, time.Now(), packageimport.OrphanTreeMinAge); err != nil {
+		logger.Warn("sweep_orphaned_trees_failed", "error", err)
+	} else if len(removed) > 0 {
+		logger.Info("sweep_orphaned_trees_done", "count", len(removed))
+	}
 	startupInventory := logStartupInventory
 	if opts.startupInventory != nil {
 		startupInventory = opts.startupInventory
