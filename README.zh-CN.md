@@ -480,7 +480,9 @@ task test
 task build
 ```
 
-`task test` 会先构建本地 SDK 并安装 long-running / on-demand calculator 示例依赖，然后运行带跨包覆盖率统计的 Go 测试，其中包含 `tests/e2e`。`task build` 会生成 `bin/octobus`，并为 `version` 子命令注入构建元数据。如果当前提交正好位于匹配 `v[0-9]*` 的 OctoBus release tag 上，则使用该 tag 作为显示版本；否则使用当前提交历史上最近的可达匹配 tag、提交距离和短 commit 组成版本，例如 `v1.2.0-12-gabc1234`；如果没有可达匹配 tag，则退回短 Git commit。没有 Git 元数据的构建环境可以通过 `OCTOBUS_VERSION`、`OCTOBUS_COMMIT` 和 `OCTOBUS_BUILD_DATE` 覆盖注入值。可以通过以下命令查看结果：
+`task test` 会先检查 `protoc` 是否已安装并位于 `PATH`，然后构建本地 SDK、安装 long-running / on-demand calculator 示例依赖，再运行带跨包覆盖率统计的 Go 测试，其中包含 `tests/e2e`。如果检查失败，请安装 `protoc` 后重试。该前置检查只作用于 `task test`；直接运行 `go test ./...` 的行为未改变，仍需由调用者在需要时自行提供 `protoc`。隔离回归测试可用 `node --test scripts/task-protoc-preflight.test.mjs` 运行。
+
+`task build` 会生成 `bin/octobus`，并为 `version` 子命令注入构建元数据。如果当前提交正好位于匹配 `v[0-9]*` 的 OctoBus release tag 上，则使用该 tag 作为显示版本；否则使用当前提交历史上最近的可达匹配 tag、提交距离和短 commit 组成版本，例如 `v1.2.0-12-gabc1234`；如果没有可达匹配 tag，则退回短 Git commit。没有 Git 元数据的构建环境可以通过 `OCTOBUS_VERSION`、`OCTOBUS_COMMIT` 和 `OCTOBUS_BUILD_DATE` 覆盖注入值。可以通过以下命令查看结果：
 
 ```bash
 ./bin/octobus version
