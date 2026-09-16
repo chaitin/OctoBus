@@ -132,6 +132,8 @@ func (i *Importer) Import(ctx context.Context, opts Options) (Result, error) {
 	if opts.Source == "" {
 		return Result{}, errors.New("service package source is required")
 	}
+	importMu.Lock()
+	defer importMu.Unlock()
 	serviceDir := filepath.Join(i.DataDir, "artifacts", "services", opts.ServiceID)
 	staging := filepath.Join(i.DataDir, "artifacts", "services", ".staging-"+opts.ServiceID)
 	if err := os.RemoveAll(staging); err != nil {
@@ -373,6 +375,8 @@ func (i *Importer) ImportRecursive(ctx context.Context, opts Options) (Recursive
 	if err != nil {
 		return RecursiveResult{}, err
 	}
+	importMu.Lock()
+	defer importMu.Unlock()
 	staging := filepath.Join(i.DataDir, "artifacts", "services", ".staging-recursive-import")
 	if err := os.RemoveAll(staging); err != nil {
 		return RecursiveResult{}, err
