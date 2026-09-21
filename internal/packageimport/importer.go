@@ -29,6 +29,20 @@ type Importer struct {
 	Store   *store.Store
 }
 
+const maxRemoteArchiveBytes int64 = 512 << 20
+
+var defaultArchiveExtractionLimits = archiveExtractionLimits{
+	MaxFiles:      100_000,
+	MaxEntryBytes: 512 << 20,
+	MaxTotalBytes: 2 << 30,
+}
+
+type archiveExtractionLimits struct {
+	MaxFiles      int
+	MaxEntryBytes uint64
+	MaxTotalBytes uint64
+}
+
 type Options struct {
 	ServiceID string                          `json:"service_id"`
 	Name      string                          `json:"name"`
@@ -649,7 +663,7 @@ func (i *Importer) prepareSource(ctx context.Context, opts Options, staging stri
 			err = untarGz(artifactPath, packageDir)
 		}
 		if err != nil {
-			return preparedSource{}, err
+			return preparedSource{}, fmt.Errorf("extract remote package %q: %w", redactedRemoteArchiveSource(source), err)
 		}
 		packageDir = normalizePackageDir(packageDir)
 	}
@@ -832,6 +846,9 @@ func downloadRemoteArchive(ctx context.Context, source, artifactPath string) err
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("download remote package %q: HTTP %d", redactedRemoteArchiveSource(source), resp.StatusCode)
 	}
+	if resp.ContentLength > maxRemoteArchiveBytes {
+		return fmt.Errorf("download remote package %q: archive exceeds %d byte limit", redactedRemoteArchiveSource(source), maxRemoteArchiveBytes)
+	}
 	if err := os.MkdirAll(filepath.Dir(artifactPath), 0o755); err != nil {
 		return err
 	}
@@ -839,12 +856,27 @@ func downloadRemoteArchive(ctx context.Context, source, artifactPath string) err
 	if err != nil {
 		return err
 	}
-	_, copyErr := io.Copy(out, resp.Body)
+	copyErr := copyWithByteLimit(out, resp.Body, maxRemoteArchiveBytes)
 	closeErr := out.Close()
 	if copyErr != nil {
-		return copyErr
+		_ = os.Remove(artifactPath)
+		return fmt.Errorf("download remote package %q: %w", redactedRemoteArchiveSource(source), copyErr)
+	}
+	if closeErr != nil {
+		_ = os.Remove(artifactPath)
 	}
 	return closeErr
+}
+
+func copyWithByteLimit(dst io.Writer, src io.Reader, max int64) error {
+	written, err := io.Copy(dst, io.LimitReader(src, max+1))
+	if err != nil {
+		return err
+	}
+	if written > max {
+		return fmt.Errorf("content exceeds %d byte limit", max)
+	}
+	return nil
 }
 
 func redactedRemoteArchiveSource(source string) string {
@@ -1630,6 +1662,10 @@ func tarGzDir(src, dst string) error {
 }
 
 func untarGz(src, dst string) error {
+	return untarGzWithLimits(src, dst, defaultArchiveExtractionLimits)
+}
+
+func untarGzWithLimits(src, dst string, limits archiveExtractionLimits) error {
 	file, err := os.Open(src)
 	if err != nil {
 		return err
@@ -1641,6 +1677,8 @@ func untarGz(src, dst string) error {
 	}
 	defer gz.Close()
 	tr := tar.NewReader(gz)
+	files := 0
+	var total uint64
 	for {
 		hdr, err := tr.Next()
 		if errors.Is(err, io.EOF) {
@@ -1649,6 +1687,17 @@ func untarGz(src, dst string) error {
 		if err != nil {
 			return err
 		}
+		files++
+		if files > limits.MaxFiles {
+			return fmt.Errorf("archive exceeds %d file limit", limits.MaxFiles)
+		}
+		if hdr.Size < 0 || uint64(hdr.Size) > limits.MaxEntryBytes {
+			return fmt.Errorf("archive entry %q exceeds %d byte limit", hdr.Name, limits.MaxEntryBytes)
+		}
+		if uint64(hdr.Size) > limits.MaxTotalBytes-total {
+			return fmt.Errorf("archive exceeds %d expanded byte limit", limits.MaxTotalBytes)
+		}
+		total += uint64(hdr.Size)
 		clean := filepath.Clean(hdr.Name)
 		if strings.HasPrefix(clean, "..") || filepath.IsAbs(clean) {
 			return fmt.Errorf("unsafe archive path %q", hdr.Name)
@@ -1667,7 +1716,7 @@ func untarGz(src, dst string) error {
 			if err != nil {
 				return err
 			}
-			_, copyErr := io.Copy(out, tr)
+			copyErr := copyWithByteLimit(out, tr, hdr.Size)
 			closeErr := out.Close()
 			if copyErr != nil {
 				return copyErr
@@ -1680,12 +1729,27 @@ func untarGz(src, dst string) error {
 }
 
 func unzip(src, dst string) error {
+	return unzipWithLimits(src, dst, defaultArchiveExtractionLimits)
+}
+
+func unzipWithLimits(src, dst string, limits archiveExtractionLimits) error {
 	r, err := zip.OpenReader(src)
 	if err != nil {
 		return err
 	}
 	defer r.Close()
+	if len(r.File) > limits.MaxFiles {
+		return fmt.Errorf("archive exceeds %d file limit", limits.MaxFiles)
+	}
+	var total uint64
 	for _, file := range r.File {
+		if file.UncompressedSize64 > limits.MaxEntryBytes {
+			return fmt.Errorf("archive entry %q exceeds %d byte limit", file.Name, limits.MaxEntryBytes)
+		}
+		if file.UncompressedSize64 > limits.MaxTotalBytes-total {
+			return fmt.Errorf("archive exceeds %d expanded byte limit", limits.MaxTotalBytes)
+		}
+		total += file.UncompressedSize64
 		clean := filepath.Clean(file.Name)
 		if strings.HasPrefix(clean, "..") || filepath.IsAbs(clean) {
 			return fmt.Errorf("unsafe archive path %q", file.Name)
@@ -1709,7 +1773,7 @@ func unzip(src, dst string) error {
 			_ = in.Close()
 			return err
 		}
-		_, copyErr := io.Copy(out, in)
+		copyErr := copyWithByteLimit(out, in, int64(file.UncompressedSize64))
 		closeIn := in.Close()
 		closeOut := out.Close()
 		if copyErr != nil {
