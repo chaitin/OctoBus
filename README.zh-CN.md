@@ -47,13 +47,13 @@ OctoBus 以 `@chaitin-ai/octobus` npm package 发布。主 package 会安装一�
 
 ```bash
 npm install -g @chaitin-ai/octobus
-octobus serve
+octobus serve --dev
 ```
 
 也可以不做全局安装，直接运行：
 
 ```bash
-npx @chaitin-ai/octobus serve
+npx @chaitin-ai/octobus serve --dev
 ```
 
 npm package 只安装 `octobus` binary。常规 service import 和 runtime 流程仍然需要本机提供 `node`、`npm`、`protoc` 和 `git`，见下方依赖说明。
@@ -65,6 +65,7 @@ Docker 镜像内包含 `octobus` binary，以及常规 service 导入和 instanc
 ```bash
 docker run --rm \
   -p 9000:9000 \
+  -e OCTOBUS_BOOTSTRAP_ADMIN_TOKEN=... \
   -v octobus-data:/var/lib/octobus \
   ghcr.io/chaitin/octobus:latest
 ```
@@ -82,13 +83,13 @@ task build
 使用默认配置启动：
 
 ```bash
-./bin/octobus serve
+./bin/octobus serve --dev
 ```
 
 常用参数：
 
 ```bash
-./bin/octobus serve \
+./bin/octobus serve --dev \
   --data-dir .octobus \
   --addr 127.0.0.1:9000
 ```
@@ -98,6 +99,7 @@ task build
 ```bash
 export OCTOBUS_DATA_DIR="./.octobus"
 export OCTOBUS_ADDR="127.0.0.1:9000"
+export OCTOBUS_ADMIN_TOKEN="octobus-dev-admin-token"
 ```
 
 数据目录中会保存 SQLite 数据库、service artifact/runtime、instance 配置和日志。默认数据目录为启动命令当前目录下的 `.octobus`
@@ -215,7 +217,8 @@ curl -X POST \
 获取 capset catalog：
 
 ```bash
-curl 'http://127.0.0.1:9000/admin/v1/catalog/dev?all=true'
+curl -H "Authorization: Bearer octobus-dev-admin-token" \
+  'http://127.0.0.1:9000/admin/v1/catalog/dev?all=true'
 ```
 
 catalog 中会按协议返回每个 method 的运行模式、后端状态、gRPC metadata、Connect RPC endpoint、MCP tool name、descriptor hash/version 和请求/响应 message 名称。默认只返回 gRPC catalog；可通过 `grpc=true`、`connect=true`、`mcp=true` 或 `all=true` query 参数选择协议，也可以用 `./bin/octobus catalog --help` 查看 CLI 选项
@@ -267,8 +270,10 @@ Connect RPC 使用 protobuf JSON mapping，未知字段会被拒绝，响应默�
 ```bash
 curl http://127.0.0.1:9000/capsets/dev/openapi.json
 curl http://127.0.0.1:9000/capsets/dev/openapi.yaml
-curl http://127.0.0.1:9000/admin/v1/catalog/dev/openapi.json
-curl http://127.0.0.1:9000/admin/v1/catalog/dev/openapi.yaml
+curl -H "Authorization: Bearer octobus-dev-admin-token" \
+  http://127.0.0.1:9000/admin/v1/catalog/dev/openapi.json
+curl -H "Authorization: Bearer octobus-dev-admin-token" \
+  http://127.0.0.1:9000/admin/v1/catalog/dev/openapi.yaml
 ```
 
 ### MCP
@@ -398,6 +403,16 @@ node bin/service.js call --data-json '{"id":"123"}'
 SDK 也会读取当前执行目录 `.env` 中的同名变量，只读取该 key，不注入其他 `.env` 变量。
 该变量不会影响 daemon 使用的 `--runtime serve` 或 `--runtime invoke` 协议；daemon 管理
 instance 时继续通过文件和 fd 传递 config/secret。
+
+## 管理员认证
+
+守护进程启用控制面前必须有 Admin Token。
+
+本地开发请使用 `octobus serve --dev`，且必须绑定 loopback（默认 `127.0.0.1:9000`）：会写入固定 token `octobus-dev-admin-token` 并打印警告。随后设置 `OCTOBUS_ADMIN_TOKEN`（或写入 `.env` / `.octobus.yml`），CLI 才能通过鉴权。监听非 loopback 地址时 `--dev` 会拒绝启动，应改用 `OCTOBUS_BOOTSTRAP_ADMIN_TOKEN`。
+
+不要在生产环境使用 `--dev`。曾经用 `--dev` 初始化过的数据目录会一直保留该公开 token；之后启动会打印警告，`OCTOBUS_BOOTSTRAP_ADMIN_TOKEN` 也不会替换它。残留的开发 token 在非 loopback 监听上会拒绝启动。生产请换全新数据目录。
+
+生产环境的全新数据目录，首次启动前设置高熵值 `OCTOBUS_BOOTSTRAP_ADMIN_TOKEN`。该值会被哈希，API 不会回显明文；完成引导后从进程环境中移除，后续 token 通过已鉴权的 Admin API 管理。空数据目录既没有 `--dev` 也没有 bootstrap token 时，守护进程会直接退出，而不是启动一个匿名开放的控制面。
 
 ## 开发
 

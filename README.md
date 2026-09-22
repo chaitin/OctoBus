@@ -52,13 +52,13 @@ platform-specific optional dependencies such as
 
 ```bash
 npm install -g @chaitin-ai/octobus
-octobus serve
+octobus serve --dev
 ```
 
 You can also run it without a global install:
 
 ```bash
-npx @chaitin-ai/octobus serve
+npx @chaitin-ai/octobus serve --dev
 ```
 
 The npm package installs the `octobus` binary only. Normal service import and
@@ -73,6 +73,7 @@ for normal service import and instance startup flows.
 ```bash
 docker run --rm \
   -p 9000:9000 \
+  -e OCTOBUS_BOOTSTRAP_ADMIN_TOKEN=... \
   -v octobus-data:/var/lib/octobus \
   ghcr.io/chaitin/octobus:latest
 ```
@@ -91,13 +92,13 @@ task build
 Start with the default configuration:
 
 ```bash
-./bin/octobus serve
+./bin/octobus serve --dev
 ```
 
 Common options:
 
 ```bash
-./bin/octobus serve \
+./bin/octobus serve --dev \
   --data-dir .octobus \
   --addr 127.0.0.1:9000
 ```
@@ -107,6 +108,7 @@ You can also override defaults through environment variables:
 ```bash
 export OCTOBUS_DATA_DIR="./.octobus"
 export OCTOBUS_ADDR="127.0.0.1:9000"
+export OCTOBUS_ADMIN_TOKEN="octobus-dev-admin-token"
 ```
 
 The data directory stores the SQLite database, service artifacts and runtimes, instance config, and logs. The default data directory is `.octobus` under the current directory where the daemon command is started.
@@ -224,7 +226,8 @@ See the next section for more invocation methods. Command details are available 
 Fetch a capset catalog:
 
 ```bash
-curl 'http://127.0.0.1:9000/admin/v1/catalog/dev?all=true'
+curl -H "Authorization: Bearer octobus-dev-admin-token" \
+  'http://127.0.0.1:9000/admin/v1/catalog/dev?all=true'
 ```
 
 The catalog returns each method by protocol, including runtime mode, backend state, gRPC metadata, Connect RPC endpoint, MCP tool name, descriptor hash/version, and request/response message names. By default, only the gRPC catalog is returned. Use the `grpc=true`, `connect=true`, `mcp=true`, or `all=true` query parameters to select protocols, or run `./bin/octobus catalog --help` to see CLI options.
@@ -276,8 +279,10 @@ Connect RPC uses protobuf JSON mapping, rejects unknown fields, and omits zero v
 ```bash
 curl http://127.0.0.1:9000/capsets/dev/openapi.json
 curl http://127.0.0.1:9000/capsets/dev/openapi.yaml
-curl http://127.0.0.1:9000/admin/v1/catalog/dev/openapi.json
-curl http://127.0.0.1:9000/admin/v1/catalog/dev/openapi.yaml
+curl -H "Authorization: Bearer octobus-dev-admin-token" \
+  http://127.0.0.1:9000/admin/v1/catalog/dev/openapi.json
+curl -H "Authorization: Bearer octobus-dev-admin-token" \
+  http://127.0.0.1:9000/admin/v1/catalog/dev/openapi.yaml
 ```
 
 ### MCP
@@ -401,6 +406,16 @@ node bin/service.js call --data-json '{"id":"123"}'
 ```
 
 The SDK also reads the same variable from `.env` in the current working directory. It reads only that key and does not inject other `.env` variables. This variable does not affect the daemon's `--runtime serve` or `--runtime invoke` protocol. When the daemon manages instances, it continues to pass config/secret through files and file descriptors.
+
+## Admin authentication
+
+The daemon requires an Admin Token before enabling the control plane.
+
+For local development, start with `octobus serve --dev` on a loopback address (the default is `127.0.0.1:9000`). This seeds a fixed admin token `octobus-dev-admin-token` and prints a warning. Then set `OCTOBUS_ADMIN_TOKEN` (or put the same value in `.env` / `.octobus.yml`) so CLI commands can authenticate. `--dev` refuses to start if the daemon would listen on a non-loopback address; use `OCTOBUS_BOOTSTRAP_ADMIN_TOKEN` instead of `--dev` for any exposed listen address.
+
+Do not use `--dev` in production. A data directory first started with `--dev` keeps that well-known token; later starts print a warning, and `OCTOBUS_BOOTSTRAP_ADMIN_TOKEN` will not replace it. A leftover development token is refused on a non-loopback listen address. Use a fresh data directory for production.
+
+On a new production data directory, set `OCTOBUS_BOOTSTRAP_ADMIN_TOKEN` to a high-entropy value for the first startup. The value is hashed and is not returned by the API; remove it from the process environment after bootstrap and manage subsequent tokens through the authenticated Admin API. If neither `--dev` nor a bootstrap token is provided on an empty data directory, the daemon exits instead of starting an unauthenticated control plane.
 
 ## Development
 

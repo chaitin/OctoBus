@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -10,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -17,6 +20,7 @@ import (
 	"octobus/internal/admin"
 	"octobus/internal/cli"
 	"octobus/internal/daemonlog"
+	"octobus/internal/domain"
 	"octobus/internal/packageimport"
 	"octobus/internal/protocol"
 	"octobus/internal/server"
@@ -50,27 +54,49 @@ func newRootCommand(adminCLI *cli.CLI) *cobra.Command {
 
 func newServeCommand(addr *string) *cobra.Command {
 	var dataDir string
+	var dev bool
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Run the Octobus daemon",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return serve(serveOptions{dataDir: dataDir, addr: *addr})
+			return serve(serveOptions{dataDir: dataDir, addr: *addr, dev: dev})
 		},
 	}
 	cmd.Flags().StringVar(&dataDir, "data-dir", defaultDataDir(), "octobus data directory")
+	cmd.Flags().BoolVar(&dev, "dev", false, "seed a fixed development admin token when none exists; requires a loopback listen address (not for production)")
 	return cmd
 }
 
 type serveOptions struct {
 	dataDir          string
 	addr             string
+	dev              bool
 	stderr           io.Writer
 	logger           *slog.Logger
 	startupInventory func(context.Context, *slog.Logger, *store.Store) error
 }
 
+const (
+	bootstrapAdminTokenID   = "bootstrap-admin"
+	bootstrapAdminTokenName = "Bootstrap admin"
+	devAdminTokenID         = "dev-admin"
+	devAdminTokenName       = "Development admin"
+	devAdminTokenSecret     = "octobus-dev-admin-token"
+)
+
+type adminAuthOptions struct {
+	dev  bool
+	addr string
+	warn io.Writer
+}
+
 func serve(opts serveOptions) error {
+	if opts.dev {
+		if err := requireDevLoopback(opts.addr); err != nil {
+			return err
+		}
+	}
 	stderr := opts.stderr
 	if stderr == nil {
 		stderr = os.Stderr
@@ -92,6 +118,11 @@ func serve(opts serveOptions) error {
 		return err
 	}
 	defer st.Close()
+	if !opts.dev {
+		if err := checkLeftoverDevAdminToken(context.Background(), st, opts.addr, stderr); err != nil {
+			return err
+		}
+	}
 	accessLogger, err := accesslog.Open(dataDir)
 	if err != nil {
 		return fmt.Errorf("open access log: %w", err)
@@ -125,7 +156,10 @@ func serve(opts serveOptions) error {
 	if err := startupInventory(ctx, logger, st); err != nil {
 		return err
 	}
-	adminServer := &admin.Server{Store: st, Importer: &packageimport.Importer{DataDir: dataDir, Store: st}, Supervisor: sup, Gateway: gateway, AccessLogPath: filepath.Join(dataDir, accesslog.FileName), Logger: logger}
+	if err := initializeAdminAuth(ctx, st, adminAuthOptions{dev: opts.dev, addr: opts.addr, warn: stderr}); err != nil {
+		return fmt.Errorf("initialize admin authentication: %w", err)
+	}
+	adminServer := &admin.Server{Store: st, Importer: &packageimport.Importer{DataDir: dataDir, Store: st}, Supervisor: sup, Gateway: gateway, AccessLogPath: filepath.Join(dataDir, accesslog.FileName), Logger: logger, RequireAdminToken: true}
 	grpcServer := protocol.GRPCServer(gateway)
 	publicServer := admin.NewHTTPServer(opts.addr, h2c.NewHandler(server.CombinedHandler(adminServer.Handler(), grpcServer, gateway), &http2.Server{}))
 	publicListener, err := net.Listen("tcp", opts.addr)
@@ -171,6 +205,93 @@ func shutdownSupervisor(logger *slog.Logger, sup *supervisor.Supervisor) {
 	if err := sup.Shutdown(shutdownCtx); err != nil {
 		logger.Warn("daemon_supervisor_shutdown_failed", "error", err)
 	}
+}
+
+func initializeAdminAuth(ctx context.Context, st *store.Store, opts adminAuthOptions) error {
+	if opts.dev {
+		if err := requireDevLoopback(opts.addr); err != nil {
+			return err
+		}
+	}
+	requires, err := st.AdminRequiresToken(ctx)
+	if err != nil {
+		return err
+	}
+	if requires {
+		return nil
+	}
+	secret := os.Getenv("OCTOBUS_BOOTSTRAP_ADMIN_TOKEN")
+	if secret != "" {
+		_, err = st.AddAdminToken(ctx, domain.AdminToken{ID: bootstrapAdminTokenID, Name: bootstrapAdminTokenName}, secret)
+		if err != nil {
+			return fmt.Errorf("provision bootstrap admin token: %w", err)
+		}
+		return nil
+	}
+	if opts.dev {
+		_, err = st.AddAdminToken(ctx, domain.AdminToken{ID: devAdminTokenID, Name: devAdminTokenName}, devAdminTokenSecret)
+		if err != nil {
+			return fmt.Errorf("provision development admin token: %w", err)
+		}
+		warn := opts.warn
+		if warn == nil {
+			warn = os.Stderr
+		}
+		fmt.Fprintf(warn, "warning: --dev seeded a fixed admin token; do not use this mode in production\nexport OCTOBUS_ADMIN_TOKEN=%s\n", devAdminTokenSecret)
+		return nil
+	}
+	return errors.New("admin token authentication is not initialized; set OCTOBUS_BOOTSTRAP_ADMIN_TOKEN or start with --dev")
+}
+
+func requireDevLoopback(addr string) error {
+	ok, err := listenAddrIsLoopback(addr)
+	if err != nil {
+		return fmt.Errorf("dev mode: parse listen address %q: %w", addr, err)
+	}
+	if !ok {
+		return fmt.Errorf("dev mode requires a loopback listen address, got %q; use OCTOBUS_BOOTSTRAP_ADMIN_TOKEN instead of --dev", addr)
+	}
+	return nil
+}
+
+func checkLeftoverDevAdminToken(ctx context.Context, st *store.Store, addr string, warn io.Writer) error {
+	_, err := st.GetAdminToken(ctx, devAdminTokenID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if warn == nil {
+		warn = os.Stderr
+	}
+	fmt.Fprintf(warn, "warning: data directory has development admin token id=%s; do not use this token in production\n", devAdminTokenID)
+	ok, err := listenAddrIsLoopback(addr)
+	if err != nil {
+		return fmt.Errorf("parse listen address %q: %w", addr, err)
+	}
+	if !ok {
+		return fmt.Errorf("development admin token cannot be used with a non-loopback listen address, got %q; bind loopback or use a fresh data directory with OCTOBUS_BOOTSTRAP_ADMIN_TOKEN", addr)
+	}
+	return nil
+}
+
+func listenAddrIsLoopback(addr string) (bool, error) {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false, err
+	}
+	if host == "" {
+		return false, nil
+	}
+	if strings.EqualFold(host, "localhost") {
+		return true, nil
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false, nil
+	}
+	return ip.IsLoopback(), nil
 }
 
 func logStartupInventory(ctx context.Context, logger *slog.Logger, st *store.Store) error {
