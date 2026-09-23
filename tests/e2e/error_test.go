@@ -124,17 +124,20 @@ func TestIDAdminAndCLIBoundaries(t *testing.T) {
 	h.mustCLI("capset", "create", "dev", "--name", "DevAgent")
 	h.mustCLI("admin-token", "add", "admin-one", "--token", "admin-secret")
 	var status map[string]any
-	h.adminJSON(http.MethodGet, "/admin/v1/status", nil, http.StatusOK, &status)
+	h.adminJSONWithToken(http.MethodGet, "/admin/v1/status", nil, "", http.StatusOK, &status)
 	if status["status"] != "ok" {
 		t.Fatalf("status should remain available without admin token: %+v", status)
 	}
-	h.adminJSON(http.MethodGet, "/admin/v1/capsets", nil, http.StatusUnauthorized, nil)
+	h.adminJSONWithToken(http.MethodGet, "/admin/v1/capsets", nil, "", http.StatusUnauthorized, nil)
 	h.adminJSONWithToken(http.MethodGet, "/admin/v1/capsets", nil, "wrong", http.StatusUnauthorized, nil)
 	var caps map[string]any
 	h.adminJSONWithToken(http.MethodGet, "/admin/v1/capsets", nil, "admin-secret", http.StatusOK, &caps)
 	if !strings.Contains(string(h.adminJSONWithToken(http.MethodGet, "/admin/v1/tokens", nil, "admin-secret", http.StatusOK, nil)), "admin-one") {
 		t.Fatalf("admin token was not listed")
 	}
+	// The CLI prefers OCTOBUS_ADMIN_TOKEN over .env, so leave the variable out
+	// to make the .env file the only source.
+	h.cliAdminToken = ""
 	dotEnv := filepath.Join(repoRoot, ".env")
 	oldDotEnv, readDotEnvErr := os.ReadFile(dotEnv)
 	if readDotEnvErr != nil && !os.IsNotExist(readDotEnvErr) {
