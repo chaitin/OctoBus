@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -49,6 +50,10 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+// e2eAdminToken is the bootstrap admin token every harness daemon starts
+// with, since the daemon refuses to serve without admin authentication.
+const e2eAdminToken = "e2e-admin-token"
+
 type harness struct {
 	t          *testing.T
 	root       string
@@ -59,6 +64,10 @@ type harness struct {
 	stdout     bytes.Buffer
 	stderr     bytes.Buffer
 	client     *http.Client
+	// cliAdminToken is exported to CLI runs as OCTOBUS_ADMIN_TOKEN. Tests that
+	// cover other token sources, such as .env, clear it so the variable is
+	// left out entirely.
+	cliAdminToken string
 }
 
 type cliResult struct {
@@ -77,6 +86,8 @@ func newHarness(t *testing.T) *harness {
 		dataDir: filepath.Join(root, "data"),
 		bin:     filepath.Join(root, "octobus"),
 		client:  &http.Client{Timeout: 10 * time.Second},
+
+		cliAdminToken: e2eAdminToken,
 	}
 	h.publicAddr = freeAddr(t)
 	buildArgs := []string{"build", "-trimpath", "-tags", "netgo,osusergo", "-o", h.bin}
@@ -130,7 +141,7 @@ func (h *harness) start() {
 	h.stderr.Reset()
 	cmd := exec.Command(h.bin, "serve", "--data-dir", h.dataDir, "--addr", h.publicAddr)
 	cmd.Dir = repoRoot
-	cmd.Env = e2eSubprocessEnv("OCTOBUS_E2E_HELPER_BINARY="+os.Args[0], "OCTOBUS_E2E_REPO_ROOT="+repoRoot, "GIT_SSL_NO_VERIFY=true", "NO_PROXY=127.0.0.1,localhost", "no_proxy=127.0.0.1,localhost")
+	cmd.Env = e2eSubprocessEnv("OCTOBUS_E2E_HELPER_BINARY="+os.Args[0], "OCTOBUS_E2E_REPO_ROOT="+repoRoot, "OCTOBUS_BOOTSTRAP_ADMIN_TOKEN="+e2eAdminToken, "GIT_SSL_NO_VERIFY=true", "NO_PROXY=127.0.0.1,localhost", "no_proxy=127.0.0.1,localhost")
 	cmd.Stdout = &h.stdout
 	cmd.Stderr = &h.stderr
 	if err := cmd.Start(); err != nil {
@@ -206,7 +217,16 @@ func (h *harness) runCLIInDir(dir string, args ...string) cliResult {
 	h.t.Helper()
 	cmd := exec.Command(h.bin, args...)
 	cmd.Dir = dir
-	cmd.Env = e2eSubprocessEnv("OCTOBUS_ADDR="+h.publicAddr, "OCTOBUS_DATA_DIR="+h.dataDir, "GIT_SSL_NO_VERIFY=true", "NO_PROXY=127.0.0.1,localhost", "no_proxy=127.0.0.1,localhost")
+	env := e2eSubprocessEnv("OCTOBUS_ADDR="+h.publicAddr, "OCTOBUS_DATA_DIR="+h.dataDir, "GIT_SSL_NO_VERIFY=true", "NO_PROXY=127.0.0.1,localhost", "no_proxy=127.0.0.1,localhost")
+	// Drop any inherited OCTOBUS_ADMIN_TOKEN so the CLI sees only the harness
+	// token, or no variable at all when a test clears it.
+	env = slices.DeleteFunc(env, func(entry string) bool {
+		return strings.HasPrefix(entry, "OCTOBUS_ADMIN_TOKEN=")
+	})
+	if h.cliAdminToken != "" {
+		env = append(env, "OCTOBUS_ADMIN_TOKEN="+h.cliAdminToken)
+	}
+	cmd.Env = env
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -244,7 +264,7 @@ func (h *harness) mustCLIInDir(dir string, args ...string) string {
 }
 
 func (h *harness) adminJSON(method, path string, body any, want int, out any) []byte {
-	return h.adminJSONWithToken(method, path, body, "", want, out)
+	return h.adminJSONWithToken(method, path, body, e2eAdminToken, want, out)
 }
 
 func (h *harness) adminJSONWithToken(method, path string, body any, token string, want int, out any) []byte {
