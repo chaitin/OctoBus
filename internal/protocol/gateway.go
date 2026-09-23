@@ -30,6 +30,7 @@ import (
 
 	"octobus/internal/descriptors"
 	"octobus/internal/domain"
+	"octobus/internal/hardening"
 	"octobus/internal/store"
 
 	"google.golang.org/grpc"
@@ -52,6 +53,10 @@ type Gateway struct {
 	DataDir      string
 	AccessLogger accessLogger
 	Logger       *slog.Logger
+	// RuntimeHardening selects the restrictions applied to on-demand runtimes.
+	RuntimeHardening hardening.Level
+	// RuntimeNode describes the node binary on-demand runtimes launch with.
+	RuntimeNode hardening.Node
 
 	mu            sync.Mutex
 	conns         map[string]*grpc.ClientConn
@@ -60,6 +65,11 @@ type Gateway struct {
 }
 
 const DefaultMaxRequestBytes int64 = 1 << 20
+
+// onDemandWaitDelay bounds how long an invoke waits for output pipes after the
+// runtime exits. A descendant that inherited stdout/stderr would otherwise keep
+// cmd.Run blocked, past the request deadline, until it exits on its own.
+const onDemandWaitDelay = 2 * time.Second
 
 type Catalog struct {
 	CapsetID    string                  `json:"capset_id"`
@@ -1613,18 +1623,37 @@ func (g *Gateway) invokeOnDemand(ctx context.Context, item store.ExposedMethod, 
 	)
 	cmd.Dir = workdir
 	cmd.ExtraFiles = []*os.File{secretFile}
-	cmd.Env = append(os.Environ(),
-		"OCTOBUS_SERVICE_ID="+item.Service.ID,
-		"OCTOBUS_INSTANCE_ID="+item.Instance.ID,
-		"OCTOBUS_PACKAGE_DIR="+filepath.Join(dataDir, "artifacts", "services", item.Service.ID, "runtime", filepath.FromSlash(item.Service.ServiceRoot)),
-		"OCTOBUS_DESCRIPTOR_PATH="+item.Service.DescriptorPath,
-		"OCTOBUS_DESCRIPTOR_SHA256="+item.Service.DescriptorSHA256,
-	)
+	serviceDir := filepath.Join(dataDir, "artifacts", "services", item.Service.ID)
+	if err := hardening.Apply(cmd, hardening.Spec{
+		Level:      g.RuntimeHardening,
+		Node:       g.RuntimeNode,
+		ServiceDir: serviceDir,
+		Workdir:    workdir,
+		Env: []string{
+			"OCTOBUS_SERVICE_ID=" + item.Service.ID,
+			"OCTOBUS_INSTANCE_ID=" + item.Instance.ID,
+			"OCTOBUS_PACKAGE_DIR=" + filepath.Join(serviceDir, "runtime", filepath.FromSlash(item.Service.ServiceRoot)),
+			"OCTOBUS_DESCRIPTOR_PATH=" + item.Service.DescriptorPath,
+			"OCTOBUS_DESCRIPTOR_SHA256=" + item.Service.DescriptorSHA256,
+		},
+	}); err != nil {
+		return nil, status.Errorf(codes.Internal, "prepare runtime hardening: %v", err)
+	}
+	cmd.Cancel = func() error { return hardening.Kill(cmd) }
+	cmd.WaitDelay = onDemandWaitDelay
 	cmd.Stdin = bytes.NewReader(req)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err = cmd.Run()
+	hardening.KillGroup(cmd)
+	var exitErr *exec.ExitError
+	if errors.Is(err, exec.ErrWaitDelay) && !errors.As(err, &exitErr) {
+		// The runtime exited successfully; only a descendant held its output
+		// open, and the pipes were closed after onDemandWaitDelay. A runtime
+		// that failed reports an ExitError, which must still be surfaced.
+		err = nil
+	}
 	if ctx.Err() == context.DeadlineExceeded {
 		return nil, status.Error(codes.DeadlineExceeded, "on-demand invoke timed out")
 	}

@@ -104,6 +104,38 @@ export OCTOBUS_ADMIN_TOKEN="octobus-dev-admin-token"
 
 数据目录中会保存 SQLite 数据库、service artifact/runtime、instance 配置和日志。默认数据目录为启动命令当前目录下的 `.octobus`
 
+### Runtime 加固
+
+默认情况下，service runtime 会继承 daemon 的全部环境变量，并且可以访问 daemon 用户能访问的一切。启动时加上 `--runtime-hardening=node`（或设置 `OCTOBUS_RUNTIME_HARDENING=node`）可以限制所有 service runtime：
+
+```bash
+./bin/octobus serve --runtime-hardening=node
+```
+
+等级按**由谁执行限制**命名，因为具体机制在不同平台上并不相同：
+
+| 等级 | 由谁执行 |
+|---|---|
+| `off`（默认） | 不限制，runtime 与 daemon 自身的运行方式一致 |
+| `node` | Node.js 进程自己 |
+
+在 `node` 等级下，每个 runtime：
+
+- 只收到白名单里的环境变量（`PATH`、`LANG`、`LC_ALL`、`TZ`、代理和 CA 相关变量，以及 Windows 上的 `SystemRoot`、`PATHEXT`、`COMSPEC`）和 `OCTOBUS_*` 上下文。daemon 的其他环境变量和已有的 `NODE_OPTIONS` 都会被丢弃。
+- `HOME`、`USERPROFILE` 和临时目录变量（`TMPDIR`、`TEMP`、`TMP`）指向自己的 instance 目录，其中残留的临时文件不会自动清理。
+- 在 Node.js 权限模型下运行：可以读自己的 service artifact、读写自己的 instance 目录；不能读其他文件（包括 `octobus.db` 和其他 instance），不能启动子进程、使用 worker 线程或加载 native addon
+- V8 老生代堆内存上限为 512 MB（`--max-old-space-size`）
+- 运行在独立的进程组中，停止 instance 时会一并停止它启动的进程（仅限 Unix）
+
+`node` 等级要求 Node.js 22.13+、23.5+ 或 24+。daemon 启动时会检查 `PATH` 中 `node` 的版本，再按启动 runtime 的方式试运行一次 `node`：使用 runtime 的环境变量和 `NODE_OPTIONS`，并在一个代替 service 目录和 instance 目录的临时目录里运行。任一检查失败，daemon 都会拒绝启动。依赖白名单以外环境变量的版本管理器 shim（例如 Volta 或 asdf）会在这一步失败，需要把真正的 `node` 可执行文件放在 `PATH` 前面。这项检查只在启动时进行，更换 `PATH` 中的 `node` 后需要重启 daemon。网络访问不受限制；Node.js 25+ 的权限模型默认禁止网络，daemon 会通过 `--allow-net` 放行。需要启动子进程、使用 worker 线程或加载 native addon 的 service 在该等级下无法正常工作。
+
+这些限制由 Node.js 进程自己检查，而不是由操作系统强制执行，因此该等级用于防止可信 service 代码的失误扩大影响，不能用来隔离不可信代码：
+
+- 符号链接即使指向授权目录之外，Node 也会跟随。
+- 权限模型和堆内存上限通过 `NODE_OPTIONS` 生效，而只有 Node.js 会读取这个变量。runtime 入口如果不是 Node.js 脚本，它本身以及它运行的非 Node.js 程序只受环境变量白名单和独立进程组限制。入口如果自己传入了权限参数，可以扩大自己的授权范围。
+- runtime 运行在独立的进程组中。daemon 在收到 `SIGINT`、`SIGTERM` 或 `SIGHUP`（启动时 `SIGHUP` 已被忽略的除外，例如用 `nohup` 启动）正常关闭时会停止它们；如果 daemon 以其他方式退出（`SIGKILL`、崩溃或 `Ctrl-\`），runtime 会继续运行，需要手动停止。
+- 该等级只作用于 service runtime。`service import` 仍会以 daemon 的环境运行 `npm`，包括 package 的生命周期脚本。
+
 ### 依赖
 
 本地运行 daemon 并完成常规 service 导入/启动流程时，需要提前安装以下命令并确保它们在 `PATH` 中：
