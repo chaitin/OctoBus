@@ -8,7 +8,8 @@ import "fmt"
 type Level string
 
 const (
-	// LevelOff launches runtimes exactly as the daemon itself runs.
+	// LevelOff launches runtimes with the daemon's own environment and
+	// privileges.
 	LevelOff Level = "off"
 	// LevelNode restricts the Node.js process itself: an environment
 	// allowlist, the permission model, a heap limit, and its own process

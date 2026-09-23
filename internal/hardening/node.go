@@ -32,7 +32,7 @@ func (n Node) grantsNet() bool {
 const checkWaitDelay = time.Second
 
 // CheckNode verifies that the node on PATH supports the stable --permission
-// flag and starts the way a hardened runtime starts. Runtimes resolve node
+// flag and starts when launched through Apply at LevelNode. Runtimes resolve node
 // through the same PATH, so a node that fails here would otherwise make every
 // hardened runtime exit at startup.
 func CheckNode(ctx context.Context) (Node, error) {
@@ -57,11 +57,13 @@ func CheckNode(ctx context.Context) (Node, error) {
 	if err != nil {
 		return Node{}, err
 	}
-	// The version only predicts which flags node accepts, so run node once the
-	// way a runtime runs: with the runtime environment, including
-	// NODE_OPTIONS and HOME, and from the workdir. A temp dir stands in for
-	// the service dir and workdir; its name has a space, so the quoted
-	// directory grants are checked too.
+	// The version only predicts which flags node accepts, so launch node once
+	// through Apply, the same preparation every runtime gets: the runtime
+	// environment and NODE_OPTIONS, the temp dir, resolved paths, and its own
+	// process group, run from the workdir. A temp dir stands in for the service
+	// dir and workdir; its name has a space, so the quoted directory grants are
+	// checked too. Unlike a runtime, the probe runs node itself rather than a
+	// service entry script.
 	dir, err := os.MkdirTemp("", "octobus node probe ")
 	if err != nil {
 		return Node{}, fmt.Errorf("create node probe dir: %w", err)
@@ -69,10 +71,15 @@ func CheckNode(ctx context.Context) (Node, error) {
 	defer os.RemoveAll(dir)
 	spec := Spec{Level: LevelNode, Node: node, ServiceDir: dir, Workdir: dir}
 	probe := exec.CommandContext(ctx, "node", "-e", "")
-	probe.Env = Env(spec)
 	probe.Dir = dir
+	if err := Apply(probe, spec); err != nil {
+		return Node{}, fmt.Errorf("prepare node probe: %w", err)
+	}
+	probe.Cancel = func() error { return Kill(probe) }
 	probe.WaitDelay = checkWaitDelay
-	if out, err := probe.CombinedOutput(); err != nil {
+	out, err = probe.CombinedOutput()
+	KillGroup(probe)
+	if err != nil {
 		return Node{}, fmt.Errorf("node %s does not start as a hardened runtime (NODE_OPTIONS %q): %w: %s", versionText, NodeOptions(spec), err, strings.TrimSpace(string(out)))
 	}
 	return node, nil

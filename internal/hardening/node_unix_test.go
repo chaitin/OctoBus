@@ -44,7 +44,7 @@ func TestCheckNodeProbesWithRuntimeOptions(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("TMPDIR", tmp)
 	seen := filepath.Join(t.TempDir(), "probe")
-	fakeNode(t, "v25.0.0", `printf '%s\n%s\n%s\n%s' "$NODE_OPTIONS" "$HOME" "$(pwd -P)" "${OCTOBUS_TEST_CANARY-unset}" > `+seen)
+	fakeNode(t, "v25.0.0", `printf '%s\n%s\n%s\n%s\n%s' "$NODE_OPTIONS" "$HOME" "$(pwd -P)" "${OCTOBUS_TEST_CANARY-unset}" "$([ -d "$TMPDIR" ] && echo tmpdir)" > `+seen)
 	node, err := CheckNode(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -57,10 +57,15 @@ func TestCheckNodeProbesWithRuntimeOptions(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := strings.Split(string(raw), "\n")
-	if len(lines) != 4 {
+	if len(lines) != 5 {
 		t.Fatalf("probe report = %q", raw)
 	}
-	options, home, cwd, canary := lines[0], lines[1], lines[2], lines[3]
+	options, home, cwd, canary, tmpdir := lines[0], lines[1], lines[2], lines[3], lines[4]
+	// Apply creates the runtime temp dir, so its presence shows the probe was
+	// launched through Apply.
+	if tmpdir != "tmpdir" {
+		t.Fatal("probe TMPDIR does not exist: the probe bypassed Apply")
+	}
 	if !strings.HasPrefix(options, "--permission ") || !strings.HasSuffix(options, " --allow-net --max-old-space-size=512") {
 		t.Fatalf("probe NODE_OPTIONS = %q, want the runtime flags", options)
 	}

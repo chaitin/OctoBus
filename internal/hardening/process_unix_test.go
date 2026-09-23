@@ -6,10 +6,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
 	"time"
+
+	"octobus/internal/proctest"
 )
 
 // startWithGrandchild launches a shell that backgrounds a long sleep, writes
@@ -39,14 +42,16 @@ func startWithGrandchild(t *testing.T, level Level, leaderScript string) (*exec.
 
 func waitGone(t *testing.T, pid string) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		if exec.Command("kill", "-0", pid).Run() != nil {
-			return
-		}
-		time.Sleep(20 * time.Millisecond)
+	proctest.WaitExited(t, mustAtoi(t, pid))
+}
+
+func mustAtoi(t *testing.T, s string) int {
+	t.Helper()
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		t.Fatal(err)
 	}
-	t.Fatalf("process %s survived", pid)
+	return n
 }
 
 func TestKillReachesProcessGroup(t *testing.T) {
@@ -64,7 +69,7 @@ func TestKillGroupReapsDescendantsAfterLeaderExits(t *testing.T) {
 	if err := cmd.Wait(); err != nil {
 		t.Fatal(err)
 	}
-	if exec.Command("kill", "-0", childPID).Run() != nil {
+	if proctest.Exited(mustAtoi(t, childPID)) {
 		t.Fatal("grandchild exited before KillGroup; test is not exercising the orphan case")
 	}
 	KillGroup(cmd)
@@ -91,7 +96,7 @@ func TestKillGroupAtLevelOffIsNoop(t *testing.T) {
 	}
 	KillGroup(cmd)
 	time.Sleep(100 * time.Millisecond)
-	if exec.Command("kill", "-0", childPID).Run() != nil {
+	if proctest.Exited(mustAtoi(t, childPID)) {
 		t.Fatal("KillGroup touched a runtime that shares the daemon process group")
 	}
 	_ = exec.Command("kill", childPID).Run()
@@ -108,7 +113,7 @@ func TestKillGroupSkipsReusedPid(t *testing.T) {
 	impostor := &exec.Cmd{SysProcAttr: &syscall.SysProcAttr{Setpgid: true}, Process: victim.Process}
 	KillGroup(impostor)
 	time.Sleep(200 * time.Millisecond)
-	if exec.Command("kill", "-0", victimChild).Run() != nil {
+	if proctest.Exited(mustAtoi(t, victimChild)) {
 		t.Fatal("KillGroup killed a live process group that reused the pid")
 	}
 }

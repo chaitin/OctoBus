@@ -127,7 +127,7 @@ export OCTOBUS_ADMIN_TOKEN="octobus-dev-admin-token"
 - V8 老生代堆内存上限为 512 MB（`--max-old-space-size`）
 - 运行在独立的进程组中，停止 instance 时会一并停止它启动的进程（仅限 Unix）
 
-`node` 等级要求 Node.js 22.13+、23.5+ 或 24+。daemon 启动时会检查 `PATH` 中 `node` 的版本，再按启动 runtime 的方式试运行一次 `node`：使用 runtime 的环境变量和 `NODE_OPTIONS`，并在一个代替 service 目录和 instance 目录的临时目录里运行。任一检查失败，daemon 都会拒绝启动。依赖白名单以外环境变量的版本管理器 shim（例如 Volta 或 asdf）会在这一步失败，需要把真正的 `node` 可执行文件放在 `PATH` 前面。这项检查只在启动时进行，更换 `PATH` 中的 `node` 后需要重启 daemon。网络访问不受限制；Node.js 25+ 的权限模型默认禁止网络，daemon 会通过 `--allow-net` 放行。需要启动子进程、使用 worker 线程或加载 native addon 的 service 在该等级下无法正常工作。
+`node` 等级要求 Node.js 22.13+、23.5+ 或 24+。daemon 启动时会检查 `PATH` 中 `node` 的版本，再用和 runtime 相同的准备流程（环境变量、`NODE_OPTIONS`、临时目录和进程组）启动一次 `node`，只是用一个临时目录代替 service 目录和 instance 目录。任一检查失败，daemon 都会拒绝启动。依赖白名单以外环境变量的版本管理器 shim（例如 Volta 或 asdf）会在这一步失败，需要把真正的 `node` 可执行文件放在 `PATH` 前面。这项检查只在启动时进行，更换 `PATH` 中的 `node` 后需要重启 daemon。网络访问不受限制；Node.js 25+ 的权限模型默认禁止网络，daemon 会通过 `--allow-net` 放行。需要启动子进程、使用 worker 线程或加载 native addon 的 service 在该等级下无法正常工作。
 
 这些限制由 Node.js 进程自己检查，而不是由操作系统强制执行，因此该等级用于防止可信 service 代码的失误扩大影响，不能用来隔离不可信代码：
 

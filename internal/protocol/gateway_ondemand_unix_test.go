@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"octobus/internal/hardening"
+	"octobus/internal/proctest"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -76,7 +77,7 @@ exit 0
 			}
 			// KillGroup already reaped it; signalling the pid again could hit a
 			// process that reused it.
-			waitPidGone(t, pid)
+			proctest.WaitExited(t, pid)
 		})
 	}
 }
@@ -100,7 +101,7 @@ exit 3
 	// At level node KillGroup must have cleaned up the descendant as well.
 	if raw, readErr := os.ReadFile(pidFile); readErr == nil {
 		if pid, convErr := strconv.Atoi(strings.TrimSpace(string(raw))); convErr == nil {
-			waitPidGone(t, pid)
+			proctest.WaitExited(t, pid)
 		}
 	}
 	if err == nil {
@@ -109,17 +110,4 @@ exit 3
 	if status.Code(err) != codes.InvalidArgument || !strings.Contains(status.Convert(err).Message(), "bad request") {
 		t.Fatalf("runtime error not surfaced: %v", err)
 	}
-}
-
-// waitPidGone fails the test unless pid exits within five seconds.
-func waitPidGone(t *testing.T, pid int) {
-	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		if syscall.Kill(pid, 0) != nil {
-			return
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	t.Fatalf("descendant %d survived the invoke", pid)
 }

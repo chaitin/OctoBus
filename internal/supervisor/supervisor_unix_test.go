@@ -11,9 +11,9 @@ import (
 	"strings"
 	"syscall"
 	"testing"
-	"time"
 
 	"octobus/internal/hardening"
+	"octobus/internal/proctest"
 )
 
 func TestFailedStartKillsHardenedProcessGroup(t *testing.T) {
@@ -47,13 +47,12 @@ func TestFailedStartKillsHardenedProcessGroup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		if syscall.Kill(pid, 0) != nil {
-			return
+	// Only a child that is still running is ours to kill; a pid that exited may
+	// already belong to another process.
+	defer func() {
+		if !proctest.Exited(pid) {
+			_ = syscall.Kill(pid, syscall.SIGKILL)
 		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	_ = syscall.Kill(pid, syscall.SIGKILL)
-	t.Fatalf("background child %d survived failed start", pid)
+	}()
+	proctest.WaitExited(t, pid)
 }
