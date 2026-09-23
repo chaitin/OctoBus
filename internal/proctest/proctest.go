@@ -6,6 +6,7 @@ package proctest
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"os/exec"
 	"strconv"
@@ -19,7 +20,9 @@ import (
 // still reaches it, and in a container whose init does not reap orphans it
 // stays in the process table indefinitely.
 func Exited(pid int) bool {
-	if syscall.Kill(pid, 0) != nil {
+	// Only ESRCH means the pid is gone. EPERM means it exists but belongs to
+	// someone else, so fall through to the state check like any live process.
+	if err := syscall.Kill(pid, 0); errors.Is(err, syscall.ESRCH) {
 		return true
 	}
 	if raw, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat"); err == nil {

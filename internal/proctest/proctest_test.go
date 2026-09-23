@@ -37,3 +37,11 @@ func TestExitedTreatsZombieAsExited(t *testing.T) {
 		t.Fatal("test is not exercising a zombie: signal 0 no longer reaches it")
 	}
 }
+
+func TestExitedKeepsProcessesWeCannotSignalRunning(t *testing.T) {
+	// pid 1 is always running. A non-root caller gets EPERM from signal 0,
+	// which must not read as exited.
+	if Exited(1) {
+		t.Fatal("pid 1 reported as exited")
+	}
+}
