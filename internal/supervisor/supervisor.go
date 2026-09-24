@@ -37,6 +37,9 @@ type Supervisor struct {
 	RuntimeHardening hardening.Level
 	// RuntimeNode describes the node binary runtimes launch with.
 	RuntimeNode hardening.Node
+	// RuntimeRulesPath is the egress rules runtimes load, as written by
+	// egressrules.Ensure. Required when RuntimeHardening is LevelNode.
+	RuntimeRulesPath string
 
 	mu          sync.Mutex
 	procs       map[string]*processState
@@ -270,6 +273,7 @@ func (s *Supervisor) startWithAttempt(ctx context.Context, instanceID string, re
 	if err := hardening.Apply(cmd, hardening.Spec{
 		Level:      s.RuntimeHardening,
 		Node:       s.RuntimeNode,
+		RulesPath:  s.RuntimeRulesPath,
 		ServiceDir: filepath.Dir(s.ServiceRuntimeDir(svc.ID)),
 		Workdir:    workdir,
 		Env: []string{

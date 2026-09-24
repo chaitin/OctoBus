@@ -54,6 +54,10 @@ type Spec struct {
 	// Node describes the node binary, as reported by CheckNode. It is required
 	// at LevelNode.
 	Node Node
+	// RulesPath is the file holding the egress rules a runtime loads, as written
+	// by egressrules.Ensure. Required at LevelNode, and absolute: NODE_OPTIONS
+	// resolves a relative --require against the runtime's working directory.
+	RulesPath string
 }
 
 // Apply configures cmd to run as described by spec. It must be called before
@@ -79,6 +83,14 @@ func Apply(cmd *exec.Cmd, spec Spec) error {
 	}
 	if spec.Node == (Node{}) {
 		return fmt.Errorf("hardening: level %s requires a node checked at daemon startup", LevelNode)
+	}
+	if spec.RulesPath == "" {
+		return fmt.Errorf("hardening: level %s requires an egress rules path", LevelNode)
+	}
+	// A relative path would be granted against the daemon's working directory
+	// but required against the runtime's, so the runtime could not load it.
+	if !filepath.IsAbs(spec.RulesPath) {
+		return fmt.Errorf("hardening: egress rules path %q is not absolute", spec.RulesPath)
 	}
 	setProcessGroup(cmd)
 	tmpDir := filepath.Join(spec.Workdir, "tmp")
@@ -133,6 +145,17 @@ func nodeOptions(spec Spec) string {
 	for _, dir := range pathVariants(spec.Workdir) {
 		opts = append(opts, "--allow-fs-write="+quoteNodeOption(dir))
 	}
+	// The rules file sits outside both granted trees and needs a read grant of its
+	// own; both path forms are granted, as above. node is told to load the
+	// resolved one, since requiring a file walks its symlinked ancestors.
+	for _, file := range pathVariants(spec.RulesPath) {
+		opts = append(opts, "--allow-fs-read="+quoteNodeOption(file))
+	}
+	required := spec.RulesPath
+	if resolved, err := filepath.EvalSymlinks(required); err == nil {
+		required = resolved
+	}
+	opts = append(opts, "--require="+quoteNodeOption(required))
 	if spec.Node.grantsNet() {
 		opts = append(opts, "--allow-net")
 	}

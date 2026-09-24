@@ -2,6 +2,7 @@ package hardening
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -34,17 +35,34 @@ func TestNodeOptionsQuotesPathsAndSetsLimits(t *testing.T) {
 	root := t.TempDir()
 	serviceDir := filepath.Join(root, "my svc")
 	workdir := filepath.Join(root, "work dir")
-	opts := nodeOptions(Spec{Level: LevelNode, ServiceDir: serviceDir, Workdir: workdir})
+	rules := testRules(t)
+	resolvedRules, err := filepath.EvalSymlinks(rules)
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts := nodeOptions(Spec{Level: LevelNode, ServiceDir: serviceDir, Workdir: workdir, RulesPath: rules})
 	for _, want := range []string{
 		"--permission",
 		"--allow-fs-read=" + quoteNodeOption(serviceDir),
 		"--allow-fs-read=" + quoteNodeOption(workdir),
 		"--allow-fs-write=" + quoteNodeOption(workdir),
+		// The rules file is read-granted by its own path and loaded by its resolved
+		// one, since requiring a file walks its symlinked ancestors.
+		"--allow-fs-read=" + quoteNodeOption(rules),
+		"--require=" + quoteNodeOption(resolvedRules),
 		"--max-old-space-size=512",
 	} {
 		if !strings.Contains(opts, want) {
 			t.Fatalf("NODE_OPTIONS missing %q: %s", want, opts)
 		}
+	}
+	// The rules file is loaded last of the grants and before the memory limit, and
+	// nothing may follow that limit.
+	if !strings.HasSuffix(opts, "--max-old-space-size=512") {
+		t.Fatalf("memory limit must stay last: %s", opts)
+	}
+	if !strings.HasPrefix(opts, "--permission ") {
+		t.Fatalf("permission model must come first: %s", opts)
 	}
 	// The service dir may appear only in its single read grant.
 	if strings.Count(opts, "my svc") != 1 {
@@ -53,7 +71,7 @@ func TestNodeOptionsQuotesPathsAndSetsLimits(t *testing.T) {
 	if strings.Contains(opts, "--allow-net") {
 		t.Fatalf("node before 25 rejects --allow-net: %s", opts)
 	}
-	if opts := nodeOptions(Spec{Level: LevelNode, ServiceDir: serviceDir, Workdir: workdir, Node: testNode(t, "v25.0.0")}); !strings.Contains(opts, "--allow-net") {
+	if opts := nodeOptions(Spec{Level: LevelNode, ServiceDir: serviceDir, Workdir: workdir, RulesPath: rules, Node: testNode(t, "v25.0.0")}); !strings.Contains(opts, "--allow-net") {
 		t.Fatalf("node 25+ needs --allow-net to keep network access: %s", opts)
 	}
 	if got := quoteNodeOption(`/data/my "svc"`); got != `"/data/my \"svc\""` {
@@ -104,7 +122,7 @@ func TestApplyValidatesAndCreatesTempDir(t *testing.T) {
 	}
 	workdir := t.TempDir()
 	cmd := exec.Command("true")
-	if err := Apply(cmd, Spec{Level: LevelNode, Node: testNode(t, "v24.0.0"), ServiceDir: t.TempDir(), Workdir: workdir}); err != nil {
+	if err := Apply(cmd, Spec{Level: LevelNode, Node: testNode(t, "v24.0.0"), RulesPath: testRules(t), ServiceDir: t.TempDir(), Workdir: workdir}); err != nil {
 		t.Fatal(err)
 	}
 	if info, err := os.Stat(filepath.Join(workdir, "tmp")); err != nil || !info.IsDir() {
@@ -160,7 +178,7 @@ func TestApplyResolvesSymlinkedEntryAndDir(t *testing.T) {
 	}
 	cmd := exec.Command(filepath.Join(link, "entry"))
 	cmd.Dir = link
-	if err := Apply(cmd, Spec{Level: LevelNode, Node: testNode(t, "v24.0.0"), ServiceDir: link, Workdir: link}); err != nil {
+	if err := Apply(cmd, Spec{Level: LevelNode, Node: testNode(t, "v24.0.0"), RulesPath: testRules(t), ServiceDir: link, Workdir: link}); err != nil {
 		t.Fatal(err)
 	}
 	if cmd.Path != filepath.Join(resolved, "entry") || cmd.Dir != resolved {
@@ -225,6 +243,81 @@ func testNode(t *testing.T, version string) Node {
 	return node
 }
 
+// testRules writes a file in the shape a runtime loads as its egress rules: a
+// CommonJS file outside the service dir and workdir, which is why it needs a
+// grant of its own.
+func testRules(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "runtime-support", "egress-rules.cjs")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("globalThis.__OCTOBUS_TEST_RULES__ = true;\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestApplyRequiresARulesPathAtLevelNode(t *testing.T) {
+	cmd := exec.Command("node")
+	err := Apply(cmd, Spec{Level: LevelNode, Node: testNode(t, "v24.0.0"), ServiceDir: t.TempDir(), Workdir: t.TempDir()})
+	if err == nil || !strings.Contains(err.Error(), "requires an egress rules path") {
+		t.Fatalf("Apply without rules = %v, want a missing-rules error", err)
+	}
+	if cmd.Env != nil {
+		t.Fatalf("rejected Apply must not configure the command: %v", cmd.Env)
+	}
+}
+
+func TestApplyRejectsARelativeRulesPath(t *testing.T) {
+	cmd := exec.Command("node")
+	err := Apply(cmd, Spec{Level: LevelNode, Node: testNode(t, "v24.0.0"), RulesPath: filepath.Join("relative", "rules.cjs"), ServiceDir: t.TempDir(), Workdir: t.TempDir()})
+	if err == nil || !strings.Contains(err.Error(), "is not absolute") {
+		t.Fatalf("Apply with a relative rules = %v, want a relative-path error", err)
+	}
+}
+
+// TestApplyLoadsTheRulesUnderThePermissionModel runs the flags Apply generates
+// against a real node. The rules file lives outside both granted trees, so this is
+// the test that fails if the grant is dropped, the path is quoted wrongly, or
+// node is handed an unresolved path whose symlinked ancestors it cannot walk.
+func TestApplyLoadsTheRulesUnderThePermissionModel(t *testing.T) {
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node not installed")
+	}
+	out, err := exec.Command("node", "--version").Output()
+	if err != nil {
+		t.Skipf("node --version: %v", err)
+	}
+	node, err := ParseNodeVersion(strings.TrimSpace(string(out)))
+	if err != nil {
+		t.Skipf("node %s cannot run a hardened runtime: %v", strings.TrimSpace(string(out)), err)
+	}
+	workdir := t.TempDir()
+	cmd := exec.Command("node", "-e", "console.log(globalThis.__OCTOBUS_TEST_RULES__ === true)")
+	cmd.Dir = workdir
+	if err := Apply(cmd, Spec{
+		Level:      LevelNode,
+		Node:       node,
+		RulesPath:  testRules(t),
+		ServiceDir: t.TempDir(),
+		Workdir:    workdir,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := cmd.Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			t.Fatalf("hardened runtime did not start: %v: %s", err, exitErr.Stderr)
+		}
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(got)) != "true" {
+		t.Fatalf("the rules were not loaded: %q", got)
+	}
+}
+
 func TestApplyRequiresCheckedNodeAtLevelNode(t *testing.T) {
 	cmd := exec.Command("node")
 	err := Apply(cmd, Spec{Level: LevelNode, ServiceDir: t.TempDir(), Workdir: t.TempDir()})
@@ -245,12 +338,13 @@ func TestCheckNodeUsesNodeOnPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	wantNode, want := ParseNodeVersion(strings.TrimSpace(string(out)))
-	gotNode, got := CheckNode(context.Background())
+	rules := testRules(t)
+	gotNode, got := CheckNode(context.Background(), rules)
 	if (got == nil) != (want == nil) || gotNode != wantNode {
 		t.Fatalf("CheckNode = %+v, %v; ParseNodeVersion = %+v, %v", gotNode, got, wantNode, want)
 	}
 	t.Setenv("PATH", t.TempDir())
-	if _, err := CheckNode(context.Background()); err == nil {
+	if _, err := CheckNode(context.Background(), rules); err == nil {
 		t.Fatal("expected error when node is missing from PATH")
 	}
 }

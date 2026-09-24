@@ -22,7 +22,11 @@ func startWithGrandchild(t *testing.T, level Level, leaderScript string) (*exec.
 	workdir := t.TempDir()
 	pidFile := filepath.Join(workdir, "child.pid")
 	cmd := exec.Command("/bin/sh", "-c", `sleep 30 & echo $! > "$1"; `+leaderScript, "sh", pidFile)
-	if err := Apply(cmd, Spec{Level: level, Node: testNode(t, "v24.0.0"), ServiceDir: t.TempDir(), Workdir: workdir}); err != nil {
+	spec := Spec{Level: level, Node: testNode(t, "v24.0.0"), ServiceDir: t.TempDir(), Workdir: workdir}
+	if level == LevelNode {
+		spec.RulesPath = testRules(t)
+	}
+	if err := Apply(cmd, spec); err != nil {
 		t.Fatal(err)
 	}
 	if err := cmd.Start(); err != nil {

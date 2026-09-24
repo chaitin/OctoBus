@@ -21,6 +21,7 @@ import (
 	"octobus/internal/cli"
 	"octobus/internal/daemonlog"
 	"octobus/internal/domain"
+	"octobus/internal/egressrules"
 	"octobus/internal/hardening"
 	"octobus/internal/packageimport"
 	"octobus/internal/protocol"
@@ -125,8 +126,17 @@ func serve(opts serveOptions) error {
 	}
 	logger.Info("daemon_starting", "addr", opts.addr, "data_dir", dataDir, "runtime_hardening", string(opts.runtimeHardening))
 	var runtimeNode hardening.Node
+	var runtimeRulesPath string
 	if opts.runtimeHardening == hardening.LevelNode {
-		checkNode := hardening.CheckNode
+		// Written before the node check, which loads it: rules that are missing
+		// or unreadable fail startup here rather than once the daemon serves.
+		runtimeRulesPath, err = egressrules.Ensure(dataDir)
+		if err != nil {
+			return fmt.Errorf("runtime hardening: %w", err)
+		}
+		checkNode := func(ctx context.Context) (hardening.Node, error) {
+			return hardening.CheckNode(ctx, runtimeRulesPath)
+		}
 		if opts.checkNode != nil {
 			checkNode = opts.checkNode
 		}
@@ -155,11 +165,12 @@ func serve(opts serveOptions) error {
 		return fmt.Errorf("open access log: %w", err)
 	}
 	defer accessLogger.Close()
-	gateway := &protocol.Gateway{Store: st, DataDir: dataDir, AccessLogger: accessLogger, Logger: logger, RuntimeHardening: opts.runtimeHardening, RuntimeNode: runtimeNode}
+	gateway := &protocol.Gateway{Store: st, DataDir: dataDir, AccessLogger: accessLogger, Logger: logger, RuntimeHardening: opts.runtimeHardening, RuntimeNode: runtimeNode, RuntimeRulesPath: runtimeRulesPath}
 	sup := supervisor.New(dataDir, st)
 	sup.Logger = logger
 	sup.RuntimeHardening = opts.runtimeHardening
 	sup.RuntimeNode = runtimeNode
+	sup.RuntimeRulesPath = runtimeRulesPath
 	sup.OnInstanceChanged = gateway.InvalidateInstance
 	ctx, stop := signal.NotifyContext(context.Background(), shutdownSignals(opts.runtimeHardening, signal.Ignored(syscall.SIGHUP))...)
 	defer stop()

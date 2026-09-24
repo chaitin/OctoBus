@@ -35,7 +35,12 @@ const checkWaitDelay = time.Second
 // flag and starts when launched through Apply at LevelNode. Runtimes resolve node
 // through the same PATH, so a node that fails here would otherwise make every
 // hardened runtime exit at startup.
-func CheckNode(ctx context.Context) (Node, error) {
+//
+// rulesPath is the file holding the egress rules a runtime will be told to
+// load. The probe runs the same NODE_OPTIONS a runtime gets, so rules that
+// cannot be loaded fail daemon startup instead of every runtime failing once
+// the daemon is serving.
+func CheckNode(ctx context.Context, rulesPath string) (Node, error) {
 	// Runtimes never inherit the daemon's NODE_OPTIONS, so neither check does:
 	// a flag there that node rejects must not fail or skew the checks.
 	env := slices.DeleteFunc(os.Environ(), func(entry string) bool {
@@ -69,7 +74,7 @@ func CheckNode(ctx context.Context) (Node, error) {
 		return Node{}, fmt.Errorf("create node probe dir: %w", err)
 	}
 	defer os.RemoveAll(dir)
-	spec := Spec{Level: LevelNode, Node: node, ServiceDir: dir, Workdir: dir}
+	spec := Spec{Level: LevelNode, RulesPath: rulesPath, Node: node, ServiceDir: dir, Workdir: dir}
 	probe := exec.CommandContext(ctx, "node", "-e", "")
 	probe.Dir = dir
 	if err := Apply(probe, spec); err != nil {

@@ -30,6 +30,7 @@ import (
 
 	"octobus/internal/descriptors"
 	"octobus/internal/domain"
+	"octobus/internal/egressrules"
 	"octobus/internal/hardening"
 	"octobus/internal/store"
 
@@ -57,6 +58,9 @@ type Gateway struct {
 	RuntimeHardening hardening.Level
 	// RuntimeNode describes the node binary on-demand runtimes launch with.
 	RuntimeNode hardening.Node
+	// RuntimeRulesPath is the egress rules on-demand runtimes load, as written
+	// by egressrules.Ensure. Required when RuntimeHardening is LevelNode.
+	RuntimeRulesPath string
 
 	mu            sync.Mutex
 	conns         map[string]*grpc.ClientConn
@@ -1627,6 +1631,7 @@ func (g *Gateway) invokeOnDemand(ctx context.Context, item store.ExposedMethod, 
 	if err := hardening.Apply(cmd, hardening.Spec{
 		Level:      g.RuntimeHardening,
 		Node:       g.RuntimeNode,
+		RulesPath:  g.RuntimeRulesPath,
 		ServiceDir: serviceDir,
 		Workdir:    workdir,
 		Env: []string{
@@ -1647,6 +1652,22 @@ func (g *Gateway) invokeOnDemand(ctx context.Context, item store.ExposedMethod, 
 	cmd.Stderr = &stderr
 	err = cmd.Run()
 	hardening.KillGroup(cmd)
+	// A runtime records a refused destination on its standard error. A
+	// long-running runtime writes it into its own instance log, but an
+	// on-demand runtime writes no such log and its output goes no further than
+	// this process, so the daemon reports it here or nobody sees it. The check
+	// runs whether or not the invoke succeeded: the refusal may be one the
+	// handler recovered from.
+	//
+	// Only a hardened runtime loads the rules, so only there can the line come
+	// from them; at any other level a service writing it itself would be
+	// reported as a refusal by rules that are not running.
+	if g.RuntimeHardening == hardening.LevelNode && g.Logger != nil {
+		if reasons := egressRefusals(stderr.String()); len(reasons) > 0 {
+			g.Logger.Warn("runtime_egress_refused",
+				"service_id", item.Service.ID, "instance_id", item.Instance.ID, "reasons", reasons)
+		}
+	}
 	var exitErr *exec.ExitError
 	if errors.Is(err, exec.ErrWaitDelay) && !errors.As(err, &exitErr) {
 		// The runtime exited successfully; only a descendant held its output
@@ -1715,6 +1736,19 @@ func metadataToJSON(md metadata.MD) map[string][]string {
 		out[key] = append([]string(nil), vals...)
 	}
 	return out
+}
+
+// egressRefusals returns the reasons a runtime recorded on its standard error
+// when the egress rules refused a destination, in the order they appear.
+func egressRefusals(stderrText string) []string {
+	var reasons []string
+	for _, line := range strings.Split(stderrText, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, egressrules.RefusalMarker) {
+			reasons = append(reasons, strings.TrimPrefix(trimmed, egressrules.RefusalMarker))
+		}
+	}
+	return reasons
 }
 
 func onDemandProcessError(err error, stderrText string) error {

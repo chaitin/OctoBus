@@ -70,11 +70,12 @@ OCTOBUS_DESCRIPTOR_SHA256=<sha256>
 
 - 环境变量不再继承 daemon，只保留白名单（`PATH`、`LANG`、`LC_ALL`、`TZ`、代理和 CA 相关变量，Windows 上另有 `SystemRoot`、`PATHEXT`、`COMSPEC`），再追加 `OCTOBUS_*` 变量。
 - `HOME`、`USERPROFILE` 指向 instance workdir；`TMPDIR`、`TEMP`、`TMP` 指向 `{workdir}/tmp`，该目录在启动前创建，其中的文件不会自动清理。
-- 注入 `NODE_OPTIONS`（daemon 自己的 `NODE_OPTIONS` 被丢弃）：`--permission`，`{data_dir}/artifacts/services/{service_id}` 和 workdir 的 `--allow-fs-read`，workdir 的 `--allow-fs-write`，Node.js 25+ 上加 `--allow-net`，以及 `--max-old-space-size=512`。路径同时授权原路径和解析符号链接后的路径。
+- 注入 `NODE_OPTIONS`（daemon 自己的 `NODE_OPTIONS` 被丢弃）：`--permission`，`{data_dir}/artifacts/services/{service_id}` 和 workdir 的 `--allow-fs-read`，workdir 的 `--allow-fs-write`，`{data_dir}/runtime-support/egress-rules.cjs` 的 `--allow-fs-read` 与 `--require`，Node.js 25+ 上加 `--allow-net`，以及 `--max-old-space-size=512`。路径同时授权原路径和解析符号链接后的路径；`--require` 用的是解析后的路径，因为 Node 在权限模型下会检查 require 目标途经的符号链接。
+- 每个 runtime 加载拨号规则（`{data_dir}/runtime-support/egress-rules.cjs`），拒绝 loopback、link-local、未指定地址、云元数据地址、运行所在主机自身的地址和 unix socket 路径；规则补丁 `dns.lookup`（含 `dns.promises.lookup`）、`fetch`、`net.connect` 和 `net.Socket.prototype.connect`，域名按连接那一刻解析出的地址判定，重定向也重新判定。被拒绝的连接会向该 runtime 的 stderr 写一行，每个原因只写一次，且只写原因、不写地址。long-running 的这行落在实例目录的 `stderr.log` 里；on-demand 没有实例日志，这类拒绝由 daemon 记进自己的日志（`runtime_egress_refused`）。
 - 入口文件路径和 cwd 解析为真实路径后再启动，因为 Node 在权限模型下会对入口做 realpath，并检查途经的符号链接（例如 macOS 上的 `/var`）。
 - 每个 runtime 运行在独立的进程组中（仅限 Unix）。停止、启动失败和 on-demand 调用结束时，信号和清理作用于整个进程组。
 
-daemon 启动时先检查 `PATH` 中 `node` 的版本（22.13+、23.5+ 或 24+），再用同样的 `Apply` 准备流程试运行一次 `node`，任一检查失败都拒绝启动。安全含义和限制见 [product/security.md](../product/security.md)。
+daemon 启动时先把拨号规则写入 `{data_dir}/runtime-support/`（内容随二进制嵌入），再检查 `PATH` 中 `node` 的版本（22.13+、23.5+ 或 24+），然后用同样的 `Apply` 准备流程试运行一次 `node`；探针使用与 runtime 相同的 `NODE_OPTIONS`，因此也会加载规则，任一检查失败都拒绝启动。见 [product/security.md](../product/security.md)。
 
 ## Node 职责
 
