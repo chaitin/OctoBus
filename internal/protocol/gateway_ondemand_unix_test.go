@@ -3,8 +3,10 @@
 package protocol
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -34,6 +36,65 @@ func testRuntimeNode(t *testing.T) hardening.Node {
 	return node
 }
 
+// testRuntimeRules stands in for the rules file the daemon writes. These
+// fixtures are shell scripts, so nothing loads it.
+func testRuntimeRules(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "egress-rules.cjs")
+	if err := os.WriteFile(path, []byte("// fixture\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// TestGatewayOnDemandReportsARefusedDestination checks the one place an on-demand
+// runtime's refusal can be seen. Such a runtime writes no instance log, so its
+// standard error goes no further than this process: without the daemon reporting
+// it, a refused destination leaves no trace anywhere.
+//
+// The fixture answers the invoke and still reports the refusal, because a
+// handler may recover from one and the daemon has to look either way. Only a
+// hardened runtime gets the rules, so at any other level the same line is a
+// service's own output and must not be reported as a refusal.
+func TestGatewayOnDemandReportsARefusedDestination(t *testing.T) {
+	for _, tc := range []struct {
+		level  hardening.Level
+		expect bool
+	}{
+		{hardening.LevelNode, true},
+		{hardening.LevelOff, false},
+	} {
+		t.Run(string(tc.level), func(t *testing.T) {
+			dataDir := t.TempDir()
+			st, item, reqRaw, _ := seedOnDemandGateway(t, dataDir)
+			defer st.Close()
+			writeOnDemandEntry(t, dataDir, "echo", item.Service.ServiceRoot, `#!/bin/sh
+cat
+echo "egress refused: loopback, link-local, or unspecified address" >&2
+`)
+			var logged bytes.Buffer
+			gateway := &Gateway{
+				Store: st, DataDir: dataDir,
+				RuntimeHardening: tc.level,
+				RuntimeNode:      testRuntimeNode(t),
+				RuntimeRulesPath: testRuntimeRules(t),
+				Logger:           slog.New(slog.NewTextHandler(&logged, nil)),
+			}
+			ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-octobus-capset", "dev", "x-octobus-instance", "echo-test"))
+			if _, err := gateway.invokeRaw(ctx, item, reqRaw); err != nil {
+				t.Fatalf("invoke: %v", err)
+			}
+			reported := strings.Contains(logged.String(), "runtime_egress_refused")
+			if reported != tc.expect {
+				t.Fatalf("reported = %v at level %s, want %v: %q", reported, tc.level, tc.expect, logged.String())
+			}
+			if tc.expect && !strings.Contains(logged.String(), "loopback, link-local, or unspecified address") {
+				t.Fatalf("the reported refusal lost its reason: %q", logged.String())
+			}
+		})
+	}
+}
+
 func TestGatewayOnDemandInvokeReturnsWhenDescendantHoldsOutput(t *testing.T) {
 	for _, level := range []hardening.Level{hardening.LevelOff, hardening.LevelNode} {
 		t.Run(fmt.Sprintf("hardening=%s", level), func(t *testing.T) {
@@ -48,7 +109,7 @@ sleep 30 &
 echo $! > %q
 exit 0
 `, pidFile))
-			gateway := &Gateway{Store: st, DataDir: dataDir, RuntimeHardening: level, RuntimeNode: testRuntimeNode(t)}
+			gateway := &Gateway{Store: st, DataDir: dataDir, RuntimeHardening: level, RuntimeNode: testRuntimeNode(t), RuntimeRulesPath: testRuntimeRules(t)}
 			ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-octobus-capset", "dev", "x-octobus-instance", "echo-test"))
 			started := time.Now()
 			respRaw, err := gateway.invokeRaw(ctx, item, reqRaw)
@@ -95,7 +156,7 @@ sleep 30 &
 echo $! > %q
 exit 3
 `, pidFile))
-	gateway := &Gateway{Store: st, DataDir: dataDir, RuntimeHardening: hardening.LevelNode, RuntimeNode: testRuntimeNode(t)}
+	gateway := &Gateway{Store: st, DataDir: dataDir, RuntimeHardening: hardening.LevelNode, RuntimeNode: testRuntimeNode(t), RuntimeRulesPath: testRuntimeRules(t)}
 	ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-octobus-capset", "dev", "x-octobus-instance", "echo-test"))
 	respRaw, err := gateway.invokeRaw(ctx, item, reqRaw)
 	// At level node KillGroup must have cleaned up the descendant as well.

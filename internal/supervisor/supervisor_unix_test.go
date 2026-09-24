@@ -32,6 +32,12 @@ func TestFailedStartKillsHardenedProcessGroup(t *testing.T) {
 		t.Fatal(err)
 	}
 	sup.RuntimeNode = node
+	// The entry is a shell script, so nothing loads the rules; the path exists
+	// because a launch at this level is only valid with one.
+	sup.RuntimeRulesPath = filepath.Join(t.TempDir(), "egress-rules.cjs")
+	if err := os.WriteFile(sup.RuntimeRulesPath, []byte("// fixture\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	ctx := context.Background()
 	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "echo-test", ServiceID: "echo", Start: false}); err != nil {
 		t.Fatal(err)

@@ -20,7 +20,8 @@ Octobus 只负责：
 `octobus serve --runtime-hardening=node`（或 `OCTOBUS_RUNTIME_HARDENING=node`）为每个 long-running 和 on-demand runtime 开启 `node` 等级：
 
 - 环境变量只保留白名单（`PATH`、`LANG`、`LC_ALL`、`TZ`、代理和 CA 相关变量，Windows 上另有 `SystemRoot`、`PATHEXT`、`COMSPEC`）和 `OCTOBUS_*` 上下文；`HOME`、`USERPROFILE` 和临时目录变量指向 instance 目录。
-- 通过 `NODE_OPTIONS` 启用 Node.js 权限模型：service 目录只读，instance 目录可读写，不能读其他文件（包括 `octobus.db` 和其他 instance），不能启动子进程、使用 worker 线程或加载 native addon。网络不受限制。
+- 通过 `NODE_OPTIONS` 启用 Node.js 权限模型：service 目录只读，instance 目录可读写，不能读其他文件（包括 `octobus.db` 和其他 instance），不能启动子进程、使用 worker 线程或加载 native addon。出站目的地见下一条，其余不受限制。
+- 每个 runtime 加载拨号规则（`{data_dir}/runtime-support/egress-rules.cjs`），拒绝 loopback、link-local、未指定地址、云元数据地址、运行所在主机自身的地址和 unix socket 路径。被拒的连接会在该 runtime 的 stderr 留一行（每个原因一次，只写原因不写地址）：审计记录里看不出这次调用是被规则拦下的，没有这行就没有任何地方能看出来。long-running 的这行在实例目录的 `stderr.log`；on-demand 没有实例日志，由 daemon 记进自己的日志。
 - V8 老生代堆内存上限为 512 MB。
 - 每个 runtime 运行在独立的进程组中（仅限 Unix）。
 

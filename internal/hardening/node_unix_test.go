@@ -28,7 +28,7 @@ func TestCheckNodeRejectsNodeThatFailsWithRuntimeOptions(t *testing.T) {
 	// A version that passes the check but refuses the flags, as Node.js 24
 	// does for --allow-net in NODE_OPTIONS.
 	fakeNode(t, "v25.0.0", `echo "node: --allow-net is not allowed in NODE_OPTIONS" >&2; exit 9`)
-	_, err := CheckNode(context.Background())
+	_, err := CheckNode(context.Background(), testRules(t))
 	if err == nil || !strings.Contains(err.Error(), "--allow-net is not allowed") {
 		t.Fatalf("CheckNode = %v, want the probe failure", err)
 	}
@@ -45,7 +45,7 @@ func TestCheckNodeProbesWithRuntimeOptions(t *testing.T) {
 	t.Setenv("TMPDIR", tmp)
 	seen := filepath.Join(t.TempDir(), "probe")
 	fakeNode(t, "v25.0.0", `printf '%s\n%s\n%s\n%s\n%s' "$NODE_OPTIONS" "$HOME" "$(pwd -P)" "${OCTOBUS_TEST_CANARY-unset}" "$([ -d "$TMPDIR" ] && echo tmpdir)" > `+seen)
-	node, err := CheckNode(context.Background())
+	node, err := CheckNode(context.Background(), testRules(t))
 	if err != nil {
 		t.Fatal(err)
 	}

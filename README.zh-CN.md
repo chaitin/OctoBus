@@ -124,10 +124,11 @@ export OCTOBUS_ADMIN_TOKEN="octobus-dev-admin-token"
 - 只收到白名单里的环境变量（`PATH`、`LANG`、`LC_ALL`、`TZ`、代理和 CA 相关变量，以及 Windows 上的 `SystemRoot`、`PATHEXT`、`COMSPEC`）和 `OCTOBUS_*` 上下文。daemon 的其他环境变量和已有的 `NODE_OPTIONS` 都会被丢弃。
 - `HOME`、`USERPROFILE` 和临时目录变量（`TMPDIR`、`TEMP`、`TMP`）指向自己的 instance 目录，其中残留的临时文件不会自动清理。
 - 在 Node.js 权限模型下运行：可以读自己的 service artifact、读写自己的 instance 目录；不能读其他文件（包括 `octobus.db` 和其他 instance），不能启动子进程、使用 worker 线程或加载 native addon
+- 拒绝拨号到 loopback、link-local、未指定地址、云元数据地址、运行所在主机自身的地址和 unix socket 路径。补丁 `dns.lookup`、`fetch`、`net.connect` 和 `net.Socket.prototype.connect`，域名按建立连接那一刻解析出的地址判定，重定向也重新判定
 - V8 老生代堆内存上限为 512 MB（`--max-old-space-size`）
 - 运行在独立的进程组中，停止 instance 时会一并停止它启动的进程（仅限 Unix）
 
-`node` 等级要求 Node.js 22.13+、23.5+ 或 24+。daemon 启动时会检查 `PATH` 中 `node` 的版本，再用和 runtime 相同的准备流程（环境变量、`NODE_OPTIONS`、临时目录和进程组）启动一次 `node`，只是用一个临时目录代替 service 目录和 instance 目录。任一检查失败，daemon 都会拒绝启动。依赖白名单以外环境变量的版本管理器 shim（例如 Volta 或 asdf）会在这一步失败，需要把真正的 `node` 可执行文件放在 `PATH` 前面。这项检查只在启动时进行，更换 `PATH` 中的 `node` 后需要重启 daemon。网络访问不受限制；Node.js 25+ 的权限模型默认禁止网络，daemon 会通过 `--allow-net` 放行。需要启动子进程、使用 worker 线程或加载 native addon 的 service 在该等级下无法正常工作。
+`node` 等级要求 Node.js 22.13+、23.5+ 或 24+。daemon 启动时先把拨号规则写入数据目录，再检查 `PATH` 中 `node` 的版本，然后用和 runtime 相同的准备流程（环境变量、含规则的 `NODE_OPTIONS`、临时目录和进程组）启动一次 `node`，只是用一个临时目录代替 service 目录和 instance 目录。任一检查失败，daemon 都会拒绝启动。依赖白名单以外环境变量的版本管理器 shim（例如 Volta 或 asdf）会在这一步失败，需要把真正的 `node` 可执行文件放在 `PATH` 前面。这项检查只在启动时进行，更换 `PATH` 中的 `node` 后需要重启 daemon。Node.js 25+ 的权限模型默认禁止网络，daemon 会通过 `--allow-net` 放行。需要启动子进程、使用 worker 线程或加载 native addon 的 service 在该等级下无法正常工作。
 
 这些限制由 Node.js 进程自己检查，而不是由操作系统强制执行，因此该等级用于防止可信 service 代码的失误扩大影响，不能用来隔离不可信代码：
 
