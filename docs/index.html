@@ -2892,7 +2892,7 @@ octobus capset add-instance dev calculator-test</code>
           <div class="list">
             <div class="list-item"><strong data-zh="默认绑定 localhost。" data-en="Bound to localhost by default.">默认绑定 localhost。</strong> <span data-zh="daemon 默认监听 127.0.0.1:9000。" data-en="The daemon listens on 127.0.0.1:9000 by default.">daemon 默认监听 127.0.0.1:9000。</span></div>
             <div class="list-item"><strong data-zh="token 可选。" data-en="Tokens are optional.">token 可选。</strong> <span data-zh="开启后按 capset 校验；未配置 token 时不会执行 token 校验。" data-en="When enabled, requests are validated per capset; without tokens, token validation is not enforced.">开启后按 capset 校验；未配置 token 时不会执行 token 校验。</span></div>
-            <div class="list-item"><strong data-zh="config / secret / log 使用 0600。" data-en="config / secret / log use 0600 permissions.">config / secret / log 使用 0600。</strong> <span data-zh="本地数据目录对敏感文件和访问日志使用严格权限。" data-en="The local data directory uses strict permissions for sensitive files and access logs.">本地数据目录对敏感文件和访问日志使用严格权限。</span></div>
+            <div class="list-item"><strong data-zh="config / log 使用 0600，secret 不落盘。" data-en="config / log use 0600 permissions; secrets are never written to disk.">config / log 使用 0600，secret 不落盘。</strong> <span data-zh="本地数据目录对敏感文件和访问日志使用严格权限。" data-en="The local data directory uses strict permissions for sensitive files and access logs.">本地数据目录对敏感文件和访问日志使用严格权限。</span></div>
             <div class="list-item"><strong data-zh="service package 是可信代码。" data-en="Service packages are trusted code.">service package 是可信代码。</strong> <span data-zh="OctoBus 不为导入服务提供沙箱隔离。" data-en="OctoBus does not sandbox imported services.">OctoBus 不为导入服务提供沙箱隔离。</span></div>
           </div>
         </section>

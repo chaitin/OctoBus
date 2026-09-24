@@ -2,7 +2,7 @@
 
 ## Trusted Package Assumption
 
-Octobus 当前目标不对 Node service package 做沙箱隔离。
+Octobus 当前目标不对 Node service package 做沙箱隔离。默认的 `off` 等级下，runtime 以 daemon 自身的环境和权限运行；可选的 `node` 等级（见下文 [Runtime 加固](#runtime-加固)）只用来缩小可信代码出错时的影响，不是安全边界。
 
 service package 是 trusted code。导入和运行第三方 npm package 等价于在本机执行第三方代码。即使 import 主路径不执行 `inspect`，依赖安装脚本和 instance 启动也都可能执行 package 代码。
 
@@ -13,7 +13,25 @@ Octobus 只负责：
 - 使用本地子进程运行。
 - 管理配置、日志和生命周期。
 
-Octobus 不限制 Node 代码访问网络、文件系统或本机资源。
+默认 `off` 等级下，Octobus 不限制 Node 代码访问网络、文件系统或本机资源。
+
+## Runtime 加固
+
+`octobus serve --runtime-hardening=node`（或 `OCTOBUS_RUNTIME_HARDENING=node`）为每个 long-running 和 on-demand runtime 开启 `node` 等级：
+
+- 环境变量只保留白名单（`PATH`、`LANG`、`LC_ALL`、`TZ`、代理和 CA 相关变量，Windows 上另有 `SystemRoot`、`PATHEXT`、`COMSPEC`）和 `OCTOBUS_*` 上下文；`HOME`、`USERPROFILE` 和临时目录变量指向 instance 目录。
+- 通过 `NODE_OPTIONS` 启用 Node.js 权限模型：service 目录只读，instance 目录可读写，不能读其他文件（包括 `octobus.db` 和其他 instance），不能启动子进程、使用 worker 线程或加载 native addon。网络不受限制。
+- V8 老生代堆内存上限为 512 MB。
+- 每个 runtime 运行在独立的进程组中（仅限 Unix）。
+
+这些限制由 Node.js 进程自己检查，不由操作系统强制执行，所以 `node` 等级**不是安全边界**，不能用来运行不可信代码：
+
+- Node 会跟随指向授权目录之外的符号链接。
+- 只有 Node.js 会读取 `NODE_OPTIONS`。runtime 入口如果不是 Node.js 脚本，它本身以及它运行的非 Node.js 程序不受权限模型限制；入口自己传入的权限参数可以扩大授权范围。
+- daemon 没有正常关闭就退出时（`SIGKILL`、崩溃），独立进程组中的 runtime 会继续运行。
+- `service import` 仍以 daemon 的完整环境运行 `npm`，包括 package 的生命周期脚本。
+
+需要隔离不可信代码时，应使用由操作系统内核执行限制的等级；该等级尚未实现。用户侧说明见 README 的 Runtime 加固一节。
 
 ## Admin API
 
@@ -27,8 +45,9 @@ admin API 与公共协议网关共用同一个端口，路径前缀为 `/admin/v
 
 instance config 可能包含 token、password 等敏感信息，必须使用 `0600` 权限写入。
 
-instance secret、stdout/stderr 日志和 access log 也使用 `0600` 权限，避免 token、
-cookie、请求参数等敏感信息被同机其他用户读取。
+stdout/stderr 日志和 access log 也使用 `0600` 权限，避免 token、cookie、请求参数等
+敏感信息被同机其他用户读取。instance secret 不写入文件：它只保存在 SQLite 中，启动时
+通过管道从 fd 3 传给子进程。
 
 ## CLI 脱敏
 
@@ -41,7 +60,7 @@ CLI 展示 config 或 secret 时按字段名启发式脱敏。
 - `secret`
 - `key`
 
-精确 secret 标记不属于当前目标范围。instance secret 通过独立的 `secret.json` 传递给 package，仍按字段名脱敏。
+精确 secret 标记不属于当前目标范围。instance secret 与 config 分开保存，启动时通过 fd 3 单独传给 package、不落盘，仍按字段名脱敏。
 
 ## 日志脱敏
 

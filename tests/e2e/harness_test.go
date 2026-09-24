@@ -60,6 +60,7 @@ type harness struct {
 	dataDir    string
 	bin        string
 	publicAddr string
+	daemonEnv  []string
 	cmd        *exec.Cmd
 	stdout     bytes.Buffer
 	stderr     bytes.Buffer
@@ -79,13 +80,19 @@ type cliResult struct {
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
+	return newHarnessWithDaemonEnv(t)
+}
+
+func newHarnessWithDaemonEnv(t *testing.T, daemonEnv ...string) *harness {
+	t.Helper()
 	root := t.TempDir()
 	h := &harness{
-		t:       t,
-		root:    root,
-		dataDir: filepath.Join(root, "data"),
-		bin:     filepath.Join(root, "octobus"),
-		client:  &http.Client{Timeout: 10 * time.Second},
+		t:         t,
+		root:      root,
+		dataDir:   filepath.Join(root, "data"),
+		bin:       filepath.Join(root, "octobus"),
+		daemonEnv: daemonEnv,
+		client:    &http.Client{Timeout: 10 * time.Second},
 
 		cliAdminToken: e2eAdminToken,
 	}
@@ -121,7 +128,9 @@ func e2eCoverageDir() string {
 func e2eSubprocessEnv(extra ...string) []string {
 	env := make([]string, 0, len(os.Environ())+len(extra))
 	for _, entry := range os.Environ() {
-		if strings.HasPrefix(entry, "GOCOVERDIR=") {
+		// A hardening level exported in the developer's shell would change
+		// every daemon; tests that want one pass it explicitly.
+		if strings.HasPrefix(entry, "GOCOVERDIR=") || strings.HasPrefix(entry, "OCTOBUS_RUNTIME_HARDENING=") {
 			continue
 		}
 		env = append(env, entry)
@@ -141,7 +150,7 @@ func (h *harness) start() {
 	h.stderr.Reset()
 	cmd := exec.Command(h.bin, "serve", "--data-dir", h.dataDir, "--addr", h.publicAddr)
 	cmd.Dir = repoRoot
-	cmd.Env = e2eSubprocessEnv("OCTOBUS_E2E_HELPER_BINARY="+os.Args[0], "OCTOBUS_E2E_REPO_ROOT="+repoRoot, "OCTOBUS_BOOTSTRAP_ADMIN_TOKEN="+e2eAdminToken, "GIT_SSL_NO_VERIFY=true", "NO_PROXY=127.0.0.1,localhost", "no_proxy=127.0.0.1,localhost")
+	cmd.Env = e2eSubprocessEnv(append([]string{"OCTOBUS_E2E_REPO_ROOT=" + repoRoot, "OCTOBUS_BOOTSTRAP_ADMIN_TOKEN=" + e2eAdminToken, "GIT_SSL_NO_VERIFY=true", "NO_PROXY=127.0.0.1,localhost", "no_proxy=127.0.0.1,localhost"}, h.daemonEnv...)...)
 	cmd.Stdout = &h.stdout
 	cmd.Stderr = &h.stderr
 	if err := cmd.Start(); err != nil {
@@ -628,7 +637,7 @@ func createFixturePackage(t *testing.T, root string, version fixtureVersion) str
 	if err := os.MkdirAll(filepath.Dir(entry), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, entry, "#!/bin/sh\nunset GOCOVERDIR\nOCTOBUS_E2E_HELPER_PROCESS=1 OCTOBUS_E2E_FIXTURE_VERSION="+string(version)+" exec \"$OCTOBUS_E2E_HELPER_BINARY\" -- \"$@\"\n", 0o755)
+	writeFile(t, entry, "#!/bin/sh\nunset GOCOVERDIR\nOCTOBUS_E2E_HELPER_PROCESS=1 OCTOBUS_E2E_FIXTURE_VERSION="+string(version)+" exec "+shellQuote(os.Args[0])+" -- \"$@\"\n", 0o755)
 	writeFile(t, filepath.Join(pkg, "package.json"), `{"name":"echo-wrapper","version":"1.0.0","bin":{"echo-wrapper":"bin/entry"}}`, 0o644)
 	writeFile(t, filepath.Join(pkg, "service.json"), `{"schema":"chaitin.octobus.service.v1","name":"echo-wrapper","displayName":"Echo Wrapper","proto":{"roots":["proto"],"files":["proto/echo.proto"]},"configSchema":"config.schema.json","secretSchema":"secret.schema.json"}`, 0o644)
 	writeFile(t, filepath.Join(pkg, "config.schema.json"), `{"type":"object","required":["token"],"properties":{"token":{"type":"string"},"projectKey":{"type":"string"},"mode":{"type":"string"}}}`, 0o644)
@@ -656,7 +665,7 @@ func createOnDemandFixturePackageWithTokenPrefix(t *testing.T, root, tokenPrefix
 	if tokenPrefix != "" {
 		env += " OCTOBUS_E2E_CONFIG_TOKEN_PREFIX=" + tokenPrefix
 	}
-	writeFile(t, filepath.Join(pkg, "bin/entry"), "#!/bin/sh\nunset GOCOVERDIR\n"+env+" exec \"$OCTOBUS_E2E_HELPER_BINARY\" -- \"$@\"\n", 0o755)
+	writeFile(t, filepath.Join(pkg, "bin/entry"), "#!/bin/sh\nunset GOCOVERDIR\n"+env+" exec "+shellQuote(os.Args[0])+" -- \"$@\"\n", 0o755)
 	writeFile(t, filepath.Join(pkg, "service.json"), `{"schema":"chaitin.octobus.service.v1","name":"echo-wrapper","displayName":"Echo Wrapper","runtime":{"mode":"on-demand"},"proto":{"roots":["proto"],"files":["proto/echo.proto"]},"configSchema":"config.schema.json","secretSchema":"secret.schema.json"}`, 0o644)
 	return pkg
 }
@@ -1406,4 +1415,10 @@ func assertStatusCode(t *testing.T, err error, code codes.Code) {
 	if !ok || st.Code() != code {
 		t.Fatalf("status=%v want=%s err=%v", st.Code(), code, err)
 	}
+}
+
+// shellQuote single-quotes s for /bin/sh, which expands nothing inside single
+// quotes; an embedded quote is closed, escaped, and reopened.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

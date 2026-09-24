@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -21,6 +22,7 @@ import (
 
 	"octobus/internal/cli"
 	"octobus/internal/domain"
+	"octobus/internal/hardening"
 	"octobus/internal/store"
 
 	"google.golang.org/grpc"
@@ -612,6 +614,61 @@ func TestEnvDefaultAndRootCommandDefaultAddr(t *testing.T) {
 	}
 }
 
+func TestServeCommandRejectsInvalidRuntimeHardeningEnv(t *testing.T) {
+	t.Setenv("OCTOBUS_RUNTIME_HARDENING", "yes")
+	addr := "127.0.0.1:0"
+	cmd := newServeCommand(&addr)
+	cmd.SetArgs([]string{"--data-dir", t.TempDir()})
+	cmd.SilenceUsage = true
+	cmd.SilenceErrors = true
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "OCTOBUS_RUNTIME_HARDENING: invalid runtime hardening level") {
+		t.Fatalf("expected invalid level error naming the variable, got %v", err)
+	}
+}
+
+func TestServeCommandFlagOverridesRuntimeHardeningEnv(t *testing.T) {
+	t.Setenv("OCTOBUS_RUNTIME_HARDENING", "node")
+	addr := "127.0.0.1:0"
+	cmd := newServeCommand(&addr)
+	// An explicit off must win over the environment; serve fails on the data
+	// dir, which proves the node check never ran. With no node on PATH, a
+	// check that did run would fail with a runtime hardening error instead.
+	t.Setenv("PATH", t.TempDir())
+	file := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd.SetArgs([]string{"--data-dir", filepath.Join(file, "child"), "--runtime-hardening", "off"})
+	cmd.SilenceUsage = true
+	cmd.SilenceErrors = true
+	err := cmd.Execute()
+	if err == nil || strings.Contains(err.Error(), "runtime hardening") {
+		t.Fatalf("expected data dir error, got %v", err)
+	}
+}
+
+func TestServeFailsWhenRuntimeHardeningNodeUnsupported(t *testing.T) {
+	var stderr bytes.Buffer
+	err := serve(serveOptions{
+		dataDir:          t.TempDir(),
+		addr:             "127.0.0.1:0",
+		runtimeHardening: hardening.LevelNode,
+		stderr:           &stderr,
+		checkNode: func(ctx context.Context) (hardening.Node, error) {
+			if _, ok := ctx.Deadline(); !ok {
+				t.Error("node check ran without a deadline")
+			}
+			return hardening.Node{}, errors.New("node too old")
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "runtime hardening: node too old") {
+		t.Fatalf("expected node check error, got %v", err)
+	}
+	if !strings.Contains(stderr.String(), "runtime_hardening=node") {
+		t.Fatalf("daemon_starting log missing runtime_hardening: %s", stderr.String())
+	}
+}
+
 func TestRootCommandRoutesAdminCommands(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/admin/v1/status" {
@@ -774,4 +831,26 @@ func runCmdHelper() {
 
 func waitForInterrupt() {
 	select {}
+}
+
+func TestShutdownSignalsHandleSIGHUPOnlyAtLevelNode(t *testing.T) {
+	for _, tc := range []struct {
+		level         hardening.Level
+		sighupIgnored bool
+		want          bool
+	}{
+		{hardening.LevelOff, false, false},
+		{hardening.LevelOff, true, false},
+		{hardening.LevelNode, false, true},
+		// Subscribing to an ignored SIGHUP would stop a daemon started under nohup.
+		{hardening.LevelNode, true, false},
+	} {
+		signals := shutdownSignals(tc.level, tc.sighupIgnored)
+		if got := slices.Contains(signals, os.Signal(syscall.SIGHUP)); got != tc.want {
+			t.Fatalf("shutdownSignals(%s, ignored=%v) includes SIGHUP = %v, want %v", tc.level, tc.sighupIgnored, got, tc.want)
+		}
+		if !slices.Contains(signals, os.Interrupt) || !slices.Contains(signals, os.Signal(syscall.SIGTERM)) {
+			t.Fatalf("shutdownSignals(%s, ignored=%v) = %v, want SIGINT and SIGTERM", tc.level, tc.sighupIgnored, signals)
+		}
+	}
 }

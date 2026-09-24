@@ -21,6 +21,7 @@ import (
 	"octobus/internal/cli"
 	"octobus/internal/daemonlog"
 	"octobus/internal/domain"
+	"octobus/internal/hardening"
 	"octobus/internal/packageimport"
 	"octobus/internal/protocol"
 	"octobus/internal/server"
@@ -55,16 +56,27 @@ func newRootCommand(adminCLI *cli.CLI) *cobra.Command {
 func newServeCommand(addr *string) *cobra.Command {
 	var dataDir string
 	var dev bool
+	var runtimeHardening string
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Run the Octobus daemon",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return serve(serveOptions{dataDir: dataDir, addr: *addr, dev: dev})
+			source := "--runtime-hardening"
+			if !cmd.Flags().Changed("runtime-hardening") {
+				runtimeHardening = os.Getenv("OCTOBUS_RUNTIME_HARDENING")
+				source = "OCTOBUS_RUNTIME_HARDENING"
+			}
+			level, err := hardening.ParseLevel(runtimeHardening)
+			if err != nil {
+				return fmt.Errorf("%s: %w", source, err)
+			}
+			return serve(serveOptions{dataDir: dataDir, addr: *addr, dev: dev, runtimeHardening: level})
 		},
 	}
 	cmd.Flags().StringVar(&dataDir, "data-dir", defaultDataDir(), "octobus data directory")
 	cmd.Flags().BoolVar(&dev, "dev", false, "seed a fixed development admin token when none exists; requires a loopback listen address (not for production)")
+	cmd.Flags().StringVar(&runtimeHardening, "runtime-hardening", string(hardening.LevelOff), "restrictions applied to service runtimes: off, or node for an environment allowlist plus the Node.js permission model (requires Node.js 22.13+, 23.5+, or 24+; env OCTOBUS_RUNTIME_HARDENING)")
 	return cmd
 }
 
@@ -72,6 +84,8 @@ type serveOptions struct {
 	dataDir          string
 	addr             string
 	dev              bool
+	runtimeHardening hardening.Level
+	checkNode        func(context.Context) (hardening.Node, error)
 	stderr           io.Writer
 	logger           *slog.Logger
 	startupInventory func(context.Context, *slog.Logger, *store.Store) error
@@ -109,7 +123,20 @@ func serve(opts serveOptions) error {
 	if err != nil {
 		return fmt.Errorf("resolve data dir: %w", err)
 	}
-	logger.Info("daemon_starting", "addr", opts.addr, "data_dir", dataDir)
+	logger.Info("daemon_starting", "addr", opts.addr, "data_dir", dataDir, "runtime_hardening", string(opts.runtimeHardening))
+	var runtimeNode hardening.Node
+	if opts.runtimeHardening == hardening.LevelNode {
+		checkNode := hardening.CheckNode
+		if opts.checkNode != nil {
+			checkNode = opts.checkNode
+		}
+		checkCtx, cancel := context.WithTimeout(context.Background(), nodeCheckTimeout)
+		runtimeNode, err = checkNode(checkCtx)
+		cancel()
+		if err != nil {
+			return fmt.Errorf("runtime hardening: %w", err)
+		}
+	}
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
 		return err
 	}
@@ -128,11 +155,13 @@ func serve(opts serveOptions) error {
 		return fmt.Errorf("open access log: %w", err)
 	}
 	defer accessLogger.Close()
-	gateway := &protocol.Gateway{Store: st, DataDir: dataDir, AccessLogger: accessLogger, Logger: logger}
+	gateway := &protocol.Gateway{Store: st, DataDir: dataDir, AccessLogger: accessLogger, Logger: logger, RuntimeHardening: opts.runtimeHardening, RuntimeNode: runtimeNode}
 	sup := supervisor.New(dataDir, st)
 	sup.Logger = logger
+	sup.RuntimeHardening = opts.runtimeHardening
+	sup.RuntimeNode = runtimeNode
 	sup.OnInstanceChanged = gateway.InvalidateInstance
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), shutdownSignals(opts.runtimeHardening, signal.Ignored(syscall.SIGHUP))...)
 	defer stop()
 	logger.Info("recover_enabled_started")
 	recovered, err := sup.RecoverEnabled(ctx)
@@ -320,6 +349,25 @@ func defaultDataDir() string {
 	}
 	return ".octobus"
 }
+
+// shutdownSignals lists the signals that trigger a graceful shutdown. At level
+// node SIGHUP is included too: runtimes run in their own process group there,
+// so a terminal hangup reaches only the daemon, and without a graceful
+// shutdown they would outlive it. At level off they share the daemon's group
+// and exit with it, as before. A daemon started with SIGHUP ignored
+// (sighupIgnored), as under nohup, keeps ignoring it, since subscribing would
+// undo that.
+func shutdownSignals(level hardening.Level, sighupIgnored bool) []os.Signal {
+	signals := []os.Signal{os.Interrupt, syscall.SIGTERM}
+	if level == hardening.LevelNode && !sighupIgnored {
+		signals = append(signals, syscall.SIGHUP)
+	}
+	return signals
+}
+
+// nodeCheckTimeout bounds the startup node checks, the version query and the
+// NODE_OPTIONS probe, so a hung node on PATH cannot stall daemon startup.
+const nodeCheckTimeout = 10 * time.Second
 
 func envDefault(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {

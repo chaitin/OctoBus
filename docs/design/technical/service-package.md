@@ -411,23 +411,22 @@ SDK 发布要求：
 
 ## Config / Secret
 
-instance config 和 secret 分别写入 instance workdir：
+instance config 写入 instance workdir：
 
 ```text
 {data_dir}/instances/{instance_id}/config.json
-{data_dir}/instances/{instance_id}/secret.json
 ```
 
-文件权限为 `0600`。未提供 config 或 secret 时，默认写入 `{}`。
+文件权限为 `0600`。secret 只保存在 SQLite 中，不落盘；runtime 启动时通过管道从 fd 3 读取（`--secret-fd 3`）。未提供 config 或 secret 时，默认为 `{}`。
 
 行为：
 
 - config 会写入 `config.json` 并记录 `config_sha256`。
-- secret 会写入 `secret.json` 并记录 `secret_sha256`。
+- secret 会保存到 SQLite 并记录 `secret_sha256`。
 - 若 service 提供 `configSchema`，创建 instance 和更新 config 时都会校验 JSON Schema。
 - 若 service 提供 `secretSchema`，创建 instance 和更新 secret 时都会校验 JSON Schema。
 - update-config 默认只更新落盘 config 和 SQLite，不自动重启 instance。
-- update-secret 默认只更新落盘 secret 和 SQLite，不自动重启 instance。
+- update-secret 默认只更新 SQLite，不自动重启 instance。
 - `update-config --restart` 和 `update-secret --restart` 会重启 long-running instance；on-demand instance 不支持 restart 控制。
 
 CLI / admin 输出 config 或 secret 时按字段名启发式脱敏常见敏感字段，例如 `password`、`token`、`secret`、`key`。
@@ -455,7 +454,7 @@ OctoBus 导入 package 后，由 Go 侧读取 service root 中的 proto 文件�
   --host 127.0.0.1 \
   --port 41001 \
   --config /path/to/config.json \
-  --secret /path/to/secret.json \
+  --secret-fd 3 \
   --workdir /path/to/instances/gitlab-test \
   --service gitlab \
   --instance gitlab-test
@@ -466,7 +465,7 @@ OctoBus 导入 package 后，由 Go 侧读取 service root 中的 proto 文件�
 - `--host` 是监听地址。
 - `--port` 是监听端口。
 - `--config` 是 instance config JSON。
-- `--secret` 是 instance secret JSON。
+- `--secret-fd 3` 表示 instance secret JSON 从 fd 3 读取，secret 不落盘。
 - `--workdir` 是 instance workdir。
 - `--service` 是 OctoBus service id。
 - `--instance` 是 OctoBus instance id。
@@ -482,6 +481,8 @@ OCTOBUS_PACKAGE_DIR=<runtime>/<service_root>
 OCTOBUS_DESCRIPTOR_PATH=<descriptor.protoset>
 OCTOBUS_DESCRIPTOR_SHA256=<sha256>
 ```
+
+默认 `off` 等级下子进程还会继承 daemon 的全部环境变量；`node` 等级下的启动差异见 [node-runtime.md](node-runtime.md#runtime-加固)。
 
 package 必须支持 gRPC health check。SDK 默认注册 `grpc.health.v1.Health`，OctoBus ready 判断使用 overall health：
 
@@ -499,7 +500,7 @@ grpc.health.v1.Health/Check service=""
 <runtime>/<node_entry> --runtime invoke \
   --method gitlab.MergeRequestService/List \
   --config /path/to/config.json \
-  --secret /path/to/secret.json \
+  --secret-fd 3 \
   --metadata /path/to/metadata.json \
   --workdir /path/to/instances/gitlab-test \
   --service gitlab \

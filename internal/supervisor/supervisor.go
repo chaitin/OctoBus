@@ -16,6 +16,7 @@ import (
 
 	"octobus/internal/daemonlog"
 	"octobus/internal/domain"
+	"octobus/internal/hardening"
 	"octobus/internal/store"
 
 	"google.golang.org/grpc"
@@ -32,6 +33,10 @@ type Supervisor struct {
 	Store             *store.Store
 	Logger            *slog.Logger
 	OnInstanceChanged func(instanceID string)
+	// RuntimeHardening selects the restrictions applied to runtimes.
+	RuntimeHardening hardening.Level
+	// RuntimeNode describes the node binary runtimes launch with.
+	RuntimeNode hardening.Node
 
 	mu          sync.Mutex
 	procs       map[string]*processState
@@ -262,13 +267,22 @@ func (s *Supervisor) startWithAttempt(ctx context.Context, instanceID string, re
 	cmd := exec.Command(entry, "--runtime", "serve", "--host", "127.0.0.1", "--port", fmt.Sprintf("%d", port), "--config", filepath.Join(workdir, "config.json"), "--secret-fd", "3", "--workdir", workdir, "--service", svc.ID, "--instance", instanceID)
 	cmd.Dir = workdir
 	cmd.ExtraFiles = []*os.File{secretFile}
-	cmd.Env = append(os.Environ(),
-		"OCTOBUS_SERVICE_ID="+svc.ID,
-		"OCTOBUS_INSTANCE_ID="+instanceID,
-		"OCTOBUS_PACKAGE_DIR="+filepath.Join(s.ServiceRuntimeDir(svc.ID), filepath.FromSlash(svc.ServiceRoot)),
-		"OCTOBUS_DESCRIPTOR_PATH="+svc.DescriptorPath,
-		"OCTOBUS_DESCRIPTOR_SHA256="+svc.DescriptorSHA256,
-	)
+	if err := hardening.Apply(cmd, hardening.Spec{
+		Level:      s.RuntimeHardening,
+		Node:       s.RuntimeNode,
+		ServiceDir: filepath.Dir(s.ServiceRuntimeDir(svc.ID)),
+		Workdir:    workdir,
+		Env: []string{
+			"OCTOBUS_SERVICE_ID=" + svc.ID,
+			"OCTOBUS_INSTANCE_ID=" + instanceID,
+			"OCTOBUS_PACKAGE_DIR=" + filepath.Join(s.ServiceRuntimeDir(svc.ID), filepath.FromSlash(svc.ServiceRoot)),
+			"OCTOBUS_DESCRIPTOR_PATH=" + svc.DescriptorPath,
+			"OCTOBUS_DESCRIPTOR_SHA256=" + svc.DescriptorSHA256,
+		},
+	}); err != nil {
+		startErr = err
+		return err
+	}
 	stdout, err := os.OpenFile(filepath.Join(workdir, "stdout.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		startErr = err
@@ -303,7 +317,11 @@ func (s *Supervisor) startWithAttempt(ctx context.Context, instanceID string, re
 	inst.PID = &pid
 	inst.Status = domain.StatusRunning
 	if err := s.Store.UpsertInstance(ctx, inst); err != nil {
-		_ = cmd.Process.Kill()
+		_ = hardening.Kill(cmd)
+		_ = cmd.Wait()
+		hardening.KillGroup(cmd)
+		_ = stdout.Close()
+		_ = stderr.Close()
 		startErr = err
 		return err
 	}
@@ -364,8 +382,9 @@ func (s *Supervisor) cleanupFailedStart(instanceID string, state *processState, 
 	}
 	s.mu.Unlock()
 	if state.cmd.Process != nil {
-		_ = state.cmd.Process.Kill()
+		_ = hardening.Kill(state.cmd)
 		_ = state.cmd.Wait()
+		hardening.KillGroup(state.cmd)
 	}
 	close(state.done)
 	_ = stdout.Close()
@@ -537,9 +556,9 @@ func (s *Supervisor) stopProcess(ctx context.Context, inst domain.Instance, enab
 	s.mu.Unlock()
 	var stopErr error
 	if state != nil && state.cmd.Process != nil {
-		_ = state.cmd.Process.Signal(os.Interrupt)
+		_ = hardening.Signal(state.cmd, os.Interrupt)
 		if err := waitProcessDone(ctx, state.done, 2*time.Second); err != nil {
-			_ = state.cmd.Process.Kill()
+			_ = hardening.Kill(state.cmd)
 			if killErr := waitProcessDone(ctx, state.done, 2*time.Second); killErr != nil {
 				stopErr = killErr
 			} else if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
@@ -657,6 +676,7 @@ func secretReadFile(secret []byte) (*os.File, func(), error) {
 
 func (s *Supervisor) wait(instanceID string, state *processState, stdout, stderr *os.File) {
 	err := state.cmd.Wait()
+	hardening.KillGroup(state.cmd)
 	_ = stdout.Close()
 	_ = stderr.Close()
 	close(state.done)

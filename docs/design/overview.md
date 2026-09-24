@@ -112,8 +112,9 @@ SQLite 是控制面事实来源，记录 service、instance、capset、method bi
 hash、descriptor metadata、instance enablement 和恢复所需状态。
 
 instance 使用 service runtime dir 启动独立 Node.js 子进程。每个 instance 有独立
-workdir、`config.json`、`secret.json`、stdout/stderr 日志和运行状态。config 与
-secret 文件权限为 `0600`；如果 service 声明 JSON Schema，创建和更新时必须完整校验。
+workdir、`config.json`、stdout/stderr 日志和运行状态。config 文件权限为 `0600`；
+secret 只保存在 SQLite 中，启动时通过管道从 fd 3 传给子进程，不落盘。如果 service
+声明 JSON Schema，创建和更新时必须完整校验。
 
 daemon 根据标准 gRPC health check 判断 long-running instance ready，并在重启后恢复
 所有 `enabled=true` 的 long-running instances。on-demand instance 不预启动，请求到达

@@ -113,6 +113,38 @@ export OCTOBUS_ADMIN_TOKEN="octobus-dev-admin-token"
 
 The data directory stores the SQLite database, service artifacts and runtimes, instance config, and logs. The default data directory is `.octobus` under the current directory where the daemon command is started.
 
+### Runtime Hardening
+
+By default, service runtimes inherit the daemon's environment and can access anything the daemon user can. Pass `--runtime-hardening=node` (or set `OCTOBUS_RUNTIME_HARDENING=node`) to restrict every service runtime:
+
+```bash
+./bin/octobus serve --runtime-hardening=node
+```
+
+Levels are named after what enforces the restrictions, because the concrete mechanism differs per platform:
+
+| Level | What enforces it |
+|---|---|
+| `off` (default) | nothing; runtimes launch just as the daemon runs |
+| `node` | the Node.js process itself |
+
+At level `node`, each runtime:
+
+- receives only an allowlist of environment variables (`PATH`, `LANG`, `LC_ALL`, `TZ`, proxy and CA settings, and on Windows `SystemRoot`, `PATHEXT`, and `COMSPEC`) plus the `OCTOBUS_*` context. Other daemon variables and any existing `NODE_OPTIONS` are dropped.
+- has `HOME`, `USERPROFILE`, and the temp directory variables (`TMPDIR`, `TEMP`, `TMP`) pointing into its instance directory. Temporary files left there are not cleaned up automatically.
+- runs under the Node.js permission model: it can read its own service artifacts, read and write its own instance directory, and cannot read other files (including `octobus.db` and other instances), start child processes, use worker threads, or load native addons
+- has its V8 old-generation heap capped at 512 MB (`--max-old-space-size`)
+- runs in its own process group, so stopping an instance also stops the processes it started (Unix only)
+
+Level `node` requires Node.js 22.13+, 23.5+, or 24+. At startup the daemon checks the version of the `node` on `PATH`, then launches `node` once with the same preparation a runtime gets (environment, `NODE_OPTIONS`, temp directory, and process group), using a temporary directory in place of the service and instance directories. The daemon refuses to start if either check fails. A version-manager shim that needs variables outside the allowlist (for example Volta or asdf) fails this check; put a real `node` binary first on `PATH`. The check runs only at startup, so restart the daemon after changing the `node` on `PATH`. Network access is not restricted; on Node.js 25+, whose permission model blocks it by default, the daemon grants it with `--allow-net`. Services that start child processes, use worker threads, or load native addons do not work at this level.
+
+Because the Node.js process checks these restrictions itself rather than the operating system enforcing them, treat this level as protection against mistakes in trusted service code, not as isolation for untrusted code:
+
+- Node follows symbolic links even when they point outside the granted directories.
+- The permission model and heap limit come from `NODE_OPTIONS`, which only Node.js reads. A runtime entry that is not a Node.js script, and any program other than Node.js that it runs, gets only the environment allowlist and the process group. An entry that passes its own permission flags can widen its grants.
+- Runtimes run in their own process group. The daemon stops them when it shuts down gracefully, on `SIGINT`, `SIGTERM`, or `SIGHUP` (unless `SIGHUP` was ignored at startup, as under `nohup`). A daemon that exits any other way (`SIGKILL`, a crash, or `Ctrl-\`) leaves them running, and they must be stopped by hand.
+- The level covers service runtimes only. `service import` still runs `npm`, including package lifecycle scripts, with the daemon's environment.
+
 ### Dependencies
 
 To run the daemon locally and perform normal service import/start workflows, install the following commands and ensure they are available in `PATH`:
@@ -385,15 +417,15 @@ Required fields:
 When a `long-running` instance starts, OctoBus executes the resolved `node_entry` from the runtime dir and passes fixed arguments:
 
 ```text
---runtime serve --host 127.0.0.1 --port <port> --config <config.json> --secret <secret.json> --workdir <instance_workdir> --service <service_id> --instance <instance_id>
+--runtime serve --host 127.0.0.1 --port <port> --config <config.json> --secret-fd 3 --workdir <instance_workdir> --service <service_id> --instance <instance_id>
 ```
 
-The service process must start a gRPC server and implement the standard gRPC health check.
+The instance secret JSON is read from file descriptor 3, which OctoBus fills through a pipe; the secret is kept in SQLite and never written to the instance directory. The service process must start a gRPC server and implement the standard gRPC health check.
 
 An `on-demand` service must also support one-shot invocation:
 
 ```text
---runtime invoke --method <package.Service/Method> --config <config.json> --secret <secret.json> --metadata <metadata.json> --workdir <instance_workdir> --service <service_id> --instance <instance_id>
+--runtime invoke --method <package.Service/Method> --config <config.json> --secret-fd 3 --metadata <metadata.json> --workdir <instance_workdir> --service <service_id> --instance <instance_id>
 ```
 
 OctoBus writes the protobuf wire-format request to stdin and expects stdout to contain only the protobuf wire-format response. OctoBus also sets `OCTOBUS_PACKAGE_DIR=<runtime>/<service_root>`, so the SDK reads `service.json`, proto, and schema from the service root while the full runtime dir still preserves the dependency layout from the distribution package root. `@chaitin-ai/octobus-sdk`'s `runServiceMain` enters the business CLI when `--runtime` is not provided. When `--runtime` is provided, it enters the runtime parser and supports commands such as `serve`, `invoke`, `dev`, `inspect`, `client-stub`, and `client-package`.
@@ -465,7 +497,6 @@ Runtime data is laid out roughly as follows:
     descriptor.protoset
   instances/{instance_id}/
     config.json
-    secret.json
     stdout.log
     stderr.log
     tmp/

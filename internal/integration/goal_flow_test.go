@@ -68,7 +68,6 @@ func TestGoalFlowImportInstanceCapsetAndInvokeAllProtocols(t *testing.T) {
 		t.Fatalf("unexpected import result: %+v", res.Service)
 	}
 
-	t.Setenv("OCTOBUS_HELPER_BINARY", os.Args[0])
 	sup := supervisor.New(dataDir, st)
 	gateway := &protocol.Gateway{Store: st}
 	adminSrv := &admin.Server{Store: st, Importer: imp, Supervisor: sup, Gateway: gateway}
@@ -240,7 +239,6 @@ func TestServiceUpdateRestartsEnabledInstanceAndRemovesInvalidBindings(t *testin
 	ctx := context.Background()
 	root := t.TempDir()
 	dataDir := filepath.Join(root, "data")
-	t.Setenv("OCTOBUS_HELPER_BINARY", os.Args[0])
 	st, err := store.Open(filepath.Join(dataDir, "octobus.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -301,7 +299,6 @@ func TestRunningConfigUpdateRestartsOnlyWhenRequested(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
 	dataDir := filepath.Join(root, "data")
-	t.Setenv("OCTOBUS_HELPER_BINARY", os.Args[0])
 	st, err := store.Open(filepath.Join(dataDir, "octobus.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -350,7 +347,6 @@ func TestRecoverEnabledStartsPersistedInstance(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
 	dataDir := filepath.Join(root, "data")
-	t.Setenv("OCTOBUS_HELPER_BINARY", os.Args[0])
 	st, err := store.Open(filepath.Join(dataDir, "octobus.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -391,7 +387,6 @@ func TestGRPCStreamingProxyIntegration(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
 	dataDir := filepath.Join(root, "data")
-	t.Setenv("OCTOBUS_HELPER_BINARY", os.Args[0])
 	st, err := store.Open(filepath.Join(dataDir, "octobus.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -808,7 +803,6 @@ func TestProtocolUtilityIntegration(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
 	dataDir := filepath.Join(root, "data")
-	t.Setenv("OCTOBUS_HELPER_BINARY", os.Args[0])
 	st, err := store.Open(filepath.Join(dataDir, "octobus.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -905,7 +899,6 @@ func TestCLIAdminGatewayAndStoreIntegrationCRUD(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
 	dataDir := filepath.Join(root, "data")
-	t.Setenv("OCTOBUS_HELPER_BINARY", os.Args[0])
 	st, err := store.Open(filepath.Join(dataDir, "octobus.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -1198,7 +1191,7 @@ func createFixturePackageWithProto(t *testing.T, root, name, protoBody string) s
 	if err := os.MkdirAll(filepath.Dir(entry), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, entry, "#!/bin/sh\nOCTOBUS_HELPER_PROCESS=1 exec \"$OCTOBUS_HELPER_BINARY\" -test.run TestGoalFlowImportInstanceCapsetAndInvokeAllProtocols -- \"$@\"\n", 0o755)
+	writeFile(t, entry, "#!/bin/sh\nOCTOBUS_HELPER_PROCESS=1 exec "+shellQuote(os.Args[0])+" -test.run TestGoalFlowImportInstanceCapsetAndInvokeAllProtocols -- \"$@\"\n", 0o755)
 	writeFile(t, filepath.Join(pkg, "service.json"), `{"schema":"chaitin.octobus.service.v1","name":"echo-wrapper","proto":{"roots":["proto"],"files":["proto/echo.proto"]}}`, 0o644)
 	writeFile(t, filepath.Join(pkg, "package.json"), `{"name":"echo-wrapper","version":"1.0.0","bin":{"echo-wrapper":"bin/entry"}}`, 0o644)
 	writeFile(t, filepath.Join(pkg, "proto/echo.proto"), protoBody, 0o644)
@@ -1610,3 +1603,9 @@ func (testRawCodec) Unmarshal(data []byte, v any) error {
 }
 
 var _ encoding.Codec = testRawCodec{}
+
+// shellQuote single-quotes s for /bin/sh, which expands nothing inside single
+// quotes; an embedded quote is closed, escaped, and reopened.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
