@@ -15,7 +15,7 @@ func TestEnvDropsUnlistedVariables(t *testing.T) {
 	t.Setenv("NODE_OPTIONS", "--inspect")
 	t.Setenv("TZ", "UTC")
 	workdir := t.TempDir()
-	env := Env(Spec{Level: LevelNode, ServiceDir: t.TempDir(), Workdir: workdir, Env: []string{"OCTOBUS_SERVICE_ID=svc"}})
+	env := runtimeEnv(Spec{Level: LevelNode, ServiceDir: t.TempDir(), Workdir: workdir, Env: []string{"OCTOBUS_SERVICE_ID=svc"}})
 	joined := "\n" + strings.Join(env, "\n") + "\n"
 	tmpDir := filepath.Join(workdir, "tmp")
 	for _, want := range []string{"\nTZ=UTC\n", "\nHOME=" + workdir + "\n", "\nTMPDIR=" + tmpDir + "\n", "\nTEMP=" + tmpDir + "\n", "\nTMP=" + tmpDir + "\n", "\nOCTOBUS_SERVICE_ID=svc\n"} {
@@ -34,7 +34,7 @@ func TestNodeOptionsQuotesPathsAndSetsLimits(t *testing.T) {
 	root := t.TempDir()
 	serviceDir := filepath.Join(root, "my svc")
 	workdir := filepath.Join(root, "work dir")
-	opts := NodeOptions(Spec{Level: LevelNode, ServiceDir: serviceDir, Workdir: workdir})
+	opts := nodeOptions(Spec{Level: LevelNode, ServiceDir: serviceDir, Workdir: workdir})
 	for _, want := range []string{
 		"--permission",
 		"--allow-fs-read=" + quoteNodeOption(serviceDir),
@@ -53,7 +53,7 @@ func TestNodeOptionsQuotesPathsAndSetsLimits(t *testing.T) {
 	if strings.Contains(opts, "--allow-net") {
 		t.Fatalf("node before 25 rejects --allow-net: %s", opts)
 	}
-	if opts := NodeOptions(Spec{Level: LevelNode, ServiceDir: serviceDir, Workdir: workdir, Node: testNode(t, "v25.0.0")}); !strings.Contains(opts, "--allow-net") {
+	if opts := nodeOptions(Spec{Level: LevelNode, ServiceDir: serviceDir, Workdir: workdir, Node: testNode(t, "v25.0.0")}); !strings.Contains(opts, "--allow-net") {
 		t.Fatalf("node 25+ needs --allow-net to keep network access: %s", opts)
 	}
 	if got := quoteNodeOption(`/data/my "svc"`); got != `"/data/my \"svc\""` {

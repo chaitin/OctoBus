@@ -15,23 +15,29 @@ import (
 	"octobus/internal/hardening"
 )
 
-// hardeningProbe replaces the calculator's label so the runtime reports the
-// restrictions it actually runs under: whether it may read the daemon
-// database or start child processes, and whether a daemon-only environment
-// variable leaked in. Without the permission model, process.permission is
-// undefined and both checks report null.
-const hardeningProbe = `label: JSON.stringify({
-        label: config.label || "",
-        readDB: process.permission?.has("fs.read", path.resolve(process.cwd(), "..", "..", "octobus.db")) ?? null,
-        child: process.permission?.has("child") ?? null,
-        canary: process.env.OCTOBUS_E2E_CANARY ?? null,
-      }),`
+// hardeningProbe replaces the calculator's label so the runtime reports what
+// it can actually do, rather than what process.permission.has claims: has()
+// returns false for any unknown scope name too, so a renamed scope would pass
+// silently. Each attempt reports "allowed" or the error code it failed with.
+// Writing the workdir must succeed, which pins down that the grants apply at
+// all; reading the daemon database and starting a child must be denied.
+const hardeningProbe = `label: (() => {
+        const attempt = (fn) => { try { fn(); return "allowed"; } catch (e) { return e.code ?? String(e); } };
+        return JSON.stringify({
+          label: config.label || "",
+          writeWorkdir: attempt(() => fs.writeFileSync(path.join(process.cwd(), "hardening-probe.txt"), "ok")),
+          readDB: attempt(() => fs.readFileSync(path.resolve(process.cwd(), "..", "..", "octobus.db"))),
+          child: attempt(() => process.getBuiltinModule("node:child_process").execFileSync(process.execPath, ["-e", ""])),
+          canary: process.env.OCTOBUS_E2E_CANARY ?? null,
+        });
+      })(),`
 
 type hardeningReport struct {
-	Label  string  `json:"label"`
-	ReadDB *bool   `json:"readDB"`
-	Child  *bool   `json:"child"`
-	Canary *string `json:"canary"`
+	Label        string  `json:"label"`
+	WriteWorkdir string  `json:"writeWorkdir"`
+	ReadDB       string  `json:"readDB"`
+	Child        string  `json:"child"`
+	Canary       *string `json:"canary"`
 }
 
 // TestRuntimeHardeningRunsRealNodeServices checks that real SDK services run
@@ -98,10 +104,10 @@ func TestRuntimeHardeningRunsRealNodeServices(t *testing.T) {
 		if report.Label != "hardened" {
 			fail("runtime lost its config: %+v", report)
 		}
-		if report.ReadDB == nil || report.Child == nil {
-			fail("runtime is not under the Node.js permission model: %s", label)
+		if report.WriteWorkdir != "allowed" {
+			fail("runtime cannot write its own workdir: %s", label)
 		}
-		if *report.ReadDB || *report.Child {
+		if report.ReadDB != "ERR_ACCESS_DENIED" || report.Child != "ERR_ACCESS_DENIED" {
 			fail("runtime may read octobus.db or start child processes: %s", label)
 		}
 		if report.Canary != nil {

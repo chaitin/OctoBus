@@ -59,6 +59,9 @@ type Spec struct {
 // Apply configures cmd to run as described by spec. It must be called before
 // cmd.Start.
 func Apply(cmd *exec.Cmd, spec Spec) error {
+	// Both dirs are required at every level, although only LevelNode uses
+	// them, so a caller that omits them fails at once rather than only after
+	// the level is switched to node.
 	if spec.ServiceDir == "" || spec.Workdir == "" {
 		return fmt.Errorf("hardening: service dir and workdir are required")
 	}
@@ -93,12 +96,13 @@ func Apply(cmd *exec.Cmd, spec Spec) error {
 			cmd.Dir = resolved
 		}
 	}
-	cmd.Env = Env(spec)
+	cmd.Env = runtimeEnv(spec)
 	return nil
 }
 
-// Env returns the LevelNode environment for a runtime process.
-func Env(spec Spec) []string {
+// runtimeEnv returns the LevelNode environment for a runtime process. It
+// ignores spec.Level; callers go through Apply, which checks the level first.
+func runtimeEnv(spec Spec) []string {
 	env := make([]string, 0, len(passthroughEnv)+len(spec.Env)+6)
 	for _, key := range passthroughEnv {
 		if value, ok := os.LookupEnv(key); ok {
@@ -113,15 +117,15 @@ func Env(spec Spec) []string {
 		"TMPDIR="+tmpDir,
 		"TEMP="+tmpDir,
 		"TMP="+tmpDir,
-		"NODE_OPTIONS="+NodeOptions(spec),
+		"NODE_OPTIONS="+nodeOptions(spec),
 	)
 	return append(env, spec.Env...)
 }
 
-// NodeOptions builds the NODE_OPTIONS value enabling the Node.js permission
+// nodeOptions builds the NODE_OPTIONS value enabling the Node.js permission
 // model. Runtime entries are shebang scripts, so flags cannot be passed on the
 // command line directly.
-func NodeOptions(spec Spec) string {
+func nodeOptions(spec Spec) string {
 	opts := []string{"--permission"}
 	for _, dir := range pathVariants(spec.ServiceDir, spec.Workdir) {
 		opts = append(opts, "--allow-fs-read="+quoteNodeOption(dir))

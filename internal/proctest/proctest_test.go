@@ -45,3 +45,17 @@ func TestExitedKeepsProcessesWeCannotSignalRunning(t *testing.T) {
 		t.Fatal("pid 1 reported as exited")
 	}
 }
+
+func TestWaitExitedReturnsOnceTheProcessExits(t *testing.T) {
+	cmd := exec.Command("sleep", "0.2")
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() {
+		_ = cmd.Wait()
+		close(done)
+	}()
+	WaitExited(t, cmd.Process.Pid)
+	<-done
+}

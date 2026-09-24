@@ -200,7 +200,7 @@ cat ./gitlab-test.config.json | octobus instance create \
 - 绑定 service 当前版本。
 - 若 service 提供 `configSchema` / `secretSchema`，按 JSON Schema Draft 2020-12 校验 instance config / secret。
 - 以 `0600` 写入 instance workdir 下的 `config.json`。
-- 以 `0600` 写入 instance workdir 下的 `secret.json`。
+- 将 secret 保存在 SQLite 中；secret 不写入 instance workdir，启动时通过 fd 3 传给子进程。
 - 计算并记录 `config_sha256` 和 `secret_sha256`。
 - 分配端口。
 - 从 service runtime dir 启动 Node 子进程。

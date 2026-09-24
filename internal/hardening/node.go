@@ -80,7 +80,7 @@ func CheckNode(ctx context.Context) (Node, error) {
 	out, err = probe.CombinedOutput()
 	KillGroup(probe)
 	if err != nil {
-		return Node{}, fmt.Errorf("node %s does not start as a hardened runtime (NODE_OPTIONS %q): %w: %s", versionText, NodeOptions(spec), err, strings.TrimSpace(string(out)))
+		return Node{}, fmt.Errorf("node %s does not start as a hardened runtime (NODE_OPTIONS %q): %w: %s", versionText, nodeOptions(spec), err, strings.TrimSpace(string(out)))
 	}
 	return node, nil
 }

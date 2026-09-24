@@ -1650,8 +1650,9 @@ func (g *Gateway) invokeOnDemand(ctx context.Context, item store.ExposedMethod, 
 	var exitErr *exec.ExitError
 	if errors.Is(err, exec.ErrWaitDelay) && !errors.As(err, &exitErr) {
 		// The runtime exited successfully; only a descendant held its output
-		// open, and the pipes were closed after onDemandWaitDelay. A runtime
-		// that failed reports an ExitError, which must still be surfaced.
+		// open, and the pipes were closed after onDemandWaitDelay. Go returns
+		// ErrWaitDelay only for a successful exit, and a failed runtime reports
+		// an ExitError instead; the ExitError check is defensive.
 		err = nil
 	}
 	if ctx.Err() == context.DeadlineExceeded {
