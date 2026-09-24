@@ -411,15 +411,15 @@ my-service/
 `long-running` 实例启动时，OctoBus 会从 runtime dir 执行解析出的 `node_entry`，并传入固定参数：
 
 ```text
---runtime serve --host 127.0.0.1 --port <port> --config <config.json> --secret <secret.json> --workdir <instance_workdir> --service <service_id> --instance <instance_id>
+--runtime serve --host 127.0.0.1 --port <port> --config <config.json> --secret-fd 3 --workdir <instance_workdir> --service <service_id> --instance <instance_id>
 ```
 
-service 进程需要启动 gRPC server，并实现标准 gRPC health check
+instance secret JSON 从 fd 3 读取，由 OctoBus 通过管道写入；secret 只保存在 SQLite 中，不会写入 instance 目录。service 进程需要启动 gRPC server，并实现标准 gRPC health check
 
 `on-demand` service 还需要支持一次性调用命令：
 
 ```text
---runtime invoke --method <package.Service/Method> --config <config.json> --secret <secret.json> --metadata <metadata.json> --workdir <instance_workdir> --service <service_id> --instance <instance_id>
+--runtime invoke --method <package.Service/Method> --config <config.json> --secret-fd 3 --metadata <metadata.json> --workdir <instance_workdir> --service <service_id> --instance <instance_id>
 ```
 
 OctoBus 会把 protobuf wire-format 请求写入 stdin，期望 stdout 只输出 protobuf wire-format 响应。OctoBus 还会设置 `OCTOBUS_PACKAGE_DIR=<runtime>/<service_root>`，因此 SDK 会从 service root 读取 `service.json`、proto 和 schema，同时完整 runtime dir 仍保留 distribution package root 的依赖布局。`@chaitin-ai/octobus-sdk` 的 `runServiceMain` 未带 `--runtime` 时进入业务 CLI；带 `--runtime` 时进入 runtime parser，支持 `serve`、`invoke`、`dev`、`inspect`、`client-stub` 和 `client-package` 等命令。
@@ -494,7 +494,6 @@ Client / Agent
     descriptor.protoset
   instances/{instance_id}/
     config.json
-    secret.json
     stdout.log
     stderr.log
     tmp/

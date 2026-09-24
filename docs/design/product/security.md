@@ -45,8 +45,9 @@ admin API 与公共协议网关共用同一个端口，路径前缀为 `/admin/v
 
 instance config 可能包含 token、password 等敏感信息，必须使用 `0600` 权限写入。
 
-instance secret、stdout/stderr 日志和 access log 也使用 `0600` 权限，避免 token、
-cookie、请求参数等敏感信息被同机其他用户读取。
+stdout/stderr 日志和 access log 也使用 `0600` 权限，避免 token、cookie、请求参数等
+敏感信息被同机其他用户读取。instance secret 不写入文件：它只保存在 SQLite 中，启动时
+通过管道从 fd 3 传给子进程。
 
 ## CLI 脱敏
 

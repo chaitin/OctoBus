@@ -193,7 +193,7 @@ cat ./gitlab-test.config.json | octobus instance create \
 
 - 复制 instance 配置到 instance workdir；未指定 `--config` 时使用 `{}`。
 - `--config` 和 `--config-json` 互斥；`--config -` 从 stdin 读取 JSON。
-- 复制 instance secret 到 instance workdir；未指定 `--secret` 时使用 `{}`。
+- 读取 instance secret（不写入 instance workdir，见下文）；未指定 `--secret` 时使用 `{}`。
 - `--secret` 和 `--secret-json` 互斥；`--secret -` 从 stdin 读取 JSON。
 - `--config -` 和 `--secret -` 不能在同一个命令中同时使用，因为 stdin 只能消费一次。
 - 敏感信息推荐通过 `--secret` 文件或 stdin 传入，避免进入 shell history 或进程参数。
@@ -239,7 +239,7 @@ octobus instance update-secret \
 
 也支持 `--secret-json JSON` 或 `--secret -`。`update-secret` 必须显式提供一个 secret 来源；如果要清空 secret，使用 `--secret-json '{}'`。
 
-默认只更新落盘 secret 和 `secret_sha256`，不自动重启 instance。若希望立即生效：
+默认只更新 SQLite 中的 secret 和 `secret_sha256`，不自动重启 instance。若希望立即生效：
 
 ```text
 octobus instance update-secret \

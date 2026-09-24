@@ -417,15 +417,15 @@ Required fields:
 When a `long-running` instance starts, OctoBus executes the resolved `node_entry` from the runtime dir and passes fixed arguments:
 
 ```text
---runtime serve --host 127.0.0.1 --port <port> --config <config.json> --secret <secret.json> --workdir <instance_workdir> --service <service_id> --instance <instance_id>
+--runtime serve --host 127.0.0.1 --port <port> --config <config.json> --secret-fd 3 --workdir <instance_workdir> --service <service_id> --instance <instance_id>
 ```
 
-The service process must start a gRPC server and implement the standard gRPC health check.
+The instance secret JSON is read from file descriptor 3, which OctoBus fills through a pipe; the secret is kept in SQLite and never written to the instance directory. The service process must start a gRPC server and implement the standard gRPC health check.
 
 An `on-demand` service must also support one-shot invocation:
 
 ```text
---runtime invoke --method <package.Service/Method> --config <config.json> --secret <secret.json> --metadata <metadata.json> --workdir <instance_workdir> --service <service_id> --instance <instance_id>
+--runtime invoke --method <package.Service/Method> --config <config.json> --secret-fd 3 --metadata <metadata.json> --workdir <instance_workdir> --service <service_id> --instance <instance_id>
 ```
 
 OctoBus writes the protobuf wire-format request to stdin and expects stdout to contain only the protobuf wire-format response. OctoBus also sets `OCTOBUS_PACKAGE_DIR=<runtime>/<service_root>`, so the SDK reads `service.json`, proto, and schema from the service root while the full runtime dir still preserves the dependency layout from the distribution package root. `@chaitin-ai/octobus-sdk`'s `runServiceMain` enters the business CLI when `--runtime` is not provided. When `--runtime` is provided, it enters the runtime parser and supports commands such as `serve`, `invoke`, `dev`, `inspect`, `client-stub`, and `client-package`.
@@ -497,7 +497,6 @@ Runtime data is laid out roughly as follows:
     descriptor.protoset
   instances/{instance_id}/
     config.json
-    secret.json
     stdout.log
     stderr.log
     tmp/
