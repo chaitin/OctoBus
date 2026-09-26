@@ -136,7 +136,17 @@ async function invokeConnectUnary(
     signal: invokeOptions.signal,
   });
   const responseText = await response.text();
-  const responseBody = parseResponseJSON(responseText);
+  let responseBody: unknown;
+  try {
+    responseBody = parseResponseJSON(responseText);
+  } catch (error) {
+    // Proxies and gateways often return HTML or plain text for failed requests.
+    // Preserve the HTTP status so callers can still classify the failure.
+    if (!response.ok) {
+      throw connectErrorFromResponse(response.status, undefined, response.statusText);
+    }
+    throw error;
+  }
   if (!response.ok) {
     throw connectErrorFromResponse(response.status, responseBody, response.statusText);
   }
