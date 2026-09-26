@@ -156,6 +156,41 @@ describe("HTTP helpers", () => {
     })).rejects.toSatisfy((error: Error) => !error.message.includes("abc"));
   });
 
+  it("keeps the request deadline active while reading the response body", async () => {
+    let sourceController: ReadableStreamDefaultController<Uint8Array> | undefined;
+    const fetchImpl = async (_url: string | URL, init?: RequestInit) => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          sourceController = controller;
+          controller.enqueue(new TextEncoder().encode("partial"));
+          init?.signal?.addEventListener("abort", () => controller.error(new Error("aborted")), { once: true });
+          setTimeout(() => controller.close(), 50);
+        },
+      });
+      return new Response(body, { status: 200 });
+    };
+
+    const response = await fetchWithTimeout("https://example.test/slow-body", {}, { timeoutMs: 5, fetchImpl });
+    await expect(readResponseText(response)).rejects.toMatchObject({ legacyCode: "DEADLINE_EXCEEDED" });
+    expect(sourceController).toBeDefined();
+  });
+
+  it("keeps external cancellation active while reading the response body", async () => {
+    const controller = new AbortController();
+    const response = await fetchWithTimeout("https://example.test/cancel-body", { signal: controller.signal }, {
+      timeoutMs: 100,
+      fetchImpl: async (_url, init) => new Response(new ReadableStream<Uint8Array>({
+        start(source) {
+          source.enqueue(new TextEncoder().encode("partial"));
+          init?.signal?.addEventListener("abort", () => source.error(new Error("aborted")), { once: true });
+        },
+      }), { status: 200 }),
+    });
+
+    controller.abort();
+    await expect(readResponseText(response)).rejects.toMatchObject({ legacyCode: "CANCELLED" });
+  });
+
   it("reads response bodies, JSON, and non-2xx errors safely", async () => {
     await expect(readResponseText(response(200, "plain"))).resolves.toBe("plain");
     await expect(readResponseJson(response(200, "{\"ok\":true}"))).resolves.toEqual({ body: "{\"ok\":true}", json: { ok: true } });

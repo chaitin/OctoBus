@@ -1,6 +1,7 @@
 import { Agent } from "undici";
 import type { Dispatcher } from "undici";
 
+import { GrpcError } from "./grpc-error.js";
 import { httpStatusError, redactSensitive, serviceError } from "./errors.js";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -79,12 +80,26 @@ export async function fetchWithTimeout(url: string | URL, init: FetchInit = {}, 
   } = init;
 
   try {
-    return await fetchImpl(url, {
+    const response = await fetchImpl(url, {
       ...safeInit,
       ...(options.dispatcher ? { dispatcher: options.dispatcher } : {}),
       signal: controller.signal,
     });
+    return responseWithRequestLifecycle(response, () => {
+      clearTimeout(timeoutId);
+      unbindAbortSignal();
+    }, () => {
+      if (timedOut) {
+        return serviceError("DEADLINE_EXCEEDED", `upstream request timed out after ${timeoutMs}ms`);
+      }
+      if (externalAborted) {
+        return serviceError("CANCELLED", "upstream request aborted");
+      }
+      return undefined;
+    });
   } catch (error) {
+    clearTimeout(timeoutId);
+    unbindAbortSignal();
     if (timedOut) {
       throw serviceError("DEADLINE_EXCEEDED", `upstream request timed out after ${timeoutMs}ms`);
     }
@@ -92,16 +107,59 @@ export async function fetchWithTimeout(url: string | URL, init: FetchInit = {}, 
       throw serviceError("CANCELLED", "upstream request aborted");
     }
     throw serviceError("UNAVAILABLE", String(redactSensitive(error instanceof Error ? error.message : "upstream request failed")));
-  } finally {
-    clearTimeout(timeoutId);
-    unbindAbortSignal();
   }
+}
+
+function responseWithRequestLifecycle(
+  response: Response,
+  cleanup: () => void,
+  requestError: () => GrpcError | undefined,
+): Response {
+  const body = response.body;
+  if (body === null || body === undefined) {
+    cleanup();
+    return response;
+  }
+
+  const reader = body.getReader();
+  const wrappedBody = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const result = await reader.read();
+        if (result.done) {
+          cleanup();
+          controller.close();
+          return;
+        }
+        controller.enqueue(result.value);
+      } catch (error) {
+        cleanup();
+        controller.error(requestError() ?? error);
+      }
+    },
+    async cancel(reason) {
+      try {
+        await reader.cancel(reason);
+      } finally {
+        cleanup();
+      }
+    },
+  });
+
+  return new Response(wrappedBody, {
+    headers: response.headers,
+    status: response.status,
+    statusText: response.statusText,
+  });
 }
 
 export async function readResponseText(response: ResponseWithText): Promise<string> {
   try {
     return String((await response.text()) ?? "");
   } catch (error) {
+    if (error instanceof GrpcError) {
+      throw error;
+    }
     const message = error instanceof Error ? error.message : "unknown error";
     throw serviceError("UNAVAILABLE", `failed to read upstream response body: ${redactSensitive(message)}`);
   }
