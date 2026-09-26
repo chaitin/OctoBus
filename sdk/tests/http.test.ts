@@ -167,10 +167,19 @@ describe("HTTP helpers", () => {
           setTimeout(() => controller.close(), 50);
         },
       });
-      return new Response(body, { status: 200 });
+      const response = new Response(body, { status: 200 });
+      Object.defineProperties(response, {
+        redirected: { configurable: true, value: true },
+        type: { configurable: true, value: "cors" },
+        url: { configurable: true, value: "https://final.example.test/path" },
+      });
+      return response;
     };
 
     const response = await fetchWithTimeout("https://example.test/slow-body", {}, { timeoutMs: 5, fetchImpl });
+    expect(response.redirected).toBe(true);
+    expect(response.type).toBe("cors");
+    expect(response.url).toBe("https://final.example.test/path");
     await expect(readResponseText(response)).rejects.toMatchObject({ legacyCode: "DEADLINE_EXCEEDED" });
     expect(sourceController).toBeDefined();
   });

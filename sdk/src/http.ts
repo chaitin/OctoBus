@@ -61,13 +61,19 @@ export async function fetchWithTimeout(url: string | URL, init: FetchInit = {}, 
   const controller = new AbortController();
   let timedOut = false;
   let externalAborted = false;
+  let cleanupRequest = (): void => {};
   const unbindAbortSignal = bindAbortSignal(controller, init.signal, () => {
     externalAborted = true;
   });
   const timeoutId = setTimeout(() => {
     timedOut = true;
     controller.abort(new Error(`timeout after ${timeoutMs}ms`));
+    cleanupRequest();
   }, timeoutMs);
+  cleanupRequest = (): void => {
+    clearTimeout(timeoutId);
+    unbindAbortSignal();
+  };
   const fetchImpl = options.fetchImpl ?? fetch;
   const {
     timeoutMs: _ignoredTimeoutMs,
@@ -85,10 +91,7 @@ export async function fetchWithTimeout(url: string | URL, init: FetchInit = {}, 
       ...(options.dispatcher ? { dispatcher: options.dispatcher } : {}),
       signal: controller.signal,
     });
-    return responseWithRequestLifecycle(response, () => {
-      clearTimeout(timeoutId);
-      unbindAbortSignal();
-    }, () => {
+    return responseWithRequestLifecycle(response, cleanupRequest, () => {
       if (timedOut) {
         return serviceError("DEADLINE_EXCEEDED", `upstream request timed out after ${timeoutMs}ms`);
       }
@@ -98,8 +101,7 @@ export async function fetchWithTimeout(url: string | URL, init: FetchInit = {}, 
       return undefined;
     });
   } catch (error) {
-    clearTimeout(timeoutId);
-    unbindAbortSignal();
+    cleanupRequest();
     if (timedOut) {
       throw serviceError("DEADLINE_EXCEEDED", `upstream request timed out after ${timeoutMs}ms`);
     }
@@ -146,11 +148,18 @@ function responseWithRequestLifecycle(
     },
   });
 
-  return new Response(wrappedBody, {
+  const wrappedResponse = new Response(wrappedBody, {
     headers: response.headers,
     status: response.status,
     statusText: response.statusText,
   });
+  for (const property of ["url", "redirected", "type"] as const) {
+    Object.defineProperty(wrappedResponse, property, {
+      configurable: true,
+      value: response[property],
+    });
+  }
+  return wrappedResponse;
 }
 
 export async function readResponseText(response: ResponseWithText): Promise<string> {
