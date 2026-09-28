@@ -606,12 +606,18 @@ waiting_for_import_lock`）说明原因。该保证只覆盖同一进程内的 i
 备份并收尾中断的提交：
 
 - 服务目录不存在：用备份恢复，磁盘回到 store 描述的那个版本。
-- 服务目录存在，且其 `descriptor.protoset` 哈希与 store 记录的 `descriptor_sha256` 一致：
-  提交与写库都已完成，只删除多余的备份。
-- 其余情况（哈希不符、store 无该行、descriptor 读不出）：回滚到备份，让磁盘与 store 一致。
+- 服务目录存在，且其 `descriptor.protoset` 与 package artifact 的哈希都与 store 记录一致：
+  提交与写库都已完成，只删除多余的备份。两者都要比：descriptor 只覆盖 proto，若一次导入改了
+  package 但 `.proto` 未变（bin、版本等变更常见如此），只看 descriptor 会把未提交的新目录
+  误判为已提交。
+- 其余情况（任一哈希不符、store 无该行、文件读不出）：回滚到备份，让磁盘与 store 一致。
 
-恢复可重复执行（在「删除服务目录」与「放回备份」之间再次崩溃，下次启动会重做这一步），失败
-只记录日志、不阻断 daemon 启动。
+同一次扫描还会删除崩溃遗留的 staging 工作树（`.staging-<service_id>`、`.staging-recursive-import`）：
+启动时不可能有导入在进行，而残留的工作树否则要等到再次导入同一 service 才会被回收。
+
+恢复可重复执行（在「删除服务目录」与「放回备份」之间再次崩溃，下次启动会重做这一步）。
+单个 service 失败不会中断整轮扫描 —— 其余 service 的目录同样需要在实例恢复之前归位 ——
+错误会被汇总记录，且**不阻断 daemon 启动**。
 
 ## 安全边界
 

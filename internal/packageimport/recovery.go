@@ -16,6 +16,11 @@ import (
 // dir into place. It is shared with replaceServiceDir.
 const previousDirSuffix = ".previous"
 
+// stagingDirPrefix names the working tree an import builds in and removes when
+// it returns. Every staging dir shares the prefix so a startup sweep can find
+// the ones a crash left behind.
+const stagingDirPrefix = ".staging-"
+
 // descriptorFileName is the compiled descriptor stored inside a service dir.
 const descriptorFileName = "descriptor.protoset"
 
@@ -27,22 +32,27 @@ type ServiceDirRecovery struct {
 	// Discarded lists services whose backup was left behind by a commit that
 	// completed.
 	Discarded []string
+	// Staging lists the working trees a crashed import left behind.
+	Staging []string
 }
 
-// RecoverServiceDirs finishes service commits that a crash interrupted.
+// RecoverServiceDirs finishes service commits that a crash interrupted, and
+// clears the working trees a crashed import abandoned.
 //
 // A commit swaps a service dir through `.<service id>.previous` and only then
 // updates the store, so a crash can leave the service dir missing with its
 // previous version in the backup, or leave the backup behind with the disk and
 // the store possibly disagreeing. The store decides between the two: a service
-// dir whose descriptor still matches the stored hash is the committed one and
-// only needs the leftover backup removed, and anything else is rolled back so
-// that the disk matches the row again.
+// dir whose descriptor and package artifact both still hash to the stored
+// values is the committed one and only needs the leftover backup removed, and
+// anything else is rolled back so that the disk matches the row again.
 //
 // Call it before instances are recovered, so that a restored service dir is in
-// place before anything starts from it. It is safe to run repeatedly.
+// place before anything starts from it. A failure on one service does not stop
+// the sweep, because every other service still needs its dir back. It is safe
+// to run repeatedly.
 func (i *Importer) RecoverServiceDirs(ctx context.Context) (ServiceDirRecovery, error) {
-	report := ServiceDirRecovery{Restored: []string{}, Discarded: []string{}}
+	report := ServiceDirRecovery{Restored: []string{}, Discarded: []string{}, Staging: []string{}}
 	servicesDir := filepath.Join(i.DataDir, "artifacts", "services")
 	entries, err := os.ReadDir(servicesDir)
 	if err != nil {
@@ -51,36 +61,60 @@ func (i *Importer) RecoverServiceDirs(ctx context.Context) (ServiceDirRecovery, 
 		}
 		return report, fmt.Errorf("scan service dirs: %w", err)
 	}
+	var errs []error
 	for _, entry := range entries {
+		if name, ok := stagingDirName(entry); ok {
+			// Nothing can be importing at startup, so a staging tree here is
+			// left over from a crash. Without this it is only reclaimed by
+			// importing that same service again.
+			if err := os.RemoveAll(filepath.Join(servicesDir, name)); err != nil {
+				errs = append(errs, fmt.Errorf("remove leftover staging tree %s: %w", name, err))
+				continue
+			}
+			report.Staging = append(report.Staging, name)
+			continue
+		}
 		serviceID, ok := backupServiceID(entry)
 		if !ok {
 			continue
 		}
-		serviceDir := filepath.Join(servicesDir, serviceID)
 		backupDir := filepath.Join(servicesDir, entry.Name())
+		serviceDir := filepath.Join(servicesDir, serviceID)
 		rollback, err := i.interruptedCommitNeedsRollback(ctx, serviceID, serviceDir)
 		if err != nil {
-			return report, err
+			errs = append(errs, err)
+			continue
 		}
 		if rollback {
 			// Remove before renaming: renaming onto a non-empty dir fails. A
 			// crash in between leaves the backup in place, so the next start
 			// repeats this instead of losing the previous version.
 			if err := os.RemoveAll(serviceDir); err != nil {
-				return report, fmt.Errorf("roll back interrupted commit for service %s: %w", serviceID, err)
+				errs = append(errs, fmt.Errorf("roll back interrupted commit for service %s: %w", serviceID, err))
+				continue
 			}
 			if err := os.Rename(backupDir, serviceDir); err != nil {
-				return report, fmt.Errorf("restore service dir %s: %w", serviceID, err)
+				errs = append(errs, fmt.Errorf("restore service dir %s: %w", serviceID, err))
+				continue
 			}
 			report.Restored = append(report.Restored, serviceID)
 			continue
 		}
 		if err := os.RemoveAll(backupDir); err != nil {
-			return report, fmt.Errorf("remove leftover backup for service %s: %w", serviceID, err)
+			errs = append(errs, fmt.Errorf("remove leftover backup for service %s: %w", serviceID, err))
+			continue
 		}
 		report.Discarded = append(report.Discarded, serviceID)
 	}
-	return report, nil
+	return report, errors.Join(errs...)
+}
+
+// stagingDirName reports the name of a staging tree entry.
+func stagingDirName(entry os.DirEntry) (string, bool) {
+	if !entry.IsDir() || !strings.HasPrefix(entry.Name(), stagingDirPrefix) {
+		return "", false
+	}
+	return entry.Name(), true
 }
 
 // backupServiceID reports the service id that a `.<id>.previous` entry backs up.
@@ -102,6 +136,12 @@ func backupServiceID(entry os.DirEntry) (string, bool) {
 
 // interruptedCommitNeedsRollback reports whether the interrupted commit for
 // serviceID has to go back to its backup.
+//
+// It compares both artifacts the store identifies a version by. The descriptor
+// alone only covers the proto surface, so a re-import that changes the package
+// but not its .proto would otherwise look like a completed commit while the row
+// still describes the previous package. Anything that cannot be verified is
+// rolled back: the backup is the only copy of the version the row names.
 func (i *Importer) interruptedCommitNeedsRollback(ctx context.Context, serviceID, serviceDir string) (bool, error) {
 	if _, err := os.Stat(serviceDir); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -109,12 +149,6 @@ func (i *Importer) interruptedCommitNeedsRollback(ctx context.Context, serviceID
 			return true, nil
 		}
 		return false, fmt.Errorf("stat service dir %s: %w", serviceID, err)
-	}
-	raw, err := os.ReadFile(filepath.Join(serviceDir, descriptorFileName))
-	if err != nil {
-		// Without a readable descriptor the new dir cannot be told apart from
-		// the deployed one, so fall back to the version the store describes.
-		return true, nil
 	}
 	stored, err := i.Store.GetService(ctx, serviceID)
 	if err != nil {
@@ -125,5 +159,16 @@ func (i *Importer) interruptedCommitNeedsRollback(ctx context.Context, serviceID
 		}
 		return false, fmt.Errorf("read service %s: %w", serviceID, err)
 	}
-	return stored.DescriptorSHA256 != domain.HashBytes(raw), nil
+	descriptor, err := os.ReadFile(filepath.Join(serviceDir, descriptorFileName))
+	if err != nil {
+		return true, nil
+	}
+	if stored.DescriptorSHA256 != domain.HashBytes(descriptor) {
+		return true, nil
+	}
+	artifact, err := os.ReadFile(filepath.Join(serviceDir, filepath.Base(stored.PackageArtifactPath)))
+	if err != nil {
+		return true, nil
+	}
+	return stored.PackageSHA256 != domain.HashBytes(artifact), nil
 }

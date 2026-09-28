@@ -736,8 +736,9 @@ func (s *Server) handleStreamingServiceImport(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if res.DryRun {
-		s.logger().Info("service_import_dry_run_done", "service_id", res.Service.ID, "update", res.Update, "runtime_mode", res.Service.RuntimeMode, "descriptor_version", res.Service.DescriptorVersion, "method_count", len(res.Service.Methods))
-		_ = writeEvent(packageimport.ImportProgressEvent{Type: "complete", Status: "ok", Service: &res.Service, DryRun: true, Update: res.Update, ExistingService: res.Existing, WouldRestartInstances: s.wouldRestartInstances(r.Context(), res.Service.ID, res.Service.RuntimeMode), RestartedInstances: []string{}, RestartErrors: []string{}})
+		wouldRestart := s.wouldRestartInstances(r.Context(), res.Service.ID, res.Service.RuntimeMode)
+		s.logger().Info("service_import_dry_run_done", "service_id", res.Service.ID, "update", res.Update, "runtime_mode", res.Service.RuntimeMode, "descriptor_version", res.Service.DescriptorVersion, "method_count", len(res.Service.Methods), "would_restart_count", len(wouldRestart))
+		_ = writeEvent(packageimport.ImportProgressEvent{Type: "complete", Status: "ok", Service: &res.Service, DryRun: true, Update: res.Update, ExistingService: res.Existing, WouldRestartInstances: wouldRestart, RestartedInstances: []string{}, RestartErrors: []string{}})
 		return
 	}
 	s.logger().Info("service_import_done", "service_id", res.Service.ID, "runtime_mode", res.Service.RuntimeMode, "descriptor_sha256", res.Service.DescriptorSHA256, "method_count", len(res.Service.Methods))
@@ -1001,23 +1002,34 @@ func readSchemaContent(path string) (json.RawMessage, error) {
 	return json.RawMessage(data), nil
 }
 
+// restartTargets lists the enabled instances of a service, which is the part of
+// a restart both the preview and the restart itself select the same way. The
+// runtime mode is decided by the caller, because a real import decides it from
+// the row it just wrote while a preview decides it from the row it would write.
+func (s *Server) restartTargets(ctx context.Context, serviceID string) ([]string, error) {
+	instances, err := s.Store.ListEnabledInstancesByService(ctx, serviceID)
+	if err != nil {
+		return nil, err
+	}
+	return instanceIDs(instances), nil
+}
+
 // wouldRestartInstances reports which instances a real import would restart,
 // without restarting anything. It takes the runtime mode of the service being
 // imported rather than the deployed row's: a real import restarts from the row
 // it just wrote, so an import that changes the mode would otherwise be
-// predicted with the mode it is about to replace. The enabled instances
-// themselves come from the store, which the import does not touch. Lookup
-// failures and services that do not exist yet report no instances — a preview
-// field is not worth failing the response over.
+// predicted with the mode it is about to replace. Lookup failures and services
+// that do not exist yet report no instances — a preview field is not worth
+// failing the response over.
 func (s *Server) wouldRestartInstances(ctx context.Context, serviceID string, runtimeMode domain.RuntimeMode) []string {
 	if s.Supervisor == nil || runtimeMode == domain.RuntimeModeOnDemand {
 		return []string{}
 	}
-	instances, err := s.Store.ListEnabledInstancesByService(ctx, serviceID)
+	targets, err := s.restartTargets(ctx, serviceID)
 	if err != nil {
 		return []string{}
 	}
-	return instanceIDs(instances)
+	return targets
 }
 
 // dryRunRestartPlan maps every discovered service to the instances a real
@@ -1041,14 +1053,14 @@ func (s *Server) restartEnabledServiceInstances(ctx context.Context, serviceID s
 	if svc.RuntimeMode == domain.RuntimeModeOnDemand {
 		return []string{}, []string{}
 	}
-	instances, err := s.Store.ListEnabledInstancesByService(ctx, serviceID)
+	targets, err := s.restartTargets(ctx, serviceID)
 	if err != nil {
 		return nil, []string{err.Error()}
 	}
-	s.logger().Info("service_instances_restart_started", "service_id", serviceID, "count", len(instances))
+	s.logger().Info("service_instances_restart_started", "service_id", serviceID, "count", len(targets))
 	var restarted []string
 	errsByInstance := make(map[string]string)
-	errs := supervisor.RunBounded(instanceIDs(instances), 4, func(id string) error {
+	errs := supervisor.RunBounded(targets, 4, func(id string) error {
 		if err := s.Supervisor.Restart(ctx, id); err != nil {
 			return fmt.Errorf("%s: %w", id, err)
 		}
@@ -1060,15 +1072,15 @@ func (s *Server) restartEnabledServiceInstances(ctx context.Context, serviceID s
 			errsByInstance[parts[0]] = err.Error()
 		}
 	}
-	for _, inst := range instances {
-		if msg := errsByInstance[inst.ID]; msg != "" {
+	for _, id := range targets {
+		if msg := errsByInstance[id]; msg != "" {
 			continue
 		}
-		restarted = append(restarted, inst.ID)
+		restarted = append(restarted, id)
 	}
 	var errStrings []string
-	for _, inst := range instances {
-		if msg := errsByInstance[inst.ID]; msg != "" {
+	for _, id := range targets {
+		if msg := errsByInstance[id]; msg != "" {
 			errStrings = append(errStrings, msg)
 		}
 	}

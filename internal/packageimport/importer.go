@@ -37,19 +37,28 @@ type Importer struct {
 // other's working tree, and can leave a service dir removed while its store row
 // survives. Locks are keyed by data dir so separate Importer values pointing at
 // the same dir are still serialized. They do not protect against other
-// processes using the same data dir.
+// processes using the same data dir, and entries are kept for the life of the
+// process: one data dir per process is the norm, and pruning would need
+// refcounting because a waiting caller holds the lock it is about to take.
 var (
 	importLocksMu sync.Mutex
 	importLocks   = map[string]*sync.Mutex{}
 )
 
+// importLock returns the lock serializing imports for a data dir. The key is
+// resolved to an absolute path so that `./data` and `/abs/data` cannot end up
+// with separate locks for the same dir.
 func importLock(dataDir string) *sync.Mutex {
+	key, err := filepath.Abs(dataDir)
+	if err != nil {
+		key = dataDir
+	}
 	importLocksMu.Lock()
 	defer importLocksMu.Unlock()
-	lock, ok := importLocks[dataDir]
+	lock, ok := importLocks[key]
 	if !ok {
 		lock = new(sync.Mutex)
-		importLocks[dataDir] = lock
+		importLocks[key] = lock
 	}
 	return lock
 }
@@ -204,7 +213,7 @@ func (i *Importer) Import(ctx context.Context, opts Options) (Result, error) {
 	}
 	defer unlock()
 	serviceDir := filepath.Join(i.DataDir, "artifacts", "services", opts.ServiceID)
-	staging := filepath.Join(i.DataDir, "artifacts", "services", ".staging-"+opts.ServiceID)
+	staging := filepath.Join(i.DataDir, "artifacts", "services", stagingDirPrefix+opts.ServiceID)
 	if err := os.RemoveAll(staging); err != nil {
 		return Result{}, err
 	}
@@ -476,7 +485,7 @@ func (i *Importer) ImportRecursive(ctx context.Context, opts Options) (Recursive
 		return RecursiveResult{}, err
 	}
 	defer unlock()
-	staging := filepath.Join(i.DataDir, "artifacts", "services", ".staging-recursive-import")
+	staging := filepath.Join(i.DataDir, "artifacts", "services", stagingDirPrefix+"recursive-import")
 	if err := os.RemoveAll(staging); err != nil {
 		return RecursiveResult{}, err
 	}

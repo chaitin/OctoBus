@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"octobus/internal/store"
 )
 
 const recoveryTestManifest = `{"schema":"chaitin.octobus.service.v1","name":"echo-wrapper","proto":{"roots":["proto"],"files":["proto/echo.proto"]}}`
@@ -147,30 +149,111 @@ func TestRecoverServiceDirsToleratesMissingServicesDir(t *testing.T) {
 	}
 }
 
-func TestRecoverServiceDirsIgnoresUnrelatedEntries(t *testing.T) {
+func TestRecoverServiceDirsCleansAbandonedStagingTrees(t *testing.T) {
 	dataDir, s := openTestStore(t)
 	importer := &Importer{DataDir: dataDir, Store: s}
 	_, servicesDir := importRecoveryFixture(t, importer)
-	for _, name := range []string{".staging-echo", ".previous"} {
-		dir := filepath.Join(servicesDir, name)
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(dir, "keep"), []byte("x"), 0o644); err != nil {
-			t.Fatal(err)
-		}
+	stagingDir := filepath.Join(servicesDir, ".staging-echo")
+	if err := os.MkdirAll(filepath.Join(stagingDir, "runtime", "node_modules"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stagingDir, "package.tgz"), []byte("leftover"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// A directory that only looks like a backup must survive the sweep.
+	notABackup := filepath.Join(servicesDir, ".previous")
+	if err := os.MkdirAll(notABackup, 0o755); err != nil {
+		t.Fatal(err)
 	}
 
 	report, err := importer.RecoverServiceDirs(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(report.Restored) != 0 || len(report.Discarded) != 0 {
+	if len(report.Staging) != 1 || report.Staging[0] != ".staging-echo" || len(report.Restored) != 0 || len(report.Discarded) != 0 {
 		t.Fatalf("unexpected recovery report: %+v", report)
 	}
-	for _, name := range []string{"echo", ".staging-echo", ".previous"} {
+	if _, err := os.Stat(stagingDir); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("leftover staging tree survived recovery: %v", err)
+	}
+	for _, name := range []string{"echo", ".previous"} {
 		if _, err := os.Stat(filepath.Join(servicesDir, name)); err != nil {
 			t.Fatalf("%s was touched by recovery: %v", name, err)
 		}
+	}
+}
+
+// A package whose .proto did not change hashes to the same descriptor as the
+// version it replaces, so the package artifact has to decide too.
+func TestRecoverServiceDirsRollsBackWhenOnlyThePackageChanged(t *testing.T) {
+	ctx := context.Background()
+	dataDir, s := openTestStore(t)
+	importer := &Importer{DataDir: dataDir, Store: s}
+	_, servicesDir := importRecoveryFixture(t, importer)
+	serviceDir := filepath.Join(servicesDir, "echo")
+	stored, err := s.GetService(ctx, "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifactPath := filepath.Join(serviceDir, filepath.Base(stored.PackageArtifactPath))
+	deployed := mustReadFile(t, artifactPath)
+	if err := copyDir(serviceDir, filepath.Join(servicesDir, ".echo.previous")); err != nil {
+		t.Fatal(err)
+	}
+	// The new package reached the disk with an unchanged descriptor, and the
+	// store was never updated.
+	if err := os.WriteFile(artifactPath, []byte("uncommitted package"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := importer.RecoverServiceDirs(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Restored) != 1 || report.Restored[0] != "echo" || len(report.Discarded) != 0 {
+		t.Fatalf("unexpected recovery report: %+v", report)
+	}
+	if got := mustReadFile(t, artifactPath); string(got) != string(deployed) {
+		t.Fatalf("service dir was not rolled back to the deployed package")
+	}
+}
+
+// One unreadable service must not stop the sweep: the rest still need their
+// dirs back before instances are recovered.
+func TestRecoverServiceDirsContinuesAfterPerServiceFailure(t *testing.T) {
+	dataDir := filepath.Join(t.TempDir(), "data")
+	s, err := store.Open(filepath.Join(dataDir, "octobus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	servicesDir := filepath.Join(dataDir, "artifacts", "services")
+	// alpha exists on disk, so recovery has to consult the store and fails once
+	// the store is closed; zulu has no live dir, so it is restorable without it.
+	if err := os.MkdirAll(filepath.Join(servicesDir, "alpha"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(servicesDir, ".alpha.previous"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(servicesDir, ".zulu.previous"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := (&Importer{DataDir: dataDir, Store: s}).RecoverServiceDirs(context.Background())
+	if err == nil {
+		t.Fatal("expected the failed service to be reported")
+	}
+	if len(report.Restored) != 1 || report.Restored[0] != "zulu" {
+		t.Fatalf("sweep stopped before restoring later services: report=%+v err=%v", report, err)
+	}
+	if _, statErr := os.Stat(filepath.Join(servicesDir, "zulu")); statErr != nil {
+		t.Fatalf("zulu was not restored: %v", statErr)
+	}
+	if _, statErr := os.Stat(filepath.Join(servicesDir, ".alpha.previous")); statErr != nil {
+		t.Fatalf("failed service should keep its backup: %v", statErr)
 	}
 }
