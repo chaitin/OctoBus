@@ -978,6 +978,105 @@ func TestCLIAdminGatewayAndStoreIntegrationCRUD(t *testing.T) {
 	}
 }
 
+func TestCLIServiceImportDryRunPreviewsWithoutCommit(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	dataDir := filepath.Join(root, "data")
+	pkgDir := createFixturePackage(t, root)
+	st, err := store.Open(filepath.Join(dataDir, "octobus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	imp := &packageimport.Importer{DataDir: dataDir, Store: st}
+	adminSrv := &admin.Server{Store: st, Importer: imp, Supervisor: supervisor.New(dataDir, st)}
+	httpSrv := httptest.NewServer(adminSrv.Handler())
+	defer httpSrv.Close()
+
+	var stderr bytes.Buffer
+	c := &cli.CLI{AdminAddr: strings.TrimPrefix(httpSrv.URL, "http://"), Client: httpSrv.Client(), Stdout: &bytes.Buffer{}, Stderr: &stderr}
+	runCLI := func(args ...string) string {
+		t.Helper()
+		var out bytes.Buffer
+		c.Stdout = &out
+		if err := c.Run(args); err != nil {
+			t.Fatalf("octobus %s: %v\n%s", strings.Join(args, " "), err, out.String())
+		}
+		return out.String()
+	}
+
+	previewOut := runCLI("service", "import", "echo", "--offline", "--dry-run", pkgDir)
+	var preview struct {
+		DryRun  bool           `json:"dry_run"`
+		Update  bool           `json:"update"`
+		Service domain.Service `json:"service"`
+	}
+	if err := json.Unmarshal([]byte(previewOut), &preview); err != nil {
+		t.Fatal(err)
+	}
+	if !preview.DryRun || preview.Update {
+		t.Fatalf("dry run flags regressed: dry_run=%v update=%v output=%s", preview.DryRun, preview.Update, previewOut)
+	}
+	// The CLI consumes the streaming path, where a false update flag must still
+	// be present for clients that branch on it.
+	if !strings.Contains(previewOut, `"update": false`) {
+		t.Fatalf("dry run output omitted the update flag: %s", previewOut)
+	}
+	if preview.Service.ID != "echo" || len(preview.Service.Methods) != 1 || preview.Service.Methods[0].FullName != "echo.v1.EchoService/Echo" {
+		t.Fatalf("dry run preview regressed: %s", previewOut)
+	}
+	if preview.Service.DescriptorVersion == "" || preview.Service.NodeEntry == "" || preview.Service.RuntimeMode == "" {
+		t.Fatalf("dry run preview missing metadata: %s", previewOut)
+	}
+	if !strings.Contains(stderr.String(), "dry run: nothing was imported") {
+		t.Fatalf("dry run notice missing from stderr: %s", stderr.String())
+	}
+	if _, err := st.GetService(ctx, "echo"); err == nil {
+		t.Fatal("dry run persisted the service")
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, "artifacts", "services", "echo")); !os.IsNotExist(err) {
+		t.Fatalf("dry run created the service dir: %v", err)
+	}
+	var listed struct {
+		Services []domain.Service `json:"services"`
+	}
+	if err := json.Unmarshal([]byte(runCLI("service", "list")), &listed); err != nil {
+		t.Fatal(err)
+	}
+	if len(listed.Services) != 0 {
+		t.Fatalf("dry run imported services: %+v", listed.Services)
+	}
+
+	runCLI("service", "import", "echo", "--offline", pkgDir)
+	stored, err := st.GetService(ctx, "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.DescriptorSHA256 != preview.Service.DescriptorSHA256 || len(stored.Methods) != len(preview.Service.Methods) {
+		t.Fatalf("real import diverged from dry run preview: stored=%+v preview=%+v", stored, preview.Service)
+	}
+
+	// Previewing again after the import reports the deployed baseline, so callers
+	// can tell whether the service changed since they confirmed it.
+	var rePreview struct {
+		Update   bool `json:"update"`
+		Existing *struct {
+			PackageSHA256    string `json:"PackageSHA256"`
+			DescriptorSHA256 string `json:"DescriptorSHA256"`
+		} `json:"existing_service"`
+	}
+	rePreviewOut := runCLI("service", "import", "echo", "--offline", "--dry-run", pkgDir)
+	if err := json.Unmarshal([]byte(rePreviewOut), &rePreview); err != nil {
+		t.Fatal(err)
+	}
+	if !rePreview.Update || rePreview.Existing == nil {
+		t.Fatalf("dry run did not report the deployed service: %s", rePreviewOut)
+	}
+	if rePreview.Existing.PackageSHA256 != stored.PackageSHA256 || rePreview.Existing.DescriptorSHA256 != stored.DescriptorSHA256 {
+		t.Fatalf("dry run baseline=%+v want package=%q descriptor=%q", rePreview.Existing, stored.PackageSHA256, stored.DescriptorSHA256)
+	}
+}
+
 func TestCLIRecursiveServiceImportListsServices(t *testing.T) {
 	root := t.TempDir()
 	dataDir := filepath.Join(root, "data")

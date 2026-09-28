@@ -372,6 +372,294 @@ func TestAdminServiceImportAndRestartLogs(t *testing.T) {
 	}
 }
 
+func TestAdminServiceImportDryRunSkipsRestart(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	dataDir := filepath.Join(root, "data")
+	st, err := store.Open(filepath.Join(dataDir, "octobus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	pkg := filepath.Join(root, "pkg")
+	writeAdminGitPackage(t, pkg, `{"schema":"chaitin.octobus.service.v1","name":"echo","proto":{"roots":["proto"],"files":["proto/echo.proto"]}}`)
+	var out bytes.Buffer
+	srv := &Server{
+		Store:      st,
+		Importer:   &packageimport.Importer{DataDir: dataDir, Store: st},
+		Supervisor: supervisor.New(dataDir, st),
+		Logger:     slog.New(slog.NewTextHandler(&out, &slog.HandlerOptions{Level: slog.LevelInfo})),
+	}
+	serveAdmin(t, srv, http.MethodPost, "/admin/v1/services/import", bytes.NewBufferString(fmt.Sprintf(`{"service_id":"echo","source":%q,"offline":true,"build":"never"}`, pkg)), http.StatusOK)
+	if err := st.UpsertInstance(ctx, domain.Instance{ID: "echo-alpha", ServiceID: "echo", Name: "Alpha", Enabled: true, Status: domain.StatusStopped, NodeEntry: "echo", ConfigJSON: []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	// The enabled instance cannot actually start, so a real import degrades.
+	serveAdmin(t, srv, http.MethodPost, "/admin/v1/services/import", bytes.NewBufferString(fmt.Sprintf(`{"service_id":"echo","source":%q,"offline":true,"build":"never"}`, pkg)), http.StatusConflict)
+
+	out.Reset()
+	body := serveAdmin(t, srv, http.MethodPost, "/admin/v1/services/import", bytes.NewBufferString(fmt.Sprintf(`{"service_id":"echo","source":%q,"offline":true,"build":"never","dry_run":true}`, pkg)), http.StatusOK)
+	var resp struct {
+		DryRun        bool            `json:"dry_run"`
+		Update        bool            `json:"update"`
+		Service       domain.Service  `json:"service"`
+		ExistingSvc   *domain.Service `json:"existing_service"`
+		Restarted     []string        `json:"restarted_instances"`
+		RestartErrors []string        `json:"restart_errors"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatal(err)
+	}
+	if !resp.DryRun || !resp.Update {
+		t.Fatalf("dry run response regressed: %s", body)
+	}
+	if resp.Service.ID != "echo" || len(resp.Service.Methods) != 1 || resp.Service.DescriptorVersion == "" {
+		t.Fatalf("dry run preview regressed: %s", body)
+	}
+	stored, err := st.GetService(ctx, "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.ExistingSvc == nil || resp.ExistingSvc.PackageSHA256 != stored.PackageSHA256 || resp.ExistingSvc.DescriptorSHA256 != stored.DescriptorSHA256 {
+		t.Fatalf("dry run did not report the deployed baseline: existing=%+v stored=%+v", resp.ExistingSvc, stored)
+	}
+	if len(resp.Restarted) != 0 || len(resp.RestartErrors) != 0 {
+		t.Fatalf("dry run reported restarts: %s", body)
+	}
+	got := out.String()
+	if !strings.Contains(got, "msg=service_import_dry_run_done service_id=echo update=true") {
+		t.Fatalf("missing dry run log in:\n%s", got)
+	}
+	for _, forbidden := range []string{"service_instances_restart_started", "service_import_done"} {
+		if strings.Contains(got, forbidden) {
+			t.Fatalf("dry run logged %q in:\n%s", forbidden, got)
+		}
+	}
+	if _, err := st.GetService(ctx, "echo"); err != nil {
+		t.Fatalf("dry run removed the stored service: %v", err)
+	}
+}
+
+func TestAdminServiceImportDryRunStreaming(t *testing.T) {
+	tests := []struct {
+		name       string
+		existing   *domain.Service
+		want       string
+		wantUpdate string
+		forbid     string
+	}{
+		{name: "new service", want: `"existing_service":null`, wantUpdate: `"update":false`, forbid: `"update":true`},
+		{name: "deployed baseline reported", existing: &domain.Service{ID: "echo", PackageSHA256: "deployed-package-sha"}, want: `"PackageSHA256":"deployed-package-sha"`, wantUpdate: `"update":true`, forbid: `"update":false`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := &Server{Importer: fakeServiceImporter{importFn: func(ctx context.Context, opts packageimport.Options) (packageimport.Result, error) {
+				if !opts.DryRun {
+					t.Fatalf("streaming dry_run not decoded: %+v", opts)
+				}
+				return packageimport.Result{
+					Service:  domain.Service{ID: opts.ServiceID, Name: "Echo", DescriptorVersion: "v2", Methods: []domain.Method{{FullName: "echo.v1.EchoService/Echo"}}},
+					DryRun:   true,
+					Update:   tc.existing != nil,
+					Existing: tc.existing,
+				}, nil
+			}}}
+			req := httptest.NewRequest(http.MethodPost, "/admin/v1/services/import", bytes.NewBufferString(`{"service_id":"echo","source":"fixture","dry_run":true}`))
+			req.Header.Set("Accept", "application/x-ndjson")
+			w := httptest.NewRecorder()
+			srv.handleServiceImport(w, req)
+			if w.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+			}
+			if contentType := w.Header().Get("Content-Type"); !strings.HasPrefix(contentType, "application/x-ndjson") {
+				t.Fatalf("content type=%q", contentType)
+			}
+			raw := w.Body.Bytes()
+			lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
+			if len(lines) != 1 || !strings.Contains(lines[0], `"type":"complete"`) {
+				t.Fatalf("dry run stream events=%q", raw)
+			}
+			for _, want := range []string{`"dry_run":true`, tc.wantUpdate, tc.want, `"service"`, `"echo.v1.EchoService/Echo"`} {
+				if !strings.Contains(lines[0], want) {
+					t.Fatalf("dry run complete event missing %q: %s", want, lines[0])
+				}
+			}
+			for _, forbidden := range []string{"restart_instances", "service_instances_restart", tc.forbid} {
+				if strings.Contains(string(raw), forbidden) {
+					t.Fatalf("dry run stream emitted %q: %s", forbidden, raw)
+				}
+			}
+		})
+	}
+}
+
+func TestAdminServiceImportRecursiveDryRunSkipsRestart(t *testing.T) {
+	srv := &Server{Importer: fakeServiceImporter{importRecursiveFn: func(ctx context.Context, opts packageimport.Options) (packageimport.RecursiveResult, error) {
+		if !opts.DryRun {
+			t.Fatalf("recursive dry_run not decoded: %+v", opts)
+		}
+		return packageimport.RecursiveResult{
+			Services:     []domain.Service{{ID: "alpha-service", Methods: []domain.Method{{FullName: "alpha.v1.AlphaService/Call"}}}},
+			ServiceCount: 0,
+			DryRun:       true,
+			Existing:     []string{"alpha-service"},
+		}, nil
+	}}}
+	// ServiceCount stays zero, so the response falls back to the discovered
+	// services, which is what an importer that only fills Services produces.
+	body := func() []byte {
+		req := httptest.NewRequest(http.MethodPost, "/admin/v1/services/import", bytes.NewBufferString(`{"recursive":true,"source":"fixture","offline":true,"build":"never","dry_run":true}`))
+		w := httptest.NewRecorder()
+		srv.handleServiceImport(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+		}
+		return w.Body.Bytes()
+	}()
+	var resp struct {
+		DryRun       bool                `json:"dry_run"`
+		ServiceCount int                 `json:"service_count"`
+		Services     []domain.Service    `json:"services"`
+		Existing     []string            `json:"existing_service_ids"`
+		Restarted    map[string][]string `json:"restarted_instances"`
+		RestartErrs  map[string][]string `json:"restart_errors"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatal(err)
+	}
+	if !resp.DryRun || resp.ServiceCount != 1 || len(resp.Services) != 1 {
+		t.Fatalf("recursive dry run response regressed: %s", body)
+	}
+	if len(resp.Services[0].Methods) != 1 || resp.Services[0].Methods[0].FullName != "alpha.v1.AlphaService/Call" {
+		t.Fatalf("recursive dry run preview regressed: %s", body)
+	}
+	if len(resp.Existing) != 1 || resp.Existing[0] != "alpha-service" {
+		t.Fatalf("recursive dry run existing ids regressed: %s", body)
+	}
+	if len(resp.Restarted) != 0 || len(resp.RestartErrs) != 0 {
+		t.Fatalf("recursive dry run reported restarts: %s", body)
+	}
+}
+
+func TestAdminServiceImportStreamingRecursiveDryRunSkipsRestart(t *testing.T) {
+	tests := []struct {
+		name     string
+		existing []string
+		want     string
+	}{
+		{name: "no existing services", want: `"existing_service_ids":[]`},
+		{name: "existing services reported", existing: []string{"alpha-service"}, want: `"existing_service_ids":["alpha-service"]`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := &Server{Importer: fakeServiceImporter{importRecursiveFn: func(ctx context.Context, opts packageimport.Options) (packageimport.RecursiveResult, error) {
+				if !opts.DryRun {
+					t.Fatalf("streaming recursive dry_run not decoded: %+v", opts)
+				}
+				return packageimport.RecursiveResult{
+					Services:     []domain.Service{{ID: "alpha-service", Methods: []domain.Method{{FullName: "alpha.v1.AlphaService/Call"}}}},
+					ServiceCount: 1,
+					DryRun:       true,
+					Existing:     tc.existing,
+				}, nil
+			}}}
+			req := httptest.NewRequest(http.MethodPost, "/admin/v1/services/import", bytes.NewBufferString(`{"recursive":true,"source":"fixture","offline":true,"build":"never","dry_run":true}`))
+			req.Header.Set("Accept", "application/x-ndjson")
+			w := httptest.NewRecorder()
+			srv.handleServiceImport(w, req)
+			if w.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+			}
+			lines := strings.Split(strings.TrimSpace(w.Body.String()), "\n")
+			if len(lines) != 1 || !strings.Contains(lines[0], `"type":"complete"`) {
+				t.Fatalf("streaming recursive dry run events=%q", w.Body.String())
+			}
+			for _, want := range []string{`"dry_run":true`, tc.want, `"alpha.v1.AlphaService/Call"`} {
+				if !strings.Contains(lines[0], want) {
+					t.Fatalf("streaming recursive dry run complete event missing %q: %s", want, lines[0])
+				}
+			}
+			for _, forbidden := range []string{"restart_instances", "service_instances_restart"} {
+				if strings.Contains(w.Body.String(), forbidden) {
+					t.Fatalf("streaming recursive dry run emitted %q: %s", forbidden, w.Body.String())
+				}
+			}
+		})
+	}
+}
+
+func TestAdminServiceImportStreamingRecursiveRestartsInstances(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	dataDir := filepath.Join(root, "data")
+	st, err := store.Open(filepath.Join(dataDir, "octobus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if err := st.UpsertService(ctx, domain.Service{ID: "alpha-service", Name: "Alpha", RuntimeMode: domain.RuntimeModeLongRunning}); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	srv := &Server{
+		Store:      st,
+		Supervisor: supervisor.New(dataDir, st),
+		Logger:     slog.New(slog.NewTextHandler(&out, &slog.HandlerOptions{Level: slog.LevelInfo})),
+		Importer: fakeServiceImporter{importRecursiveFn: func(ctx context.Context, opts packageimport.Options) (packageimport.RecursiveResult, error) {
+			if opts.DryRun {
+				t.Fatalf("plain recursive import should not set dry_run: %+v", opts)
+			}
+			return packageimport.RecursiveResult{Services: []domain.Service{{ID: "alpha-service"}}, ServiceCount: 1}, nil
+		}},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/admin/v1/services/import", bytes.NewBufferString(`{"recursive":true,"source":"fixture","offline":true,"build":"never"}`))
+	req.Header.Set("Accept", "application/x-ndjson")
+	w := httptest.NewRecorder()
+	srv.handleServiceImport(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	raw := w.Body.String()
+	for _, want := range []string{`"type":"complete"`, `"status":"ok"`, `"restarted_instances":{`, `"restart_errors":{`} {
+		if !strings.Contains(raw, want) {
+			t.Fatalf("streaming recursive complete event missing %q: %s", want, raw)
+		}
+	}
+	if strings.Contains(raw, `"dry_run"`) {
+		t.Fatalf("plain streaming recursive import reported dry_run: %s", raw)
+	}
+	if !strings.Contains(out.String(), "service_instances_restart") {
+		t.Fatalf("plain streaming recursive import did not restart instances:\n%s", out.String())
+	}
+}
+
+func TestAdminServiceImportMultipartDryRun(t *testing.T) {
+	called := false
+	srv := &Server{Importer: fakeServiceImporter{importFn: func(ctx context.Context, opts packageimport.Options) (packageimport.Result, error) {
+		called = true
+		if !opts.DryRun {
+			t.Fatalf("multipart dry_run not decoded: %+v", opts)
+		}
+		return packageimport.Result{Service: domain.Service{ID: opts.ServiceID, Name: "Echo"}, DryRun: true}, nil
+	}}}
+	req := newMultipartServiceImportRequest(t,
+		multipartTestPart{name: "options", value: `{"service_id":"echo","source":"client-upload:fixture","offline":true,"build":"never","dry_run":true}`},
+		multipartTestPart{name: "upload_kind", value: "directory"},
+		multipartTestPart{name: "package", filename: "package.tgz", value: "package bytes"},
+	)
+	w := httptest.NewRecorder()
+	srv.handleServiceImport(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+	if !called {
+		t.Fatal("multipart dry run did not call importer")
+	}
+	if !strings.Contains(w.Body.String(), `"dry_run":true`) {
+		t.Fatalf("multipart dry run response regressed: %s", w.Body.String())
+	}
+}
+
 func TestAdminServiceImportJSONContentTypeCompatibility(t *testing.T) {
 	called := false
 	srv := &Server{Importer: fakeServiceImporter{importFn: func(ctx context.Context, opts packageimport.Options) (packageimport.Result, error) {

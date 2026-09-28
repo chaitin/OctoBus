@@ -131,7 +131,8 @@ octobus service import --recursive ./platform-services//chaitin__subset
 
 recursive import 对每个 discovered service 写入一条现有 service 记录，不新增 store schema；
 导入前会先校验本次发现到的所有 manifest、service id、bin、schema 和 descriptor，校验失败
-时不提交任何 service。
+时不提交任何 service。recursive dry-run（`--dry-run`）不写任何 service 记录，只返回每个
+discovered service 的预览；详见 `docs/design/technical/service-package.md` 的 Dry Run 一节。
 
 recursive import 的发现规则是当前契约的一部分：
 
@@ -150,6 +151,10 @@ admin import endpoint 在 recursive 模式下返回 `services`、`service_count`
 `restarted_instances` 和 `restart_errors`。导入成功后，daemon 会按 service id 聚合
 enabled long-running instances 的重启结果；任一重启失败时返回 HTTP 409，并带
 `status: "degraded"`。on-demand service 不执行持久进程重启。
+
+recursive dry-run 不重启任何 instance，返回 `dry_run: true`、`services`、`service_count`
+和 `existing_service_ids`（会被覆盖的 service id），`restarted_instances` / `restart_errors`
+为空。
 
 依赖安装只以根 `package.json` 为准。子目录 `package.json` 不参与 import/runtime
 依赖解析。
