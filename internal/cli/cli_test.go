@@ -200,6 +200,9 @@ func TestServiceImportRequest(t *testing.T) {
 		if req["service_id"] != "echo" || req["source"] != gitSource || req["offline"] != true {
 			t.Fatalf("unexpected body: %+v", req)
 		}
+		if _, ok := req["dry_run"]; ok {
+			t.Fatalf("plain import must not send dry_run: %+v", req)
+		}
 		if r.Header.Get("Accept") != "application/x-ndjson" {
 			t.Fatalf("Accept=%q", r.Header.Get("Accept"))
 		}
@@ -234,6 +237,9 @@ func TestServiceImportRecursiveRequest(t *testing.T) {
 		if req["recursive"] != true || req["source"] != source || req["build"] != "auto" {
 			t.Fatalf("unexpected recursive body: %+v", req)
 		}
+		if _, ok := req["dry_run"]; ok {
+			t.Fatalf("plain recursive import must not send dry_run: %+v", req)
+		}
 		if _, ok := req["service_id"]; ok {
 			t.Fatalf("recursive request should not include service_id: %+v", req)
 		}
@@ -246,6 +252,59 @@ func TestServiceImportRecursiveRequest(t *testing.T) {
 	c := &CLI{AdminAddr: strings.TrimPrefix(server.URL, "http://"), Client: server.Client(), Stdout: io.Discard}
 	if err := c.Run([]string{"service", "import", "--recursive", source}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestServiceImportDryRunRequest(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/admin/v1/services/import" {
+			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatal(err)
+		}
+		if req["service_id"] != "echo" || req["source"] != "npm:pkg" || req["dry_run"] != true {
+			t.Fatalf("unexpected dry run body: %+v", req)
+		}
+		_, _ = fmt.Fprintln(w, `{"type":"complete","status":"ok","dry_run":true,"update":true,"service":{"ID":"echo"},"restarted_instances":[],"restart_errors":[]}`)
+	}))
+	defer server.Close()
+	var out, stderr bytes.Buffer
+	c := &CLI{AdminAddr: strings.TrimPrefix(server.URL, "http://"), Client: server.Client(), Stdout: &out, Stderr: &stderr}
+	if err := c.Run([]string{"service", "import", "echo", "--dry-run", "npm:pkg"}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), `"dry_run": true`) {
+		t.Fatalf("stdout missing dry run marker: %s", out.String())
+	}
+	if !strings.Contains(stderr.String(), "dry run: nothing was imported") {
+		t.Fatalf("stderr missing dry run notice: %s", stderr.String())
+	}
+}
+
+func TestServiceImportRecursiveDryRunRequest(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatal(err)
+		}
+		if req["recursive"] != true || req["dry_run"] != true {
+			t.Fatalf("unexpected recursive dry run body: %+v", req)
+		}
+		if _, ok := req["service_id"]; ok {
+			t.Fatalf("recursive dry run request should not include service_id: %+v", req)
+		}
+		_, _ = fmt.Fprintln(w, `{"type":"complete","status":"ok","dry_run":true,"services":[],"existing_service_ids":[],"restarted_instances":{},"restart_errors":{}}`)
+	}))
+	defer server.Close()
+	var stderr bytes.Buffer
+	c := &CLI{AdminAddr: strings.TrimPrefix(server.URL, "http://"), Client: server.Client(), Stdout: io.Discard, Stderr: &stderr}
+	if err := c.Run([]string{"service", "import", "--recursive", "--dry-run", "npm:pkg"}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stderr.String(), "dry run: nothing was imported") {
+		t.Fatalf("stderr missing dry run notice: %s", stderr.String())
 	}
 }
 

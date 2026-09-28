@@ -37,6 +37,7 @@ type Options struct {
 	Reinstall bool                            `json:"reinstall"`
 	Build     string                          `json:"build"`
 	Recursive bool                            `json:"recursive"`
+	DryRun    bool                            `json:"dry_run"`
 	Upload    *UploadedSource                 `json:"-"`
 	Progress  func(ImportProgressEvent) error `json:"-"`
 }
@@ -58,6 +59,16 @@ type UploadedSource struct {
 type Result struct {
 	Service  domain.Service
 	Manifest domain.ServiceManifest
+	// DryRun reports that Service is a preview and nothing was committed.
+	DryRun bool
+	// Update is only meaningful for dry runs: it reports that Service already
+	// exists in the store and a real import would replace it.
+	Update bool
+	// Existing is the currently stored service that a real import would
+	// replace, and is only set for dry runs. Callers use it to check that the
+	// baseline they confirmed is still deployed (compare PackageSHA256 or
+	// DescriptorSHA256) before applying the import.
+	Existing *domain.Service
 }
 
 type RecursiveResult struct {
@@ -66,6 +77,11 @@ type RecursiveResult struct {
 	Manifests          map[string]domain.ServiceManifest
 	RestartedInstances map[string][]string
 	RestartErrors      map[string][]string
+	// DryRun reports that Services are previews and nothing was committed.
+	DryRun bool
+	// Existing lists the discovered service ids that a real import would
+	// replace. It is only populated for dry runs.
+	Existing []string
 }
 
 type ImportProgressEvent struct {
@@ -81,6 +97,12 @@ type ImportProgressEvent struct {
 	RestartErrors      any              `json:"restart_errors,omitempty"`
 	Status             string           `json:"status,omitempty"`
 	Error              string           `json:"error,omitempty"`
+	// The dry run fields are `any` so a dry run can report false and empty
+	// values explicitly while plain imports keep them out of the event.
+	DryRun           any `json:"dry_run,omitempty"`
+	Update           any `json:"update,omitempty"`
+	ExistingService  any `json:"existing_service,omitempty"`
+	ExistingServices any `json:"existing_service_ids,omitempty"`
 }
 
 type preparedSource struct {
@@ -166,12 +188,14 @@ func (i *Importer) Import(ctx context.Context, opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	if err := reportImportProgress(opts, ImportProgressEvent{Type: "status", Stage: "prepare_runtime", Message: "Installing runtime dependencies", ServiceID: opts.ServiceID}); err != nil {
-		return Result{}, err
-	}
-	runtimeDir, err := prepareServiceRuntime(ctx, prepared, staging, opts)
-	if err != nil {
-		return Result{}, err
+	runtimeDir := ""
+	if !opts.DryRun {
+		if err := reportImportProgress(opts, ImportProgressEvent{Type: "status", Stage: "prepare_runtime", Message: "Installing runtime dependencies", ServiceID: opts.ServiceID}); err != nil {
+			return Result{}, err
+		}
+		if runtimeDir, err = prepareServiceRuntime(ctx, prepared, staging, opts); err != nil {
+			return Result{}, err
+		}
 	}
 	if err := reportImportProgress(opts, ImportProgressEvent{Type: "status", Stage: "compile_descriptor", Message: "Compiling service descriptor", ServiceID: opts.ServiceID}); err != nil {
 		return Result{}, err
@@ -180,13 +204,26 @@ func (i *Importer) Import(ctx context.Context, opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	commitDir, finalPackageDir, err := stageServiceCommit(prepared, runtimeDir, descriptor, staging)
-	if err != nil {
-		return Result{}, err
+	commitDir := ""
+	finalPackageDir := prepared.PackageDir
+	if !opts.DryRun {
+		if commitDir, finalPackageDir, err = stageServiceCommit(prepared, runtimeDir, descriptor, staging); err != nil {
+			return Result{}, err
+		}
 	}
 	svc, err := i.buildImportedService(ctx, opts, prepared, service, descriptor.Result, serviceDir, finalPackageDir)
 	if err != nil {
 		return Result{}, err
+	}
+	if opts.DryRun {
+		existing, err := i.existingService(ctx, opts.ServiceID)
+		if err != nil {
+			return Result{}, err
+		}
+		if err := reportImportProgress(opts, ImportProgressEvent{Type: "status", Stage: "preview", Message: "Dry run: previewing service package", ServiceID: opts.ServiceID}); err != nil {
+			return Result{}, err
+		}
+		return Result{Service: svc, Manifest: service.Manifest, DryRun: true, Update: existing != nil, Existing: existing}, nil
 	}
 	if err := reportImportProgress(opts, ImportProgressEvent{Type: "status", Stage: "commit_service", Message: "Committing service", ServiceID: opts.ServiceID}); err != nil {
 		return Result{}, err
@@ -196,6 +233,18 @@ func (i *Importer) Import(ctx context.Context, opts Options) (Result, error) {
 		return Result{}, err
 	}
 	return Result{Service: stored, Manifest: service.Manifest}, nil
+}
+
+// existingService returns the stored service, or nil when none is imported yet.
+func (i *Importer) existingService(ctx context.Context, serviceID string) (*domain.Service, error) {
+	svc, err := i.Store.GetService(ctx, serviceID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("check service %s: %w", serviceID, err)
+	}
+	return &svc, nil
 }
 
 func reportImportProgress(opts Options, event ImportProgressEvent) error {
@@ -400,12 +449,14 @@ func (i *Importer) ImportRecursive(ctx context.Context, opts Options) (Recursive
 		return RecursiveResult{}, err
 	}
 	basePackageSource := recursiveBasePackageSource(opts.Source, baseSource)
-	if err := reportImportProgress(opts, ImportProgressEvent{Type: "status", Stage: "prepare_runtime", Message: "Installing runtime dependencies"}); err != nil {
-		return RecursiveResult{}, err
-	}
-	runtimeDir, err := prepareServiceRuntime(ctx, prepared, staging, opts)
-	if err != nil {
-		return RecursiveResult{}, err
+	runtimeDir := ""
+	if !opts.DryRun {
+		if err := reportImportProgress(opts, ImportProgressEvent{Type: "status", Stage: "prepare_runtime", Message: "Installing runtime dependencies"}); err != nil {
+			return RecursiveResult{}, err
+		}
+		if runtimeDir, err = prepareServiceRuntime(ctx, prepared, staging, opts); err != nil {
+			return RecursiveResult{}, err
+		}
 	}
 	serviceRoots, err := discoverServiceRoots(prepared.PackageDir, prepared.ServiceRoot)
 	if err != nil {
@@ -461,19 +512,40 @@ func (i *Importer) ImportRecursive(ctx context.Context, opts Options) (Recursive
 		Manifests:          manifests,
 		RestartedInstances: map[string][]string{},
 		RestartErrors:      map[string][]string{},
+		DryRun:             opts.DryRun,
+		Existing:           []string{},
 	}
 	for idx, candidate := range candidates {
 		current := idx + 1
 		serviceDir := filepath.Join(i.DataDir, "artifacts", "services", candidate.ServiceID)
-		commitDir, finalPackageDir, err := stageServiceCommit(candidate.Prepared, runtimeDir, candidate.Descriptor, staging)
-		if err != nil {
-			return result, fmt.Errorf("stage service %s: %w", candidate.ServiceID, err)
+		commitDir := ""
+		finalPackageDir := candidate.Prepared.PackageDir
+		if !opts.DryRun {
+			stagedCommitDir, stagedPackageDir, err := stageServiceCommit(candidate.Prepared, runtimeDir, candidate.Descriptor, staging)
+			if err != nil {
+				return result, fmt.Errorf("stage service %s: %w", candidate.ServiceID, err)
+			}
+			commitDir, finalPackageDir = stagedCommitDir, stagedPackageDir
 		}
 		serviceOpts := opts
 		serviceOpts.ServiceID = candidate.ServiceID
 		svc, err := i.buildImportedService(ctx, serviceOpts, candidate.Prepared, candidate.Service, candidate.Descriptor.Result, serviceDir, finalPackageDir)
 		if err != nil {
 			return result, fmt.Errorf("build service %s: %w", candidate.ServiceID, err)
+		}
+		if opts.DryRun {
+			existing, err := i.existingService(ctx, candidate.ServiceID)
+			if err != nil {
+				return result, err
+			}
+			if existing != nil {
+				result.Existing = append(result.Existing, candidate.ServiceID)
+			}
+			if err := reportImportProgress(opts, ImportProgressEvent{Type: "status", Stage: "preview", Message: "Dry run: previewing service package", ServiceID: candidate.ServiceID, Current: current, Total: len(candidates)}); err != nil {
+				return result, err
+			}
+			result.Services = append(result.Services, svc)
+			continue
 		}
 		if err := reportImportProgress(opts, ImportProgressEvent{Type: "status", Stage: "commit_service", Message: "Committing service", ServiceID: candidate.ServiceID, Current: current, Total: len(candidates)}); err != nil {
 			return result, err

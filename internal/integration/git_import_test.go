@@ -89,6 +89,71 @@ func TestHTTPSGitAdminImportIntegrationRedactsCredentials(t *testing.T) {
 	}
 }
 
+func TestHTTPSGitAdminImportIntegrationDryRunPreviewsWithoutCommit(t *testing.T) {
+	requireIntegrationGit(t)
+	t.Setenv("GIT_SSL_NO_VERIFY", "true")
+	t.Setenv("NO_PROXY", "127.0.0.1,localhost")
+	t.Setenv("no_proxy", "127.0.0.1,localhost")
+
+	ctx := context.Background()
+	root := t.TempDir()
+	gitRepo := createIntegrationGitRepo(t, root, "user", "p@ss")
+	dataDir := filepath.Join(root, "data")
+	st, err := store.Open(filepath.Join(dataDir, "octobus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	srv := &admin.Server{Store: st, Importer: &packageimport.Importer{DataDir: dataDir, Store: st}, Supervisor: supervisor.New(dataDir, st)}
+	source := strings.Replace(gitRepo.URL, "https://", "https://user:p%40ss@", 1) + "//svc@v1.0.0"
+
+	body := postIntegrationAdmin(t, srv, map[string]any{"service_id": "echo", "source": source, "offline": true, "dry_run": true}, http.StatusOK)
+	for _, leaked := range []string{"p@ss", "p%40ss"} {
+		if bytes.Contains(body, []byte(leaked)) {
+			t.Fatalf("dry run response leaked credential %q: %s", leaked, body)
+		}
+	}
+	var res struct {
+		DryRun  bool `json:"dry_run"`
+		Update  bool `json:"update"`
+		Service struct {
+			PackageVersion    string `json:"PackageVersion"`
+			DescriptorVersion string `json:"DescriptorVersion"`
+			DescriptorSHA256  string `json:"DescriptorSHA256"`
+			NodeEntry         string `json:"NodeEntry"`
+			RuntimeMode       string `json:"RuntimeMode"`
+			Methods           []any  `json:"Methods"`
+		} `json:"service"`
+	}
+	if err := json.Unmarshal(body, &res); err != nil {
+		t.Fatal(err)
+	}
+	if !res.DryRun || res.Update {
+		t.Fatalf("dry run flags regressed: dry_run=%v update=%v body=%s", res.DryRun, res.Update, body)
+	}
+	if len(res.Service.Methods) == 0 || res.Service.DescriptorVersion == "" || res.Service.NodeEntry == "" || res.Service.RuntimeMode == "" {
+		t.Fatalf("dry run preview missing metadata: %s", body)
+	}
+	if res.Service.PackageVersion != gitRepo.Tags["v1.0.0"] {
+		t.Fatalf("dry run package version=%q want %q", res.Service.PackageVersion, gitRepo.Tags["v1.0.0"])
+	}
+	if _, err := st.GetService(ctx, "echo"); err == nil {
+		t.Fatal("dry run persisted the service")
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, "artifacts", "services", "echo")); !os.IsNotExist(err) {
+		t.Fatalf("dry run created the service dir: %v", err)
+	}
+
+	postIntegrationAdmin(t, srv, map[string]any{"service_id": "echo", "source": source, "offline": true}, http.StatusOK)
+	stored, err := st.GetService(ctx, "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.DescriptorSHA256 != res.Service.DescriptorSHA256 || len(stored.Methods) != len(res.Service.Methods) {
+		t.Fatalf("real import diverged from dry run preview: stored=%+v preview=%+v", stored, res.Service)
+	}
+}
+
 func TestHTTPSGitAdminImportIntegrationBadCredentialsDoNotPersist(t *testing.T) {
 	requireIntegrationGit(t)
 	t.Setenv("GIT_SSL_NO_VERIFY", "true")

@@ -222,9 +222,9 @@ func (c *CLI) serviceCommand() *cobra.Command {
 
 func (c *CLI) serviceImportCommand() *cobra.Command {
 	var name, build, sourceModeValue string
-	var offline, reinstall, recursive bool
+	var offline, reinstall, recursive, dryRun bool
 	cmd := &cobra.Command{
-		Use:   "import SERVICE SOURCE [--name NAME] [--build auto|always|never] [--offline] [--reinstall]\n  octobus service import --recursive SOURCE [--build auto|always|never] [--offline] [--reinstall]",
+		Use:   "import SERVICE SOURCE [--name NAME] [--build auto|always|never] [--offline] [--reinstall] [--dry-run]\n  octobus service import --recursive SOURCE [--build auto|always|never] [--offline] [--reinstall] [--dry-run]",
 		Short: "Import or update a service package",
 		Args: func(cmd *cobra.Command, args []string) error {
 			if recursive {
@@ -264,12 +264,14 @@ func (c *CLI) serviceImportCommand() *cobra.Command {
 			source := transfer.Source
 			if recursive {
 				body := map[string]any{"recursive": true, "source": source, "offline": offline, "reinstall": reinstall, "build": build}
+				setDryRun(body, dryRun)
 				if transfer.Upload {
 					return c.requestServiceImportUpload(body, transfer.Local)
 				}
 				return c.requestServiceImport(body)
 			}
 			body := map[string]any{"service_id": args[0], "name": name, "source": source, "offline": offline, "reinstall": reinstall, "build": build}
+			setDryRun(body, dryRun)
 			if transfer.Upload {
 				return c.requestServiceImportUpload(body, transfer.Local)
 			}
@@ -282,6 +284,7 @@ func (c *CLI) serviceImportCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&offline, "offline", false, "use npm offline cache")
 	cmd.Flags().BoolVar(&reinstall, "reinstall", false, "reinstall dependencies")
 	cmd.Flags().BoolVar(&recursive, "recursive", false, "import all services discovered under the package source")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "preview the service package without importing, committing, or restarting instances; still fetches the source and runs the --build policy")
 	return cmd
 }
 
@@ -311,6 +314,15 @@ func (c *CLI) serviceUpdateCommand() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&name, "name", "", "service name")
 	return cmd
+}
+
+// setDryRun adds the dry_run request field only when a dry run was requested.
+// The daemon decodes import bodies with DisallowUnknownFields, so sending the
+// field unconditionally would make plain imports fail against an older daemon.
+func setDryRun(body map[string]any, dryRun bool) {
+	if dryRun {
+		body["dry_run"] = true
+	}
 }
 
 func normalizeImportSource(source string) (string, error) {
@@ -1448,6 +1460,11 @@ func (c *CLI) handleServiceImportStream(resp *http.Response) error {
 			}
 			return errors.New(msg)
 		case "complete":
+			if dryRun, _ := event["dry_run"].(bool); dryRun {
+				if err := c.printServiceImportLine("dry run: nothing was imported and no instances were restarted"); err != nil {
+					return err
+				}
+			}
 			if err := c.printServiceImportComplete(event); err != nil {
 				return err
 			}
@@ -1475,6 +1492,10 @@ func (c *CLI) printServiceImportProgress(event map[string]any) error {
 	if serviceID, _ := event["service_id"].(string); serviceID != "" {
 		message = fmt.Sprintf("%s: %s", serviceID, message)
 	}
+	return c.printServiceImportLine(message)
+}
+
+func (c *CLI) printServiceImportLine(message string) error {
 	stderr := c.Stderr
 	if stderr == nil {
 		stderr = io.Discard

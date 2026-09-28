@@ -352,6 +352,51 @@ source package 构建流程在 staging 目录中执行：
 
 最终保存的 package artifact 是 npm-packed built artifact，内容选择遵循 npm 标准 `files` / `.npmignore` 规则。
 
+## Dry Run
+
+```text
+octobus service import --dry-run SERVICE SOURCE
+octobus service import --recursive --dry-run SOURCE
+```
+
+dry-run 用来在真正导入前回答「这次导入会得到什么」，语义是真实导入减去最后三步：
+
+| 阶段 | 真实导入 | dry-run |
+| --- | --- | --- |
+| 解析并获取 package source（含 Git 拉取、npm pack、归档下载解压） | 是 | 是 |
+| 按 `--build` 策略构建 | 是 | 是 |
+| 校验 `service.json`、`bin` target、runtime mode | 是 | 是 |
+| 编译 descriptor、解析 methods metadata | 是 | 是 |
+| 安装 runtime dependencies | 是 | 否 |
+| 写入 `artifacts/services/<id>`、更新 service 记录 | 是 | 否 |
+| 重启该 service 的 enabled instances | 是 | 否 |
+
+返回结果包含 `dry_run: true`、`update`（目标 service 是否已存在，即真实导入是否会覆盖它）、
+`existing_service`（当前已部署的 service 记录，新建时为 `null`），以及真实导入将会写入的 service
+记录：`ID`、`Name`、`PackageSource`、`PackageVersion`、`DescriptorVersion`、`DescriptorSHA256`、
+`NodeEntry`、`RuntimeMode`、`Methods`。其中 `DescriptorPath` / `PackageArtifactPath` /
+`ConfigSchemaPath` / `SecretSchemaPath` 是真实导入后的最终路径，dry-run 时这些文件尚未写入。
+
+`existing_service` 用于替换前的基线校验：调用方在确认待导入的包之后，可以比对
+`existing_service.PackageSHA256` / `DescriptorSHA256` 是否仍是自己确认时那一份，从而发现
+「确认之后线上已被别人换过」。它与 `update` 一致：`update` 为真当且仅当 `existing_service`
+非 `null`。
+
+recursive dry-run 返回 `services`（每个 discovered service 的预览），以及
+`existing_service_ids`（会被覆盖的 service id）；recursive 模式不返回逐个 service 的
+`existing_service` 记录。
+
+约束：
+
+- 跳过 runtime dependency 安装，因为它的产物不参与 service 形状和方法列表。因此 dry-run
+  通过不代表 `npm install --omit=dev` 一定成功。`--reinstall` 只作用于这一步，对 `--dry-run`
+  没有影响；`--offline` 还会作用于 dry-run 仍会执行的构建阶段依赖安装（`npm ci` / `npm install`），
+  所以在没有本地 npm 缓存的机器上，`--dry-run --build=always --offline` 仍可能因离线安装失败。
+- 取包阶段是真实执行的：HTTPS Git source 会 clone，`npm:` source 会执行 `npm pack`，
+  `--build=always` 会执行包内构建脚本。dry-run 保证的是 daemon 状态不变（不写 service
+  artifact、不更新 SQLite、不重启 instance），不是「不执行任何代码」。
+- dry-run 不写 staging 之外的任何路径；staging 目录在结束时删除。
+
 ## Runtime Dependencies
 
 OctoBus 只在 import 阶段准备 runtime dependencies。

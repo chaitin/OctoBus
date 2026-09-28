@@ -442,12 +442,17 @@ func (s *Server) handleServiceImport(w http.ResponseWriter, r *http.Request) {
 		s.handleRecursiveServiceImport(w, r, req)
 		return
 	}
-	s.logger().Info("service_import_started", "service_id", req.ServiceID, "offline", req.Offline, "reinstall", req.Reinstall, "build", req.Build)
+	s.logger().Info("service_import_started", "service_id", req.ServiceID, "offline", req.Offline, "reinstall", req.Reinstall, "build", req.Build, "dry_run", req.DryRun)
 	res, err := s.Importer.Import(r.Context(), req)
 	if err != nil {
 		msg := serviceImportErrorMessage(err, req)
 		s.logger().Warn("service_import_failed", "service_id", req.ServiceID, "error", msg)
 		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
+	if res.DryRun {
+		s.logger().Info("service_import_dry_run_done", "service_id", res.Service.ID, "update", res.Update, "runtime_mode", res.Service.RuntimeMode, "descriptor_version", res.Service.DescriptorVersion, "method_count", len(res.Service.Methods))
+		writeJSON(w, http.StatusOK, map[string]any{"dry_run": true, "update": res.Update, "existing_service": res.Existing, "service": res.Service, "restarted_instances": []string{}, "restart_errors": []string{}})
 		return
 	}
 	s.logger().Info("service_import_done", "service_id", res.Service.ID, "runtime_mode", res.Service.RuntimeMode, "descriptor_sha256", res.Service.DescriptorSHA256, "method_count", len(res.Service.Methods))
@@ -642,12 +647,18 @@ func (s *Server) handleRecursiveServiceImport(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusBadRequest, "name cannot be used with recursive import")
 		return
 	}
-	s.logger().Info("service_import_recursive_started", "offline", req.Offline, "reinstall", req.Reinstall, "build", req.Build)
+	s.logger().Info("service_import_recursive_started", "offline", req.Offline, "reinstall", req.Reinstall, "build", req.Build, "dry_run", req.DryRun)
 	res, err := s.Importer.ImportRecursive(r.Context(), req)
 	if err != nil {
 		msg := serviceImportErrorMessage(err, req)
 		s.logger().Warn("service_import_recursive_failed", "error", msg)
 		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
+	if res.DryRun {
+		existing := nonNilStrings(res.Existing)
+		s.logger().Info("service_import_recursive_dry_run_done", "service_count", len(res.Services), "existing_count", len(existing))
+		writeJSON(w, http.StatusOK, map[string]any{"dry_run": true, "services": res.Services, "service_count": recursiveServiceCount(res), "existing_service_ids": existing, "restarted_instances": map[string][]string{}, "restart_errors": map[string][]string{}})
 		return
 	}
 	s.logger().Info("service_import_recursive_done", "service_count", len(res.Services))
@@ -668,10 +679,7 @@ func (s *Server) handleRecursiveServiceImport(w http.ResponseWriter, r *http.Req
 			degraded = true
 		}
 	}
-	serviceCount := res.ServiceCount
-	if serviceCount == 0 {
-		serviceCount = len(res.Services)
-	}
+	serviceCount := recursiveServiceCount(res)
 	body := map[string]any{"services": res.Services, "service_count": serviceCount, "restarted_instances": restartedByService, "restart_errors": restartErrsByService}
 	if degraded {
 		body["status"] = "degraded"
@@ -679,6 +687,23 @@ func (s *Server) handleRecursiveServiceImport(w http.ResponseWriter, r *http.Req
 		return
 	}
 	writeJSON(w, http.StatusOK, body)
+}
+
+// recursiveServiceCount reports the service count for a recursive import,
+// falling back to the discovered services when the importer only fills those.
+func recursiveServiceCount(res packageimport.RecursiveResult) int {
+	if res.ServiceCount != 0 {
+		return res.ServiceCount
+	}
+	return len(res.Services)
+}
+
+// nonNilStrings reports values as an empty JSON array rather than null.
+func nonNilStrings(values []string) []string {
+	if values == nil {
+		return []string{}
+	}
+	return values
 }
 
 func (s *Server) echoServiceImport(c *echo.Context) error {
@@ -700,12 +725,17 @@ func (s *Server) handleStreamingServiceImport(w http.ResponseWriter, r *http.Req
 		s.handleStreamingRecursiveServiceImport(w, r, req, writeEvent)
 		return
 	}
-	s.logger().Info("service_import_started", "service_id", req.ServiceID, "offline", req.Offline, "reinstall", req.Reinstall, "build", req.Build)
+	s.logger().Info("service_import_started", "service_id", req.ServiceID, "offline", req.Offline, "reinstall", req.Reinstall, "build", req.Build, "dry_run", req.DryRun)
 	res, err := s.Importer.Import(r.Context(), req)
 	if err != nil {
 		msg := serviceImportErrorMessage(err, req)
 		s.logger().Warn("service_import_failed", "service_id", req.ServiceID, "error", msg)
 		_ = writeEvent(packageimport.ImportProgressEvent{Type: "error", Error: msg})
+		return
+	}
+	if res.DryRun {
+		s.logger().Info("service_import_dry_run_done", "service_id", res.Service.ID, "update", res.Update, "runtime_mode", res.Service.RuntimeMode, "descriptor_version", res.Service.DescriptorVersion, "method_count", len(res.Service.Methods))
+		_ = writeEvent(packageimport.ImportProgressEvent{Type: "complete", Status: "ok", Service: &res.Service, DryRun: true, Update: res.Update, ExistingService: res.Existing, RestartedInstances: []string{}, RestartErrors: []string{}})
 		return
 	}
 	s.logger().Info("service_import_done", "service_id", res.Service.ID, "runtime_mode", res.Service.RuntimeMode, "descriptor_sha256", res.Service.DescriptorSHA256, "method_count", len(res.Service.Methods))
@@ -727,12 +757,18 @@ func (s *Server) handleStreamingServiceImport(w http.ResponseWriter, r *http.Req
 }
 
 func (s *Server) handleStreamingRecursiveServiceImport(w http.ResponseWriter, r *http.Request, req packageimport.Options, writeEvent func(packageimport.ImportProgressEvent) error) {
-	s.logger().Info("service_import_recursive_started", "offline", req.Offline, "reinstall", req.Reinstall, "build", req.Build)
+	s.logger().Info("service_import_recursive_started", "offline", req.Offline, "reinstall", req.Reinstall, "build", req.Build, "dry_run", req.DryRun)
 	res, err := s.Importer.ImportRecursive(r.Context(), req)
 	if err != nil {
 		msg := serviceImportErrorMessage(err, req)
 		s.logger().Warn("service_import_recursive_failed", "error", msg)
 		_ = writeEvent(packageimport.ImportProgressEvent{Type: "error", Error: msg})
+		return
+	}
+	if res.DryRun {
+		existing := nonNilStrings(res.Existing)
+		s.logger().Info("service_import_recursive_dry_run_done", "service_count", len(res.Services), "existing_count", len(existing))
+		_ = writeEvent(packageimport.ImportProgressEvent{Type: "complete", Status: "ok", Services: res.Services, DryRun: true, ExistingServices: existing, RestartedInstances: map[string][]string{}, RestartErrors: map[string][]string{}})
 		return
 	}
 	s.logger().Info("service_import_recursive_done", "service_count", len(res.Services))

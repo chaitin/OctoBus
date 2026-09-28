@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -43,6 +44,180 @@ func TestImporterImportsDirectoryPackage(t *testing.T) {
 	for _, path := range []string{res.Service.PackageArtifactPath, res.Service.DescriptorPath, filepath.Join(dataDir, "artifacts/services/echo/runtime/service.json")} {
 		if _, err := os.Stat(path); err != nil {
 			t.Fatalf("expected artifact %s: %v", path, err)
+		}
+	}
+}
+
+func TestImporterDryRunPreviewsServiceWithoutCommitting(t *testing.T) {
+	dataDir, s := openTestStore(t)
+	pkg := writeTestPackage(t, t.TempDir(), `{"schema":"chaitin.octobus.service.v1","name":"echo-wrapper","proto":{"roots":["proto"],"files":["proto/echo.proto"]}}`)
+	var events []ImportProgressEvent
+	res, err := (&Importer{DataDir: dataDir, Store: s}).Import(context.Background(), Options{
+		ServiceID: "echo",
+		Source:    pkg,
+		Offline:   true,
+		DryRun:    true,
+		Progress: func(event ImportProgressEvent) error {
+			events = append(events, event)
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.DryRun || res.Update {
+		t.Fatalf("dry run flags regressed: dry_run=%v update=%v", res.DryRun, res.Update)
+	}
+	svc := res.Service
+	if svc.ID != "echo" || svc.Name != "echo-wrapper" || svc.RuntimeMode != domain.RuntimeModeLongRunning {
+		t.Fatalf("preview metadata regressed: %+v", svc)
+	}
+	if svc.NodeEntry != filepath.Clean("bin/echo.js") || svc.ServiceRoot != "." || svc.DescriptorVersion == "" || svc.DescriptorSHA256 == "" {
+		t.Fatalf("preview entry or descriptor regressed: %+v", svc)
+	}
+	if len(svc.Methods) != 1 || svc.Methods[0].FullName != "echo.v1.EchoService/Echo" {
+		t.Fatalf("preview methods regressed: %+v", svc.Methods)
+	}
+	if res.Manifest.Name != "echo-wrapper" {
+		t.Fatalf("preview manifest regressed: %+v", res.Manifest)
+	}
+	if _, err := s.GetService(context.Background(), "echo"); err == nil {
+		t.Fatal("dry run committed the service")
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, "artifacts", "services", "echo")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("dry run created the service dir: err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, "artifacts", "services", ".staging-echo")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("dry run left staging behind: err=%v", err)
+	}
+	for _, stage := range []string{"prepare_source", "build_package", "validate_manifest", "compile_descriptor", "preview"} {
+		if !hasImportProgressStage(events, stage) {
+			t.Fatalf("missing progress stage %q in %+v", stage, events)
+		}
+	}
+	for _, stage := range []string{"prepare_runtime", "commit_service"} {
+		if hasImportProgressStage(events, stage) {
+			t.Fatalf("dry run reported skipped stage %q in %+v", stage, events)
+		}
+	}
+}
+
+func TestImporterDryRunOnExistingServiceReportsUpdate(t *testing.T) {
+	ctx := context.Background()
+	dataDir, s := openTestStore(t)
+	importer := &Importer{DataDir: dataDir, Store: s}
+	manifest := `{"schema":"chaitin.octobus.service.v1","name":"echo-wrapper","proto":{"roots":["proto"],"files":["proto/echo.proto"]}}`
+	stored, err := importer.Import(ctx, Options{ServiceID: "echo", Source: writeTestPackage(t, t.TempDir(), manifest), Offline: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	updatedPkg := writeTestPackage(t, t.TempDir(), manifest)
+	writeTestFile(t, filepath.Join(updatedPkg, "proto/echo.proto"), `syntax = "proto3";
+package echo.v1;
+service EchoService {
+  rpc Echo(EchoRequest) returns (EchoResponse);
+  rpc Ping(EchoRequest) returns (EchoResponse);
+}
+message EchoRequest { string text = 1; }
+message EchoResponse { string text = 1; }
+`, 0o644)
+	res, err := importer.Import(ctx, Options{ServiceID: "echo", Source: updatedPkg, Offline: true, DryRun: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.DryRun || !res.Update {
+		t.Fatalf("existing service not reported as update: dry_run=%v update=%v", res.DryRun, res.Update)
+	}
+	if len(res.Service.Methods) != 2 {
+		t.Fatalf("preview methods regressed: %+v", res.Service.Methods)
+	}
+	current, err := s.GetService(ctx, "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if current.DescriptorSHA256 != stored.Service.DescriptorSHA256 || current.PackageSHA256 != stored.Service.PackageSHA256 {
+		t.Fatalf("dry run replaced the stored service: current=%+v stored=%+v", current, stored.Service)
+	}
+}
+
+func TestImporterDryRunRecursivePreviewsAllServices(t *testing.T) {
+	dataDir, s := openTestStore(t)
+	fixture := writeMultiServiceTestPackage(t, t.TempDir())
+	var events []ImportProgressEvent
+	res, err := (&Importer{DataDir: dataDir, Store: s}).ImportRecursive(context.Background(), Options{
+		Source:  fixture.Root,
+		Offline: true,
+		Build:   "never",
+		DryRun:  true,
+		Progress: func(event ImportProgressEvent) error {
+			events = append(events, event)
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.DryRun || res.ServiceCount != len(fixture.Services) || len(res.Services) != len(fixture.Services) {
+		t.Fatalf("recursive dry run result regressed: %+v", res)
+	}
+	if len(res.Existing) != 0 {
+		t.Fatalf("recursive dry run reported existing services: %+v", res.Existing)
+	}
+	previewed := make(map[string]domain.Service, len(res.Services))
+	for _, svc := range res.Services {
+		previewed[svc.ID] = svc
+	}
+	for _, want := range fixture.Services {
+		svc, ok := previewed[want.ID]
+		if !ok {
+			t.Fatalf("recursive dry run missed service %s: %+v", want.ID, res.Services)
+		}
+		if svc.ServiceRoot != want.ServiceRoot || svc.NodeEntry != want.NodeEntry {
+			t.Fatalf("preview metadata regressed for %s: %+v", want.ID, svc)
+		}
+		if len(svc.Methods) != 1 || svc.Methods[0].FullName != want.MethodFull {
+			t.Fatalf("preview methods regressed for %s: %+v", want.ID, svc.Methods)
+		}
+		if _, err := os.Stat(filepath.Join(dataDir, "artifacts", "services", want.ID)); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("recursive dry run created service dir %s: err=%v", want.ID, err)
+		}
+	}
+	services, err := s.ListServices(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(services) != 0 {
+		t.Fatalf("recursive dry run committed services: %+v", services)
+	}
+	if !hasImportProgressStage(events, "preview") {
+		t.Fatalf("missing preview progress stage in %+v", events)
+	}
+	for _, stage := range []string{"prepare_runtime", "commit_service"} {
+		if hasImportProgressStage(events, stage) {
+			t.Fatalf("recursive dry run reported skipped stage %q in %+v", stage, events)
+		}
+	}
+}
+
+func TestImporterDryRunRecursiveReportsExistingServices(t *testing.T) {
+	ctx := context.Background()
+	dataDir, s := openTestStore(t)
+	fixture := writeMultiServiceTestPackage(t, t.TempDir())
+	importer := &Importer{DataDir: dataDir, Store: s}
+	if _, err := importer.ImportRecursive(ctx, Options{Source: fixture.Root, Offline: true, Build: "never"}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := importer.ImportRecursive(ctx, Options{Source: fixture.Root, Offline: true, Build: "never", DryRun: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.DryRun || len(res.Existing) != len(fixture.Services) {
+		t.Fatalf("recursive dry run existing services=%+v want %d", res.Existing, len(fixture.Services))
+	}
+	for _, want := range fixture.Services {
+		if !slices.Contains(res.Existing, want.ID) {
+			t.Fatalf("recursive dry run missed existing service %s: %+v", want.ID, res.Existing)
 		}
 	}
 }
