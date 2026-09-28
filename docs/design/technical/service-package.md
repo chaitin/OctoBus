@@ -593,6 +593,19 @@ recursive import 共用的 `.staging-recursive-import`）和提交用的 `.previ
 waiting_for_import_lock`）说明原因。该保证只覆盖同一进程内的 import；多个进程共用同一个
 `data_dir` 不在保证范围内。
 
+提交本身不是原子的：`replaceServiceDir` 先把当前 `artifacts/services/{service_id}` 改名为
+`.{service_id}.previous`，再放入新目录，之后才更新 SQLite。若进程在两步之间崩溃，服务目录
+会消失而备份仍在，服务随之下线。因此 daemon 启动时（**早于实例恢复**，见下）会扫描这些残留
+备份并收尾中断的提交：
+
+- 服务目录不存在：用备份恢复，磁盘回到 store 描述的那个版本。
+- 服务目录存在，且其 `descriptor.protoset` 哈希与 store 记录的 `descriptor_sha256` 一致：
+  提交与写库都已完成，只删除多余的备份。
+- 其余情况（哈希不符、store 无该行、descriptor 读不出）：回滚到备份，让磁盘与 store 一致。
+
+恢复可重复执行（在「删除服务目录」与「放回备份」之间再次崩溃，下次启动会重做这一步），失败
+只记录日志、不阻断 daemon 启动。
+
 ## 安全边界
 
 service package 是 trusted code。导入和运行第三方 npm package 等价于在本机执行第三方代码。

@@ -345,7 +345,7 @@ func prepareServiceRuntime(ctx context.Context, prepared preparedSource, staging
 }
 
 func compileServiceDescriptor(staging string, service preparedService) (compiledServiceDescriptor, error) {
-	descriptorPath := filepath.Join(staging, "descriptor.protoset")
+	descriptorPath := filepath.Join(staging, descriptorFileName)
 	return compileServiceDescriptorAt(descriptorPath, service)
 }
 
@@ -366,7 +366,7 @@ func stageServiceCommit(prepared preparedSource, runtimeDir string, descriptor c
 	commitDir := filepath.Join(staging, "service")
 	finalPackageDir := filepath.Join(commitDir, "package")
 	finalRuntimeDir := filepath.Join(commitDir, "runtime")
-	finalDescriptor := filepath.Join(commitDir, "descriptor.protoset")
+	finalDescriptor := filepath.Join(commitDir, descriptorFileName)
 	finalArtifact := filepath.Join(commitDir, filepath.Base(prepared.ArtifactPath))
 	if err := os.RemoveAll(commitDir); err != nil {
 		return "", "", err
@@ -410,7 +410,7 @@ func (i *Importer) buildImportedService(ctx context.Context, opts Options, prepa
 		secretSchemaPath = filepath.Join(serviceDir, "package", serviceRootPath, service.Manifest.SecretSchema)
 	}
 	finalStoredArtifact := filepath.Join(serviceDir, filepath.Base(prepared.ArtifactPath))
-	finalStoredDescriptor := filepath.Join(serviceDir, "descriptor.protoset")
+	finalStoredDescriptor := filepath.Join(serviceDir, descriptorFileName)
 	svc := domain.Service{
 		ID:                  opts.ServiceID,
 		Name:                serviceName,
@@ -1624,7 +1624,7 @@ func replaceServiceDir(serviceDir, preparedDir string) (func() error, func() err
 	if err := os.MkdirAll(parent, 0o755); err != nil {
 		return nil, nil, err
 	}
-	backupDir := filepath.Join(parent, "."+filepath.Base(serviceDir)+".previous")
+	backupDir := filepath.Join(parent, "."+filepath.Base(serviceDir)+previousDirSuffix)
 	if err := os.RemoveAll(backupDir); err != nil {
 		return nil, nil, err
 	}

@@ -154,6 +154,40 @@ func TestDaemonRestartRecoversEnabledAndLeavesDisabledStopped(t *testing.T) {
 	assertConnectError(t, unavailable, "UNAVAILABLE")
 }
 
+func TestDaemonRestoresInterruptedServiceCommitBeforeStartingInstances(t *testing.T) {
+	h := newHarness(t)
+	cat := setupCalculator(t, h)
+	add := requireMethod(t, cat, "calculator.v1.CalculatorService/Add")
+
+	// Simulate a crash between the two renames of a commit: the live dir is gone
+	// and only the backup is left. The enabled instance below cannot start from
+	// the service dir until that backup is restored.
+	h.stop()
+	servicesDir := filepath.Join(h.dataDir, "artifacts", "services")
+	if err := os.Rename(filepath.Join(servicesDir, "calculator"), filepath.Join(servicesDir, ".calculator.previous")); err != nil {
+		t.Fatal(err)
+	}
+	h.start()
+
+	if _, err := os.Stat(filepath.Join(servicesDir, "calculator", "descriptor.protoset")); err != nil {
+		t.Fatalf("daemon did not restore the interrupted service commit: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(servicesDir, ".calculator.previous")); !os.IsNotExist(err) {
+		t.Fatalf("backup survived recovery: %v", err)
+	}
+	cat = h.waitCatalogRunning()
+	add = requireMethod(t, cat, "calculator.v1.CalculatorService/Add")
+	var after map[string]any
+	h.publicConnect(add.Endpoint, `{"left":1,"right":2}`, http.StatusOK, &after)
+	if math.Abs(after["result"].(float64)-3) > 0.000001 {
+		t.Fatalf("instance did not come back from the restored service dir: %+v", after)
+	}
+	row := h.readDB(`SELECT status, pid FROM instances WHERE id = ?`, "calculator-test")
+	if row["status"] != "running" || row["pid"] == "" {
+		t.Fatalf("enabled instance was not recovered: %+v", row)
+	}
+}
+
 func TestKilledLongRunningInstanceAutoRecovers(t *testing.T) {
 	h := newHarness(t)
 	cat := setupCalculator(t, h)
