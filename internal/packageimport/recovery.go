@@ -53,6 +53,14 @@ type ServiceDirRecovery struct {
 // to run repeatedly.
 func (i *Importer) RecoverServiceDirs(ctx context.Context) (ServiceDirRecovery, error) {
 	report := ServiceDirRecovery{Restored: []string{}, Discarded: []string{}, Staging: []string{}}
+	// The sweep deletes staging trees and rolls back commits, which is only safe
+	// while no import of this data dir is running. Taking the import lock makes
+	// that a property of this call rather than a convention of its callers.
+	unlock, err := i.acquireImportLock(ctx, Options{})
+	if err != nil {
+		return report, err
+	}
+	defer unlock()
 	servicesDir := filepath.Join(i.DataDir, "artifacts", "services")
 	entries, err := os.ReadDir(servicesDir)
 	if err != nil {
@@ -172,6 +180,10 @@ func (i *Importer) interruptedCommitNeedsRollback(ctx context.Context, serviceID
 	if stored.DescriptorSHA256 != domain.HashBytes(descriptor) {
 		return true, nil
 	}
+	// The artifact keeps its version in its file name, so only the row knows
+	// which one belongs to it; the descriptor name never changes, so it is read
+	// from the dir under inspection instead of the row's absolute path, which a
+	// moved data dir would have left behind.
 	artifact, err := os.ReadFile(filepath.Join(serviceDir, filepath.Base(stored.PackageArtifactPath)))
 	if err != nil {
 		return true, nil

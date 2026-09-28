@@ -301,6 +301,72 @@ func TestImporterConcurrentImportsOfSameServiceDoNotClobberStaging(t *testing.T)
 	}
 }
 
+// A queued import whose caller goes away must give up, not wait for the running
+// import and then work for nobody.
+func TestImporterImportLockHonorsContextWhileWaiting(t *testing.T) {
+	dataDir, s := openTestStore(t)
+	pkg := writeTestPackage(t, t.TempDir(), `{"schema":"chaitin.octobus.service.v1","name":"echo-wrapper","proto":{"roots":["proto"],"files":["proto/echo.proto"]}}`)
+
+	barrierReached := make(chan struct{})
+	releaseFirst := make(chan struct{})
+	firstDone := make(chan error, 1)
+	go func() {
+		_, err := (&Importer{DataDir: dataDir, Store: s}).Import(context.Background(), Options{
+			ServiceID: "echo",
+			Source:    pkg,
+			Offline:   true,
+			Build:     "never",
+			Progress: func(event ImportProgressEvent) error {
+				if event.Stage == "compile_descriptor" {
+					close(barrierReached)
+					<-releaseFirst
+				}
+				return nil
+			},
+		})
+		firstDone <- err
+	}()
+	<-barrierReached
+
+	waiting := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	secondDone := make(chan error, 1)
+	go func() {
+		_, err := (&Importer{DataDir: dataDir, Store: s}).Import(ctx, Options{
+			ServiceID: "echo",
+			Source:    pkg,
+			Offline:   true,
+			Build:     "never",
+			Progress: func(event ImportProgressEvent) error {
+				if event.Stage == "waiting_for_import_lock" {
+					close(waiting)
+				}
+				return nil
+			},
+		})
+		secondDone <- err
+	}()
+	select {
+	case <-waiting:
+	case <-time.After(30 * time.Second):
+		t.Fatal("second import never reported that it was waiting")
+	}
+	cancel()
+	select {
+	case err := <-secondDone:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("cancelled import err=%v want context.Canceled", err)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("cancelled import kept waiting for the import lock")
+	}
+
+	close(releaseFirst)
+	if err := <-firstDone; err != nil {
+		t.Fatalf("running import failed: %v", err)
+	}
+}
+
 func TestOptionsUploadIsInternalOnly(t *testing.T) {
 	opts := Options{
 		ServiceID: "echo",

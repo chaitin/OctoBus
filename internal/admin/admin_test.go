@@ -631,9 +631,17 @@ func TestAdminServiceImportDryRunPredictsRestartWithImportedRuntimeMode(t *testi
 		t.Fatalf("preview missed the restarts a runtime mode change would cause: %s", body)
 	}
 
-	// The import commits before it restarts, so the instance cannot start from
-	// this fixture and the response degrades; the service row is updated anyway.
-	serveAdmin(t, srv, http.MethodPost, "/admin/v1/services/import", importBody(longRunningPkg, false), http.StatusConflict)
+	// The deployed row is long-running now, which is what the next preview has to
+	// notice. Set it directly instead of relying on a real import of the
+	// long-running package degrading because its instance cannot start.
+	stored, err := st.GetService(ctx, "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored.RuntimeMode = domain.RuntimeModeLongRunning
+	if err := st.UpsertService(ctx, stored); err != nil {
+		t.Fatal(err)
+	}
 
 	// Switching back to on-demand restarts nothing, and the preview must not
 	// promise restarts the import would not perform.

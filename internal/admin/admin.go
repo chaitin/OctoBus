@@ -1712,7 +1712,18 @@ func acceptsNDJSON(r *http.Request) bool {
 	return false
 }
 
+// importProgressWriteTimeout bounds a single progress write. Imports serialize
+// per data dir, so a client that stops reading must not be able to pin the
+// import lock: its own write fails, its import aborts, and the queue drains.
+const importProgressWriteTimeout = 30 * time.Second
+
 func writeNDJSONEvent(w http.ResponseWriter, event packageimport.ImportProgressEvent) error {
+	// Writers without deadline support (recorders, some test doubles) report
+	// ErrNotSupported, which is fine to ignore.
+	controller := http.NewResponseController(w)
+	if err := controller.SetWriteDeadline(time.Now().Add(importProgressWriteTimeout)); err != nil && !errors.Is(err, http.ErrNotSupported) {
+		return err
+	}
 	if err := json.NewEncoder(w).Encode(event); err != nil {
 		return err
 	}

@@ -175,12 +175,21 @@ func serve(opts serveOptions) error {
 	sup.OnInstanceChanged = gateway.InvalidateInstance
 	ctx, stop := signal.NotifyContext(context.Background(), shutdownSignals(opts.runtimeHardening, signal.Ignored(syscall.SIGHUP))...)
 	defer stop()
+	// Take the port before touching the data dir. The startup steps below are
+	// destructive — they finish interrupted commits, delete abandoned staging
+	// trees and start instances — and nothing guards a data dir across
+	// processes, so a second `serve` on the same data dir would run them and
+	// then exit on the bind. Failing on the bind first is the cheap guard.
+	publicListener, err := net.Listen("tcp", opts.addr)
+	if err != nil {
+		return err
+	}
 	// Finish interrupted commits before instances are recovered, so that a
 	// restored service dir is in place before anything starts from it.
 	if recovery, err := importer.RecoverServiceDirs(ctx); err != nil {
 		logger.Warn("recover_service_dirs_failed", "error", err)
-	} else if len(recovery.Restored) > 0 || len(recovery.Discarded) > 0 {
-		logger.Warn("recover_service_dirs_done", "restored", recovery.Restored, "discarded", recovery.Discarded)
+	} else if len(recovery.Restored) > 0 || len(recovery.Discarded) > 0 || len(recovery.Staging) > 0 {
+		logger.Warn("recover_service_dirs_done", "restored", recovery.Restored, "discarded", recovery.Discarded, "staging", recovery.Staging)
 	}
 	logger.Info("recover_enabled_started")
 	recovered, err := sup.RecoverEnabled(ctx)
@@ -210,10 +219,6 @@ func serve(opts serveOptions) error {
 	adminServer := &admin.Server{Store: st, Importer: importer, Supervisor: sup, Gateway: gateway, AccessLogPath: filepath.Join(dataDir, accesslog.FileName), Logger: logger, RequireAdminToken: true}
 	grpcServer := protocol.GRPCServer(gateway)
 	publicServer := admin.NewHTTPServer(opts.addr, h2c.NewHandler(server.CombinedHandler(adminServer.Handler(), grpcServer, gateway), &http2.Server{}))
-	publicListener, err := net.Listen("tcp", opts.addr)
-	if err != nil {
-		return err
-	}
 	serverErr := make(chan error, 1)
 	go func() {
 		if err := publicServer.Serve(publicListener); err != nil && err != http.ErrServerClosed {

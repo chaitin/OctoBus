@@ -152,9 +152,10 @@ admin import endpoint 在 recursive 模式下返回 `services`、`service_count`
 enabled long-running instances 的重启结果；任一重启失败时返回 HTTP 409，并带
 `status: "degraded"`。on-demand service 不执行持久进程重启。
 
-recursive dry-run 不重启任何 instance，返回 `dry_run: true`、`services`、`service_count`
-和 `existing_service_ids`（会被覆盖的 service id），`restarted_instances` / `restart_errors`
-为空。
+recursive dry-run 不重启任何 instance，返回 `dry_run: true`、`services`、`service_count`、
+`existing_service_ids`（会被覆盖的 service id）和 `would_restart_instances`（真实导入会重启
+哪些实例，按 service id 分组；dry-run 自身不重启，故 `restarted_instances` / `restart_errors`
+为空）。
 
 依赖安装只以根 `package.json` 为准。子目录 `package.json` 不参与 import/runtime
 依赖解析。

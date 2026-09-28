@@ -42,22 +42,27 @@ type Importer struct {
 // refcounting because a waiting caller holds the lock it is about to take.
 var (
 	importLocksMu sync.Mutex
-	importLocks   = map[string]*sync.Mutex{}
+	importLocks   = map[string]chan struct{}{}
 )
 
-// importLock returns the lock serializing imports for a data dir. The key is
-// resolved to an absolute path so that `./data` and `/abs/data` cannot end up
-// with separate locks for the same dir.
-func importLock(dataDir string) *sync.Mutex {
+// importLock returns the lock serializing imports for a data dir, as a channel
+// holding at most one token so that a waiter can give up when its caller does.
+// The key is resolved to an absolute, symlink-free path so that `./data`,
+// `/abs/data` and `/tmp/data` vs `/private/tmp/data` cannot end up with
+// separate locks for the same dir.
+func importLock(dataDir string) chan struct{} {
 	key, err := filepath.Abs(dataDir)
 	if err != nil {
 		key = dataDir
+	}
+	if resolved, err := filepath.EvalSymlinks(key); err == nil {
+		key = resolved
 	}
 	importLocksMu.Lock()
 	defer importLocksMu.Unlock()
 	lock, ok := importLocks[key]
 	if !ok {
-		lock = new(sync.Mutex)
+		lock = make(chan struct{}, 1)
 		importLocks[key] = lock
 	}
 	return lock
@@ -65,17 +70,24 @@ func importLock(dataDir string) *sync.Mutex {
 
 // acquireImportLock returns the unlock function once the import may proceed.
 // A waiting caller reports progress before blocking, so a queued import looks
-// like a queue rather than a hang, and gives up if the progress sink is gone.
-func (i *Importer) acquireImportLock(opts Options) (func(), error) {
+// like a queue rather than a hang, and gives up when the caller goes away
+// instead of running an import nobody is waiting for.
+func (i *Importer) acquireImportLock(ctx context.Context, opts Options) (func(), error) {
 	lock := importLock(i.DataDir)
-	if lock.TryLock() {
-		return lock.Unlock, nil
+	select {
+	case lock <- struct{}{}:
+		return func() { <-lock }, nil
+	default:
 	}
 	if err := reportImportProgress(opts, ImportProgressEvent{Type: "status", Stage: "waiting_for_import_lock", Message: "Waiting for another import to finish"}); err != nil {
 		return nil, err
 	}
-	lock.Lock()
-	return lock.Unlock, nil
+	select {
+	case lock <- struct{}{}:
+		return func() { <-lock }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 type Options struct {
@@ -207,7 +219,7 @@ func (i *Importer) Import(ctx context.Context, opts Options) (Result, error) {
 	if opts.Source == "" {
 		return Result{}, errors.New("service package source is required")
 	}
-	unlock, err := i.acquireImportLock(opts)
+	unlock, err := i.acquireImportLock(ctx, opts)
 	if err != nil {
 		return Result{}, err
 	}
@@ -480,7 +492,7 @@ func (i *Importer) ImportRecursive(ctx context.Context, opts Options) (Recursive
 	if err != nil {
 		return RecursiveResult{}, err
 	}
-	unlock, err := i.acquireImportLock(opts)
+	unlock, err := i.acquireImportLock(ctx, opts)
 	if err != nil {
 		return RecursiveResult{}, err
 	}

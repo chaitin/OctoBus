@@ -619,6 +619,11 @@ waiting_for_import_lock`）说明原因。该保证只覆盖同一进程内的 i
 单个 service 失败不会中断整轮扫描 —— 其余 service 的目录同样需要在实例恢复之前归位 ——
 错误会被汇总记录，且**不阻断 daemon 启动**。
 
+恢复与 import 共用同一把（进程内的）锁，因此它不会和一个正在进行的 import 抢目录。但**跨进程
+没有任何保护**：daemon 会先 bind 端口再执行恢复，所以「同 data dir 同端口」误起第二个 daemon
+会在扫描之前就失败退出；而「同 data dir 不同端口」的第二个进程不会被阻止，会真的执行这轮
+扫描。不要用两个进程指向同一个 `data_dir`。
+
 ## 安全边界
 
 service package 是 trusted code。导入和运行第三方 npm package 等价于在本机执行第三方代码。
