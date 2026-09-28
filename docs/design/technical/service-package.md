@@ -586,6 +586,13 @@ service update 不自动重写 capset method binding。如果新 descriptor 中�
 
 需要回滚时，用户重新导入旧 package artifact。
 
+同一个 `data_dir` 上的 import 串行执行：staging 路径（`.staging-<service_id>`，以及所有
+recursive import 共用的 `.staging-recursive-import`）和提交用的 `.previous` 备份路径都是
+固定的，并发的 import 会互相删除对方的工作目录，因此 daemon 保证同一时刻只有一个 import
+在跑。第二个请求会等待前一个结束，并在开始等待前通过进度事件（`stage:
+waiting_for_import_lock`）说明原因。该保证只覆盖同一进程内的 import；多个进程共用同一个
+`data_dir` 不在保证范围内。
+
 ## 安全边界
 
 service package 是 trusted code。导入和运行第三方 npm package 等价于在本机执行第三方代码。

@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"octobus/internal/descriptors"
 	"octobus/internal/domain"
@@ -27,6 +28,45 @@ import (
 type Importer struct {
 	DataDir string
 	Store   *store.Store
+}
+
+// Imports sharing a data dir must not run at the same time: they use fixed
+// staging paths (`.staging-<service id>`, and a single
+// `.staging-recursive-import` for every recursive import) and commit through a
+// fixed `.previous` backup path. Two concurrent imports therefore delete each
+// other's working tree, and can leave a service dir removed while its store row
+// survives. Locks are keyed by data dir so separate Importer values pointing at
+// the same dir are still serialized. They do not protect against other
+// processes using the same data dir.
+var (
+	importLocksMu sync.Mutex
+	importLocks   = map[string]*sync.Mutex{}
+)
+
+func importLock(dataDir string) *sync.Mutex {
+	importLocksMu.Lock()
+	defer importLocksMu.Unlock()
+	lock, ok := importLocks[dataDir]
+	if !ok {
+		lock = new(sync.Mutex)
+		importLocks[dataDir] = lock
+	}
+	return lock
+}
+
+// acquireImportLock returns the unlock function once the import may proceed.
+// A waiting caller reports progress before blocking, so a queued import looks
+// like a queue rather than a hang, and gives up if the progress sink is gone.
+func (i *Importer) acquireImportLock(opts Options) (func(), error) {
+	lock := importLock(i.DataDir)
+	if lock.TryLock() {
+		return lock.Unlock, nil
+	}
+	if err := reportImportProgress(opts, ImportProgressEvent{Type: "status", Stage: "waiting_for_import_lock", Message: "Waiting for another import to finish"}); err != nil {
+		return nil, err
+	}
+	lock.Lock()
+	return lock.Unlock, nil
 }
 
 type Options struct {
@@ -154,6 +194,11 @@ func (i *Importer) Import(ctx context.Context, opts Options) (Result, error) {
 	if opts.Source == "" {
 		return Result{}, errors.New("service package source is required")
 	}
+	unlock, err := i.acquireImportLock(opts)
+	if err != nil {
+		return Result{}, err
+	}
+	defer unlock()
 	serviceDir := filepath.Join(i.DataDir, "artifacts", "services", opts.ServiceID)
 	staging := filepath.Join(i.DataDir, "artifacts", "services", ".staging-"+opts.ServiceID)
 	if err := os.RemoveAll(staging); err != nil {
@@ -422,6 +467,11 @@ func (i *Importer) ImportRecursive(ctx context.Context, opts Options) (Recursive
 	if err != nil {
 		return RecursiveResult{}, err
 	}
+	unlock, err := i.acquireImportLock(opts)
+	if err != nil {
+		return RecursiveResult{}, err
+	}
+	defer unlock()
 	staging := filepath.Join(i.DataDir, "artifacts", "services", ".staging-recursive-import")
 	if err := os.RemoveAll(staging); err != nil {
 		return RecursiveResult{}, err
