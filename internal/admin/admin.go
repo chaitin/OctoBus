@@ -451,7 +451,7 @@ func (s *Server) handleServiceImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if res.DryRun {
-		wouldRestart := s.wouldRestartInstances(r.Context(), res.Service.ID)
+		wouldRestart := s.wouldRestartInstances(r.Context(), res.Service.ID, res.Service.RuntimeMode)
 		s.logger().Info("service_import_dry_run_done", "service_id", res.Service.ID, "update", res.Update, "runtime_mode", res.Service.RuntimeMode, "descriptor_version", res.Service.DescriptorVersion, "method_count", len(res.Service.Methods), "would_restart_count", len(wouldRestart))
 		writeJSON(w, http.StatusOK, map[string]any{"dry_run": true, "update": res.Update, "existing_service": res.Existing, "service": res.Service, "would_restart_instances": wouldRestart, "restarted_instances": []string{}, "restart_errors": []string{}})
 		return
@@ -737,7 +737,7 @@ func (s *Server) handleStreamingServiceImport(w http.ResponseWriter, r *http.Req
 	}
 	if res.DryRun {
 		s.logger().Info("service_import_dry_run_done", "service_id", res.Service.ID, "update", res.Update, "runtime_mode", res.Service.RuntimeMode, "descriptor_version", res.Service.DescriptorVersion, "method_count", len(res.Service.Methods))
-		_ = writeEvent(packageimport.ImportProgressEvent{Type: "complete", Status: "ok", Service: &res.Service, DryRun: true, Update: res.Update, ExistingService: res.Existing, WouldRestartInstances: s.wouldRestartInstances(r.Context(), res.Service.ID), RestartedInstances: []string{}, RestartErrors: []string{}})
+		_ = writeEvent(packageimport.ImportProgressEvent{Type: "complete", Status: "ok", Service: &res.Service, DryRun: true, Update: res.Update, ExistingService: res.Existing, WouldRestartInstances: s.wouldRestartInstances(r.Context(), res.Service.ID, res.Service.RuntimeMode), RestartedInstances: []string{}, RestartErrors: []string{}})
 		return
 	}
 	s.logger().Info("service_import_done", "service_id", res.Service.ID, "runtime_mode", res.Service.RuntimeMode, "descriptor_sha256", res.Service.DescriptorSHA256, "method_count", len(res.Service.Methods))
@@ -1002,16 +1002,15 @@ func readSchemaContent(path string) (json.RawMessage, error) {
 }
 
 // wouldRestartInstances reports which instances a real import would restart,
-// without restarting anything. It mirrors the rule restartEnabledServiceInstances
-// applies to pick its targets, so the two have to be kept in sync. Lookup
-// failures and services that do not exist yet simply report no instances: a
-// preview field is not worth failing the response over.
-func (s *Server) wouldRestartInstances(ctx context.Context, serviceID string) []string {
-	if s.Supervisor == nil {
-		return []string{}
-	}
-	svc, err := s.Store.GetService(ctx, serviceID)
-	if err != nil || svc.RuntimeMode == domain.RuntimeModeOnDemand {
+// without restarting anything. It takes the runtime mode of the service being
+// imported rather than the deployed row's: a real import restarts from the row
+// it just wrote, so an import that changes the mode would otherwise be
+// predicted with the mode it is about to replace. The enabled instances
+// themselves come from the store, which the import does not touch. Lookup
+// failures and services that do not exist yet report no instances — a preview
+// field is not worth failing the response over.
+func (s *Server) wouldRestartInstances(ctx context.Context, serviceID string, runtimeMode domain.RuntimeMode) []string {
+	if s.Supervisor == nil || runtimeMode == domain.RuntimeModeOnDemand {
 		return []string{}
 	}
 	instances, err := s.Store.ListEnabledInstancesByService(ctx, serviceID)
@@ -1026,7 +1025,7 @@ func (s *Server) wouldRestartInstances(ctx context.Context, serviceID string) []
 func (s *Server) dryRunRestartPlan(ctx context.Context, services []domain.Service) map[string][]string {
 	plan := make(map[string][]string, len(services))
 	for _, svc := range services {
-		plan[svc.ID] = s.wouldRestartInstances(ctx, svc.ID)
+		plan[svc.ID] = s.wouldRestartInstances(ctx, svc.ID, svc.RuntimeMode)
 	}
 	return plan
 }
