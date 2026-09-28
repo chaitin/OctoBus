@@ -184,6 +184,10 @@ func serve(opts serveOptions) error {
 	if err != nil {
 		return err
 	}
+	// The steps below can still fail and return, and Shutdown closes the
+	// listener on the way out, so this only matters on those paths — where
+	// leaving the port bound would keep it unusable for the rest of the process.
+	defer func() { _ = publicListener.Close() }()
 	// Finish interrupted commits before instances are recovered, so that a
 	// restored service dir is in place before anything starts from it.
 	if recovery, err := importer.RecoverServiceDirs(ctx); err != nil {
