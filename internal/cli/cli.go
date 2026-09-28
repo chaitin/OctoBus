@@ -257,6 +257,11 @@ func (c *CLI) serviceImportCommand() *cobra.Command {
 			} else {
 				sourceArg = args[1]
 			}
+			if dryRun && reinstall {
+				if err := c.printServiceImportLine("--reinstall has no effect with --dry-run: runtime dependency installation is skipped"); err != nil {
+					return err
+				}
+			}
 			transfer, err := resolveImportSourceTransfer(sourceArg, sourceModeValue)
 			if err != nil {
 				return err

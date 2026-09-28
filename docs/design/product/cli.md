@@ -130,14 +130,18 @@ recursive 模式下仍禁止 `--name`。执行到编译 descriptor 为止，不�
 不写 `artifacts/services/<id>`，不更新 SQLite，也不重启 instances。
 
 输出包含 `dry_run: true`、`update`（真实导入是否会覆盖已有 service）、`existing_service`
-（当前已部署的 service 记录，新建时为 `null`，可用于比对确认时的基线是否已变），以及真实导入
-将会写入的 service 记录：`ID`、`Name`、`PackageSource`、`PackageVersion`、`DescriptorVersion`、
-`DescriptorSHA256`、`NodeEntry`、`RuntimeMode` 和完整的 `Methods` 列表。除了这些预览字段，
-输出形状与真实导入一致；`DescriptorPath` / `PackageArtifactPath` 等路径是真实导入后的最终
-路径，dry-run 时尚未写入。recursive dry-run 额外返回 `existing_service_ids`。
+（当前已部署的 service 记录，新建时为 `null`，可用于比对确认时的基线是否已变）、
+`would_restart_instances`（真实导入会重启哪些实例；recursive 模式按 service 分组），以及真实
+导入将会写入的 service 记录：`ID`、`Name`、`PackageSource`、`PackageVersion`、
+`DescriptorVersion`、`DescriptorSHA256`、`NodeEntry`、`RuntimeMode` 和完整的 `Methods` 列表。
+dry-run 自身不重启任何实例，因此 `restarted_instances` 恒为空 —— 需要判断停机影响时看
+`would_restart_instances`，不要看 `restarted_instances`。除了这些预览字段，输出形状与真实
+导入一致；`DescriptorPath` / `PackageArtifactPath` 等路径是真实导入后的最终路径，dry-run 时
+尚未写入。recursive dry-run 额外返回 `existing_service_ids`。
 
-`--reinstall` 只作用于被 dry-run 跳过的 runtime 依赖安装，因此对 `--dry-run` 没有影响；
-`--offline` 还会作用于构建阶段仍会执行的依赖安装（`npm ci` / `npm install`）。dry-run 仍会获取
+`--reinstall` 只作用于被 dry-run 跳过的 runtime 依赖安装，因此对 `--dry-run` 没有影响，CLI 会在
+两个 flag 同时传时明确提示（warning，不报错）；`--offline` 还会作用于构建阶段仍会执行的依赖
+安装（`npm ci` / `npm install`）。dry-run 仍会获取
 source 并执行 `--build` 策略，所以 Git source 仍会 clone、`--build=always` 仍会执行包内
 `prepack` / `prepare` / `build` 脚本；它保证的是 daemon 状态不变，不是「不执行任何代码」。
 

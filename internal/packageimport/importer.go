@@ -143,6 +143,10 @@ type ImportProgressEvent struct {
 	Update           any `json:"update,omitempty"`
 	ExistingService  any `json:"existing_service,omitempty"`
 	ExistingServices any `json:"existing_service_ids,omitempty"`
+	// WouldRestartInstances lists the instances a real import would restart. It
+	// is set for dry runs only, so a preview answers "what will this cost me"
+	// instead of leaving an empty restarted_instances to be misread.
+	WouldRestartInstances any `json:"would_restart_instances,omitempty"`
 }
 
 type preparedSource struct {

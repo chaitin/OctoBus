@@ -386,11 +386,18 @@ recursive dry-run 返回 `services`（每个 discovered service 的预览），�
 `existing_service_ids`（会被覆盖的 service id）；recursive 模式不返回逐个 service 的
 `existing_service` 记录。
 
+dry-run 自身不重启任何实例，所以 `restarted_instances` 恒为空。真实导入会重启哪些实例由
+`would_restart_instances` 给出：单服务 dry-run 是实例 id 列表，recursive dry-run 是按 service
+id 分组的 map（与 `restarted_instances` 的形状一致）。它沿用与真实重启相同的规则 —— on-demand
+service 与未导入的 service 都是空列表 —— 因此可以据此判断这次导入是否需要停机窗口，不要根据
+空的 `restarted_instances` 下结论。
+
 约束：
 
 - 跳过 runtime dependency 安装，因为它的产物不参与 service 形状和方法列表。因此 dry-run
   通过不代表 `npm install --omit=dev` 一定成功。`--reinstall` 只作用于这一步，对 `--dry-run`
-  没有影响；`--offline` 还会作用于 dry-run 仍会执行的构建阶段依赖安装（`npm ci` / `npm install`），
+  没有影响（CLI 会在两个 flag 同时传时提示）；`--offline` 还会作用于 dry-run 仍会执行的构建
+  阶段依赖安装（`npm ci` / `npm install`），
   所以在没有本地 npm 缓存的机器上，`--dry-run --build=always --offline` 仍可能因离线安装失败。
 - 取包阶段是真实执行的：HTTPS Git source 会 clone，`npm:` source 会执行 `npm pack`，
   `--build=always` 会执行包内构建脚本。dry-run 保证的是 daemon 状态不变（不写 service
