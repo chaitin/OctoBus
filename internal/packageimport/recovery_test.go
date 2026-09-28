@@ -149,6 +149,35 @@ func TestRecoverServiceDirsToleratesMissingServicesDir(t *testing.T) {
 	}
 }
 
+// A service id may start with the staging prefix, which makes its backup name
+// (".<id>.previous") start with that prefix too. The backup must still win over
+// the staging sweep: it holds the only copy of the deployed version.
+func TestRecoverServiceDirsKeepsBackupOfServiceNamedLikeStaging(t *testing.T) {
+	ctx := context.Background()
+	dataDir, s := openTestStore(t)
+	importer := &Importer{DataDir: dataDir, Store: s}
+	pkg := writeTestPackage(t, t.TempDir(), recoveryTestManifest)
+	if _, err := importer.Import(ctx, Options{ServiceID: "staging-helper", Source: pkg, Offline: true}); err != nil {
+		t.Fatal(err)
+	}
+	servicesDir := filepath.Join(dataDir, "artifacts", "services")
+	backupDir := filepath.Join(servicesDir, ".staging-helper.previous")
+	if err := os.Rename(filepath.Join(servicesDir, "staging-helper"), backupDir); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := importer.RecoverServiceDirs(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Restored) != 1 || report.Restored[0] != "staging-helper" || len(report.Staging) != 0 {
+		t.Fatalf("backup was mistaken for a staging tree: report=%+v", report)
+	}
+	if _, err := os.Stat(filepath.Join(servicesDir, "staging-helper", descriptorFileName)); err != nil {
+		t.Fatalf("service dir was not restored: %v", err)
+	}
+}
+
 func TestRecoverServiceDirsCleansAbandonedStagingTrees(t *testing.T) {
 	dataDir, s := openTestStore(t)
 	importer := &Importer{DataDir: dataDir, Store: s}

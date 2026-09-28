@@ -110,11 +110,17 @@ func (i *Importer) RecoverServiceDirs(ctx context.Context) (ServiceDirRecovery, 
 }
 
 // stagingDirName reports the name of a staging tree entry.
+//
+// Backups are excluded explicitly: a service id may begin with the staging
+// prefix, and `.<id>.previous` for such a service starts with it too, so the
+// two namespaces overlap. A staging name never ends with the backup suffix for
+// the same reason a service id cannot contain a dot.
 func stagingDirName(entry os.DirEntry) (string, bool) {
-	if !entry.IsDir() || !strings.HasPrefix(entry.Name(), stagingDirPrefix) {
+	name := entry.Name()
+	if !entry.IsDir() || !strings.HasPrefix(name, stagingDirPrefix) || strings.HasSuffix(name, previousDirSuffix) {
 		return "", false
 	}
-	return entry.Name(), true
+	return name, true
 }
 
 // backupServiceID reports the service id that a `.<id>.previous` entry backs up.
