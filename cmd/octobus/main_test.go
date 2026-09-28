@@ -316,6 +316,39 @@ func TestRootAddrFlagOverridesAdminCommands(t *testing.T) {
 	}
 }
 
+// Startup steps that fail after the port was taken must not leave it bound:
+// in-process callers (including these tests, which hand serve an address they
+// already probed) would otherwise never be able to reuse it.
+func TestServeReleasesListenerWhenStartupFailsAfterBind(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().String()
+	if err := ln.Close(); err != nil {
+		t.Fatal(err)
+	}
+	inventoryErr := errors.New("inventory failed")
+	err = serve(serveOptions{
+		dataDir: t.TempDir(),
+		addr:    addr,
+		logger:  slog.New(slog.NewTextHandler(io.Discard, nil)),
+		startupInventory: func(context.Context, *slog.Logger, *store.Store) error {
+			return inventoryErr
+		},
+	})
+	if !errors.Is(err, inventoryErr) {
+		t.Fatalf("serve err=%v want %v", err, inventoryErr)
+	}
+	again, err := net.Listen("tcp", addr)
+	if err != nil {
+		t.Fatalf("failed startup kept the port bound: %v", err)
+	}
+	if err := again.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestServeRejectsDevNonLoopbackBeforeStartup(t *testing.T) {
 	dataDir := filepath.Join(t.TempDir(), "should-not-exist")
 	inventoryCalled := false

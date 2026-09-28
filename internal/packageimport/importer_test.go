@@ -17,6 +17,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"octobus/internal/domain"
 	"octobus/internal/store"
@@ -219,6 +220,150 @@ func TestImporterDryRunRecursiveReportsExistingServices(t *testing.T) {
 		if !slices.Contains(res.Existing, want.ID) {
 			t.Fatalf("recursive dry run missed existing service %s: %+v", want.ID, res.Existing)
 		}
+	}
+}
+
+func TestImporterConcurrentImportsOfSameServiceDoNotClobberStaging(t *testing.T) {
+	dataDir, s := openTestStore(t)
+	pkg := writeTestPackage(t, t.TempDir(), `{"schema":"chaitin.octobus.service.v1","name":"echo-wrapper","proto":{"roots":["proto"],"files":["proto/echo.proto"]}}`)
+
+	barrierReached := make(chan struct{})
+	releaseFirst := make(chan struct{})
+	waitingReported := make(chan struct{})
+
+	// The first import parks inside the pipeline with its staging tree fully
+	// populated, so a second import has something to clobber.
+	firstDone := make(chan error, 1)
+	go func() {
+		_, err := (&Importer{DataDir: dataDir, Store: s}).Import(context.Background(), Options{
+			ServiceID: "echo",
+			Source:    pkg,
+			Offline:   true,
+			Build:     "never",
+			Progress: func(event ImportProgressEvent) error {
+				if event.Stage == "compile_descriptor" {
+					close(barrierReached)
+					<-releaseFirst
+				}
+				return nil
+			},
+		})
+		firstDone <- err
+	}()
+	<-barrierReached
+
+	secondDone := make(chan error, 1)
+	go func() {
+		_, err := (&Importer{DataDir: dataDir, Store: s}).Import(context.Background(), Options{
+			ServiceID: "echo",
+			Source:    pkg,
+			Offline:   true,
+			Build:     "never",
+			Progress: func(event ImportProgressEvent) error {
+				if event.Stage == "waiting_for_import_lock" {
+					close(waitingReported)
+				}
+				return nil
+			},
+		})
+		secondDone <- err
+	}()
+
+	// A second import of the same service must wait for the running one. When
+	// it did not, it ran to completion here and wiped the first import's
+	// staging tree out from under it.
+	var secondErr error
+	secondFinishedWhileFirstRan := false
+	select {
+	case <-waitingReported:
+	case secondErr = <-secondDone:
+		secondFinishedWhileFirstRan = true
+	case <-time.After(30 * time.Second):
+		t.Fatal("timed out waiting for the second import to report its state")
+	}
+	if secondFinishedWhileFirstRan {
+		t.Fatalf("second import finished (err=%v) while the first import was still running", secondErr)
+	}
+	close(releaseFirst)
+
+	if err := <-firstDone; err != nil {
+		t.Fatalf("first import failed because a second import ran concurrently: %v", err)
+	}
+	if secondErr = <-secondDone; secondErr != nil {
+		t.Fatalf("second import failed: %v", secondErr)
+	}
+	stored, err := s.GetService(context.Background(), "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.PackageSHA256 == "" || len(stored.Methods) != 1 {
+		t.Fatalf("stored service regressed: %+v", stored)
+	}
+}
+
+// A queued import whose caller goes away must give up, not wait for the running
+// import and then work for nobody.
+func TestImporterImportLockHonorsContextWhileWaiting(t *testing.T) {
+	dataDir, s := openTestStore(t)
+	pkg := writeTestPackage(t, t.TempDir(), `{"schema":"chaitin.octobus.service.v1","name":"echo-wrapper","proto":{"roots":["proto"],"files":["proto/echo.proto"]}}`)
+
+	barrierReached := make(chan struct{})
+	releaseFirst := make(chan struct{})
+	firstDone := make(chan error, 1)
+	go func() {
+		_, err := (&Importer{DataDir: dataDir, Store: s}).Import(context.Background(), Options{
+			ServiceID: "echo",
+			Source:    pkg,
+			Offline:   true,
+			Build:     "never",
+			Progress: func(event ImportProgressEvent) error {
+				if event.Stage == "compile_descriptor" {
+					close(barrierReached)
+					<-releaseFirst
+				}
+				return nil
+			},
+		})
+		firstDone <- err
+	}()
+	<-barrierReached
+
+	waiting := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	secondDone := make(chan error, 1)
+	go func() {
+		_, err := (&Importer{DataDir: dataDir, Store: s}).Import(ctx, Options{
+			ServiceID: "echo",
+			Source:    pkg,
+			Offline:   true,
+			Build:     "never",
+			Progress: func(event ImportProgressEvent) error {
+				if event.Stage == "waiting_for_import_lock" {
+					close(waiting)
+				}
+				return nil
+			},
+		})
+		secondDone <- err
+	}()
+	select {
+	case <-waiting:
+	case <-time.After(30 * time.Second):
+		t.Fatal("second import never reported that it was waiting")
+	}
+	cancel()
+	select {
+	case err := <-secondDone:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("cancelled import err=%v want context.Canceled", err)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("cancelled import kept waiting for the import lock")
+	}
+
+	close(releaseFirst)
+	if err := <-firstDone; err != nil {
+		t.Fatalf("running import failed: %v", err)
 	}
 }
 

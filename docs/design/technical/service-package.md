@@ -386,11 +386,18 @@ recursive dry-run 返回 `services`（每个 discovered service 的预览），�
 `existing_service_ids`（会被覆盖的 service id）；recursive 模式不返回逐个 service 的
 `existing_service` 记录。
 
+dry-run 自身不重启任何实例，所以 `restarted_instances` 恒为空。真实导入会重启哪些实例由
+`would_restart_instances` 给出：单服务 dry-run 是实例 id 列表，recursive dry-run 是按 service
+id 分组的 map（与 `restarted_instances` 的形状一致）。它沿用与真实重启相同的规则 —— on-demand
+service 与未导入的 service 都是空列表 —— 因此可以据此判断这次导入是否需要停机窗口，不要根据
+空的 `restarted_instances` 下结论。
+
 约束：
 
 - 跳过 runtime dependency 安装，因为它的产物不参与 service 形状和方法列表。因此 dry-run
   通过不代表 `npm install --omit=dev` 一定成功。`--reinstall` 只作用于这一步，对 `--dry-run`
-  没有影响；`--offline` 还会作用于 dry-run 仍会执行的构建阶段依赖安装（`npm ci` / `npm install`），
+  没有影响（CLI 会在两个 flag 同时传时提示）；`--offline` 还会作用于 dry-run 仍会执行的构建
+  阶段依赖安装（`npm ci` / `npm install`），
   所以在没有本地 npm 缓存的机器上，`--dry-run --build=always --offline` 仍可能因离线安装失败。
 - 取包阶段是真实执行的：HTTPS Git source 会 clone，`npm:` source 会执行 `npm pack`，
   `--build=always` 会执行包内构建脚本。dry-run 保证的是 daemon 状态不变（不写 service
@@ -585,6 +592,37 @@ disabled instance 不会在 update 时被拉起；它们下次启动时使用 se
 service update 不自动重写 capset method binding。如果新 descriptor 中删除了已绑定 method，或该 method 不再是 unary，该 binding 会变成无效 binding。catalog / MCP tools/list 不再暴露无效 binding；直接调用返回 `NOT_FOUND` 或 `UNIMPLEMENTED`。
 
 需要回滚时，用户重新导入旧 package artifact。
+
+同一个 `data_dir` 上的 import 串行执行：staging 路径（`.staging-<service_id>`，以及所有
+recursive import 共用的 `.staging-recursive-import`）和提交用的 `.previous` 备份路径都是
+固定的，并发的 import 会互相删除对方的工作目录，因此 daemon 保证同一时刻只有一个 import
+在跑。第二个请求会等待前一个结束，并在开始等待前通过进度事件（`stage:
+waiting_for_import_lock`）说明原因。该保证只覆盖同一进程内的 import；多个进程共用同一个
+`data_dir` 不在保证范围内。
+
+提交本身不是原子的：`replaceServiceDir` 先把当前 `artifacts/services/{service_id}` 改名为
+`.{service_id}.previous`，再放入新目录，之后才更新 SQLite。若进程在两步之间崩溃，服务目录
+会消失而备份仍在，服务随之下线。因此 daemon 启动时（**早于实例恢复**，见下）会扫描这些残留
+备份并收尾中断的提交：
+
+- 服务目录不存在：用备份恢复，磁盘回到 store 描述的那个版本。
+- 服务目录存在，且其 `descriptor.protoset` 与 package artifact 的哈希都与 store 记录一致：
+  提交与写库都已完成，只删除多余的备份。两者都要比：descriptor 只覆盖 proto，若一次导入改了
+  package 但 `.proto` 未变（bin、版本等变更常见如此），只看 descriptor 会把未提交的新目录
+  误判为已提交。
+- 其余情况（任一哈希不符、store 无该行、文件读不出）：回滚到备份，让磁盘与 store 一致。
+
+同一次扫描还会删除崩溃遗留的 staging 工作树（`.staging-<service_id>`、`.staging-recursive-import`）：
+启动时不可能有导入在进行，而残留的工作树否则要等到再次导入同一 service 才会被回收。
+
+恢复可重复执行（在「删除服务目录」与「放回备份」之间再次崩溃，下次启动会重做这一步）。
+单个 service 失败不会中断整轮扫描 —— 其余 service 的目录同样需要在实例恢复之前归位 ——
+错误会被汇总记录，且**不阻断 daemon 启动**。
+
+恢复与 import 共用同一把（进程内的）锁，因此它不会和一个正在进行的 import 抢目录。但**跨进程
+没有任何保护**：daemon 会先 bind 端口再执行恢复，所以「同 data dir 同端口」误起第二个 daemon
+会在扫描之前就失败退出；而「同 data dir 不同端口」的第二个进程不会被阻止，会真的执行这轮
+扫描。不要用两个进程指向同一个 `data_dir`。
 
 ## 安全边界
 

@@ -308,6 +308,39 @@ func TestServiceImportRecursiveDryRunRequest(t *testing.T) {
 	}
 }
 
+func TestServiceImportReinstallWarning(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = fmt.Fprintln(w, `{"type":"complete","status":"ok","dry_run":true,"update":false,"service":{"ID":"echo"},"would_restart_instances":[],"restarted_instances":[],"restart_errors":[]}`)
+	}))
+	defer server.Close()
+	tests := []struct {
+		name     string
+		args     []string
+		wantWarn bool
+	}{
+		{
+			name:     "dry run ignores reinstall",
+			args:     []string{"service", "import", "echo", "--dry-run", "--reinstall", "npm:pkg"},
+			wantWarn: true,
+		},
+		{name: "dry run alone", args: []string{"service", "import", "echo", "--dry-run", "npm:pkg"}},
+		{name: "reinstall alone", args: []string{"service", "import", "echo", "--reinstall", "npm:pkg"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var stderr bytes.Buffer
+			c := &CLI{AdminAddr: strings.TrimPrefix(server.URL, "http://"), Client: server.Client(), Stdout: io.Discard, Stderr: &stderr}
+			if err := c.Run(tc.args); err != nil {
+				t.Fatal(err)
+			}
+			warned := strings.Contains(stderr.String(), "--reinstall has no effect with --dry-run")
+			if warned != tc.wantWarn {
+				t.Fatalf("warning=%v want=%v stderr=%q", warned, tc.wantWarn, stderr.String())
+			}
+		})
+	}
+}
+
 func TestServiceImportStreamProgressAndComplete(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Accept") != "application/x-ndjson" {

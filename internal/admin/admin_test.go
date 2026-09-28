@@ -404,6 +404,7 @@ func TestAdminServiceImportDryRunSkipsRestart(t *testing.T) {
 		Update        bool            `json:"update"`
 		Service       domain.Service  `json:"service"`
 		ExistingSvc   *domain.Service `json:"existing_service"`
+		WouldRestart  []string        `json:"would_restart_instances"`
 		Restarted     []string        `json:"restarted_instances"`
 		RestartErrors []string        `json:"restart_errors"`
 	}
@@ -425,6 +426,11 @@ func TestAdminServiceImportDryRunSkipsRestart(t *testing.T) {
 	}
 	if len(resp.Restarted) != 0 || len(resp.RestartErrors) != 0 {
 		t.Fatalf("dry run reported restarts: %s", body)
+	}
+	// A real import would restart the enabled instance, and the preview has to
+	// say so instead of leaving only an empty restarted_instances behind.
+	if len(resp.WouldRestart) != 1 || resp.WouldRestart[0] != "echo-alpha" {
+		t.Fatalf("dry run did not report the instances a real import would restart: %s", body)
 	}
 	got := out.String()
 	if !strings.Contains(got, "msg=service_import_dry_run_done service_id=echo update=true") {
@@ -479,12 +485,12 @@ func TestAdminServiceImportDryRunStreaming(t *testing.T) {
 			if len(lines) != 1 || !strings.Contains(lines[0], `"type":"complete"`) {
 				t.Fatalf("dry run stream events=%q", raw)
 			}
-			for _, want := range []string{`"dry_run":true`, tc.wantUpdate, tc.want, `"service"`, `"echo.v1.EchoService/Echo"`} {
+			for _, want := range []string{`"dry_run":true`, tc.wantUpdate, tc.want, `"would_restart_instances":[]`, `"service"`, `"echo.v1.EchoService/Echo"`} {
 				if !strings.Contains(lines[0], want) {
 					t.Fatalf("dry run complete event missing %q: %s", want, lines[0])
 				}
 			}
-			for _, forbidden := range []string{"restart_instances", "service_instances_restart", tc.forbid} {
+			for _, forbidden := range []string{`"stage":"restart_instances"`, "service_instances_restart", tc.forbid} {
 				if strings.Contains(string(raw), forbidden) {
 					t.Fatalf("dry run stream emitted %q: %s", forbidden, raw)
 				}
@@ -574,17 +580,81 @@ func TestAdminServiceImportStreamingRecursiveDryRunSkipsRestart(t *testing.T) {
 			if len(lines) != 1 || !strings.Contains(lines[0], `"type":"complete"`) {
 				t.Fatalf("streaming recursive dry run events=%q", w.Body.String())
 			}
-			for _, want := range []string{`"dry_run":true`, tc.want, `"alpha.v1.AlphaService/Call"`} {
+			for _, want := range []string{`"dry_run":true`, tc.want, `"would_restart_instances":{"alpha-service":[]}`, `"alpha.v1.AlphaService/Call"`} {
 				if !strings.Contains(lines[0], want) {
 					t.Fatalf("streaming recursive dry run complete event missing %q: %s", want, lines[0])
 				}
 			}
-			for _, forbidden := range []string{"restart_instances", "service_instances_restart"} {
+			for _, forbidden := range []string{`"stage":"restart_instances"`, "service_instances_restart"} {
 				if strings.Contains(w.Body.String(), forbidden) {
 					t.Fatalf("streaming recursive dry run emitted %q: %s", forbidden, w.Body.String())
 				}
 			}
 		})
+	}
+}
+
+func TestAdminServiceImportDryRunPredictsRestartWithImportedRuntimeMode(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	dataDir := filepath.Join(root, "data")
+	st, err := store.Open(filepath.Join(dataDir, "octobus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	onDemandPkg := filepath.Join(root, "on-demand")
+	writeAdminGitPackage(t, onDemandPkg, `{"schema":"chaitin.octobus.service.v1","name":"echo","runtime":{"mode":"on-demand"},"proto":{"roots":["proto"],"files":["proto/echo.proto"]}}`)
+	longRunningPkg := filepath.Join(root, "long-running")
+	writeAdminGitPackage(t, longRunningPkg, `{"schema":"chaitin.octobus.service.v1","name":"echo","proto":{"roots":["proto"],"files":["proto/echo.proto"]}}`)
+	srv := &Server{Store: st, Importer: &packageimport.Importer{DataDir: dataDir, Store: st}, Supervisor: supervisor.New(dataDir, st)}
+	importBody := func(pkg string, dryRun bool) *bytes.Buffer {
+		return bytes.NewBufferString(fmt.Sprintf(`{"service_id":"echo","source":%q,"offline":true,"build":"never","dry_run":%t}`, pkg, dryRun))
+	}
+	var resp struct {
+		Update       bool     `json:"update"`
+		WouldRestart []string `json:"would_restart_instances"`
+	}
+
+	serveAdmin(t, srv, http.MethodPost, "/admin/v1/services/import", importBody(onDemandPkg, false), http.StatusOK)
+	if err := st.UpsertInstance(ctx, domain.Instance{ID: "echo-alpha", ServiceID: "echo", Name: "Alpha", Enabled: true, Status: domain.StatusStopped, NodeEntry: "echo", ConfigJSON: []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Switching on-demand -> long-running restarts the deployed instance, so the
+	// preview has to report it even though nothing is restarted today.
+	body := serveAdmin(t, srv, http.MethodPost, "/admin/v1/services/import", importBody(longRunningPkg, true), http.StatusOK)
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatal(err)
+	}
+	if !resp.Update || len(resp.WouldRestart) != 1 || resp.WouldRestart[0] != "echo-alpha" {
+		t.Fatalf("preview missed the restarts a runtime mode change would cause: %s", body)
+	}
+
+	// The deployed row is long-running now, which is what the next preview has to
+	// notice. Set it directly instead of relying on a real import of the
+	// long-running package degrading because its instance cannot start.
+	stored, err := st.GetService(ctx, "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored.RuntimeMode = domain.RuntimeModeLongRunning
+	if err := st.UpsertService(ctx, stored); err != nil {
+		t.Fatal(err)
+	}
+
+	// Switching back to on-demand restarts nothing, and the preview must not
+	// promise restarts the import would not perform.
+	resp = struct {
+		Update       bool     `json:"update"`
+		WouldRestart []string `json:"would_restart_instances"`
+	}{}
+	body = serveAdmin(t, srv, http.MethodPost, "/admin/v1/services/import", importBody(onDemandPkg, true), http.StatusOK)
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.WouldRestart) != 0 {
+		t.Fatalf("preview promised restarts for a switch to on-demand: %s", body)
 	}
 }
 

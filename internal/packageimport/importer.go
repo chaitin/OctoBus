@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"octobus/internal/descriptors"
 	"octobus/internal/domain"
@@ -27,6 +28,66 @@ import (
 type Importer struct {
 	DataDir string
 	Store   *store.Store
+}
+
+// Imports sharing a data dir must not run at the same time: they use fixed
+// staging paths (`.staging-<service id>`, and a single
+// `.staging-recursive-import` for every recursive import) and commit through a
+// fixed `.previous` backup path. Two concurrent imports therefore delete each
+// other's working tree, and can leave a service dir removed while its store row
+// survives. Locks are keyed by data dir so separate Importer values pointing at
+// the same dir are still serialized. They do not protect against other
+// processes using the same data dir, and entries are kept for the life of the
+// process: one data dir per process is the norm, and pruning would need
+// refcounting because a waiting caller holds the lock it is about to take.
+var (
+	importLocksMu sync.Mutex
+	importLocks   = map[string]chan struct{}{}
+)
+
+// importLock returns the lock serializing imports for a data dir, as a channel
+// holding at most one token so that a waiter can give up when its caller does.
+// The key is resolved to an absolute, symlink-free path so that `./data`,
+// `/abs/data` and `/tmp/data` vs `/private/tmp/data` cannot end up with
+// separate locks for the same dir.
+func importLock(dataDir string) chan struct{} {
+	key, err := filepath.Abs(dataDir)
+	if err != nil {
+		key = dataDir
+	}
+	if resolved, err := filepath.EvalSymlinks(key); err == nil {
+		key = resolved
+	}
+	importLocksMu.Lock()
+	defer importLocksMu.Unlock()
+	lock, ok := importLocks[key]
+	if !ok {
+		lock = make(chan struct{}, 1)
+		importLocks[key] = lock
+	}
+	return lock
+}
+
+// acquireImportLock returns the unlock function once the import may proceed.
+// A waiting caller reports progress before blocking, so a queued import looks
+// like a queue rather than a hang, and gives up when the caller goes away
+// instead of running an import nobody is waiting for.
+func (i *Importer) acquireImportLock(ctx context.Context, opts Options) (func(), error) {
+	lock := importLock(i.DataDir)
+	select {
+	case lock <- struct{}{}:
+		return func() { <-lock }, nil
+	default:
+	}
+	if err := reportImportProgress(opts, ImportProgressEvent{Type: "status", Stage: "waiting_for_import_lock", Message: "Waiting for another import to finish"}); err != nil {
+		return nil, err
+	}
+	select {
+	case lock <- struct{}{}:
+		return func() { <-lock }, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 }
 
 type Options struct {
@@ -103,6 +164,10 @@ type ImportProgressEvent struct {
 	Update           any `json:"update,omitempty"`
 	ExistingService  any `json:"existing_service,omitempty"`
 	ExistingServices any `json:"existing_service_ids,omitempty"`
+	// WouldRestartInstances lists the instances a real import would restart. It
+	// is set for dry runs only, so a preview answers "what will this cost me"
+	// instead of leaving an empty restarted_instances to be misread.
+	WouldRestartInstances any `json:"would_restart_instances,omitempty"`
 }
 
 type preparedSource struct {
@@ -154,8 +219,13 @@ func (i *Importer) Import(ctx context.Context, opts Options) (Result, error) {
 	if opts.Source == "" {
 		return Result{}, errors.New("service package source is required")
 	}
+	unlock, err := i.acquireImportLock(ctx, opts)
+	if err != nil {
+		return Result{}, err
+	}
+	defer unlock()
 	serviceDir := filepath.Join(i.DataDir, "artifacts", "services", opts.ServiceID)
-	staging := filepath.Join(i.DataDir, "artifacts", "services", ".staging-"+opts.ServiceID)
+	staging := filepath.Join(i.DataDir, "artifacts", "services", stagingDirPrefix+opts.ServiceID)
 	if err := os.RemoveAll(staging); err != nil {
 		return Result{}, err
 	}
@@ -300,7 +370,7 @@ func prepareServiceRuntime(ctx context.Context, prepared preparedSource, staging
 }
 
 func compileServiceDescriptor(staging string, service preparedService) (compiledServiceDescriptor, error) {
-	descriptorPath := filepath.Join(staging, "descriptor.protoset")
+	descriptorPath := filepath.Join(staging, descriptorFileName)
 	return compileServiceDescriptorAt(descriptorPath, service)
 }
 
@@ -321,7 +391,7 @@ func stageServiceCommit(prepared preparedSource, runtimeDir string, descriptor c
 	commitDir := filepath.Join(staging, "service")
 	finalPackageDir := filepath.Join(commitDir, "package")
 	finalRuntimeDir := filepath.Join(commitDir, "runtime")
-	finalDescriptor := filepath.Join(commitDir, "descriptor.protoset")
+	finalDescriptor := filepath.Join(commitDir, descriptorFileName)
 	finalArtifact := filepath.Join(commitDir, filepath.Base(prepared.ArtifactPath))
 	if err := os.RemoveAll(commitDir); err != nil {
 		return "", "", err
@@ -365,7 +435,7 @@ func (i *Importer) buildImportedService(ctx context.Context, opts Options, prepa
 		secretSchemaPath = filepath.Join(serviceDir, "package", serviceRootPath, service.Manifest.SecretSchema)
 	}
 	finalStoredArtifact := filepath.Join(serviceDir, filepath.Base(prepared.ArtifactPath))
-	finalStoredDescriptor := filepath.Join(serviceDir, "descriptor.protoset")
+	finalStoredDescriptor := filepath.Join(serviceDir, descriptorFileName)
 	svc := domain.Service{
 		ID:                  opts.ServiceID,
 		Name:                serviceName,
@@ -422,7 +492,12 @@ func (i *Importer) ImportRecursive(ctx context.Context, opts Options) (Recursive
 	if err != nil {
 		return RecursiveResult{}, err
 	}
-	staging := filepath.Join(i.DataDir, "artifacts", "services", ".staging-recursive-import")
+	unlock, err := i.acquireImportLock(ctx, opts)
+	if err != nil {
+		return RecursiveResult{}, err
+	}
+	defer unlock()
+	staging := filepath.Join(i.DataDir, "artifacts", "services", stagingDirPrefix+"recursive-import")
 	if err := os.RemoveAll(staging); err != nil {
 		return RecursiveResult{}, err
 	}
@@ -1574,7 +1649,7 @@ func replaceServiceDir(serviceDir, preparedDir string) (func() error, func() err
 	if err := os.MkdirAll(parent, 0o755); err != nil {
 		return nil, nil, err
 	}
-	backupDir := filepath.Join(parent, "."+filepath.Base(serviceDir)+".previous")
+	backupDir := filepath.Join(parent, "."+filepath.Base(serviceDir)+previousDirSuffix)
 	if err := os.RemoveAll(backupDir); err != nil {
 		return nil, nil, err
 	}
