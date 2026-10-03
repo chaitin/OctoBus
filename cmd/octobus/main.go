@@ -210,6 +210,13 @@ func serve(opts serveOptions) error {
 		logger.Warn("recover_enabled_failed", "error", err)
 	}
 	logger.Info("recover_enabled_done", "count", recovered)
+	// Shared runtime trees are published per distinct content, so superseded
+	// ones accumulate for the life of the daemon unless reclaimed.
+	if removed, err := (&packageimport.Importer{DataDir: dataDir}).SweepOrphanedTrees(ctx, time.Now(), packageimport.OrphanTreeMinAge); err != nil {
+		logger.Warn("sweep_orphaned_trees_failed", "error", err)
+	} else if len(removed) > 0 {
+		logger.Info("sweep_orphaned_trees_done", "count", len(removed))
+	}
 	startupInventory := logStartupInventory
 	if opts.startupInventory != nil {
 		startupInventory = opts.startupInventory

@@ -32,6 +32,7 @@ import (
 	"octobus/internal/domain"
 	"octobus/internal/egressrules"
 	"octobus/internal/hardening"
+	"octobus/internal/packageimport"
 	"octobus/internal/store"
 
 	"google.golang.org/grpc"
@@ -1634,6 +1635,10 @@ func (g *Gateway) invokeOnDemand(ctx context.Context, item store.ExposedMethod, 
 		RulesPath:  g.RuntimeRulesPath,
 		ServiceDir: serviceDir,
 		Workdir:    workdir,
+		// package/ and runtime/ may be symlinks into the shared runtime tree
+		// store; the grant is the resolved tree, not the whole store. See the
+		// supervisor's launch path for why and for the failure fallback.
+		ExtraReadDirs: packageimport.SharedTreeReadGrants(dataDir, item.Service.ID),
 		Env: []string{
 			"OCTOBUS_SERVICE_ID=" + item.Service.ID,
 			"OCTOBUS_INSTANCE_ID=" + item.Instance.ID,
