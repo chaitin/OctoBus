@@ -103,7 +103,7 @@ Request fields:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `query` | string | Yes for search; optional for question recommendations | Search keyword (trimmed and non-empty). For `GetQuestionRecommendations`: a topic keyword; omitted → recommend from the caller's profile, provided → topic mode (trimmed value must be non-empty). |
+| `query` | string | Yes for search; optional for question recommendations | Search keyword (trimmed and non-empty). For `GetQuestionRecommendations`: topic keyword — empty/omitted → recommend from the caller's profile, non-empty → topic mode. |
 | `count` | int32 | No | Search result count; clamped to 1–10 (`ZhihuSearch`) or 1–20 (`GlobalSearch`), default 10. For `GetQuestionRecommendations`: clamped to 1–20, default 5. |
 | `filter` | string | No | Global search filter expression, e.g. `host=="example.com" AND publish_time>=1778494631`. |
 | `search_db` | string | No | `all`, `realtime`, or `static`; default `all`. |

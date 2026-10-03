@@ -93,7 +93,7 @@ message HotListRequest {
 
 // 问题推荐请求
 message GetQuestionRecommendationsRequest {
-  // 主题关键词；不传时按当前用户画像推荐，传入时按主题推荐（去除首尾空白后不能为空）。
+  // 主题关键词；为空时按当前用户画像推荐，非空时按主题推荐。
   string query = 1;
   // 返回数量，范围 1..20，默认 5；越界值会被服务端截断。
   int32 count = 2;

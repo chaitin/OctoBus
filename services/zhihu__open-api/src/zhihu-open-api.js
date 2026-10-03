@@ -107,8 +107,12 @@ const nonNegativeInteger = (value, field) => {
 
 // Zhihu servers clamp out-of-range counts/limits instead of rejecting them, so
 // the service mirrors that behavior: values are clamped into [1, max].
+// proto3 decodes an omitted numeric field to 0, and 0 is never a valid Count or
+// Limit (the upstream clamps to >= 1), so treat 0 as "unset" and fall back to
+// the documented default instead of clamping it to 1.
 const clampedPositiveInteger = (value, field, max, fallback) => {
-  const number = Number(value === undefined || value === null || value === '' ? fallback : value);
+  const unset = value === undefined || value === null || value === '' || Number(value) === 0;
+  const number = Number(unset ? fallback : value);
   if (!Number.isFinite(number)) {
     throw errorWithCode('INVALID_ARGUMENT', `${field} must be an integer`);
   }
@@ -164,19 +168,18 @@ export const buildHotListQuery = (request = {}) => ({
   Limit: clampedPositiveInteger(request.limit ?? request.Limit, 'Limit', 30, 30),
 });
 
-// Question recommendations: an absent Query means "recommend from the caller's
-// profile"; an explicitly provided but blank Query is rejected upstream with
-// 10001, so mirror that here instead of silently dropping it.
+// Question recommendations: the Open Platform distinguishes an absent Query
+// (recommend from the caller's profile) from an explicitly blank one (an
+// error), but a proto3 string cannot carry that distinction across the wire —
+// the runtime fills an omitted Query with "". Treat a trimmed-empty Query as
+// profile mode (omit the parameter) so profile recommendations work over
+// Connect/gRPC, and use a non-empty Query as the topic.
 export const buildQuestionRecommendationsQuery = (request = {}) => {
   const params = {
     Count: clampedPositiveInteger(request.count ?? request.Count, 'Count', 20, 5),
   };
-  const query = pick(request, 'query', 'Query');
-  if (query !== undefined) {
-    const text = asString(query);
-    if (!text) throw errorWithCode('INVALID_ARGUMENT', 'query must not be empty when provided');
-    params.Query = text;
-  }
+  const topic = asString(request.query ?? request.Query);
+  if (topic) params.Query = topic;
   return params;
 };
 

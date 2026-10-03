@@ -110,7 +110,7 @@ test('ZhihuSearch requires a non-empty Query and clamps Count', async () => {
 
   const calls2 = [];
   await handlers[METHODS.ZHIHU_SEARCH](context([response(okData({}))], { query: 'x', count: 0 }, calls2));
-  assert.match(calls2[0].url, /Count=1/);
+  assert.match(calls2[0].url, /Count=10/);
 });
 
 test('GlobalSearch includes SearchDB default and optional Filter', async () => {
@@ -152,6 +152,11 @@ test('GetHotList clamps Limit and returns Data', async () => {
   const calls2 = [];
   await handlers[METHODS.GET_HOT_LIST](context([response(okData({}))], {}, calls2));
   assert.equal(calls2[0].url, 'https://developer.zhihu.com/api/v1/content/hot_list?Limit=30');
+
+  // An omitted/zero Limit is a proto3 default -> the documented 30, not 1.
+  const calls3 = [];
+  await handlers[METHODS.GET_HOT_LIST](context([response(okData({}))], { limit: 0 }, calls3));
+  assert.equal(calls3[0].url, 'https://developer.zhihu.com/api/v1/content/hot_list?Limit=30');
 });
 
 test('GetQuota builds the APIIDs query and returns the array Data', async () => {
@@ -203,15 +208,13 @@ test('GetQuestionRecommendations covers profile and topic modes and clamps Count
     'https://developer.zhihu.com/api/v1/user/question_recommendations?Count=20&Query=%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD',
   );
 
-  // An explicitly blank Query is an error upstream (10001), not profile mode.
-  await assert.rejects(
-    handlers[METHODS.GET_QUESTION_RECOMMENDATIONS](context([], { query: '   ' })),
-    (error) => error.code === grpcStatus.INVALID_ARGUMENT && /query must not be empty/.test(error.message),
-  );
-
+  // A blank/omitted Query is profile mode, not an error: proto3 cannot carry
+  // the absent-vs-empty distinction, and the runtime fills omitted strings with "".
   assert.deepEqual(_test.buildQuestionRecommendationsQuery({}), { Count: '5' });
+  assert.deepEqual(_test.buildQuestionRecommendationsQuery({ query: '   ' }), { Count: '5' });
   assert.deepEqual(_test.buildQuestionRecommendationsQuery({ Query: ' x ' }), { Count: '5', Query: 'x' });
-  assert.deepEqual(_test.buildQuestionRecommendationsQuery({ count: 0 }), { Count: '1' });
+  // count 0 is a proto3 default, so it falls back to 5 rather than clamping to 1.
+  assert.deepEqual(_test.buildQuestionRecommendationsQuery({ count: 0 }), { Count: '5' });
 });
 
 test('GetQuestionAnswers requires a question URL and pages the answers', async () => {
