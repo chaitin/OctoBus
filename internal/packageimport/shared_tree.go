@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
-	"strings"
 )
 
 // A recursive import materializes the whole distribution package once and then
@@ -75,11 +74,12 @@ func SharedTreesDir(dataDir string) string {
 //
 // A service with real directories (the legacy layout, or a non-shared import)
 // references no tree and yields no grant. A link whose target lies outside
-// the store is a layout this function does not explain; it falls back to the
-// store root rather than guess, because a missing grant kills the runtime at
-// startup while an over-broad one only widens what it could have read anyway.
+// the store is a layout this function does not explain; the grant is the
+// target itself. Granting the store root there would not cover the target
+// anyway -- the runtime's entry resolves under the target and Node would
+// still refuse it -- so it would only widen the read surface without making
+// the service start.
 func SharedTreeReadGrants(dataDir, serviceID string) []string {
-	store := sharedTreesDir(dataDir)
 	var grants []string
 	seen := map[string]bool{}
 	for _, entry := range []string{"package", "runtime"} {
@@ -89,9 +89,6 @@ func SharedTreeReadGrants(dataDir, serviceID string) []string {
 			// Not a symlink: a legacy real directory, or no such entry.
 			// Neither references the store.
 			continue
-		}
-		if !strings.HasPrefix(target, store+string(filepath.Separator)) {
-			return []string{store}
 		}
 		resolved := filepath.Clean(target)
 		if !seen[resolved] {

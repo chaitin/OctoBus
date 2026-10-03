@@ -651,15 +651,22 @@ func TestSharedTreeReadGrants(t *testing.T) {
 		}
 	})
 
-	t.Run("target outside the store falls back to the store root", func(t *testing.T) {
+	t.Run("target outside the store grants the target itself", func(t *testing.T) {
 		dir := filepath.Join(servicesDir, "weird")
 		mustMkdirAll(t, dir)
-		if err := os.Symlink(t.TempDir(), filepath.Join(dir, "runtime")); err != nil {
+		outside := t.TempDir()
+		if err := os.Symlink(outside, filepath.Join(dir, "runtime")); err != nil {
 			t.Fatal(err)
 		}
+		// The store root would not cover the target anyway -- the runtime's
+		// entry resolves under it and Node would still refuse -- so granting
+		// it directly is both narrower and the only thing that starts.
 		grants := SharedTreeReadGrants(dataDir, "weird")
-		if len(grants) != 1 || grants[0] != store {
-			t.Fatalf("grants=%v, want the store root %s", grants, store)
+		if len(grants) != 1 || grants[0] != filepath.Clean(outside) {
+			t.Fatalf("grants=%v, want the resolved target %s", grants, outside)
+		}
+		if len(grants) == 1 && grants[0] == store {
+			t.Fatalf("grants=%v, must not fall back to the store root", grants)
 		}
 	})
 
