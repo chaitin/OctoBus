@@ -279,11 +279,14 @@ func (s *Supervisor) startWithAttempt(ctx context.Context, instanceID string, re
 		Workdir:    workdir,
 		// package/ and runtime/ may be symlinks into the shared runtime tree
 		// store, and Node's permission model checks realpaths: without a read
-		// grant for the store the runtime dies on startup. Granting the whole
-		// store, rather than the one tree this service links to, keeps this
-		// static; the store is still runtime-scoped data, and the grant is read
-		// only.
-		ExtraReadDirs: []string{packageimport.SharedTreesDir(s.DataDir)},
+		// grant for the tree the runtime dies on startup. The grant is the
+		// resolved tree, not the whole store: other services' trees hold their
+		// code and dependencies, and a compromised runtime has no business
+		// reading them. A running instance never sees its link repointed --
+		// re-import swaps the tree and restarts the instance, which resolves
+		// the grant afresh -- so resolving once at launch covers the whole
+		// process lifetime.
+		ExtraReadDirs: s.sharedTreeReadGrants(svc.ID),
 		Env: []string{
 			"OCTOBUS_SERVICE_ID=" + svc.ID,
 			"OCTOBUS_INSTANCE_ID=" + instanceID,
@@ -654,6 +657,13 @@ func (s *Supervisor) InstanceWorkdir(instanceID string) string {
 
 func (s *Supervisor) ServiceRuntimeDir(serviceID string) string {
 	return filepath.Join(s.DataDir, "artifacts", "services", serviceID, "runtime")
+}
+
+// sharedTreeReadGrants resolves the shared runtime trees this service's
+// package/ and runtime/ entries point at, for the hardening read grant. See
+// packageimport.SharedTreeReadGrants for the semantics.
+func (s *Supervisor) sharedTreeReadGrants(serviceID string) []string {
+	return packageimport.SharedTreeReadGrants(s.DataDir, serviceID)
 }
 
 func (s *Supervisor) writeInstanceConfig(instanceID string, config []byte) error {

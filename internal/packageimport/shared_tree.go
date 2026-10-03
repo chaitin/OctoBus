@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 )
 
 // A recursive import materializes the whole distribution package once and then
@@ -60,6 +61,45 @@ func sharedTreesDir(dataDir string) string {
 // hardening grants from drifting apart.
 func SharedTreesDir(dataDir string) string {
 	return sharedTreesDir(dataDir)
+}
+
+// SharedTreeReadGrants resolves the shared runtime trees a service's package/
+// and runtime/ entries point at, for the hardening read grant at the node
+// hardening level: Node checks realpaths, so a linked service dies on startup
+// unless its tree is inside a grant. The grant is the resolved tree, not the
+// whole store -- other services' trees hold their code and dependencies, and
+// a compromised runtime has no business reading them. A running instance never
+// sees its link repointed -- re-import swaps the tree and restarts the
+// instance, which resolves the grant afresh -- so resolving once at launch
+// covers the process lifetime.
+//
+// A service with real directories (the legacy layout, or a non-shared import)
+// references no tree and yields no grant. A link whose target lies outside
+// the store is a layout this function does not explain; it falls back to the
+// store root rather than guess, because a missing grant kills the runtime at
+// startup while an over-broad one only widens what it could have read anyway.
+func SharedTreeReadGrants(dataDir, serviceID string) []string {
+	store := sharedTreesDir(dataDir)
+	var grants []string
+	seen := map[string]bool{}
+	for _, entry := range []string{"package", "runtime"} {
+		path := filepath.Join(dataDir, "artifacts", "services", serviceID, entry)
+		target, err := os.Readlink(path)
+		if err != nil {
+			// Not a symlink: a legacy real directory, or no such entry.
+			// Neither references the store.
+			continue
+		}
+		if !strings.HasPrefix(target, store+string(filepath.Separator)) {
+			return []string{store}
+		}
+		resolved := filepath.Clean(target)
+		if !seen[resolved] {
+			seen[resolved] = true
+			grants = append(grants, resolved)
+		}
+	}
+	return grants
 }
 
 // runtimeTreeKey derives the content address for a prepared runtime tree.

@@ -1636,9 +1636,9 @@ func (g *Gateway) invokeOnDemand(ctx context.Context, item store.ExposedMethod, 
 		ServiceDir: serviceDir,
 		Workdir:    workdir,
 		// package/ and runtime/ may be symlinks into the shared runtime tree
-		// store; see the supervisor's launch path for why the store needs a
-		// read grant at the node hardening level.
-		ExtraReadDirs: []string{packageimport.SharedTreesDir(dataDir)},
+		// store; the grant is the resolved tree, not the whole store. See the
+		// supervisor's launch path for why and for the failure fallback.
+		ExtraReadDirs: packageimport.SharedTreeReadGrants(dataDir, item.Service.ID),
 		Env: []string{
 			"OCTOBUS_SERVICE_ID=" + item.Service.ID,
 			"OCTOBUS_INSTANCE_ID=" + item.Instance.ID,

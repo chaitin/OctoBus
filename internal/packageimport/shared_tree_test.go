@@ -615,3 +615,57 @@ func TestOptionalFileDependencyMissingDoesNotVetoInstall(t *testing.T) {
 		t.Fatal("a missing regular file: target must veto the install as before")
 	}
 }
+
+// The hardening read grant is the resolved tree, not the whole store: other
+// services' trees hold their code, and a compromised runtime has no business
+// reading them. A legacy service (real directories) references no tree and
+// yields no grant, and an unexplainable layout falls back to the store root
+// rather than leave the runtime unable to start.
+func TestSharedTreeReadGrants(t *testing.T) {
+	dataDir := t.TempDir()
+	store := SharedTreesDir(dataDir)
+	servicesDir := filepath.Join(dataDir, "artifacts", "services")
+	mustMkdirAll(t, servicesDir)
+	tree := makeSharedTree(t, dataDir, "some-tree")
+
+	t.Run("linked service grants its tree", func(t *testing.T) {
+		dir := filepath.Join(servicesDir, "linked")
+		mustMkdirAll(t, dir)
+		for _, entry := range []string{"package", "runtime"} {
+			if err := os.Symlink(tree, filepath.Join(dir, entry)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		grants := SharedTreeReadGrants(dataDir, "linked")
+		if len(grants) != 1 || grants[0] != tree {
+			t.Fatalf("grants=%v, want exactly [%s]", grants, tree)
+		}
+	})
+
+	t.Run("legacy real directories grant nothing", func(t *testing.T) {
+		dir := filepath.Join(servicesDir, "legacy")
+		mustMkdirAll(t, filepath.Join(dir, "package"))
+		mustMkdirAll(t, filepath.Join(dir, "runtime"))
+		if grants := SharedTreeReadGrants(dataDir, "legacy"); len(grants) != 0 {
+			t.Fatalf("grants=%v, want none for real directories", grants)
+		}
+	})
+
+	t.Run("target outside the store falls back to the store root", func(t *testing.T) {
+		dir := filepath.Join(servicesDir, "weird")
+		mustMkdirAll(t, dir)
+		if err := os.Symlink(t.TempDir(), filepath.Join(dir, "runtime")); err != nil {
+			t.Fatal(err)
+		}
+		grants := SharedTreeReadGrants(dataDir, "weird")
+		if len(grants) != 1 || grants[0] != store {
+			t.Fatalf("grants=%v, want the store root %s", grants, store)
+		}
+	})
+
+	t.Run("absent service yields no grant", func(t *testing.T) {
+		if grants := SharedTreeReadGrants(dataDir, "absent"); len(grants) != 0 {
+			t.Fatalf("grants=%v, want none", grants)
+		}
+	})
+}
