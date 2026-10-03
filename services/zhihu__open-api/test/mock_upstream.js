@@ -91,6 +91,30 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Question answers (answer summaries for one question URL)
+  if (method === 'GET' && url.pathname === '/api/v1/content/question_answers') {
+    const QuestionUrl = url.searchParams.get('QuestionUrl');
+    if (!QuestionUrl) {
+      sendJson(res, 200, { Code: 10001, Message: 'QuestionUrl is required', Data: {} });
+      return;
+    }
+    sendJson(res, 200, {
+      Code: 0,
+      Message: 'success',
+      Data: {
+        Items: [{
+          ContentType: 'answer',
+          ContentToken: '456',
+          Url: `${QuestionUrl}/answer/456`,
+          Summary: '这是一段回答摘要……',
+        }],
+        Paging: { IsEnd: true, NextOffset: 1, Totals: 1 },
+      },
+    });
+    log('question_answers:', QuestionUrl);
+    return;
+  }
+
   // Knowledge bases
   if (method === 'GET' && url.pathname === '/api/v1/knowledge/bases') {
     sendJson(res, 200, {

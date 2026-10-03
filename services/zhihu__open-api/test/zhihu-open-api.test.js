@@ -214,6 +214,37 @@ test('GetQuestionRecommendations covers profile and topic modes and clamps Count
   assert.deepEqual(_test.buildQuestionRecommendationsQuery({ count: 0 }), { Count: '1' });
 });
 
+test('GetQuestionAnswers requires a question URL and pages the answers', async () => {
+  const calls = [];
+  const result = await handlers[METHODS.GET_QUESTION_ANSWERS](context([
+    response(okData({
+      Items: [{ ContentType: 'answer', ContentToken: '456', Url: 'https://www.zhihu.com/question/123/answer/456', Summary: '摘要' }],
+      Paging: { IsEnd: true, Totals: 1 },
+    })),
+  ], { question_url: 'https://www.zhihu.com/question/123' }, calls));
+
+  assert.equal(result.data.Items[0].ContentToken, '456');
+  assert.equal(
+    calls[0].url,
+    'https://developer.zhihu.com/api/v1/content/question_answers?QuestionUrl=https%3A%2F%2Fwww.zhihu.com%2Fquestion%2F123&Offset=0&Limit=20',
+  );
+  assert.equal(calls[0].options.method, 'GET');
+
+  // camelCase alias + clamping, and Offset passthrough.
+  const calls2 = [];
+  await handlers[METHODS.GET_QUESTION_ANSWERS](context([response(okData({}))], { questionUrl: 'https://www.zhihu.com/question/9', offset: 40, limit: 99 }, calls2));
+  assert.match(calls2[0].url, /Offset=40&Limit=50$/);
+
+  await assert.rejects(
+    handlers[METHODS.GET_QUESTION_ANSWERS](context([], {})),
+    (error) => error.code === grpcStatus.INVALID_ARGUMENT && /question_url is required/.test(error.message),
+  );
+  await assert.rejects(
+    handlers[METHODS.GET_QUESTION_ANSWERS](context([], { question_url: 'https://x', offset: -1 })),
+    /Offset must be a non-negative integer/,
+  );
+});
+
 test('ListKnowledgeBases validates Scope', async () => {
   const calls = [];
   const result = await handlers[METHODS.LIST_KNOWLEDGE_BASES](context([

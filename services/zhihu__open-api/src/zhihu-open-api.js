@@ -11,6 +11,7 @@ export const METHODS = {
   GLOBAL_SEARCH: `${PREFIX}/GlobalSearch`,
   GET_HOT_LIST: `${PREFIX}/GetHotList`,
   GET_QUESTION_RECOMMENDATIONS: `${PREFIX}/GetQuestionRecommendations`,
+  GET_QUESTION_ANSWERS: `${PREFIX}/GetQuestionAnswers`,
   LIST_KNOWLEDGE_BASES: `${PREFIX}/ListKnowledgeBases`,
   LIST_KNOWLEDGE_BASE_ITEMS: `${PREFIX}/ListKnowledgeBaseItems`,
   UPLOAD_KNOWLEDGE_FILE: `${PREFIX}/UploadKnowledgeFile`,
@@ -178,6 +179,17 @@ export const buildQuestionRecommendationsQuery = (request = {}) => {
   }
   return params;
 };
+
+// Question answers: page through the answers of one question (from its full
+// Zhihu URL). QuestionUrl is required; Offset/Limit mirror the upstream page.
+export const buildQuestionAnswersQuery = (request = {}) => ({
+  QuestionUrl: requiredString(
+    request.question_url ?? request.questionUrl ?? request.QuestionUrl,
+    'question_url',
+  ),
+  Offset: offsetParam(request.offset ?? request.Offset),
+  Limit: clampedPositiveInteger(request.limit ?? request.Limit, 'Limit', 50, 20),
+});
 
 // APIIDs is a comma-separated list of quota item ids. Normalize whitespace and
 // drop empty tokens; pass through unknown ids so future Zhihu quota items work
@@ -450,6 +462,13 @@ export const handlers = {
     logInfo(meta, 'GetQuestionRecommendations:success', { topic: topic || '(profile)' });
     return data(result.data);
   }),
+  [METHODS.GET_QUESTION_ANSWERS]: wrap(async (settings, req, meta) => {
+    const query = buildQuestionAnswersQuery(req);
+    logInfo(meta, 'GetQuestionAnswers:start', { questionUrl: query.QuestionUrl });
+    const result = await callApi(settings, 'GET', '/api/v1/content/question_answers', { query: buildQuery(query) });
+    logInfo(meta, 'GetQuestionAnswers:success', { questionUrl: query.QuestionUrl });
+    return data(result.data);
+  }),
   [METHODS.GET_QUOTA]: wrap(async (settings, req) => {
     const result = await callApi(settings, 'GET', '/api/v1/quota', { query: buildQuery(buildGetQuotaQuery(req)) });
     return data(result.data);
@@ -530,6 +549,7 @@ export const _test = {
   buildKnowledgeSearchBody,
   buildQuery,
   buildQuestionRecommendationsQuery,
+  buildQuestionAnswersQuery,
   buildUploadForm,
   buildUserCollectionsQuery,
   buildUserContentsQuery,

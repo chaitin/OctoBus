@@ -43,6 +43,10 @@
           "name": "get-question-recommendations",
           "description": "Recommend Zhihu questions by the caller's profile or a topic."
         },
+        "Zhihu_Open_Api.Zhihu_Open_Api/GetQuestionAnswers": {
+          "name": "get-question-answers",
+          "description": "List the answer summaries of one Zhihu question."
+        },
         "Zhihu_Open_Api.Zhihu_Open_Api/ListKnowledgeBases": {
           "name": "list-knowledge-bases",
           "description": "List knowledge bases created or subscribed by the current user."
