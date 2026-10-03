@@ -110,7 +110,7 @@ test('ZhihuSearch requires a non-empty Query and clamps Count', async () => {
 
   const calls2 = [];
   await handlers[METHODS.ZHIHU_SEARCH](context([response(okData({}))], { query: 'x', count: 0 }, calls2));
-  assert.match(calls2[0].url, /Count=1/);
+  assert.match(calls2[0].url, /Count=10/);
 });
 
 test('GlobalSearch includes SearchDB default and optional Filter', async () => {
@@ -152,6 +152,11 @@ test('GetHotList clamps Limit and returns Data', async () => {
   const calls2 = [];
   await handlers[METHODS.GET_HOT_LIST](context([response(okData({}))], {}, calls2));
   assert.equal(calls2[0].url, 'https://developer.zhihu.com/api/v1/content/hot_list?Limit=30');
+
+  // An omitted/zero Limit is a proto3 default -> the documented 30, not 1.
+  const calls3 = [];
+  await handlers[METHODS.GET_HOT_LIST](context([response(okData({}))], { limit: 0 }, calls3));
+  assert.equal(calls3[0].url, 'https://developer.zhihu.com/api/v1/content/hot_list?Limit=30');
 });
 
 test('GetQuota builds the APIIDs query and returns the array Data', async () => {
@@ -182,6 +187,65 @@ test('GetQuota builds the APIIDs query and returns the array Data', async () => 
   assert.deepEqual(_test.buildGetQuotaQuery({ apiIds: '  global_search, , hot_list, ' }), { APIIDs: 'global_search,hot_list' });
   assert.deepEqual(_test.buildGetQuotaQuery({}), {});
   assert.deepEqual(_test.buildGetQuotaQuery({ apiIds: '  ,  ' }), {});
+});
+
+test('GetQuestionRecommendations covers profile and topic modes and clamps Count', async () => {
+  // Profile mode: no Query parameter at all (upstream recommends from the
+  // caller's profile), and Count defaults to 5.
+  const calls = [];
+  const result = await handlers[METHODS.GET_QUESTION_RECOMMENDATIONS](context([
+    response(okData({ Items: [{ Title: '如何理解 AI Agent？', Url: 'https://www.zhihu.com/question/123' }] })),
+  ], {}, calls));
+  assert.equal(result.data.Items[0].Title, '如何理解 AI Agent？');
+  assert.equal(calls[0].url, 'https://developer.zhihu.com/api/v1/user/question_recommendations?Count=5');
+  assert.equal(calls[0].options.method, 'GET');
+
+  // Topic mode (camelCase alias): Query is URL-encoded and Count is clamped to 20.
+  const calls2 = [];
+  await handlers[METHODS.GET_QUESTION_RECOMMENDATIONS](context([response(okData({}))], { query: '人工智能', count: 99 }, calls2));
+  assert.equal(
+    calls2[0].url,
+    'https://developer.zhihu.com/api/v1/user/question_recommendations?Count=20&Query=%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD',
+  );
+
+  // A blank/omitted Query is profile mode, not an error: proto3 cannot carry
+  // the absent-vs-empty distinction, and the runtime fills omitted strings with "".
+  assert.deepEqual(_test.buildQuestionRecommendationsQuery({}), { Count: '5' });
+  assert.deepEqual(_test.buildQuestionRecommendationsQuery({ query: '   ' }), { Count: '5' });
+  assert.deepEqual(_test.buildQuestionRecommendationsQuery({ Query: ' x ' }), { Count: '5', Query: 'x' });
+  // count 0 is a proto3 default, so it falls back to 5 rather than clamping to 1.
+  assert.deepEqual(_test.buildQuestionRecommendationsQuery({ count: 0 }), { Count: '5' });
+});
+
+test('GetQuestionAnswers requires a question URL and pages the answers', async () => {
+  const calls = [];
+  const result = await handlers[METHODS.GET_QUESTION_ANSWERS](context([
+    response(okData({
+      Items: [{ ContentType: 'answer', ContentToken: '456', Url: 'https://www.zhihu.com/question/123/answer/456', Summary: '摘要' }],
+      Paging: { IsEnd: true, Totals: 1 },
+    })),
+  ], { question_url: 'https://www.zhihu.com/question/123' }, calls));
+
+  assert.equal(result.data.Items[0].ContentToken, '456');
+  assert.equal(
+    calls[0].url,
+    'https://developer.zhihu.com/api/v1/content/question_answers?QuestionUrl=https%3A%2F%2Fwww.zhihu.com%2Fquestion%2F123&Offset=0&Limit=20',
+  );
+  assert.equal(calls[0].options.method, 'GET');
+
+  // camelCase alias + clamping, and Offset passthrough.
+  const calls2 = [];
+  await handlers[METHODS.GET_QUESTION_ANSWERS](context([response(okData({}))], { questionUrl: 'https://www.zhihu.com/question/9', offset: 40, limit: 99 }, calls2));
+  assert.match(calls2[0].url, /Offset=40&Limit=50$/);
+
+  await assert.rejects(
+    handlers[METHODS.GET_QUESTION_ANSWERS](context([], {})),
+    (error) => error.code === grpcStatus.INVALID_ARGUMENT && /question_url is required/.test(error.message),
+  );
+  await assert.rejects(
+    handlers[METHODS.GET_QUESTION_ANSWERS](context([], { question_url: 'https://x', offset: -1 })),
+    /Offset must be a non-negative integer/,
+  );
 });
 
 test('ListKnowledgeBases validates Scope', async () => {

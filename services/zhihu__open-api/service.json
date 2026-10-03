@@ -2,7 +2,7 @@
   "schema": "chaitin.octobus.service.v1",
   "name": "zhihu-open-api",
   "displayName": "Zhihu Open API",
-  "description": "OctoBus package for the Zhihu Open Platform — in-site and global search, hot list, knowledge base (RAG), and user data APIs.",
+  "description": "OctoBus package for the Zhihu Open Platform — in-site and global search, hot list, question recommendations, knowledge base (RAG), and user data APIs.",
   "runtime": {
     "mode": "long-running"
   },
@@ -38,6 +38,14 @@
         "Zhihu_Open_Api.Zhihu_Open_Api/GetHotList": {
           "name": "get-hot-list",
           "description": "Read the current Zhihu hot list of questions and articles."
+        },
+        "Zhihu_Open_Api.Zhihu_Open_Api/GetQuestionRecommendations": {
+          "name": "get-question-recommendations",
+          "description": "Recommend Zhihu questions by the caller's profile or a topic."
+        },
+        "Zhihu_Open_Api.Zhihu_Open_Api/GetQuestionAnswers": {
+          "name": "get-question-answers",
+          "description": "List the answer summaries of one Zhihu question."
         },
         "Zhihu_Open_Api.Zhihu_Open_Api/ListKnowledgeBases": {
           "name": "list-knowledge-bases",
