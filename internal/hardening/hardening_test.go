@@ -368,3 +368,30 @@ func TestParseLevel(t *testing.T) {
 		}
 	}
 }
+
+// A service dir whose package/ and runtime/ entries are symlinks into the
+// shared runtime tree store must keep working at LevelNode: Node's module
+// loader checks realpaths, so the store has to be inside the read grant. This
+// pins the ExtraReadDirs wiring; without it, every shared-tree service dies
+// with ERR_ACCESS_DENIED at startup while the same import at level off works.
+func TestNodeOptionsGrantsExtraReadDirs(t *testing.T) {
+	root := t.TempDir()
+	serviceDir := filepath.Join(root, "services", "echo")
+	workdir := filepath.Join(root, "instances", "echo-1")
+	sharedStore := filepath.Join(root, "artifacts", "runtimes")
+	rules := testRules(t)
+
+	opts := nodeOptions(Spec{Level: LevelNode, ServiceDir: serviceDir, Workdir: workdir, RulesPath: rules, ExtraReadDirs: []string{sharedStore}})
+	if !strings.Contains(opts, "--allow-fs-read="+quoteNodeOption(sharedStore)) {
+		t.Fatalf("shared runtime tree store missing from the read grant: %s", opts)
+	}
+	// The extra dirs are read grants only; nothing may gain write access.
+	if strings.Contains(opts, "--allow-fs-write="+quoteNodeOption(sharedStore)) {
+		t.Fatalf("shared runtime tree store must stay read-only: %s", opts)
+	}
+	// Omitting ExtraReadDirs must not change the grant shape.
+	base := nodeOptions(Spec{Level: LevelNode, ServiceDir: serviceDir, Workdir: workdir, RulesPath: rules})
+	if strings.Contains(base, quoteNodeOption(sharedStore)) {
+		t.Fatalf("store granted without ExtraReadDirs: %s", base)
+	}
+}

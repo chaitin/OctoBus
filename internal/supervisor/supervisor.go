@@ -17,6 +17,7 @@ import (
 	"octobus/internal/daemonlog"
 	"octobus/internal/domain"
 	"octobus/internal/hardening"
+	"octobus/internal/packageimport"
 	"octobus/internal/store"
 
 	"google.golang.org/grpc"
@@ -276,6 +277,13 @@ func (s *Supervisor) startWithAttempt(ctx context.Context, instanceID string, re
 		RulesPath:  s.RuntimeRulesPath,
 		ServiceDir: filepath.Dir(s.ServiceRuntimeDir(svc.ID)),
 		Workdir:    workdir,
+		// package/ and runtime/ may be symlinks into the shared runtime tree
+		// store, and Node's permission model checks realpaths: without a read
+		// grant for the store the runtime dies on startup. Granting the whole
+		// store, rather than the one tree this service links to, keeps this
+		// static; the store is still runtime-scoped data, and the grant is read
+		// only.
+		ExtraReadDirs: []string{packageimport.SharedTreesDir(s.DataDir)},
 		Env: []string{
 			"OCTOBUS_SERVICE_ID=" + svc.ID,
 			"OCTOBUS_INSTANCE_ID=" + instanceID,
