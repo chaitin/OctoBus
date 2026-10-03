@@ -502,11 +502,21 @@ func TestResolveImportSourceTransferModes(t *testing.T) {
 	if err := os.Chdir(tmp); err != nil {
 		t.Fatal(err)
 	}
+	// classifyLocalImportSource resolves each source against the process cwd,
+	// which after the chdir above is the symlink-free form of tmp -- on macOS
+	// /var/folders is a symlink to /private/var/folders, so Abs from the chdir'd
+	// cwd differs from the literal t.TempDir path. Deriving every expectation
+	// the same way keeps the test about transfer modes rather than about the
+	// host's temp-dir symlinks.
 	absPkg, err := filepath.Abs("pkg")
 	if err != nil {
 		t.Fatal(err)
 	}
 	absUnsupported, err := filepath.Abs("notes.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	absArchive, err := filepath.Abs("service.tar.gz")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -522,7 +532,7 @@ func TestResolveImportSourceTransferModes(t *testing.T) {
 		wantErr    string
 	}{
 		{name: "auto local directory", source: "./pkg//nested", mode: "auto", wantSource: "client-upload:pkg//nested", wantUpload: true, wantPath: absPkg, wantKind: packageimport.UploadKindDirectory},
-		{name: "auto local archive", source: "service.tar.gz", mode: "auto", wantSource: "client-upload:service.tar.gz", wantUpload: true, wantPath: archive, wantKind: packageimport.UploadKindArchive},
+		{name: "auto local archive", source: "service.tar.gz", mode: "auto", wantSource: "client-upload:service.tar.gz", wantUpload: true, wantPath: absArchive, wantKind: packageimport.UploadKindArchive},
 		{name: "auto npm local", source: "npm:./pkg", mode: "auto", wantSource: "client-upload:pkg", wantUpload: true, wantPath: absPkg, wantKind: packageimport.UploadKindNPMLocal},
 		{name: "auto missing keeps json", source: "missing", mode: "auto", wantSource: "missing"},
 		{name: "auto unsupported file keeps json", source: "notes.txt", mode: "auto", wantSource: absUnsupported},
