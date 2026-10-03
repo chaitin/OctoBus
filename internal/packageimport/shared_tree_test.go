@@ -619,8 +619,10 @@ func TestOptionalFileDependencyMissingDoesNotVetoInstall(t *testing.T) {
 // The hardening read grant is the resolved tree, not the whole store: other
 // services' trees hold their code, and a compromised runtime has no business
 // reading them. A legacy service (real directories) references no tree and
-// yields no grant, and an unexplainable layout falls back to the store root
-// rather than leave the runtime unable to start.
+// yields no grant. A link pointing outside the store grants the target itself
+// -- the store root would not cover the target, so falling back to it would
+// widen the surface without letting the service start, which is why the
+// subtest below asserts the store root must never come back.
 func TestSharedTreeReadGrants(t *testing.T) {
 	dataDir := t.TempDir()
 	store := SharedTreesDir(dataDir)
