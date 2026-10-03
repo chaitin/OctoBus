@@ -1,8 +1,8 @@
 # Zhihu OctoBus Service
 
 This package wraps the public [Zhihu Open Platform](https://developer.zhihu.com/docs) APIs — in-site and global search,
-the Zhihu hot list, knowledge base (RAG) retrieval and upload, and user data (contents, followees, collections, and
-favorites) — behind a single OctoBus service. Method-level capsets can expose search, hot list, knowledge base, and
+the Zhihu hot list, question recommendations, knowledge base (RAG) retrieval and upload, and user data (contents, followees, collections, and
+favorites) — behind a single OctoBus service. Method-level capsets can expose search, hot list, question discovery, knowledge base, and
 user data independently.
 
 Service name: `zhihu-open-api`
@@ -87,6 +87,7 @@ All data methods return the upstream Zhihu `Data` object in the structured `Json
 | `ZhihuSearch` | `GET /api/v1/content/zhihu_search` | Search within Zhihu (questions, answers, articles). |
 | `GlobalSearch` | `GET /api/v1/content/global_search` | Search the whole web with optional filter expression. |
 | `GetHotList` | `GET /api/v1/content/hot_list` | Current Zhihu hot list. |
+| `GetQuestionRecommendations` | `GET /api/v1/user/question_recommendations` | Questions recommended for the caller, by profile (no `query`) or by topic (`query`). |
 | `ListKnowledgeBases` | `GET /api/v1/knowledge/bases` | Knowledge bases created or subscribed by the user. |
 | `ListKnowledgeBaseItems` | `GET /api/v1/knowledge/bases/{id}/items` | Page through a knowledge base's contents. |
 | `UploadKnowledgeFile` | `POST /api/v1/knowledge/files` | Upload a file (multipart) and mount it after parsing. |
@@ -101,8 +102,8 @@ Request fields:
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `query` | string | Yes for search methods | Search keyword; trimmed and non-empty. |
-| `count` | int32 | No | Search result count; clamped to 1–10 (`ZhihuSearch`) or 1–20 (`GlobalSearch`), default 10. |
+| `query` | string | Yes for search; optional for question recommendations | Search keyword (trimmed and non-empty). For `GetQuestionRecommendations`: a topic keyword; omitted → recommend from the caller's profile, provided → topic mode (trimmed value must be non-empty). |
+| `count` | int32 | No | Search result count; clamped to 1–10 (`ZhihuSearch`) or 1–20 (`GlobalSearch`), default 10. For `GetQuestionRecommendations`: clamped to 1–20, default 5. |
 | `filter` | string | No | Global search filter expression, e.g. `host=="example.com" AND publish_time>=1778494631`. |
 | `search_db` | string | No | `all`, `realtime`, or `static`; default `all`. |
 | `limit` | int32 | No | Page size; clamped to 1–30 (hot list), 1–20 (knowledge items, default 20), 1–10 (knowledge search, default 10), or 1–50 (user data, default 20). |
@@ -118,7 +119,7 @@ Request fields:
 | `sort_field` / `sort_order` | string | No | `like_count` or `ts`; `asc` or `desc`; defaults `ts` / `desc`. |
 | `favlist_url_token` | string | Yes for favlist contents | Favorites list URL token from `GetUserFavlists`. |
 | `oauth_token` | string | No | Per-request OAuth token override for user data methods. |
-| `api_ids` | string | No | Comma-separated quota API IDs for `GetQuota`; omit to return all. Valid ids: `global_search`, `zhihu_search`, `hot_list`, `user_data`, `zhida_openai`, `knowledge`, `tools`. |
+| `api_ids` | string | No | Comma-separated quota API IDs for `GetQuota`; omit to return all. Valid ids: `global_search`, `zhihu_search`, `hot_list`, `question_discovery`, `user_data`, `zhida_openai`, `knowledge`, `tools`. |
 
 Runtime handler example:
 

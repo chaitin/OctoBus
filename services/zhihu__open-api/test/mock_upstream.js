@@ -74,6 +74,23 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Question recommendations (profile mode when Query is absent)
+  if (method === 'GET' && url.pathname === '/api/v1/user/question_recommendations') {
+    const Query = url.searchParams.get('Query');
+    sendJson(res, 200, {
+      Code: 0,
+      Message: 'success',
+      Data: {
+        Items: [{
+          Title: Query ? `推荐问题: ${Query}` : '画像推荐问题',
+          Url: 'https://www.zhihu.com/question/123',
+        }],
+      },
+    });
+    log('question_recommendations:', Query ?? '(profile)');
+    return;
+  }
+
   // Knowledge bases
   if (method === 'GET' && url.pathname === '/api/v1/knowledge/bases') {
     sendJson(res, 200, {

@@ -184,6 +184,36 @@ test('GetQuota builds the APIIDs query and returns the array Data', async () => 
   assert.deepEqual(_test.buildGetQuotaQuery({ apiIds: '  ,  ' }), {});
 });
 
+test('GetQuestionRecommendations covers profile and topic modes and clamps Count', async () => {
+  // Profile mode: no Query parameter at all (upstream recommends from the
+  // caller's profile), and Count defaults to 5.
+  const calls = [];
+  const result = await handlers[METHODS.GET_QUESTION_RECOMMENDATIONS](context([
+    response(okData({ Items: [{ Title: '如何理解 AI Agent？', Url: 'https://www.zhihu.com/question/123' }] })),
+  ], {}, calls));
+  assert.equal(result.data.Items[0].Title, '如何理解 AI Agent？');
+  assert.equal(calls[0].url, 'https://developer.zhihu.com/api/v1/user/question_recommendations?Count=5');
+  assert.equal(calls[0].options.method, 'GET');
+
+  // Topic mode (camelCase alias): Query is URL-encoded and Count is clamped to 20.
+  const calls2 = [];
+  await handlers[METHODS.GET_QUESTION_RECOMMENDATIONS](context([response(okData({}))], { query: '人工智能', count: 99 }, calls2));
+  assert.equal(
+    calls2[0].url,
+    'https://developer.zhihu.com/api/v1/user/question_recommendations?Count=20&Query=%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD',
+  );
+
+  // An explicitly blank Query is an error upstream (10001), not profile mode.
+  await assert.rejects(
+    handlers[METHODS.GET_QUESTION_RECOMMENDATIONS](context([], { query: '   ' })),
+    (error) => error.code === grpcStatus.INVALID_ARGUMENT && /query must not be empty/.test(error.message),
+  );
+
+  assert.deepEqual(_test.buildQuestionRecommendationsQuery({}), { Count: '5' });
+  assert.deepEqual(_test.buildQuestionRecommendationsQuery({ Query: ' x ' }), { Count: '5', Query: 'x' });
+  assert.deepEqual(_test.buildQuestionRecommendationsQuery({ count: 0 }), { Count: '1' });
+});
+
 test('ListKnowledgeBases validates Scope', async () => {
   const calls = [];
   const result = await handlers[METHODS.LIST_KNOWLEDGE_BASES](context([

@@ -10,6 +10,7 @@ export const METHODS = {
   ZHIHU_SEARCH: `${PREFIX}/ZhihuSearch`,
   GLOBAL_SEARCH: `${PREFIX}/GlobalSearch`,
   GET_HOT_LIST: `${PREFIX}/GetHotList`,
+  GET_QUESTION_RECOMMENDATIONS: `${PREFIX}/GetQuestionRecommendations`,
   LIST_KNOWLEDGE_BASES: `${PREFIX}/ListKnowledgeBases`,
   LIST_KNOWLEDGE_BASE_ITEMS: `${PREFIX}/ListKnowledgeBaseItems`,
   UPLOAD_KNOWLEDGE_FILE: `${PREFIX}/UploadKnowledgeFile`,
@@ -161,6 +162,22 @@ export const buildGlobalSearchQuery = (request = {}) => ({
 export const buildHotListQuery = (request = {}) => ({
   Limit: clampedPositiveInteger(request.limit ?? request.Limit, 'Limit', 30, 30),
 });
+
+// Question recommendations: an absent Query means "recommend from the caller's
+// profile"; an explicitly provided but blank Query is rejected upstream with
+// 10001, so mirror that here instead of silently dropping it.
+export const buildQuestionRecommendationsQuery = (request = {}) => {
+  const params = {
+    Count: clampedPositiveInteger(request.count ?? request.Count, 'Count', 20, 5),
+  };
+  const query = pick(request, 'query', 'Query');
+  if (query !== undefined) {
+    const text = asString(query);
+    if (!text) throw errorWithCode('INVALID_ARGUMENT', 'query must not be empty when provided');
+    params.Query = text;
+  }
+  return params;
+};
 
 // APIIDs is a comma-separated list of quota item ids. Normalize whitespace and
 // drop empty tokens; pass through unknown ids so future Zhihu quota items work
@@ -425,6 +442,14 @@ export const handlers = {
     const result = await callApi(settings, 'GET', '/api/v1/content/hot_list', { query: buildQuery(buildHotListQuery(req)) });
     return data(result.data);
   }),
+  [METHODS.GET_QUESTION_RECOMMENDATIONS]: wrap(async (settings, req, meta) => {
+    const query = buildQuestionRecommendationsQuery(req);
+    const topic = query.Query ?? '';
+    logInfo(meta, 'GetQuestionRecommendations:start', { topic: topic || '(profile)' });
+    const result = await callApi(settings, 'GET', '/api/v1/user/question_recommendations', { query: buildQuery(query) });
+    logInfo(meta, 'GetQuestionRecommendations:success', { topic: topic || '(profile)' });
+    return data(result.data);
+  }),
   [METHODS.GET_QUOTA]: wrap(async (settings, req) => {
     const result = await callApi(settings, 'GET', '/api/v1/quota', { query: buildQuery(buildGetQuotaQuery(req)) });
     return data(result.data);
@@ -504,6 +529,7 @@ export const _test = {
   buildKnowledgeBaseItemsQuery,
   buildKnowledgeSearchBody,
   buildQuery,
+  buildQuestionRecommendationsQuery,
   buildUploadForm,
   buildUserCollectionsQuery,
   buildUserContentsQuery,
