@@ -6,6 +6,7 @@
     "baseUrl": {
       "type": "string",
       "format": "uri",
+      "pattern": "^https://",
       "default": "https://developer.zhihu.com",
       "description": "Zhihu Open Platform root URL."
     },
@@ -28,19 +29,19 @@
       "description": "Optional additional HTTP headers. Core auth, JSON, and trace headers are set by the service."
     },
     "skipTlsVerify": {
-      "type": "boolean",
+      "const": false,
       "default": false,
-      "description": "Skip TLS certificate verification for private testing."
+      "description": "TLS certificate verification is mandatory."
     },
     "tlsInsecureSkipVerify": {
-      "type": "boolean",
+      "const": false,
       "default": false,
-      "description": "Legacy alias for skipTlsVerify."
+      "description": "Legacy alias; TLS certificate verification is mandatory."
     },
     "insecureSkipVerify": {
-      "type": "boolean",
+      "const": false,
       "default": false,
-      "description": "Legacy alias for skipTlsVerify."
+      "description": "Legacy alias; TLS certificate verification is mandatory."
     }
   }
 }
