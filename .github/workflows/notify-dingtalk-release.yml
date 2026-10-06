@@ -1,0 +1,355 @@
+name: Notify DingTalk release
+
+# Configure DINGTALK_TARGETS_JSON as a GitHub Actions secret containing a
+# non-empty array of {"webhook":"...","secret":"..."} objects.
+on:
+  workflow_run:
+    workflows:
+      - ci
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: OctoBus release tag to translate and send to DingTalk
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  notify-dingtalk:
+    name: Translate and notify DingTalk
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        startsWith(github.event.workflow_run.head_branch, 'v')
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Translate release notes and send notifications
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_RUN_TAG: ${{ github.event.workflow_run.head_branch }}
+          WORKFLOW_RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          MANUAL_RELEASE_TAG: ${{ inputs.release_tag }}
+          DINGTALK_TARGETS_JSON: ${{ secrets.DINGTALK_TARGETS_JSON }}
+          RELEASE_LLM_API_URL: ${{ secrets.RELEASE_LLM_API_URL }}
+          RELEASE_LLM_API_KEY: ${{ secrets.RELEASE_LLM_API_KEY }}
+          RELEASE_LLM_MODEL: ${{ secrets.RELEASE_LLM_MODEL }}
+        run: |
+          set -euo pipefail
+
+          for variable in \
+            DINGTALK_TARGETS_JSON \
+            RELEASE_LLM_API_URL \
+            RELEASE_LLM_API_KEY \
+            RELEASE_LLM_MODEL
+          do
+            if [[ -z "${!variable}" ]]; then
+              echo "::error::GitHub Actions secret '$variable' is not configured"
+              exit 1
+            fi
+          done
+
+          if ! jq -e '
+            type == "array" and
+            length > 0 and
+            all(.[];
+              type == "object" and
+              (.webhook | type == "string" and length > 0) and
+              (.secret | type == "string" and length > 0)
+            )
+          ' <<<"$DINGTALK_TARGETS_JSON" >/dev/null 2>&1
+          then
+            echo '::error::DINGTALK_TARGETS_JSON must be a non-empty array of objects with non-empty webhook and secret strings'
+            exit 1
+          fi
+
+          release_tag="${WORKFLOW_RUN_TAG:-}"
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            release_tag="${MANUAL_RELEASE_TAG:-}"
+          fi
+          if [[ -z "$release_tag" ]]; then
+            echo "::error::An OctoBus release tag is required"
+            exit 1
+          fi
+          if [[ ! "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::OctoBus release tag '$release_tag' must match v<semver>"
+            exit 1
+          fi
+
+          git fetch --force --tags origin
+          current_ref="${release_tag}^{commit}"
+          if ! git rev-parse --verify "$current_ref" >/dev/null 2>&1; then
+            echo "::error::Release tag '$release_tag' does not exist in git history"
+            exit 1
+          fi
+          release_sha="$(git rev-parse "$current_ref")"
+
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_run" ]]; then
+            if [[ -z "${WORKFLOW_RUN_HEAD_SHA:-}" ]]; then
+              echo "::error::workflow_run head sha is required to verify release provenance"
+              exit 1
+            fi
+            if [[ "$WORKFLOW_RUN_HEAD_SHA" != "$release_sha" ]]; then
+              echo "::error::Release tag '$release_tag' currently points to $release_sha, but ci completed for $WORKFLOW_RUN_HEAD_SHA"
+              exit 1
+            fi
+          fi
+
+          echo "Waiting for docker workflow to complete for ${release_tag}..."
+          deadline=$((SECONDS + 1800))
+          while true; do
+            if ! docker_runs_json="$(gh api \
+              --header 'Accept: application/vnd.github+json' \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/docker.yml/runs?event=push&head_sha=${release_sha}&per_page=100")"
+            then
+              echo "::error::Failed to query docker workflow runs for ${release_tag}"
+              exit 1
+            fi
+            if ! docker_run="$(jq -c \
+              --arg branch "$release_tag" \
+              '.workflow_runs
+                | map(select(.head_branch == $branch))
+                | first // empty' <<<"$docker_runs_json")"
+            then
+              echo "::error::Failed to parse docker workflow runs response for ${release_tag}"
+              exit 1
+            fi
+            if [[ -n "$docker_run" ]]; then
+              docker_status="$(jq -r '.status // ""' <<<"$docker_run")"
+              docker_conclusion="$(jq -r '.conclusion // ""' <<<"$docker_run")"
+              docker_url="$(jq -r '.html_url // ""' <<<"$docker_run")"
+
+              if [[ "$docker_status" == "completed" ]]; then
+                if [[ "$docker_conclusion" == "success" ]]; then
+                  echo "Docker workflow succeeded: $docker_url"
+                  break
+                fi
+                echo "::error::Docker workflow completed with conclusion '${docker_conclusion:-unknown}': $docker_url"
+                exit 1
+              fi
+
+              echo "Docker workflow is ${docker_status:-unknown}: $docker_url"
+            else
+              echo "Docker workflow run for ${release_tag} was not found yet."
+            fi
+
+            if (( SECONDS >= deadline )); then
+              echo "::error::Timed out waiting for docker workflow for ${release_tag}"
+              exit 1
+            fi
+            sleep 30
+          done
+
+          format_commit_changelog() {
+            git log --first-parent --format='%h%x1f%s%x1f%b%x1e' "$@" |
+              while IFS= read -r -d $'\x1e' record; do
+                while [[ "$record" == $'\n'* ]]; do
+                  record="${record#$'\n'}"
+                done
+                separator=$'\x1f'
+                short_hash="${record%%"$separator"*}"
+                remainder="${record#*"$separator"}"
+                subject="${remainder%%"$separator"*}"
+                body="${remainder#*"$separator"}"
+                entry="$subject"
+
+                if [[ "$subject" =~ ^Merge[[:space:]]pull[[:space:]]request[[:space:]]#([0-9]+)[[:space:]]from[[:space:]] ]]; then
+                  pr_number="${BASH_REMATCH[1]}"
+                  pr_title="$(sed -n '/[^[:space:]]/{s/^[[:space:]]*//;s/[[:space:]]*$//;p;q;}' <<<"$body")"
+                  if [[ -n "$pr_title" ]]; then
+                    entry="${pr_title} (#${pr_number})"
+                  fi
+                fi
+
+                printf -- '- %s (%s)\n' "$entry" "$short_hash"
+              done
+          }
+
+          previous_tag="$(git describe --tags --match 'v[0-9]*' --abbrev=0 "${current_ref}^" 2>/dev/null || true)"
+          if [[ -n "$previous_tag" ]]; then
+            changelog_range="${previous_tag}..${release_tag}"
+            changelog_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/${previous_tag}...${release_tag}"
+            commit_changelog="$(format_commit_changelog "${previous_tag}..${current_ref}")"
+          else
+            changelog_range="initial release..${release_tag}"
+            changelog_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${release_tag}"
+            commit_changelog="$(format_commit_changelog "$current_ref")"
+          fi
+          if [[ -z "$commit_changelog" ]]; then
+            commit_changelog="- ${release_tag}"
+          fi
+
+          release_name="$release_tag"
+          release_page_url=""
+          release_notes=""
+          if release_json="$(gh api \
+            --header 'Accept: application/vnd.github+json' \
+            "repos/${GITHUB_REPOSITORY}/releases/tags/${release_tag}" 2>/dev/null)"
+          then
+            release_tag="$(jq -er '.tag_name' <<<"$release_json")"
+            release_name="$(jq -er '.name // .tag_name' <<<"$release_json")"
+            release_page_url="$(jq -er '.html_url' <<<"$release_json")"
+            release_notes="$(jq -r '.body // ""' <<<"$release_json")"
+          fi
+
+          release_body="$(printf 'OctoBus release: %s\nChangelog range: %s\n\nGit commit changelog:\n%s' \
+            "$release_tag" \
+            "$changelog_range" \
+            "$commit_changelog")"
+          if [[ -n "$release_notes" ]]; then
+            release_body="$(printf 'OctoBus release: %s\nChangelog range: %s\n\nGitHub Release notes:\n%s\n\nGit commit changelog:\n%s' \
+              "$release_tag" \
+              "$changelog_range" \
+              "$release_notes" \
+              "$commit_changelog")"
+          fi
+
+          temporary_response="$(mktemp)"
+          trap 'rm -f "$temporary_response"' EXIT
+
+          system_prompt='You turn OctoBus release notes and git commit changelogs into a concise Simplified Chinese user-facing changelog for a DingTalk notification and GitHub Actions summary. Output Markdown only, with no more than 12 bullets and approximately 1200 Chinese characters. Keep important user-visible changes: OctoBus daemon and CLI behavior, service package import/runtime changes, capset and instance management, gRPC/Connect RPC/MCP/OpenAPI gateway behavior, SDK and npm package publishing, Docker image and deployment, storage/schema changes, compatibility, security, and performance. Omit routine documentation-only changes, CI workflow changes, tests, ordinary refactors, internal build housekeeping, generated-file updates, and other implementation details unless they materially affect users, compatibility, security, performance, deployment, or installation. Merge related entries into concise bullets, remove duplicates, and do not list every commit. Do not invent facts or claim changes that are not present in the input. Preserve exact version strings, important scope names, code identifiers, usernames, pull-request numbers, URLs, and Markdown links when retained. Use headings such as 功能、修复、性能与兼容性、部署与安装 only when the section is non-empty. Keep technical product and script names such as OctoBus, octobus, @chaitin-ai/octobus, @chaitin-ai/octobus-sdk, Docker, GitHub, npm, Node.js, Go, gRPC, Connect RPC, MCP, OpenAPI, CLI, API, SDK, SQLite, capset, service, instance, scripts/build-octobus.sh, and scripts/build-octobus-npm-packages.sh unchanged.'
+
+          request_body="$(jq -n \
+            --arg model "$RELEASE_LLM_MODEL" \
+            --arg system_prompt "$system_prompt" \
+            --arg release_body "$release_body" \
+            '{
+              model: $model,
+              temperature: 0.1,
+              messages: [
+                {role: "system", content: $system_prompt},
+                {role: "user", content: ("Translate the following OctoBus release notes:\n\n--- BEGIN RELEASE NOTES ---\n" + $release_body + "\n--- END RELEASE NOTES ---")}
+              ]
+            }')"
+
+          if ! curl -fsS \
+            --retry 2 \
+            --connect-timeout 10 \
+            --max-time 120 \
+            -X POST \
+            -H 'Content-Type: application/json' \
+            -H "Authorization: Bearer ${RELEASE_LLM_API_KEY}" \
+            --data "$request_body" \
+            "$RELEASE_LLM_API_URL" >"$temporary_response"
+          then
+            echo "::error::LLM request failed; check RELEASE_LLM_API_URL, RELEASE_LLM_API_KEY, and RELEASE_LLM_MODEL"
+            exit 1
+          fi
+
+          translated_body="$(jq -er '.choices[0].message.content // empty' "$temporary_response" 2>/dev/null || true)"
+          if [[ -z "$translated_body" ]]; then
+            llm_error="$(jq -r '.error.message // "LLM response did not contain choices[0].message.content"' "$temporary_response" 2>/dev/null || true)"
+            echo "::error::Release note translation failed: ${llm_error:-unknown error}"
+            exit 1
+          fi
+
+          footer_link_label="查看变更"
+          footer_link_url="$changelog_url"
+          if [[ -n "$release_page_url" ]]; then
+            footer_link_label="查看 Release"
+            footer_link_url="$release_page_url"
+          fi
+
+          {
+            printf '## OctoBus %s 已发布\n\n' "$release_tag"
+            printf '**版本**：%s\n\n' "$release_tag"
+            printf '**变更内容**\n\n%s\n\n' "$translated_body"
+            printf '**其他**\n\n'
+            printf '• 完整变更记录：%s\n\n' "$changelog_url"
+            printf '[%s](%s)\n' "$footer_link_label" "$footer_link_url"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          dingtalk_text="$(printf '### OctoBus %s 已发布\n\n**版本**：%s\n\n**变更内容**\n\n%s\n\n**其他**\n\n• 完整变更记录：%s\n\n[%s](%s)' \
+            "$release_tag" \
+            "$release_tag" \
+            "$translated_body" \
+            "$changelog_url" \
+            "$footer_link_label" \
+            "$footer_link_url")"
+
+          dingtalk_payload="$(jq -n \
+            --arg title "OctoBus ${release_tag} 已发布" \
+            --arg text "$dingtalk_text" \
+            '{msgtype: "markdown", markdown: {title: $title, text: $text}}')"
+
+          target_count="$(jq -r 'length' <<<"$DINGTALK_TARGETS_JSON")"
+          failed_count=0
+          for ((index = 0; index < target_count; index++)); do
+            target_number=$((index + 1))
+            webhook="$(jq -er ".[$index].webhook" <<<"$DINGTALK_TARGETS_JSON")"
+            signing_secret="$(jq -er ".[$index].secret" <<<"$DINGTALK_TARGETS_JSON")"
+            echo "::add-mask::$webhook"
+            echo "::add-mask::$signing_secret"
+
+            timestamp="$(date +%s)000"
+            string_to_sign="$(printf '%s\n%s' "$timestamp" "$signing_secret")"
+            sign="$(printf '%s' "$string_to_sign" \
+              | openssl dgst -sha256 -hmac "$signing_secret" -binary \
+              | base64 \
+              | tr -d '\r\n')"
+            encoded_sign="$(jq -rn --arg sign "$sign" '$sign | @uri')"
+            echo "::add-mask::$encoded_sign"
+
+            separator='?'
+            if [[ "$webhook" == *\?* ]]; then
+              separator='&'
+            fi
+            signed_webhook="${webhook}${separator}timestamp=${timestamp}&sign=${encoded_sign}"
+            echo "::add-mask::$signed_webhook"
+
+            if ! dingtalk_response="$(curl -fsS \
+              --retry 3 \
+              --connect-timeout 10 \
+              --max-time 30 \
+              -X POST \
+              -H 'Content-Type: application/json' \
+              --data "$dingtalk_payload" \
+              "$signed_webhook")"
+            then
+              echo "::error::DingTalk HTTP request failed for target #${target_number}"
+              failed_count=$((failed_count + 1))
+              continue
+            fi
+
+            if ! dingtalk_error="$(jq -er '
+              if type != "object" then
+                error("response is not an object")
+              elif (.errcode // 0) == 0 then
+                ""
+              else
+                (.errmsg // "unknown error")
+              end
+            ' <<<"$dingtalk_response" 2>/dev/null)"
+            then
+              echo "::error::DingTalk returned an invalid response for target #${target_number}"
+              failed_count=$((failed_count + 1))
+              continue
+            fi
+            if [[ -n "$dingtalk_error" ]]; then
+              echo "::error::DingTalk notification failed for target #${target_number}: $dingtalk_error"
+              failed_count=$((failed_count + 1))
+              continue
+            fi
+
+            echo "DingTalk notification sent to target #${target_number}."
+          done
+
+          if ((failed_count > 0)); then
+            echo "::error::DingTalk notification failed for ${failed_count} of ${target_count} targets"
+            exit 1
+          fi
+
+          echo "DingTalk notification sent for ${release_name:-$release_tag}."
