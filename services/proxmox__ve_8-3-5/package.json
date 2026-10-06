@@ -1,0 +1,13 @@
+{
+  "name": "ve-8-3-5",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "ve-8-3-5": "bin/ve-8-3-5.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.6.0",
+    "undici": "^7.16.0"
+  }
+}
