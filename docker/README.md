@@ -37,7 +37,19 @@ development token is refused on a non-loopback listen address. Use a fresh
 volume for production. Do not bake a default token into the image.
 
 When using a host bind mount instead of a named volume, make sure the mounted
-directory is writable by the container user.
+directory is owned by the non-root `octobus` user. The UID and GID are image
+details, so query them from the exact image you are going to run and apply them
+to the host directory:
+
+```bash
+mkdir -p ./octobus-data
+docker run --rm --entrypoint id octobus:dev -u octobus
+docker run --rm --entrypoint id octobus:dev -g octobus
+sudo chown -R <uid>:<gid> ./octobus-data
+docker run --rm -p 9000:9000 \
+  -v "$PWD/octobus-data:/var/lib/octobus" \
+  octobus:dev
+```
 
 The image defaults to:
 
