@@ -113,7 +113,8 @@ describe("Connect RPC stub", () => {
       .rejects.toMatchObject({
         name: "ConnectRpcError",
         code: "unknown",
-        status: 0,
+        status: 503,
+        message: "Service Unavailable",
       });
 
     const nonObjectError = createConnectRpcStub({
