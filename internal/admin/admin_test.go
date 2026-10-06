@@ -1900,6 +1900,49 @@ func TestAdminInstanceActionsSuccessAndServiceDeleteInUse(t *testing.T) {
 	serveAdmin(t, srv, http.MethodDelete, "/admin/v1/services/echo", nil, http.StatusOK)
 }
 
+func TestAdminServiceDeleteRemovesArtifactDir(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+	st, err := store.Open(filepath.Join(dataDir, "octobus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if err := st.UpsertService(ctx, domain.Service{ID: "echo", Name: "Echo", PackageSource: "fixture", PackageArtifactPath: "pkg", PackageSHA256: "pkgsha", DescriptorPath: "desc", DescriptorSHA256: "descsha", DescriptorVersion: "descsha", NodeEntry: "missing-entry"}); err != nil {
+		t.Fatal(err)
+	}
+	// A shared tree store entry, linked the way a shared-tree import links a
+	// committed service. The sweep must see the link while the directory
+	// exists and nothing once it is removed.
+	storeDir := packageimport.SharedTreesDir(dataDir)
+	tree := filepath.Join(storeDir, "treekey")
+	if err := os.MkdirAll(filepath.Join(tree, "node_modules"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	serviceDir := packageimport.ServiceArtifactDir(dataDir, "echo")
+	if err := os.MkdirAll(serviceDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(tree, filepath.Join(serviceDir, "runtime")); err != nil {
+		t.Fatal(err)
+	}
+	srv := &Server{Store: st, Supervisor: supervisor.New(dataDir, st), Gateway: &protocol.Gateway{Store: st, DataDir: dataDir}}
+
+	serveAdmin(t, srv, http.MethodDelete, "/admin/v1/services/echo", nil, http.StatusOK)
+	if _, err := os.Stat(serviceDir); !os.IsNotExist(err) {
+		t.Fatalf("service artifact dir still present after delete (err=%v)", err)
+	}
+
+	importer := &packageimport.Importer{DataDir: dataDir, Store: st}
+	removed, err := importer.SweepOrphanedTrees(ctx, time.Now().Add(2*packageimport.OrphanTreeMinAge), packageimport.OrphanTreeMinAge)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(removed) != 1 || removed[0] != tree {
+		t.Fatalf("sweep removed %v, want [%s]", removed, tree)
+	}
+}
+
 func TestAdminCatalogGatewayRequired(t *testing.T) {
 	dataDir := t.TempDir()
 	st, err := store.Open(filepath.Join(dataDir, "octobus.db"))

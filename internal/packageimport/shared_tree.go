@@ -83,7 +83,7 @@ func SharedTreeReadGrants(dataDir, serviceID string) []string {
 	var grants []string
 	seen := map[string]bool{}
 	for _, entry := range []string{"package", "runtime"} {
-		path := filepath.Join(dataDir, "artifacts", "services", serviceID, entry)
+		path := filepath.Join(ServiceArtifactDir(dataDir, serviceID), entry)
 		target, err := os.Readlink(path)
 		if err != nil {
 			// Not a symlink: a legacy real directory, or no such entry.
@@ -97,6 +97,16 @@ func SharedTreeReadGrants(dataDir, serviceID string) []string {
 		}
 	}
 	return grants
+}
+
+// ServiceArtifactDir returns the committed service directory for serviceID,
+// the place package/ and runtime/ land on import. Callers that remove a
+// service must remove this directory with it: a leftover directory holds
+// symlinks into the shared tree store, and referencedSharedTrees reads liveness
+// from those links, so an orphaned directory pins its tree against collection
+// for as long as it exists.
+func ServiceArtifactDir(dataDir, serviceID string) string {
+	return filepath.Join(dataDir, "artifacts", "services", serviceID)
 }
 
 // runtimeTreeKey derives the content address for a prepared runtime tree.
