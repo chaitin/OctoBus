@@ -58,6 +58,12 @@ type Spec struct {
 	// by egressrules.Ensure. Required at LevelNode, and absolute: NODE_OPTIONS
 	// resolves a relative --require against the runtime's working directory.
 	RulesPath string
+	// ExtraReadDirs lists directories reachable through symlinks inside
+	// ServiceDir. Node's module loader checks realpaths, so code under
+	// ServiceDir that is a symlink to a directory elsewhere fails the read
+	// check against the link's target unless the target is granted too.
+	// Optional; each entry must be absolute.
+	ExtraReadDirs []string
 }
 
 // Apply configures cmd to run as described by spec. It must be called before
@@ -139,7 +145,10 @@ func runtimeEnv(spec Spec) []string {
 // command line directly.
 func nodeOptions(spec Spec) string {
 	opts := []string{"--permission"}
-	for _, dir := range pathVariants(spec.ServiceDir, spec.Workdir) {
+	// ExtraReadDirs are granted read-only, like ServiceDir itself: the runtime
+	// must be able to load code through them, and nothing more.
+	readDirs := append([]string{spec.ServiceDir, spec.Workdir}, spec.ExtraReadDirs...)
+	for _, dir := range pathVariants(readDirs...) {
 		opts = append(opts, "--allow-fs-read="+quoteNodeOption(dir))
 	}
 	for _, dir := range pathVariants(spec.Workdir) {

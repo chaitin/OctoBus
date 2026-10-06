@@ -929,6 +929,19 @@ func (s *Server) handleServicePath(w http.ResponseWriter, r *http.Request, servi
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+		// The committed service directory holds symlinks into the shared
+		// runtime tree store, and SweepOrphanedTrees reads liveness from those
+		// links. Leaving the directory behind would pin its tree against
+		// collection for as long as it exists, so remove it with the row.
+		// Removal failure is only logged: the row is gone, so deletion
+		// succeeded as far as the API is concerned, and a re-import of the
+		// same ID clears the leftover through replaceServiceDir.
+		if s.Gateway != nil && s.Gateway.DataDir != "" {
+			dir := packageimport.ServiceArtifactDir(s.Gateway.DataDir, serviceID)
+			if err := os.RemoveAll(dir); err != nil {
+				s.logger().Warn("service_dir_cleanup_failed", "service_id", serviceID, "error", err)
+			}
+		}
 		s.logger().Info("service_deleted", "service_id", serviceID)
 		writeJSON(w, http.StatusOK, map[string]any{"deleted": true, "service_id": serviceID})
 	default:

@@ -115,6 +115,17 @@ func TestRuntimeHardeningRunsRealNodeServices(t *testing.T) {
 	h.mustCLI("service", "import", "calculator", hardeningProbePackage(t, calculatorPackagePath(t)))
 	mustCLIWithRuntimeLogs(t, h, "calc-long", "instance", "create", "calc-long", "--service", "calculator", "--config", configPath, "--secret", secretPath)
 	h.mustCLI("service", "import", "calculator-on-demand", hardeningProbePackage(t, calculatorOnDemandPackagePath(t)))
+
+	// The probe packages are shaped to be shareable, so the imports must have
+	// published trees and symlinked service dirs. If this regresses to real
+	// directories, the grant exercised below is dead code again.
+	if trees, err := filepath.Glob(filepath.Join(h.dataDir, "artifacts", "runtimes", "*")); err != nil || len(trees) == 0 {
+		t.Fatalf("shared runtime trees=%v err=%v; the hardened probe did not take the shared-tree path", trees, err)
+	}
+	if linked, err := filepath.EvalSymlinks(filepath.Join(h.dataDir, "artifacts", "services", "calculator", "runtime")); err != nil || !strings.Contains(linked, filepath.Join("artifacts", "runtimes")) {
+		t.Fatalf("calculator/runtime resolved to %q err=%v; want a symlink into the shared store", linked, err)
+	}
+
 	mustCLIWithRuntimeLogs(t, h, "calc-demand", "instance", "create", "calc-demand", "--service", "calculator-on-demand", "--config", configPath, "--secret", secretPath, "--no-start")
 	h.mustCLI("capset", "create", "dev", "--name", "DevAgent")
 	h.mustCLI("capset", "add-instance", "dev", "calc-long")
@@ -230,22 +241,57 @@ func mustCLIWithRuntimeLogs(t *testing.T, h *harness, instanceID string, args ..
 		strings.Join(args, " "), res.code, res.err, res.stdout, res.stderr)
 }
 
-// hardeningProbePackage copies an example calculator package and swaps its
-// label for hardeningProbe.
+// hardeningProbePackage copies an example calculator package, swaps its label
+// for hardeningProbe, and shapes the copy so the import shares its runtime
+// tree.
+//
+// The example name is replaced because sharingEligible excludes the local
+// example packages: their SDK dependency is rewritten against the live working
+// tree, which no content address can capture. Without the rename this test
+// would exercise only real directories, and the read grant that lets Node's
+// permission model resolve a symlinked service dir would never run against a
+// real node process.
+//
+// The dependency is installed into the copy because sharingEligible also
+// rejects trees whose dependencies would be resolved at import time -- that is
+// exactly the hardened shape of a packed service package, dependencies
+// carried in node_modules, so the probe exercises what production imports.
 func hardeningProbePackage(t *testing.T, src string) string {
 	t.Helper()
 	dst := filepath.Join(t.TempDir(), filepath.Base(src))
 	copyDirForTest(t, src, dst)
+
+	pkgJSON := filepath.Join(dst, "package.json")
+	raw, err := os.ReadFile(pkgJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const exampleName = `"name": "octobus-calculator`
+	idx := strings.Index(string(raw), exampleName)
+	if idx < 0 {
+		t.Fatalf("%s no longer names an octobus-calculator example; update hardeningProbe", pkgJSON)
+	}
+	renamed := strings.Replace(string(raw), exampleName, `"name": "octobus-hardening-probe`, 1)
+	if err := os.WriteFile(pkgJSON, []byte(renamed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	install := exec.CommandContext(context.Background(), "npm", "install", "--omit=dev", "--no-audit", "--no-fund")
+	install.Dir = dst
+	if out, err := install.CombinedOutput(); err != nil {
+		t.Fatalf("probe package npm install: %v\n%s", err, out)
+	}
+
 	entry := filepath.Join(dst, "bin", "calculator.js")
-	raw, err := os.ReadFile(entry)
+	entryRaw, err := os.ReadFile(entry)
 	if err != nil {
 		t.Fatal(err)
 	}
 	const original = `label: config.label || "",`
-	if !strings.Contains(string(raw), original) {
+	if !strings.Contains(string(entryRaw), original) {
 		t.Fatalf("%s no longer sets the label as %q; update hardeningProbe", entry, original)
 	}
-	if err := os.WriteFile(entry, []byte(strings.Replace(string(raw), original, hardeningProbe, 1)), 0o755); err != nil {
+	if err := os.WriteFile(entry, []byte(strings.Replace(string(entryRaw), original, hardeningProbe, 1)), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	return dst

@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -1115,10 +1116,15 @@ func TestImporterRollsBackServiceDirWhenStoreCommitFails(t *testing.T) {
 	dataDir, s := openTestStore(t)
 	firstPkg := writeTestPackage(t, filepath.Join(t.TempDir(), "first"), `{"schema":"chaitin.octobus.service.v1","name":"echo-wrapper","proto":{"roots":["proto"],"files":["proto/echo.proto"]}}`)
 	imp := &Importer{DataDir: dataDir, Store: s}
+	// Build "never" keeps node_modules out of the picture, but the runtime tree
+	// is still shared, so package/ is a symlink into artifacts/runtimes. The
+	// marker has to live somewhere the rollback actually swaps, otherwise it
+	// lands in the shared tree and the assertion below passes without proving
+	// anything.
 	if _, err := imp.Import(ctx, Options{ServiceID: "echo", Source: firstPkg, Build: "never", Offline: true}); err != nil {
 		t.Fatal(err)
 	}
-	marker := filepath.Join(dataDir, "artifacts/services/echo/package/rollback-marker.txt")
+	marker := filepath.Join(dataDir, "artifacts/services/echo/rollback-marker.txt")
 	writeTestFile(t, marker, "old", 0o644)
 
 	if err := s.Close(); err != nil {
@@ -2423,6 +2429,12 @@ func writeTestPackage(t *testing.T, pkg, manifest string) string {
 	if err := os.MkdirAll(filepath.Join(pkg, "node_modules"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	// npm pack drops an empty node_modules, and a packed package with neither
+	// node_modules nor declared dependencies installs at import time (npm
+	// refreshes the lockfile), which makes it unshareable. Give the fixture a
+	// carried entry so the packed form is shareable, matching multi-service
+	// fixtures and real packed service packages.
+	writeIgnoredServiceJSON(t, filepath.Join(pkg, "node_modules", "carried"))
 	if err := os.MkdirAll(filepath.Join(pkg, "bin"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -2774,4 +2786,53 @@ func hasImportProgressStage(events []ImportProgressEvent, stage string) bool {
 		}
 	}
 	return false
+}
+
+// The lock key must not depend on how the caller spells the data dir or on
+// whether it exists yet. importLockKey resolves the longest existing ancestor
+// and appends the missing tail, so `link/data` with `link -> real` and `data`
+// not yet created keys the same as the already-created `real/data` -- keying
+// the unresolved string instead would let two Importer values for the same
+// logical dir take different locks and run concurrently, exactly the staging
+// and commit corruption the lock exists to prevent. macOS /tmp symlinks to
+// /private/tmp, so the pair below really does resolve differently.
+func TestImportLockKeyStableAcrossDataDirCreation(t *testing.T) {
+	base := t.TempDir()
+	unresolved := filepath.Join(base, "link", "data")
+	if err := os.Symlink(base, filepath.Join(base, "link")); err != nil {
+		if errors.Is(err, syscall.EPERM) {
+			t.Skip("symlink creation not permitted")
+		}
+		t.Fatal(err)
+	}
+	resolvedLink, err := filepath.EvalSymlinks(filepath.Join(base, "link"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Lock A is taken while the data dir does not exist yet: its key resolves
+	// through the link and appends the missing tail. Lock B is taken after the
+	// dir exists, spelled through the resolved parent. Both must land on the
+	// same lock.
+	acquired := make(chan chan struct{}, 1)
+	go func() {
+		lock := importLock(unresolved)
+		lock <- struct{}{}
+		acquired <- lock
+	}()
+	lockA := <-acquired
+
+	created := filepath.Join(resolvedLink, "data")
+	if err := os.MkdirAll(created, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	lockB := importLock(created)
+	select {
+	case lockB <- struct{}{}:
+		close(lockA)
+		t.Fatal("lock B was free while lock A was still held: the two keyed differently")
+	default:
+	}
+	<-lockB // not held; receive to leave no token behind
+	close(lockA)
 }

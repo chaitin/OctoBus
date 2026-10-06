@@ -51,13 +51,7 @@ var (
 // `/abs/data` and `/tmp/data` vs `/private/tmp/data` cannot end up with
 // separate locks for the same dir.
 func importLock(dataDir string) chan struct{} {
-	key, err := filepath.Abs(dataDir)
-	if err != nil {
-		key = dataDir
-	}
-	if resolved, err := filepath.EvalSymlinks(key); err == nil {
-		key = resolved
-	}
+	key := importLockKey(dataDir)
 	importLocksMu.Lock()
 	defer importLocksMu.Unlock()
 	lock, ok := importLocks[key]
@@ -66,6 +60,47 @@ func importLock(dataDir string) chan struct{} {
 		importLocks[key] = lock
 	}
 	return lock
+}
+
+// importLockKey resolves dataDir to the key locks are taken under.
+//
+// The data dir may not exist yet -- the first import creates it. EvalSymlinks
+// fails on an absent path, and keying on the unresolved string in that case
+// would hand different Importer values different locks depending on call
+// order, so instead the longest existing ancestor is resolved and the
+// remaining tail is appended: `.../link/data` with `link -> real` and `data`
+// not yet created resolves through `link` exactly as it will once `data`
+// exists. Resolution never creates anything, so a read-only sweep on a
+// misspelled data dir stays read-only.
+//
+// The unresolved absolute path is the fallback when even no ancestor can be
+// resolved. That is effectively unreachable for a real data dir, and it errs
+// toward refusing to share a lock rather than sharing one wrongly.
+func importLockKey(dataDir string) string {
+	abs, err := filepath.Abs(dataDir)
+	if err != nil {
+		return dataDir
+	}
+	abs = filepath.Clean(abs)
+	existing := abs
+	for {
+		if resolved, err := filepath.EvalSymlinks(existing); err == nil {
+			tail, err := filepath.Rel(existing, abs)
+			if err != nil {
+				break
+			}
+			if tail == "." {
+				return resolved
+			}
+			return filepath.Join(resolved, tail)
+		}
+		parent := filepath.Dir(existing)
+		if parent == existing {
+			break
+		}
+		existing = parent
+	}
+	return abs
 }
 
 // acquireImportLock returns the unlock function once the import may proceed.
@@ -258,12 +293,12 @@ func (i *Importer) Import(ctx context.Context, opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	runtimeDir := ""
+	var runtimeTree preparedRuntime
 	if !opts.DryRun {
 		if err := reportImportProgress(opts, ImportProgressEvent{Type: "status", Stage: "prepare_runtime", Message: "Installing runtime dependencies", ServiceID: opts.ServiceID}); err != nil {
 			return Result{}, err
 		}
-		if runtimeDir, err = prepareServiceRuntime(ctx, prepared, staging, opts); err != nil {
+		if runtimeTree, err = prepareServiceRuntime(ctx, i.DataDir, prepared, staging, opts); err != nil {
 			return Result{}, err
 		}
 	}
@@ -277,7 +312,7 @@ func (i *Importer) Import(ctx context.Context, opts Options) (Result, error) {
 	commitDir := ""
 	finalPackageDir := prepared.PackageDir
 	if !opts.DryRun {
-		if commitDir, finalPackageDir, err = stageServiceCommit(prepared, runtimeDir, descriptor, staging); err != nil {
+		if commitDir, finalPackageDir, err = stageServiceCommit(prepared, runtimeTree, descriptor, staging); err != nil {
 			return Result{}, err
 		}
 	}
@@ -347,26 +382,40 @@ func validatePreparedService(prepared preparedSource) (preparedService, error) {
 	}, nil
 }
 
-func prepareServiceRuntime(ctx context.Context, prepared preparedSource, staging string, opts Options) (string, error) {
-	runtimeDir := filepath.Join(staging, "runtime")
-	if err := copyDir(prepared.PackageDir, runtimeDir); err != nil {
-		return "", err
-	}
-	if prepared.RuntimeNodeModulesDir != "" {
-		if err := copyDir(prepared.RuntimeNodeModulesDir, filepath.Join(runtimeDir, "node_modules")); err != nil {
-			return "", err
+// prepareServiceRuntime materializes the runtime tree for one import run.
+//
+// When the tree is shareable it is published to the content-addressed store
+// and every service directory links to it; otherwise it stays in staging and
+// is copied per service as before. See shared_tree.go.
+func prepareServiceRuntime(ctx context.Context, dataDir string, prepared preparedSource, staging string, opts Options) (preparedRuntime, error) {
+	if !sharingEligible(prepared, opts) {
+		buildDir := filepath.Join(staging, "runtime")
+		if err := buildRuntimeTree(ctx, prepared, buildDir, opts); err != nil {
+			return preparedRuntime{}, err
 		}
+		return preparedRuntime{StagingDir: buildDir}, nil
 	}
-	if err := replaceLocalExampleSDK(runtimeDir); err != nil {
-		return "", err
+	storeDir := sharedTreesDir(dataDir)
+	key, err := runtimeTreeKey(prepared, opts)
+	if err != nil {
+		return preparedRuntime{}, err
 	}
-	if err := prepareRuntime(ctx, runtimeDir, opts.Offline, opts.Reinstall); err != nil {
-		return "", err
+	// A tree already published under this key is byte-identical to the one we
+	// would build, so skip the build entirely. This is where a re-import saves
+	// its time: no copy and no npm install beyond the source preparation the
+	// caller has already done.
+	if existing, ok := existingSharedTree(storeDir, key); ok {
+		return preparedRuntime{SharedDir: existing}, nil
 	}
-	if err := replaceLocalExampleSDK(runtimeDir); err != nil {
-		return "", err
+	buildDir := filepath.Join(staging, "runtime-shared")
+	if err := buildRuntimeTree(ctx, prepared, buildDir, opts); err != nil {
+		return preparedRuntime{}, err
 	}
-	return runtimeDir, nil
+	shared, err := publishSharedTree(buildDir, storeDir, key)
+	if err != nil {
+		return preparedRuntime{}, err
+	}
+	return preparedRuntime{SharedDir: shared}, nil
 }
 
 func compileServiceDescriptor(staging string, service preparedService) (compiledServiceDescriptor, error) {
@@ -387,7 +436,14 @@ func compileServiceDescriptorAt(descriptorPath string, service preparedService) 
 	return compiledServiceDescriptor{Path: descriptorPath, Result: compiled}, nil
 }
 
-func stageServiceCommit(prepared preparedSource, runtimeDir string, descriptor compiledServiceDescriptor, staging string) (string, string, error) {
+// stageServiceCommit assembles one service directory in staging, ready to be
+// renamed into place.
+//
+// The package tree and the runtime tree are byte-identical across every
+// service in a recursive import, so they are linked rather than copied when a
+// shared tree is available. descriptor.protoset is the only genuinely
+// per-service content, and it is still copied.
+func stageServiceCommit(prepared preparedSource, runtimeTree preparedRuntime, descriptor compiledServiceDescriptor, staging string) (string, string, error) {
 	commitDir := filepath.Join(staging, "service")
 	finalPackageDir := filepath.Join(commitDir, "package")
 	finalRuntimeDir := filepath.Join(commitDir, "runtime")
@@ -402,11 +458,38 @@ func stageServiceCommit(prepared preparedSource, runtimeDir string, descriptor c
 	if err := copyFile(prepared.ArtifactPath, finalArtifact, 0o644); err != nil {
 		return "", "", err
 	}
-	if err := copyDir(prepared.PackageDir, finalPackageDir); err != nil {
-		return "", "", err
-	}
-	if err := copyDir(runtimeDir, finalRuntimeDir); err != nil {
-		return "", "", err
+	if runtimeTree.SharedDir != "" {
+		// One tree serves as both the package tree and the runtime tree: the
+		// runtime is the package plus installed dependencies, so a second
+		// shared tree would duplicate it again.
+		//
+		// Both entries point at the same tree. When the platform cannot
+		// symlink, the first entry falls back to a full copy and the second
+		// reuses that copy rather than paying for another one.
+		if err := linkSharedTree(finalPackageDir, runtimeTree.SharedDir); err != nil {
+			return "", "", err
+		}
+		if pathIsSymlink(finalRuntimeDir) || pathIsSymlink(finalPackageDir) {
+			if err := linkSharedTree(finalRuntimeDir, runtimeTree.SharedDir); err != nil {
+				return "", "", err
+			}
+		} else {
+			// The first entry could only be a real directory through the
+			// fallback copy, so reuse it instead of copying the tree again.
+			if err := os.Rename(finalPackageDir, finalRuntimeDir); err != nil {
+				return "", "", err
+			}
+			if err := copyDir(runtimeTree.SharedDir, finalPackageDir); err != nil {
+				return "", "", err
+			}
+		}
+	} else {
+		if err := copyDir(prepared.PackageDir, finalPackageDir); err != nil {
+			return "", "", err
+		}
+		if err := copyDir(runtimeTree.StagingDir, finalRuntimeDir); err != nil {
+			return "", "", err
+		}
 	}
 	if err := copyFile(descriptor.Path, finalDescriptor, 0o644); err != nil {
 		return "", "", err
@@ -524,12 +607,12 @@ func (i *Importer) ImportRecursive(ctx context.Context, opts Options) (Recursive
 		return RecursiveResult{}, err
 	}
 	basePackageSource := recursiveBasePackageSource(opts.Source, baseSource)
-	runtimeDir := ""
+	var runtimeTree preparedRuntime
 	if !opts.DryRun {
 		if err := reportImportProgress(opts, ImportProgressEvent{Type: "status", Stage: "prepare_runtime", Message: "Installing runtime dependencies"}); err != nil {
 			return RecursiveResult{}, err
 		}
-		if runtimeDir, err = prepareServiceRuntime(ctx, prepared, staging, opts); err != nil {
+		if runtimeTree, err = prepareServiceRuntime(ctx, i.DataDir, prepared, staging, opts); err != nil {
 			return RecursiveResult{}, err
 		}
 	}
@@ -596,7 +679,7 @@ func (i *Importer) ImportRecursive(ctx context.Context, opts Options) (Recursive
 		commitDir := ""
 		finalPackageDir := candidate.Prepared.PackageDir
 		if !opts.DryRun {
-			stagedCommitDir, stagedPackageDir, err := stageServiceCommit(candidate.Prepared, runtimeDir, candidate.Descriptor, staging)
+			stagedCommitDir, stagedPackageDir, err := stageServiceCommit(candidate.Prepared, runtimeTree, candidate.Descriptor, staging)
 			if err != nil {
 				return result, fmt.Errorf("stage service %s: %w", candidate.ServiceID, err)
 			}
@@ -1512,16 +1595,25 @@ func prepareRuntime(ctx context.Context, runtimeDir string, offline, reinstall b
 			return err
 		}
 	}
-	if _, err := os.Stat(filepath.Join(runtimeDir, "package.json")); err != nil {
-		return nil
-	}
-	if !reinstall && runtimeDependenciesInstalled(runtimeDir) {
-		return nil
-	}
-	if !packageLocalFileDependenciesAvailable(runtimeDir) {
+	if !willRuntimeInstall(runtimeDir, reinstall) {
 		return nil
 	}
 	return npmInstall(ctx, runtimeDir, offline, true)
+}
+
+// willRuntimeInstall reports whether prepareRuntime would run npmInstall for
+// the tree at runtimeDir, without running anything. prepareRuntime itself
+// branches on exactly this predicate, and the shared-tree gate (needsRuntimeInstall)
+// asks the same question about the tree an import is about to build, so the
+// two cannot drift apart: they call one function.
+func willRuntimeInstall(runtimeDir string, reinstall bool) bool {
+	if _, err := os.Stat(filepath.Join(runtimeDir, "package.json")); err != nil {
+		return false
+	}
+	if !reinstall && runtimeDependenciesInstalled(runtimeDir) {
+		return false
+	}
+	return packageLocalFileDependenciesAvailable(runtimeDir)
 }
 
 func runtimeDependenciesInstalled(runtimeDir string) bool {
@@ -1547,7 +1639,8 @@ func packageLocalFileDependenciesAvailable(runtimeDir string) bool {
 	if err != nil {
 		return false
 	}
-	for _, spec := range deps {
+	optional := optionalDependencyNames(runtimeDir)
+	for name, spec := range deps {
 		if !strings.HasPrefix(spec, "file:") {
 			continue
 		}
@@ -1556,10 +1649,40 @@ func packageLocalFileDependenciesAvailable(runtimeDir string) bool {
 			return false
 		}
 		if _, err := os.Stat(filepath.Join(runtimeDir, rel)); err != nil {
+			// npm skips an unresolvable optionalDependencies entry instead of
+			// failing (verified: a missing optional file: target installs
+			// cleanly), so a missing optional target must not veto the
+			// install the way a missing regular one does.
+			if optional[name] {
+				continue
+			}
 			return false
 		}
 	}
 	return true
+}
+
+// optionalDependencyNames reports the names declared under
+// optionalDependencies. It is a separate read from packageDependencies
+// because that function deliberately folds optionals into the must-be-carried
+// set, and callers that need the optional distinction cannot recover it from
+// the folded map.
+func optionalDependencyNames(packageDir string) map[string]bool {
+	b, err := os.ReadFile(filepath.Join(packageDir, "package.json"))
+	if err != nil {
+		return nil
+	}
+	var pkg struct {
+		OptionalDependencies map[string]string `json:"optionalDependencies"`
+	}
+	if err := json.Unmarshal(b, &pkg); err != nil {
+		return nil
+	}
+	names := make(map[string]bool, len(pkg.OptionalDependencies))
+	for name := range pkg.OptionalDependencies {
+		names[name] = true
+	}
+	return names
 }
 
 func packageDependencies(packageDir string) (map[string]string, error) {
@@ -1568,12 +1691,58 @@ func packageDependencies(packageDir string) (map[string]string, error) {
 		return nil, err
 	}
 	var pkg struct {
-		Dependencies map[string]string `json:"dependencies"`
+		Dependencies         map[string]string `json:"dependencies"`
+		OptionalDependencies map[string]string `json:"optionalDependencies"`
+		PeerDependencies     map[string]string `json:"peerDependencies"`
+		PeerDependenciesMeta map[string]struct {
+			Optional bool `json:"optional"`
+		} `json:"peerDependenciesMeta"`
+		OptionalDependenciesMeta map[string]struct {
+			Optional bool `json:"optional"`
+		} `json:"optionalDependenciesMeta"`
 	}
 	if err := json.Unmarshal(b, &pkg); err != nil {
 		return nil, err
 	}
-	return pkg.Dependencies, nil
+	// npm install --omit=dev resolves dependencies, optionalDependencies, and
+	// peerDependencies alike, so every field the install can pull from the
+	// registry must be visible here. Missing one would let a package whose
+	// only declarations are optionals look install-free: the shared-tree gate
+	// would publish a registry-resolved tree as a pure function of the
+	// package, and later imports would silently reuse whatever the first
+	// import's registry served. OptionalDependencies override dependencies on
+	// the same name, mirroring npm.
+	//
+	// The returned set answers "what would npm try to resolve", not "what is
+	// optional": optionalDependencies entries stay in despite their name,
+	// because an optional that npm CAN resolve lands in the tree with content
+	// from the registry. The one exclusion is a peer marked optional through
+	// peerDependenciesMeta: npm skips it silently when unresolvable (verified
+	// on npm 11 -- even a resolvable optional peer is not auto-installed), so
+	// its absence never makes the tree depend on the registry. Whatever the
+	// import ends up carrying is captured by the content fingerprint instead,
+	// so the entry stays out of the must-be-carried set rather than
+	// predicting an install that never happens.
+	optionalPeers := make(map[string]bool, len(pkg.PeerDependenciesMeta))
+	for name, meta := range pkg.PeerDependenciesMeta {
+		if meta.Optional {
+			optionalPeers[name] = true
+		}
+	}
+	deps := make(map[string]string, len(pkg.Dependencies)+len(pkg.OptionalDependencies)+len(pkg.PeerDependencies))
+	for name, spec := range pkg.Dependencies {
+		deps[name] = spec
+	}
+	for name, spec := range pkg.PeerDependencies {
+		if optionalPeers[name] {
+			continue
+		}
+		deps[name] = spec
+	}
+	for name, spec := range pkg.OptionalDependencies {
+		deps[name] = spec
+	}
+	return deps, nil
 }
 
 func npmInstall(ctx context.Context, dir string, offline, omitDev bool) error {
