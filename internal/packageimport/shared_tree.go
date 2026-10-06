@@ -280,6 +280,11 @@ func sharingEligible(prepared preparedSource, opts Options) bool {
 // content key cannot capture. TestNeedsRuntimeInstallMatchesPrepareRuntime
 // pins this prediction against willRuntimeInstall's verdict on an actually
 // assembled tree, so the two cannot drift.
+//
+// "Carried" means "survives copyDir", not "exists on disk": copyDir drops
+// non-regular entries, so a dependency carried only as a symlink is missing
+// from the assembled tree and prepareRuntime installs it from the registry --
+// a resolution the content key cannot capture.
 func needsRuntimeInstall(prepared preparedSource) bool {
 	deps, err := packageDependencies(prepared.PackageDir)
 	if err != nil {
@@ -295,11 +300,12 @@ func needsRuntimeInstall(prepared preparedSource) bool {
 	// below.
 	for name := range deps {
 		rel := filepath.FromSlash(name)
-		if _, err := os.Stat(filepath.Join(prepared.PackageDir, "node_modules", rel)); err == nil {
+		if carriedByCopyDir(filepath.Join(prepared.PackageDir, "node_modules", rel)) {
 			continue
 		}
 		if prepared.RuntimeNodeModulesDir != "" {
-			if _, err := os.Stat(filepath.Join(prepared.RuntimeNodeModulesDir, rel)); err == nil {
+			// RuntimeNodeModulesDir is itself a node_modules directory.
+			if carriedByCopyDir(filepath.Join(prepared.RuntimeNodeModulesDir, rel)) {
 				continue
 			}
 		}
@@ -308,6 +314,16 @@ func needsRuntimeInstall(prepared preparedSource) bool {
 		return true
 	}
 	return false
+}
+
+// carriedByCopyDir reports whether copyDir would reproduce the entry at path:
+// directories and regular files yes, a symlink no, however well it stats.
+func carriedByCopyDir(path string) bool {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return false
+	}
+	return info.IsDir() || info.Mode().IsRegular()
 }
 
 // existingSharedTree reports whether a complete tree is already published

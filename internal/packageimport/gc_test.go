@@ -260,6 +260,63 @@ func TestSweepOrphanedTreesMissingStore(t *testing.T) {
 	}
 }
 
+// The data dir has two spellings and a daemon uses whichever one it was started
+// with: a service directory's links record the spelling of the daemon that
+// imported it, while the sweep compares against the spelling of the daemon
+// running now. macOS makes the pair real -- /tmp symlinks to /private/tmp, and
+// the default data dir is the relative ".octobus", which filepath.Abs resolves
+// against a cwd that may carry either spelling.
+func TestSweepOrphanedTreesKeepsTreeSpelledThroughASymlinkedDataDir(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		// importedThroughLink picks which spelling the import and the service
+		// directory's links use; the sweep always uses the other one.
+		importedThroughLink bool
+	}{
+		{name: "imported through the link, swept through the target", importedThroughLink: true},
+		{name: "imported through the target, swept through the link", importedThroughLink: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			base := t.TempDir()
+			real := filepath.Join(base, "real")
+			mustMkdirAll(t, real)
+			link := filepath.Join(base, "link")
+			if err := os.Symlink(real, link); err != nil {
+				t.Skip("symlink creation not permitted:", err)
+			}
+			linked, sweep := real, link
+			if tc.importedThroughLink {
+				linked, sweep = link, real
+			}
+
+			tree := makeSharedTree(t, linked, "somekey")
+			serviceDir := filepath.Join(servicesDirFor(t, linked), "echo")
+			mustMkdirAll(t, serviceDir)
+			for _, entry := range []string{"package", "runtime"} {
+				if err := os.Symlink(tree, filepath.Join(serviceDir, entry)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			// Old enough that only the reference walk can save it.
+			old := time.Now().Add(-48 * time.Hour)
+			if err := os.Chtimes(tree, old, old); err != nil {
+				t.Fatal(err)
+			}
+
+			removed, err := (&Importer{DataDir: sweep}).SweepOrphanedTrees(context.Background(), time.Now(), OrphanTreeMinAge)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(removed) != 0 {
+				t.Fatalf("removed=%v, want none: the live service still points at this tree", removed)
+			}
+			if _, err := os.Stat(filepath.Join(serviceDir, "runtime", "service.json")); err != nil {
+				t.Fatalf("live service lost its tree: %v", err)
+			}
+		})
+	}
+}
+
 // End to end: importing a package, then re-importing it after its content
 // changes, leaves the superseded tree collectable.
 func TestSweepOrphanedTreesAfterReimportWithChangedContent(t *testing.T) {

@@ -40,7 +40,8 @@ const OrphanTreeMinAge = time.Hour
 //
 // Liveness is read from the links themselves rather than from the store,
 // because the key is a composite fingerprint that cannot be recomputed from
-// anything SQLite holds.
+// anything SQLite holds. Links and the store are compared under both of the
+// data dir's spellings, not as strings: see treeReferenced.
 //
 // A tree is removed only when it is both unreferenced and older than
 // OrphanTreeMinAge. Both conditions matter: see the const for why the age floor
@@ -77,7 +78,7 @@ func (i *Importer) SweepOrphanedTrees(ctx context.Context, now time.Time, minAge
 			continue
 		}
 		path := filepath.Join(storeDir, entry.Name())
-		if referenced[path] {
+		if treeReferenced(referenced, path) {
 			continue
 		}
 		info, err := entry.Info()
@@ -93,6 +94,22 @@ func (i *Importer) SweepOrphanedTrees(ctx context.Context, now time.Time, minAge
 		removed = append(removed, path)
 	}
 	return removed, nil
+}
+
+// treeReferenced reports whether the tree at path is referenced, under its own
+// spelling or its symlink-resolved one.
+//
+// A link target carries the spelling of the daemon that imported it; storeDir
+// carries the spelling of the daemon running now. Matching them as strings left
+// live trees looking unreferenced, and a collected tree stays invisible until
+// the supervisor stats the entrypoint -- rename does not fail on a dangling
+// link.
+func treeReferenced(referenced map[string]bool, path string) bool {
+	if referenced[path] {
+		return true
+	}
+	resolved, err := filepath.EvalSymlinks(path)
+	return err == nil && referenced[resolved]
 }
 
 // referencedSharedTrees returns the set of shared tree paths that service
@@ -147,7 +164,13 @@ func referencedSharedTrees(dataDir string) (map[string]bool, error) {
 				// or a service with no such entry. Neither references a tree.
 				continue
 			}
-			referenced[filepath.Clean(target)] = true
+			cleaned := filepath.Clean(target)
+			referenced[cleaned] = true
+			// Record the resolved form too: the sweep may spell the store
+			// differently than the daemon that wrote this link did.
+			if resolved, err := filepath.EvalSymlinks(cleaned); err == nil {
+				referenced[resolved] = true
+			}
 		}
 		return nil
 	})

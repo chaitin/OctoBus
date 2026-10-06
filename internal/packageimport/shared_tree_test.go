@@ -499,6 +499,10 @@ func TestNeedsRuntimeInstallMatchesPrepareRuntime(t *testing.T) {
 		// node_modules; carriedExternal in RuntimeNodeModulesDir's.
 		carried         []string
 		carriedExternal []string
+		// carriedLinked and carriedExternalLinked carry the dependency as a
+		// symlink: os.Stat follows it, copyDir drops it.
+		carriedLinked         []string
+		carriedExternalLinked []string
 	}{
 		{name: "dependencies carried in package", pkg: `{"name":"a","dependencies":{"left-pad":"^1"}}`, carried: []string{"left-pad"}},
 		{name: "dependencies carried externally", pkg: `{"name":"a","dependencies":{"left-pad":"^1"}}`, carriedExternal: []string{"left-pad"}},
@@ -508,22 +512,47 @@ func TestNeedsRuntimeInstallMatchesPrepareRuntime(t *testing.T) {
 		{name: "peerDependencies missing", pkg: `{"name":"a","peerDependencies":{"left-pad":"^1"}}`},
 		{name: "optional overrides dependencies on the same name", pkg: `{"name":"a","dependencies":{"left-pad":"^1","other":"^1"},"optionalDependencies":{"left-pad":"^2"}}`, carried: []string{"other"}},
 		{name: "mixed fields, one missing", pkg: `{"name":"a","dependencies":{"a-dep":"^1"},"optionalDependencies":{"opt-dep":"^1"}}`, carried: []string{"a-dep"}},
+		// A symlinked entry is not carried: copyDir drops it, so the assembled
+		// tree lacks it and the install runs. Judging by os.Stat alone would
+		// call the package shareable and freeze the registry resolution.
+		{name: "dependency carried as a symlink is not carried", pkg: `{"name":"a","dependencies":{"left-pad":"^1"}}`, carriedLinked: []string{"left-pad"}},
+		{name: "external dependency carried as a symlink is not carried", pkg: `{"name":"a","dependencies":{"left-pad":"^1"}}`, carriedExternalLinked: []string{"left-pad"}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			pkgDir := t.TempDir()
 			writeTestFile(t, filepath.Join(pkgDir, "package.json"), tc.pkg, 0o644)
-			writeDeps := func(root string, names []string) {
+			writeDeps := func(nodeModules string, names []string) {
 				for _, name := range names {
-					dir := filepath.Join(root, "node_modules", filepath.FromSlash(name))
+					dir := filepath.Join(nodeModules, filepath.FromSlash(name))
 					mustMkdirAll(t, dir)
 					writeTestFile(t, filepath.Join(dir, "index.js"), "module.exports=1", 0o644)
 				}
 			}
-			writeDeps(pkgDir, tc.carried)
+			// writeLinkedDeps carries a dependency the way npm link and pnpm do:
+			// the entry exists, but only as a link.
+			writeLinkedDeps := func(nodeModules string, names []string) {
+				for _, name := range names {
+					target := filepath.Join(t.TempDir(), "dep")
+					mustMkdirAll(t, target)
+					writeTestFile(t, filepath.Join(target, "index.js"), "module.exports=1", 0o644)
+					link := filepath.Join(nodeModules, filepath.FromSlash(name))
+					mustMkdirAll(t, filepath.Dir(link))
+					if err := os.Symlink(target, link); err != nil {
+						t.Skipf("symlink creation not permitted: %v", err)
+					}
+				}
+			}
+			writeDeps(filepath.Join(pkgDir, "node_modules"), tc.carried)
+			writeLinkedDeps(filepath.Join(pkgDir, "node_modules"), tc.carriedLinked)
 
+			// RuntimeNodeModulesDir is itself a node_modules directory, so its
+			// entries go straight in. Writing them a level deeper carries
+			// nothing where the code looks, and both predicates would then
+			// agree on "install" for the wrong reason.
 			external := t.TempDir()
 			writeDeps(external, tc.carriedExternal)
+			writeLinkedDeps(external, tc.carriedExternalLinked)
 
 			prepared := preparedSource{PackageDir: pkgDir, RuntimeNodeModulesDir: external}
 			predicted := needsRuntimeInstall(prepared)
