@@ -60,7 +60,7 @@ OctoBus npm 发布由同一个 workflow 中的 `publish-octobus` job 完成：
 - tag 中版本必须等于 `npm/octobus/package.json.version`。
 - 发布前用 `scripts/build-octobus-npm-packages.sh --dry-run` 交叉构建所有平台 binary，
   该脚本复用 `scripts/build-octobus.sh` 的 version/commit/date 注入和静态构建参数。
-- npm token 只通过 GitHub secret `NPM_TOKEN` 注入为 `NODE_AUTH_TOKEN`。
+- 通过 npm trusted publishing（GitHub OIDC）认证，不使用 npm token secret。
 - 启用 npm provenance 所需的 `id-token: write` 权限。
 - prerelease 使用 `npm publish --access public --provenance --tag next`。
 - stable release 使用 `npm publish --access public --provenance`。
@@ -80,7 +80,7 @@ SDK 通过同一个 workflow 中的 `publish-sdk` job 发布：
 - 依赖 `validate` job 通过。
 - tag 中版本必须等于 `sdk/package.json.version`。
 - 发布前重新运行 SDK `npm ci`、`npm test`、`npm run build`、`npm pack --dry-run`。
-- npm token 只通过 GitHub secret `NPM_TOKEN` 注入为 `NODE_AUTH_TOKEN`。
+- 通过 npm trusted publishing（GitHub OIDC）认证，不使用 npm token secret。
 - 启用 npm provenance 所需的 `id-token: write` 权限。
 - prerelease 使用 `npm publish --access public --provenance --tag next`。
 - stable release 使用 `npm publish --access public --provenance`。

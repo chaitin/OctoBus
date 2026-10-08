@@ -274,7 +274,7 @@ The package is published to npmjs under the existing `@chaitin-ai` scope.
 
 ## Publish
 
-SDK releases are published to npmjs by the GitHub Actions workflow when a GitHub Release is published. The Release tag must use the `sdk-v<version>` format, and `<version>` must match `sdk/package.json.version` exactly. Repository administrators must configure the GitHub secret `NPM_TOKEN` with permission to publish `@chaitin-ai/octobus-sdk`.
+SDK releases are published to npmjs by the GitHub Actions workflow when an `sdk-v<version>` tag is pushed. `<version>` must match `sdk/package.json.version` exactly. Publishing authenticates through npm trusted publishing over GitHub OIDC, so no npm token secret is configured.
 
 ```bash
 npm version 0.1.1 --prefix sdk --no-git-tag-version
@@ -284,4 +284,4 @@ git tag sdk-v0.1.1
 git push origin main sdk-v0.1.1
 ```
 
-After pushing the tag, create and publish the GitHub Release for `sdk-v0.1.1`. Stable versions publish with npm's default `latest` dist-tag. Prerelease versions publish with the `next` dist-tag. Tags that do not match `sdk-v<version>` or do not match `sdk/package.json.version` fail before publishing.
+Pushing the tag is the release trigger; no GitHub Release is needed. Stable versions publish with npm's default `latest` dist-tag. Prerelease versions publish with the `next` dist-tag. Tags that do not match `sdk-v<version>` or do not match `sdk/package.json.version` fail before publishing.
