@@ -562,9 +562,10 @@ go test ./tests/e2e -count=1
 
 GitHub Actions 中的默认 CI 是轻量验证：检查公开痕迹、Go 格式和 vet，运行
 `go test ./cmd/... ./internal/...`，构建 binary，并在 `sdk` 目录执行 npm test/build/pack
-dry-run。完整 `task test` 和 e2e 仍是本地门禁。SDK 发布由 GitHub Release published
-事件触发，release tag 必须为 `sdk-v<version>` 且匹配 `sdk/package.json.version`，并需要
-仓库 secret `NPM_TOKEN`。
+dry-run。完整 `task test` 和 e2e 仍是本地门禁。OctoBus binary 包发布仅由 `v<version>`
+tag push 构建触发，tag 版本必须匹配 `npm/octobus/package.json.version`；SDK 发布仅由
+`sdk-v<version>` tag push 构建触发，tag 版本必须匹配 `sdk/package.json.version`。两条
+发布路径都通过 npm trusted publishing（GitHub OIDC）认证，无需仓库 secret。
 
 ##  社区与支持
 欢迎加入技术社区，与更多开发者交流 OctoBus 的使用、部署和开发经验。

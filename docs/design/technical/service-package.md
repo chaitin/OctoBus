@@ -451,7 +451,7 @@ local directory、客户端上传目录和 HTTPS Git source 若声明了 `file:`
 npm install @chaitin-ai/octobus-sdk
 ```
 
-SDK 发布由 `sdk-v<version>` tag push 构建触发，tag 版本必须和 `sdk/package.json.version` 完全一致。发布 job 使用 GitHub secret `NPM_TOKEN` 认证到 npmjs。
+SDK 发布由 `sdk-v<version>` tag push 构建触发，tag 版本必须和 `sdk/package.json.version` 完全一致。发布 job 通过 npm trusted publishing（GitHub OIDC）认证到 npmjs，不使用 npm token secret。
 
 SDK 发布要求：
 
