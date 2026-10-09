@@ -8,6 +8,9 @@ set -euo pipefail
 
 export OCTOBUS_DATA_DIR="/tmp/.octobus"
 export OCTOBUS_ADDR="127.0.0.1:19001"
+# --dev seeds this fixed admin token on a loopback address; the CLI calls below
+# authenticate with it. Never use --dev outside a local example.
+export OCTOBUS_ADMIN_TOKEN="octobus-dev-admin-token"
 
 SERVICE_DIR="examples/calculator-js"
 SERVICE_ID="calculator"
@@ -22,7 +25,14 @@ task build
 task example:calculator:dev-deps
 
 # start daemon, listen on OCTOBUS_ADDR
-./bin/octobus serve & # put into background
+#
+# Start from a clean data dir and without an inherited bootstrap token: --dev
+# only seeds its fixed token into a data dir that has no admin token yet, and
+# OCTOBUS_BOOTSTRAP_ADMIN_TOKEN takes precedence over --dev entirely, so either
+# one would leave the CLI below holding a token the daemon never provisioned.
+rm -rf "${OCTOBUS_DATA_DIR}"
+unset OCTOBUS_BOOTSTRAP_ADMIN_TOKEN
+./bin/octobus serve --dev & # put into background
 PID=$!
 # auto kill when script ends, we also clear data so it can run again
 cleanup() {
@@ -32,8 +42,11 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# let the server start
-sleep 2
+# wait until the daemon answers admin requests, rather than guessing with a
+# fixed sleep: under load the daemon can take longer than any constant to bind,
+# and the CLI calls below then fail with "daemon is not running".
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/wait-for-daemon.sh"
+wait_for_daemon "${PID}"
 set -x
 
 # 1. import the service
