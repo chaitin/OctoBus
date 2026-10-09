@@ -4,8 +4,6 @@ package Panabit_TANG_R1;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Panabit_TANG_R1";
-
 service Panabit_TANG_R1 {
   rpc Login(LoginRequest) returns (LoginResponse) {}
   rpc ListIPTable(ListIPTableRequest) returns (ListIPTableResponse) {}

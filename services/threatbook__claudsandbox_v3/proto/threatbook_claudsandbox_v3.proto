@@ -4,8 +4,6 @@ package ThreatBook_ClaudSandbox_V3;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/ThreatBook_ClaudSandbox_V3";
-
 service ThreatBook_ClaudSandbox_V3 {
   rpc UploadFile(UploadFileRequest) returns (UploadFileResponse) {}
   rpc GetFileReport(GetFileReportRequest) returns (FileReportResponse) {}

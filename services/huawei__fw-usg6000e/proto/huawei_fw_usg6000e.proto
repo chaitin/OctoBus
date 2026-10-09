@@ -4,8 +4,6 @@ package HUAWEI_FW_USG6000E;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/HUAWEI_FW_USG6000E";
-
 service HUAWEI_FW_USG6000E {
   rpc UpdateAddressGroup(UpdateAddressGroupRequest) returns (UpdateAddressGroupResponse) {}
 }

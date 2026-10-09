@@ -5,8 +5,6 @@ package MISP;
 import "google/protobuf/struct.proto";
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/MISP";
-
 service MISP {
   // 搜索威胁事件
   rpc SearchEvents(SearchEventsRequest) returns (SearchEventsResponse) {}

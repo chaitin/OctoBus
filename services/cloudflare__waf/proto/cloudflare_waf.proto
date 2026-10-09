@@ -5,8 +5,6 @@ package Cloudflare_WAF;
 import "google/protobuf/struct.proto";
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/Cloudflare_WAF";
-
 service Cloudflare_WAF {
   // 封禁 IP：在 IP Access Rules 中创建规则；单个服务进程内会串行化相同 scope+target+mode 并幂等复用。
   // 多进程或多副本之间不共享锁，跨实例并发创建属于 best-effort；调用方应避免并发提交同一目标。

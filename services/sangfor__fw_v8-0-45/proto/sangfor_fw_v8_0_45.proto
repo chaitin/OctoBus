@@ -5,8 +5,6 @@ package Sangfor_FW_V8045;
 import "google/protobuf/struct.proto";
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/Sangfor_FW_V8045";
-
 service Sangfor_FW_V8045 {
   rpc Login(LoginRequest) returns (LoginResponse) {}
   rpc BlockIP(BlockIPRequest) returns (BlockIPResponse) {}

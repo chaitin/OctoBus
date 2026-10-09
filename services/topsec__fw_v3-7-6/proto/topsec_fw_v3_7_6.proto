@@ -5,8 +5,6 @@ package TopSec_FW_V376;
 import "google/protobuf/struct.proto";
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/TopSec_FW_V376";
-
 service TopSec_FW_V376 {
   rpc Login(LoginRequest) returns (LoginResponse) {}
   rpc AddBlacklistIP(AddBlacklistIPRequest) returns (BlacklistMutationResponse) {}

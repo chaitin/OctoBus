@@ -4,8 +4,6 @@ package ThreatBook_CloudAPI_V3;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/ThreatBook_CloudAPI_V3";
-
 service ThreatBook_CloudAPI_V3 {
   rpc IpReputation(IpReputationRequest) returns (IpReputationResponse) {}
   rpc DomainQuery(DomainQueryRequest) returns (DomainQueryResponse) {}

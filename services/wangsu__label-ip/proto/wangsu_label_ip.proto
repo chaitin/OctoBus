@@ -4,8 +4,6 @@ package Wangsu_LabelIP;
 
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/Wangsu_LabelIP";
-
 service WangsuLabelIPService {
   rpc BatchForbidIP(BatchForbidIPRequest) returns (BatchIPOperationResponse);
   rpc BatchUnforbidIP(BatchUnforbidIPRequest) returns (BatchIPOperationResponse);

@@ -4,8 +4,6 @@ package AlienVault_OTX;
 
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/AlienVault_OTX";
-
 service AlienVault_OTX {
   rpc CheckIP(CheckIPRequest) returns (CheckIPResponse) {}
   rpc CheckDomain(CheckDomainRequest) returns (CheckDomainResponse) {}

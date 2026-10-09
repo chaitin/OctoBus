@@ -4,8 +4,6 @@ package QIANXIN_FW_SecGate3600;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/QIANXIN_FW_SecGate3600";
-
 service QIANXIN_FW_SecGate3600 {
   rpc Login(LoginRequest) returns (LoginResponse) {}
   rpc UpdateAddressGroup(UpdateAddressGroupRequest) returns (UpdateAddressGroupResponse) {}

@@ -5,8 +5,6 @@ package ThreatBook_HFISH;
 import "google/protobuf/wrappers.proto";
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/ThreatBook_HFISH";
-
 service ThreatBook_HFISH {
   // 获取攻击来源 IP 列表，支持分页
   rpc ListAttackIPs(ListAttackIPsRequest) returns (ListAttackIPsResponse) {}

@@ -5,8 +5,6 @@ package API7_Enterprise_V3_10_2;
 import "google/protobuf/struct.proto";
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/API7_Enterprise_V3_10_2";
-
 service API7_Enterprise_V3_10_2 {
   rpc ListAuditLogs(ListAuditLogsRequest) returns (ListResponse) {}
   rpc ExportAuditLogs(ExportAuditLogsRequest) returns (BlobResponse) {}

@@ -4,8 +4,6 @@ package Tencent_SSL;
 
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/Tencent_SSL";
-
 service Tencent_SSL {
   rpc ListCertificates(ListCertificatesRequest) returns (ListCertificatesResponse) {}
   rpc GetCertificate(GetCertificateRequest) returns (GetCertificateResponse) {}

@@ -4,8 +4,6 @@ package Zhihu_Open_Api;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Zhihu_Open_Api";
-
 // 知乎数据开放平台服务
 // 封装知乎开放平台(https://developer.zhihu.com/docs)的内容搜索、热榜、
 // 知识库(RAG)与用户数据 API。所有方法均使用 Bearer Access Secret 鉴权，

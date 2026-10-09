@@ -4,8 +4,6 @@ package qingteng.hids.v5;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "octobus/services/qingteng/hids/v5";
-
 service QingtengHIDSService {
   rpc ListHosts(ListHostsRequest) returns (ListHostsResponse) {}
   rpc GetHost(GetHostRequest) returns (GetHostResponse) {}

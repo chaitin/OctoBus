@@ -4,8 +4,6 @@ package Huawei_CCM;
 
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/Huawei_CCM";
-
 service Huawei_CCM {
   rpc ListCertificates(ListCertificatesRequest) returns (ListCertificatesResponse) {}
   rpc GetCertificate(GetCertificateRequest) returns (GetCertificateResponse) {}

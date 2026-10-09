@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package Chaitin_CloudWalker;
 
-option go_package = "miner/grpc-service/Chaitin_CloudWalker";
-
 service Chaitin_CloudWalker {
   rpc ListClusters(ListClustersRequest) returns (ListClustersResponse) {}
   rpc GetClusterInfo(GetClusterInfoRequest) returns (Cluster) {}

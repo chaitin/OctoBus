@@ -4,8 +4,6 @@ package Sangfor_FW_V8095;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Sangfor_FW_V8095";
-
 service Sangfor_FW_V8095 {
   rpc Login(LoginRequest) returns (ApiResponse) {}
   rpc KeepAlive(TokenRequest) returns (ApiResponse) {}

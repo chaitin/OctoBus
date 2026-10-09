@@ -4,8 +4,6 @@ package Sangfor_Atrust_OpenAPI_V3;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Sangfor_Atrust_OpenAPI_V3";
-
 service Sangfor_Atrust_OpenAPI_V3 {
   rpc ListOnlineUsers(ListOnlineUsersRequest) returns (ApiResponse) {}
   rpc KickoutUsers(KickoutUsersRequest) returns (ApiResponse) {}

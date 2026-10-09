@@ -5,8 +5,6 @@ package H3C_SECPATH;
 import "google/protobuf/struct.proto";
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/H3C_SECPATH";
-
 // H3C_SECPATH exposes H3C SecPath Comware 7 REST API as unary RPCs.
 service H3C_SECPATH {
   // GetDeviceBase retrieves basic device information.

@@ -5,8 +5,6 @@ package Filigran_OPENCTI;
 import "google/protobuf/struct.proto";
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/Filigran_OPENCTI";
-
 service Filigran_OPENCTI {
   // 搜索威胁指标（IOC），支持关键字、类型过滤与分页
   rpc SearchIndicators(SearchIndicatorsRequest) returns (SearchIndicatorsResponse) {}

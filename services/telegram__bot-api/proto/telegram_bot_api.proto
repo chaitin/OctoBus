@@ -4,8 +4,6 @@ package Telegram_Bot_API;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Telegram_Bot_API";
-
 service Telegram_Bot_API {
   rpc GetMe(GetMeRequest) returns (TelegramResponse) {}
   rpc SendMessage(SendMessageRequest) returns (TelegramResponse) {}

@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package BaiduWAF_WAFWebTemplate;
 
-option go_package = "miner/grpc-service/BaiduWAF_WAFWebTemplate";
-
 // BaiduWAF_WAFWebTemplate - 百度云 WAF 基础防护模板、白名单规则与区域封禁规则操作
 service BaiduWAF_WAFWebTemplate {
   rpc WebTemplateDetail(WebTemplateDetailRequest) returns (WebTemplateDetailResponse);

@@ -4,8 +4,6 @@ package Nsfocus_NIPS_V56R11;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Nsfocus_NIPS_V56R11";
-
 service Nsfocus_NIPS_V56R11 {
   rpc Login(LoginRequest) returns (LoginResponse) {}
   rpc BlockIP(BlockIPRequest) returns (NipsResponse) {}

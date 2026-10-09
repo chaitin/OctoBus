@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package Tencent_QQ_Chat;
 
-option go_package = "miner/grpc-service/Tencent_QQ_Chat";
-
 // Tencent_QQ_Chat wraps QQ Bot OpenAPI v2 chat messaging.
 service Tencent_QQ_Chat {
   rpc GetAccessToken(GetAccessTokenRequest) returns (GetAccessTokenResponse) {}

@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package DAS_Gateway_V3;
 
-option go_package = "miner/grpc-service/DAS_Gateway_V3";
-
 // 安恒-明御安全网关-V3 (DAS_Gateway_V3) 服务
 service DAS_Gateway_V3 {
   // 批量封禁 IP

@@ -4,8 +4,6 @@ package Tencent_CFW;
 
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/Tencent_CFW";
-
 service Tencent_CFW {
   rpc BlockIP(BlockIPRequest) returns (BlockIPResponse) {}
   rpc UnblockIP(UnblockIPRequest) returns (UnblockIPResponse) {}

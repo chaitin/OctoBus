@@ -4,8 +4,6 @@ package DPtech_FW_V4610;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/DPtech_FW_V4610";
-
 service DPtech_FW_V4610 {
   // 查询包过滤即时生效开关状态，对应 GET /func/web_main/api/system/sysinfolist/pfInEfList。
   rpc GetPacketFilterStatus(GetPacketFilterStatusRequest) returns (GetPacketFilterStatusResponse) {}

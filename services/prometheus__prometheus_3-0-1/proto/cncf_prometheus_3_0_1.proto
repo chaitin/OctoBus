@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package CNCF_Prometheus_3_0_1;
 
-option go_package = "miner/grpc-service/CNCF_Prometheus_3_0_1";
-
 service CNCF_Prometheus_3_0_1 {
   rpc InstantQuery(InstantQueryRequest) returns (QueryResponse);
   rpc RangeQuery(RangeQueryRequest) returns (QueryResponse);

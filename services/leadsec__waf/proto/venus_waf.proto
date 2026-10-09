@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package Venus_WAF;
 
-option go_package = "miner/grpc-service/Venus_WAF";
-
 service Venus_WAF {
   // Login probe. It verifies base URL, username/password and upstream availability.
   rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse) {}

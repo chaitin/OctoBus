@@ -4,8 +4,6 @@ package Imperva_WAF_Gateway_v13_6_90;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Imperva_WAF_Gateway_v13_6_90";
-
 service Imperva_WAF_Gateway_v13_6_90 {
   // 检查 Imperva WAF 管理接口在线状态。
   rpc CheckOnline(CheckOnlineRequest) returns (CheckOnlineResponse) {}

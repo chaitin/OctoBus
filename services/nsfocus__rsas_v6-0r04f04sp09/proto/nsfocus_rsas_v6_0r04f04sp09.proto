@@ -4,8 +4,6 @@ package Nsfocus_RSAS_V60R04F04SP09;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Nsfocus_RSAS_V60R04F04SP09";
-
 // NSFOCUS RSAS (Remote Security Assessment System) V6.0R04F04SP09 REST API.
 // Credentials (username/password) are provided through config/secret bindings
 // and appended to every request as query parameters, matching the device's

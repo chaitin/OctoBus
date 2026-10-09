@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package Prometheus_Alertmanager_0_27_0;
 
-option go_package = "miner/grpc-service/Prometheus_Alertmanager_0_27_0";
-
 service Prometheus_Alertmanager_0_27_0 {
   rpc ListAlerts(ListAlertsRequest) returns (ListAlertsResponse);
   rpc GetAlertGroups(GetAlertGroupsRequest) returns (GetAlertGroupsResponse);

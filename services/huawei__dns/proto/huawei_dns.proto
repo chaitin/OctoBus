@@ -4,8 +4,6 @@ package Huawei_DNS;
 
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/Huawei_DNS";
-
 service Huawei_DNS {
   rpc ListZones(ListZonesRequest) returns (ListZonesResponse) {}
   rpc ListRecordSets(ListRecordSetsRequest) returns (ListRecordSetsResponse) {}

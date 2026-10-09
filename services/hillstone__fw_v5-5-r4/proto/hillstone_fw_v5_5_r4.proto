@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package HILLSTONE_FW_V55R4;
 
-option go_package = "miner/grpc-service/HILLSTONE_FW_V55R4";
-
 service HILLSTONE_FW_V55R4 {
   // Login 调用 Hillstone 登录接口 POST /rest/doc/login，返回原始 HTTP 状态码与响应文本。
   rpc Login(LoginRequest) returns (HttpResponse) {}

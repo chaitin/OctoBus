@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package OpenStack_Yoga_2022_1;
 
-option go_package = "miner/grpc-service/OpenStack_Yoga_2022_1";
-
 service OpenStack_Yoga_2022_1 {
   rpc ListProjects(Empty) returns (ListProjectsResponse);
   rpc ListServers(ListServersRequest) returns (ListServersResponse);

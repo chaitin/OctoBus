@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package WD_K01;
 
-option go_package = "miner/grpc-service/WD_K01";
-
 service WD_K01 {
   rpc BlockIP(BlockIPRequest) returns (BlockIPResponse) {}
   rpc UnblockIP(UnblockIPRequest) returns (UnblockIPResponse) {}

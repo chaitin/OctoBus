@@ -4,8 +4,6 @@ package Tencent_TSec_V251;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Tencent_TSec_V251";
-
 service Tencent_TSec_V251 {
   rpc AddPreciseBlack(AddPreciseBlackRequest) returns (AddPreciseBlackResponse) {}
   rpc DeletePreciseBlack(DeletePreciseBlackRequest) returns (DeletePreciseBlackResponse) {}

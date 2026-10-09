@@ -5,8 +5,6 @@ package CTDSG_FW;
 import "google/protobuf/struct.proto";
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/CTDSG_FW";
-
 service CTDSG_FW {
   rpc BlockIP(BlockIPRequest) returns (DeviceHttpResponse) {}
   rpc UnblockIP(UnblockIPRequest) returns (DeviceHttpResponse) {}

@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package Kubernetes_API;
 
-option go_package = "miner/grpc-service/Kubernetes_API";
-
 service Kubernetes_API {
   rpc ListNamespaces(ListNamespacesRequest) returns (ListNamespacesResponse);
   rpc ListPods(ListPodsRequest) returns (ListPodsResponse);

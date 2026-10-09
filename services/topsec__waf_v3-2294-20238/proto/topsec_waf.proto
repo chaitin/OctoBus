@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package TopSec_WAF;
 
-option go_package = "miner/grpc-service/TopSec_WAF";
-
 service TopSec_WAF {
   rpc AddBlacklistIP(AddBlacklistIPRequest) returns (AddBlacklistIPResponse) {}
   rpc DeleteBlacklistIP(DeleteBlacklistIPRequest) returns (DeleteBlacklistIPResponse) {}

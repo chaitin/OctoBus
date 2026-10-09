@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package HUAYULAB_NGAF;
 
-option go_package = "miner/grpc-service/HUAYULAB_NGAF";
-
 service HUAYULAB_NGAF {
   // Get the current logged-in API user information.
   //

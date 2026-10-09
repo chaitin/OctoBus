@@ -4,8 +4,6 @@ package Ruijie_Behavior_Firewall_R232T0;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Ruijie_Behavior_Firewall_R232T0";
-
 service RuijieBehaviorFirewallR232T0 {
   rpc ListSafePolicies(ListRequest) returns (RuijieResponse) {}
   rpc AddSafePolicy(PayloadRequest) returns (RuijieResponse) {}

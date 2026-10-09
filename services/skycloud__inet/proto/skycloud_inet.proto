@@ -4,8 +4,6 @@ package SKYCloud_INET;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/SKYCloud_INET";
-
 service SKYCloud_INET {
   rpc BatchBlockIP(BatchOperateIPRequest) returns (BatchOperateIPResponse) {}
   rpc BatchUnblockIP(BatchOperateIPRequest) returns (BatchOperateIPResponse) {}

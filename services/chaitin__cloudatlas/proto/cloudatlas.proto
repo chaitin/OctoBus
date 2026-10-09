@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package CloudAtlas;
 
-option go_package = "miner/grpc-service/CloudAtlas";
-
 import "google/protobuf/wrappers.proto";
 import "google/protobuf/struct.proto";
 

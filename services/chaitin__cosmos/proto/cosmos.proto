@@ -5,8 +5,6 @@ package Chaitin_COSMOS;
 import "google/protobuf/wrappers.proto";
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Chaitin_COSMOS";
-
 service Chaitin_COSMOS {
   // 获取日志详情，根据日志 ID 列表查询
   rpc SearchLogInfo(SearchLogInfoRequest) returns (SearchLogInfoResponse) {}

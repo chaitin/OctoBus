@@ -4,8 +4,6 @@ package HILLSTONE_FW_V55R10;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/HILLSTONE_FW_V55R10";
-
 // HILLSTONE_FW_V55R10 exposes Hillstone Firewall V5.5R10 login and address-book HTTP APIs as unary RPCs.
 service HILLSTONE_FW_V55R10 {
   // Login calls POST {host}/rest/api/login and caches the latest successful session for the given host.

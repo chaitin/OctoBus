@@ -4,8 +4,6 @@ package Feishu_GroupRobot;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Feishu_GroupRobot";
-
 // 飞书群机器人消息推送服务
 // 用于通过飞书群机器人 webhook 向指定飞书群推送文本消息
 service Feishu_GroupRobot {

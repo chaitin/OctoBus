@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package HILLSTONE_FW_V55R6;
 
-option go_package = "miner/grpc-service/HILLSTONE_FW_V55R6";
-
 service HILLSTONE_FW_V55R6 {
   rpc Login(LoginRequest) returns (LoginResponse) {}
   rpc CreateAddrGroup(CreateAddrGroupRequest) returns (AddrGroupResponse) {}

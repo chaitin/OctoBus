@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package ThreatBook_NGTIP_V5;
 
-option go_package = "miner/grpc-service/ThreatBook_NGTIP_V5";
-
 service ThreatBook_NGTIP_V5 {
   rpc QueryIPReputation(QueryIPReputationRequest) returns (QueryIPReputationResponse) {}
   rpc QueryDNSCompromised(QueryDNSCompromisedRequest) returns (QueryDNSCompromisedResponse) {}

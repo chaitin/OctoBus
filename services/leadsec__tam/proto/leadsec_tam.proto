@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package Leadsec_TAM;
 
-option go_package = "miner/grpc-service/Leadsec_TAM";
-
 service LeadsecTAMService {
   rpc AddBlacklist(AddIPListRequest) returns (AddIPListResponse) {}
   rpc AddWhitelist(AddIPListRequest) returns (AddIPListResponse) {}

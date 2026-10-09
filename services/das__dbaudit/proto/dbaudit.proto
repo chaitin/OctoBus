@@ -4,8 +4,6 @@ package Chaitin_DBAUDIT;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Chaitin_DBAUDIT";
-
 service DBAuditService {
   rpc ListIPFilters(ListIPFiltersRequest) returns (ListIPFiltersResponse) {}
   rpc CreateIPFilter(CreateIPFilterRequest) returns (CreateIPFilterResponse) {}

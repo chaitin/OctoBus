@@ -4,8 +4,6 @@ package Huawei_WAF;
 
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/Huawei_WAF";
-
 service Huawei_WAF {
   rpc BlockIP(BlockIPRequest) returns (BlockIPResponse) {}
   rpc UnblockIP(UnblockIPRequest) returns (UnblockIPResponse) {}

@@ -4,8 +4,6 @@ package Fortinet_FW;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Fortinet_FW";
-
 service Fortinet_FW {
   // 创建地址对象，约定地址对象名与 IP 文本一致。
   rpc CreateAddress(CreateAddressRequest) returns (FortinetResponse) {}

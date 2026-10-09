@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package Venus_MAF;
 
-option go_package = "miner/grpc-service/Venus_MAF";
-
 service Venus_MAF {
   rpc HealthCheck(HealthCheckRequest) returns (OperationResponse) {}
   rpc CreateSite(CreateSiteRequest) returns (OperationResponse) {}

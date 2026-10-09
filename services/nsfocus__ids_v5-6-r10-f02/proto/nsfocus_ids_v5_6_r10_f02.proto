@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package NSFOCUS_IDS_V5_6_R10_F02;
 
-option go_package = "miner/grpc-service/NSFOCUS_IDS_V5_6_R10_F02";
-
 // 绿盟(NSFOCUS)入侵检测/防御系统 IDS/IPS V5.6R10F02。
 // 认证为 web 会话 Cookie:GET /ips/eventList/detail/false/dns/false，credentials=include，
 // 需带 Referer:/ips/event 与 X-Requested-With: XMLHttpRequest。

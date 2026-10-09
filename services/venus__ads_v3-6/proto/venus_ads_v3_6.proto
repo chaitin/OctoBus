@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package Venus_ADS_V36;
 
-option go_package = "miner/grpc-service/Venus_ADS_V36";
-
 // VenusADSBlacklistService wraps Venus ADS V3.6 blacklist login, block, remove, and logout workflows.
 service VenusADSBlacklistService {
   rpc BatchBlockIP(BatchBlockIPRequest) returns (BatchBlockIPResponse) {}

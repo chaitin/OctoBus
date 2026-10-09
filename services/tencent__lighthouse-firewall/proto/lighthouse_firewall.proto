@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package Tencent_Lighthouse_FIREWALL;
 
-option go_package = "miner/grpc-service/Tencent_Lighthouse_FIREWALL";
-
 service Tencent_Lighthouse_FIREWALL {
   rpc ListFirewallRules(ListFirewallRulesRequest) returns (ListFirewallRulesResponse) {}
   rpc CreateFirewallRules(CreateFirewallRulesRequest) returns (CreateFirewallRulesResponse) {}

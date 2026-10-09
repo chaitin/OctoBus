@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package Aliyun_Waf3;
 
-option go_package = "miner/grpc-service/Aliyun_Waf3";
-
 // 阿里云 WAF 3.0 能力服务
 // 提供 IP 黑名单/白名单、自定义 ACL 规则、攻击事件查询和防护资源管理能力
 service Waf3 {

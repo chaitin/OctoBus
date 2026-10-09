@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package QianXin_SkyEye_V3_0_14_0;
 
-option go_package = "miner/grpc-service/QianXin_SkyEye_V3_0_14_0";
-
 service QianXin_SkyEye_V3_0_14_0 {
   rpc QueryAlarmList(QueryAlarmListRequest) returns (QueryAlarmListResponse) {}
   rpc QueryAlarmPacket(QueryAlarmPacketRequest) returns (QueryAlarmPacketResponse) {}

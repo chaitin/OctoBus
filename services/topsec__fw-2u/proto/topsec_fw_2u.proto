@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package TopSec_FW_2U;
 
-option go_package = "miner/grpc-service/TopSec_FW_2U";
-
 service TopSec_FW_2U {
   rpc Login(LoginRequest) returns (LoginResponse) {}
   rpc ActivatePermission(ActivatePermissionRequest) returns (ActivatePermissionResponse) {}

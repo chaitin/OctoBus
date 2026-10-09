@@ -4,8 +4,6 @@ package Anyi_CloudNativeSecurity;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Anyi_CloudNativeSecurity";
-
 service Anyi_CloudNativeSecurity {
   // 获取告警列表，支持分页和过滤
   rpc ListWarnings(ListWarningsRequest) returns (ListWarningsResponse) {}

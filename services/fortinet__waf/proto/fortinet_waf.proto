@@ -4,8 +4,6 @@ package Fortinet_WAF;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Fortinet_WAF";
-
 service Fortinet_WAF {
   // 检查 Fortinet WAF 在线状态；成功时表示 HTTPS 认证可用且设备返回 status=1。
   rpc CheckOnline(CheckOnlineRequest) returns (CheckOnlineResponse) {}

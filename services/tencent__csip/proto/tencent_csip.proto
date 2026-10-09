@@ -4,8 +4,6 @@ package Tencent_CSIP;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Tencent_CSIP";
-
 service Tencent_CSIP {
   rpc DescribeAlertList(TencentCloudRequest) returns (TencentCloudResponse) {}
   rpc DescribeCVMAssets(TencentCloudRequest) returns (TencentCloudResponse) {}

@@ -4,8 +4,6 @@ package TopSec_FW_5U;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/TopSec_FW_5U";
-
 service TopSec_FW_5U {
   rpc Login(LoginRequest) returns (LoginResponse) {}
   rpc Refresh(RefreshRequest) returns (RefreshResponse) {}

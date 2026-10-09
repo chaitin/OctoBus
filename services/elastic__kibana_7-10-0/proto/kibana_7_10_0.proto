@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package Elastic_Kibana_7_10_0;
 
-option go_package = "miner/grpc-service/Elastic_Kibana_7_10_0";
-
 service Elastic_Kibana_7_10_0 {
   rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
   rpc ListSpaces(ListSpacesRequest) returns (ListSpacesResponse);

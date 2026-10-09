@@ -4,8 +4,6 @@ package Tencent_TIX_SaaS;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Tencent_TIX_SaaS";
-
 service Tencent_TIX_SaaS {
   rpc QueryIOC(TixLookupRequest) returns (TixResponse) {}
   rpc GetIPIngressInfo(TixLookupRequest) returns (TixResponse) {}

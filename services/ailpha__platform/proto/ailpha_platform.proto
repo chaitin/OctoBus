@@ -5,8 +5,6 @@ package AiLPHA_Platform;
 import "google/protobuf/struct.proto";
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/AiLPHA_Platform";
-
 // AiLPHA 安全分析与管理平台 (SIEM/SOC) - 归并告警查询/详情/处置 + 联动策略封禁/解封。
 // 认证：apiKey HTTP 头。响应形如 { "$page":N, "$size":N, "total":N, "data":... }，无 code/msg 信封，成败看 HTTP 状态码。
 // 大对象（告警/策略）字段繁多，统一用 google.protobuf.Struct 原样透传。

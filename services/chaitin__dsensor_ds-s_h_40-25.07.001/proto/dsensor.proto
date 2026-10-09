@@ -2,7 +2,6 @@ syntax = "proto3";
 package dsensor;
 
 import "google/protobuf/struct.proto";
-option go_package = "miner/grpc-service/dsensor";
 
 // ========== Shared Response ==========
 message dsensor_response {
