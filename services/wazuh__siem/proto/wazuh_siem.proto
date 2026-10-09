@@ -5,8 +5,6 @@ package Wazuh_SIEM;
 import "google/protobuf/wrappers.proto";
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Wazuh_SIEM";
-
 service Wazuh_SIEM {
   // 查询安全告警列表，支持 Wazuh 查询语法、时间范围和严重级别过滤
   rpc ListAlerts(ListAlertsRequest) returns (ListAlertsResponse) {}

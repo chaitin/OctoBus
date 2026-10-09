@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package Riversec_Botgate_WAF;
 
-option go_package = "miner/grpc-service/Riversec_Botgate_WAF";
-
 // Riversec Botgate / Safeplus dynamic protection system (REST API v1).
 
 // -----------------------------------------------------------

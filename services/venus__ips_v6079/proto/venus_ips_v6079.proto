@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package Venus_IPSV6079;
 
-option go_package = "miner/grpc-service/Venus_IPSV6079";
-
 service IPSV6079Service {
   rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse) {}
   rpc Login(LoginRequest) returns (LoginResponse) {}

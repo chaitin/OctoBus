@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package Elasticsearch_7_10_0;
 
-option go_package = "miner/grpc-service/Elasticsearch_7_10_0";
-
 service Elasticsearch_7_10_0 {
   rpc ClusterHealth(ClusterHealthRequest) returns (ClusterHealthResponse);
   rpc ListIndices(ListIndicesRequest) returns (ListIndicesResponse);

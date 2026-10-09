@@ -4,8 +4,6 @@ package DPtech_UMC_ADS_v5329;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/DPtech_UMC_ADS_v5329";
-
 // DPtech_UMC_ADS_v5329 exposes DPtech UMC ADS V5.3.29 login and blacklist-related HTTP APIs as unary gRPC methods.
 service DPtech_UMC_ADS_v5329 {
   // Login calls POST {host}/UMC/restful/token/getRestfulInterfaceToken with credentials from engine bindings.

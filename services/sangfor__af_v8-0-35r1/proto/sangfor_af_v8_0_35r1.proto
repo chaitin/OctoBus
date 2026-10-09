@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package Sangfor_AF_V8035R1;
 
-option go_package = "miner/grpc-service/Sangfor_AF_V8035R1";
-
 service Sangfor_AF_V8035R1 {
   rpc ListWhiteBlackListEntries(ListWhiteBlackListEntriesRequest) returns (ListWhiteBlackListEntriesResponse) {}
   rpc GetWhiteBlackListEntry(GetWhiteBlackListEntryRequest) returns (GetWhiteBlackListEntryResponse) {}

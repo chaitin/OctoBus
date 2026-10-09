@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package Tencent_QYWeiXin_GroupRobot;
 
-option go_package = "miner/grpc-service/Tencent_QYWeiXin_GroupRobot";
-
 service Tencent_QYWeiXin_GroupRobot {
   rpc SendText(SendTextRequest) returns (SendTextResponse) {}
 }

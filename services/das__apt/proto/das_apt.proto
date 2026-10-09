@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package DAS_APT;
 
-option go_package = "miner/grpc-service/DAS_APT";
-
 // DAS APT asset service.
 service DASAPTService {
   // List assets from DAS APT.

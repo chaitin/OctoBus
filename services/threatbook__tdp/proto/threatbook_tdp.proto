@@ -4,8 +4,6 @@ package ThreatBook_TDP;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/ThreatBook_TDP";
-
 service ThreatBook_TDP {
   rpc BlockDomain(BlockDomainRequest) returns (BlockDomainResponse) {}
   rpc UnblockDomain(UnblockDomainRequest) returns (UnblockDomainResponse) {}

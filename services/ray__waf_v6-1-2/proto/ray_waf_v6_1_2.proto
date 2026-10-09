@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package RAY_WAF_V612;
 
-option go_package = "miner/grpc-service/RAY_WAF_V612";
-
 service RAY_WAF_V612 {
   rpc Login(LoginRequest) returns (LoginResponse) {}
   rpc QueryBlacklist(QueryBlacklistRequest) returns (QueryBlacklistResponse) {}

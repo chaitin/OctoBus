@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package Tencent_WeixinPersonal;
 
-option go_package = "miner/grpc-service/Tencent_WeixinPersonal";
-
 // Tencent_WeixinPersonal wraps the experimental Tencent iLink Bot API.
 service Tencent_WeixinPersonal {
   rpc SendText(SendTextRequest) returns (SendTextResponse) {}

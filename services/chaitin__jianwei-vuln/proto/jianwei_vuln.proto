@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package jianwei.vuln.service;
 
-option go_package = "jianwei/vuln/service";
-
 // ============================================================
 // Shared / Common Messages
 // ============================================================

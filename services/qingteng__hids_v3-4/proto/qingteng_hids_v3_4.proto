@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package QingTeng_HIDS_V34;
 
-option go_package = "miner/grpc-service/QingTeng_HIDS_V34";
-
 service QingTeng_HIDS_V34 {
   rpc Login(LoginRequest) returns (QingTengResponse) {}
   rpc QueryHostAssets(QueryHostAssetsRequest) returns (QingTengResponse) {}

@@ -5,8 +5,6 @@ package huorong.endpoint_security_management_system.v2_0_19_3;
 import "google/protobuf/struct.proto";
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/huorong/endpoint_security_management_system/v2_0_19_3";
-
 service HuorongEndpointSecurityManagementSystem {
   // 获取全部终端分组
   rpc ListGroups(ListGroupsRequest) returns (ListGroupsResponse) {}

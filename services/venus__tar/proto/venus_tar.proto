@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package Venus_TAR;
 
-option go_package = "miner/grpc-service/Venus_TAR";
-
 service TARService {
   rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse) {}
   rpc Login(LoginRequest) returns (LoginResponse) {}

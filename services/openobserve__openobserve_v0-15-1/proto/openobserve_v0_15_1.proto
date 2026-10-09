@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package OpenObserve_v0_15_1;
 
-option go_package = "miner/grpc-service/OpenObserve_v0_15_1";
-
 service OpenObserve_v0_15_1 {
   rpc ListOrganizations(ListOrganizationsRequest) returns (ListOrganizationsResponse);
   rpc ListStreams(ListStreamsRequest) returns (ListStreamsResponse);

@@ -4,8 +4,6 @@ package Volcengine_WAF;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Volcengine_WAF";
-
 service Volcengine_WAF {
   rpc ListDomain(VolcengineRequest) returns (VolcengineResponse) {}
   rpc ListLoadBalancer(VolcengineRequest) returns (VolcengineResponse) {}

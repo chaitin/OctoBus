@@ -4,8 +4,6 @@ package Nsfcous_ADS_V45R90F06;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Nsfcous_ADS_V45R90F06";
-
 service Nsfcous_ADS_V45R90F06 {
   rpc BlockIP(BlockIPRequest) returns (BlockIPResponse) {}
   rpc UnblockIP(UnblockIPRequest) returns (UnblockIPResponse) {}

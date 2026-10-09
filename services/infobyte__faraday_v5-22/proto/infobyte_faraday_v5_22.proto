@@ -5,8 +5,6 @@ package InfobyteFaradayV522;
 import "google/protobuf/struct.proto";
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/InfobyteFaradayV522";
-
 service Faraday {
   // 获取 Faraday 工作区列表。
   rpc ListWorkspaces(ListWorkspacesRequest) returns (ListResponse) {}

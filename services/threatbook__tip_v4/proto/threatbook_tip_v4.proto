@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package ThreatBook_TIP_V4;
 
-option go_package = "miner/grpc-service/ThreatBook_TIP_V4";
-
 service ThreatBook_TIP_V4 {
   rpc QueryIPReputation(QueryIPReputationRequest) returns (QueryIPReputationResponse) {}
 }

@@ -5,8 +5,6 @@ package Huoxian_IAST_DONGTAI;
 import "google/protobuf/wrappers.proto";
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Huoxian_IAST_DONGTAI";
-
 service Huoxian_IAST_DONGTAI {
   // 获取漏洞列表，支持按等级/类型/项目/状态筛选与分页
   rpc ListVulnerabilities(ListVulnerabilitiesRequest) returns (ListVulnerabilitiesResponse) {}

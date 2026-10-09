@@ -4,8 +4,6 @@ package QIANXIN_FW_SecGate3600_Policy;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/QIANXIN_FW_SecGate3600_Policy";
-
 // 网神 SecGate3600 防火墙 - 安全策略 (sec_policy) 管理（在现有 qianxin__fw-secgate3600 基础上增量）。
 // 有状态：先 Login 获取会话（PHPSESSID + token，按 instance/host 缓存），业务方法经 POST /v1.0/rest/ 调用，
 // body 为数组 [{head:{module,function,...}, body:{...}}]。响应大对象用 google.protobuf.Value 原样透传。

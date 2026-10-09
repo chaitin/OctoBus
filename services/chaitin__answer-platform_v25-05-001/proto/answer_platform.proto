@@ -4,8 +4,6 @@ package Answer_Platform;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Answer_Platform";
-
 service Answer_Platform {
   rpc Login(LoginRequest) returns (LoginResponse) {}
   rpc SearchAlarms(SearchAlarmsRequest) returns (SearchAlarmsResponse) {}

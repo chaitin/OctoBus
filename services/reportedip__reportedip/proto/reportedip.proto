@@ -4,8 +4,6 @@ package ReportedIP;
 
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/ReportedIP";
-
 service ReportedIP {
   rpc CheckIP(CheckIPRequest) returns (CheckIPResponse) {}
 }

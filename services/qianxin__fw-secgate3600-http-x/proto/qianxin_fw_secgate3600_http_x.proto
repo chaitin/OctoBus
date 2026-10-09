@@ -5,8 +5,6 @@ package QIANXIN_FW_SecGate3600_HTTP_X;
 import "google/protobuf/struct.proto";
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/QIANXIN_FW_SecGate3600_HTTP_X";
-
 service QIANXIN_FW_SecGate3600_HTTP_X {
   rpc Login(LoginRequest) returns (DeviceHttpResponse) {}
   rpc BlockIP(BlacklistMutationRequest) returns (DeviceHttpResponse) {}

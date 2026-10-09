@@ -4,8 +4,6 @@ package Ctyun_AccessOne;
 
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/Ctyun_AccessOne";
-
 // Ctyun_AccessOne wraps 天翼云 AccessOne (边缘安全加速平台 ESA) CTAPI 操作.
 // Stateless service — EOP HMAC-SHA256 signing on every call, no login/logout.
 // 8 只读 + 2 写 (新增访问控制规则 / 域名级开关启停), 覆盖 6 个产品域: 域名管理 / 防护规则引擎 / WAF / 访问控制 / 资源包 / IPv6检测

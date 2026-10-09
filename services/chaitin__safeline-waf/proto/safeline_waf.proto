@@ -5,8 +5,6 @@ package Chaitin_WAF_SAFELINE;
 import "google/protobuf/wrappers.proto";
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Chaitin_WAF_SAFELINE";
-
 service Chaitin_WAF_SAFELINE {
   // 按源 IP 聚合攻击检测日志，支持 condition/时间窗/条数限制
   rpc AggregateDetectLogBySrcIP(AggregateDetectLogRequest) returns (AggregateDetectLogResponse) {}

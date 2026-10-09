@@ -5,8 +5,6 @@ package OWASP_DependencyTrack_SCA_V5;
 import "google/protobuf/struct.proto";
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/OWASP_DependencyTrack_SCA_V5";
-
 service OWASP_DependencyTrack_SCA_V5 {
   // List Dependency-Track projects with common paging and name filters.
   rpc ListProjects(ListProjectsRequest) returns (ListResponse) {}

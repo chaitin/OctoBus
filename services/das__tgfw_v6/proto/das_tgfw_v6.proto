@@ -4,8 +4,6 @@ package DAS_TGFW_V6;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/DAS_TGFW_V6";
-
 service DAS_TGFW_V6 {
   // 查询黑名单记录。
   rpc query_blacklist(query_blacklist_request) returns (query_blacklist_response) {}

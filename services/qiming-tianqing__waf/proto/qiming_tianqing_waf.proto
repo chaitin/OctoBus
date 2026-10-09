@@ -5,8 +5,6 @@ package Qiming_Tianqing_WAF;
 import "google/protobuf/struct.proto";
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/Qiming_Tianqing_WAF";
-
 service QimingTianqingWafService {
   rpc BlockIP(BlockIPRequest) returns (BlockIPResponse);
   rpc UnblockIP(UnblockIPRequest) returns (UnblockIPResponse);

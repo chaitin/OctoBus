@@ -5,8 +5,6 @@ package m01.intelligence;
 import "google/protobuf/struct.proto";
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/m01/intelligence";
-
 // m01 邮件安全网关 - 本地威胁情报（Threat Intelligence）操作。
 // 枚举值以上游 wire string 形式保留（字符串字段 + handler 校验），与仓库既有风格一致。
 service M01IntelligenceService {

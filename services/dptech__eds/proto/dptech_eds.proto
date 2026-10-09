@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package DPtech_EDS;
 
-option go_package = "miner/grpc-service/DPtech_EDS";
-
 service DPtech_EDS {
   rpc BatchBlockIPs(BatchBlacklistRequest) returns (BatchIPOperationResponse) {}
   rpc BatchUnblockIPs(BatchBlacklistRequest) returns (BatchIPOperationResponse) {}

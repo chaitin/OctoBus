@@ -4,8 +4,6 @@ package ThreatBook_TDP_Host;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/ThreatBook_TDP_Host";
-
 service ThreatBook_TDP_Host {
   // 查询失陷主机汇总列表（TDP web 控制台 /api/web/host/getFallHostSumList）。
   rpc QueryFallHostList(QueryFallHostListRequest) returns (QueryFallHostListResponse) {}

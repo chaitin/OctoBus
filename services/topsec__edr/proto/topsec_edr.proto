@@ -5,8 +5,6 @@ package TopSec_EDR;
 import "google/protobuf/wrappers.proto";
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/TopSec_EDR";
-
 // TopSec EDR (天融信终端威胁防御系统) service for OctoBus.
 // Provides terminal asset query, alert/threat query, system info, and host isolation capabilities.
 service TopSec_EDR {

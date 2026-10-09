@@ -5,8 +5,6 @@ package Qihoo360_EPP;
 import "google/protobuf/wrappers.proto";
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Qihoo360_EPP";
-
 service Qihoo360_EPP {
   // 获取仪表盘概览信息（终端数量、病毒数量、漏洞数量等）
   rpc GetDashboardInfo(GetDashboardInfoRequest) returns (GetDashboardInfoResponse) {}

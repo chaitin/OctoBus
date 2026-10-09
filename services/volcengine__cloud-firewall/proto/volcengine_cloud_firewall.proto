@@ -4,8 +4,6 @@ package Volcengine_Cloud_Firewall;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Volcengine_Cloud_Firewall";
-
 service Volcengine_Cloud_Firewall {
   rpc DescribeAddressBook(VolcengineRequest) returns (VolcengineResponse) {}
   rpc DescribeControlPolicy(VolcengineRequest) returns (VolcengineResponse) {}

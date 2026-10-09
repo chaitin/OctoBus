@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package Slack_GroupRobot;
 
-option go_package = "miner/grpc-service/Slack_GroupRobot";
-
 // Slack_GroupRobot 提供 Slack Incoming Webhooks 消息推送能力，通过统一 Engine gRPC service 封装 Slack Webhook 接口。
 service Slack_GroupRobot {
   // SendTextMessage 通过 Slack Incoming Webhook 发送一条文本消息。

@@ -5,8 +5,6 @@ package Crowdsec_SECURITY_ENGINE;
 import "google/protobuf/wrappers.proto";
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/Crowdsec_SECURITY_ENGINE";
-
 service Crowdsec_SECURITY_ENGINE {
   // 查询安全告警，支持按场景/IP/时间/来源等过滤
   rpc ListAlerts(ListAlertsRequest) returns (ListAlertsResponse) {}

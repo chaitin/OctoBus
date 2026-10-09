@@ -4,8 +4,6 @@ package AlibabaCloud_SWAS_Firewall;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/AlibabaCloud_SWAS_Firewall";
-
 service SimpleApplicationServerFirewallService {
   rpc CreateFirewallRule(CreateFirewallRuleRequest) returns (CreateFirewallRuleResponse) {}
   rpc CreateFirewallRules(CreateFirewallRulesRequest) returns (CreateFirewallRulesResponse) {}

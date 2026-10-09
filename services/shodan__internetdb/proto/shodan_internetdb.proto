@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package Shodan_InternetDB;
 
-option go_package = "miner/grpc-service/Shodan_InternetDB";
-
 service Shodan_InternetDB {
   rpc LookupIP(LookupIPRequest) returns (LookupIPResponse) {}
 }

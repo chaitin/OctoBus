@@ -4,8 +4,6 @@ package QIANXIN_FW_SecGate3600_V3_6_6;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/QIANXIN_FW_SecGate3600_V3_6_6";
-
 // 奇安信网神 SecGate3600 防火墙 V3.6.6.0 RESTful API。
 // 认证: POST /v1.0/login，返回 token，写入 Cookie: token=...
 // 业务: POST /v1.0/rest/，报文 [{head:{module,function}, body:{...}}]

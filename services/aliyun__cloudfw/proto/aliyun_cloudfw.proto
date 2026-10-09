@@ -4,8 +4,6 @@ package aliyun.cloudfw.v1;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/aliyun/cloudfw/v1";
-
 service AliyunCloudFWService {
   rpc ListAssets(ListAssetsRequest) returns (CloudfwResponse) {}
   rpc ListAddressBooks(ListAddressBooksRequest) returns (CloudfwResponse) {}

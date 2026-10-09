@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package Apache_APISIX;
 
-option go_package = "miner/grpc-service/Apache_APISIX";
-
 service Apache_APISIX {
   // List APISIX routes through the Admin API.
   rpc ListRoutes(ListResourcesRequest) returns (ListResourcesResponse) {}

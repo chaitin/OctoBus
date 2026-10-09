@@ -5,8 +5,6 @@ package TheHive_CORTEX;
 import "google/protobuf/wrappers.proto";
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/TheHive_CORTEX";
-
 service TheHive_CORTEX {
   // 列出可用分析器，可选按 observable 类型过滤
   rpc ListAnalyzers(ListAnalyzersRequest) returns (ListAnalyzersResponse) {}

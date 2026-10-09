@@ -5,8 +5,6 @@ package DefectDojo;
 import "google/protobuf/struct.proto";
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/DefectDojo";
-
 service DefectDojo {
   // 获取产品列表，支持 DefectDojo API v2 常用分页和名称过滤参数。
   rpc ListProducts(ListProductsRequest) returns (ListResponse) {}

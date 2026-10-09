@@ -5,8 +5,6 @@ package Tencent_BH;
 import "google/protobuf/struct.proto";
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/Tencent_BH";
-
 service Tencent_BH {
   // 查询堡垒机会话列表
   rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse) {}

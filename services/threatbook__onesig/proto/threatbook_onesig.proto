@@ -4,8 +4,6 @@ package ThreatBook_OneSIG;
 
 import "google/protobuf/struct.proto";
 
-option go_package = "miner/grpc-service/ThreatBook_OneSIG";
-
 service ThreatBook_OneSIG {
   rpc BatchBlockIP(BatchBlockIPRequest) returns (BatchBlockIPResponse) {}
   rpc ListInboundBlacklistEntries(ListInboundBlacklistEntriesRequest) returns (ListInboundBlacklistEntriesResponse) {}

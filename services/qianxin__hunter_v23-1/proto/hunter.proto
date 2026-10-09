@@ -4,8 +4,6 @@ package qianxin.hunter.v1;
 
 import "google/protobuf/wrappers.proto";
 
-option go_package = "miner/grpc-service/qianxin_hunter_v1";
-
 service HunterService {
   // Search the Hunter network space engine with query syntax.
   // Supports IP lookup, domain search, component identification, certificate search,

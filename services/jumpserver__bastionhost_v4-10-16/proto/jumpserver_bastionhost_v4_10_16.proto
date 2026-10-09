@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package JumpServer_Bastionhost_V41016;
 
-option go_package = "miner/grpc-service/JumpServer_Bastionhost_V41016";
-
 service JumpServer_Bastionhost_V41016 {
   rpc ListAssets(ListAssetsRequest) returns (ListAssetsResponse) {}
   rpc GetAsset(GetAssetRequest) returns (AssetResponse) {}
