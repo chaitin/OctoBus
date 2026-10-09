@@ -297,6 +297,70 @@ func TestReflectionAccessLog(t *testing.T) {
 		GRPCCode: codes.OK.String(),
 	})
 
+	// Reflection clients resolve descriptors by symbol and by file name, and the
+	// server has to answer every request shape rather than only listing services.
+	variants := []struct {
+		name    string
+		request *grpc_reflection_v1.ServerReflectionRequest
+		code    codes.Code
+	}{
+		{
+			name:    "known symbol",
+			request: &grpc_reflection_v1.ServerReflectionRequest{MessageRequest: &grpc_reflection_v1.ServerReflectionRequest_FileContainingSymbol{FileContainingSymbol: "echo.v1.EchoService"}},
+			code:    codes.OK,
+		},
+		{
+			name:    "unknown symbol",
+			request: &grpc_reflection_v1.ServerReflectionRequest{MessageRequest: &grpc_reflection_v1.ServerReflectionRequest_FileContainingSymbol{FileContainingSymbol: "echo.v1.Missing"}},
+			code:    codes.NotFound,
+		},
+		{
+			name:    "known file",
+			request: &grpc_reflection_v1.ServerReflectionRequest{MessageRequest: &grpc_reflection_v1.ServerReflectionRequest_FileByFilename{FileByFilename: "echo.proto"}},
+			code:    codes.OK,
+		},
+		{
+			name:    "unknown file",
+			request: &grpc_reflection_v1.ServerReflectionRequest{MessageRequest: &grpc_reflection_v1.ServerReflectionRequest_FileByFilename{FileByFilename: "missing.proto"}},
+			code:    codes.NotFound,
+		},
+		{
+			name:    "unsupported request",
+			request: &grpc_reflection_v1.ServerReflectionRequest{MessageRequest: &grpc_reflection_v1.ServerReflectionRequest_AllExtensionNumbersOfType{AllExtensionNumbersOfType: "echo.v1.EchoService"}},
+			code:    codes.Unimplemented,
+		},
+	}
+	for _, tc := range variants {
+		t.Run(tc.name, func(t *testing.T) {
+			stream, err := client.ServerReflectionInfo(metadata.NewOutgoingContext(ctx, metadata.Pairs("x-octobus-capset", "dev")))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := stream.Send(tc.request); err != nil {
+				t.Fatal(err)
+			}
+			resp, err := stream.Recv()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := stream.CloseSend(); err != nil {
+				t.Fatal(err)
+			}
+			// Read to EOF so the handler has returned, and with it written the
+			// stream's access log record, before the caller inspects the log.
+			if _, err := stream.Recv(); !errors.Is(err, io.EOF) {
+				t.Fatalf("reflection %s stream close err=%v", tc.name, err)
+			}
+			got := codes.OK
+			if errResp := resp.GetErrorResponse(); errResp != nil {
+				got = codes.Code(errResp.GetErrorCode())
+			}
+			if got != tc.code {
+				t.Fatalf("reflection %s code=%v want %v (resp=%+v)", tc.name, got, tc.code, resp)
+			}
+		})
+	}
+
 	before := len(logger.Records())
 	noCapset, err := client.ServerReflectionInfo(ctx)
 	if err != nil {

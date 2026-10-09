@@ -1512,6 +1512,58 @@ func TestCommandValidationErrors(t *testing.T) {
 		{name: "admin token get", args: []string{"admin-token", "get"}, want: "token id is required"},
 		{name: "admin token delete", args: []string{"admin-token", "delete"}, want: "token id is required"},
 		{name: "admin token remove", args: []string{"admin-token", "remove"}, want: "token id is required"},
+		{name: "instance create rejects two config sources", args: []string{"instance", "create", "inst", "--service", "svc", "--config", "c.json", "--config-json", "{}"}, want: "mutually exclusive"},
+		// A file the CLI cannot read is asserted by the path in the error, not by the
+		// operating system's wording for a missing file: the path is what the test
+		// controls, and it appears in the error on every platform.
+		// Command validation for the argument and flag shapes the commands accept.
+		// Extends the table above; these are the extra-argument, flag-conflict and
+		// unreadable-file cases, which had no test before.
+		{name: "service import rejects extra args", args: []string{"service", "import", "svc", "src", "extra"}, want: "accepts 2 arg(s), received 3"},
+		{name: "service import requires a source", args: []string{"service", "import", "svc"}, want: "service source is required"},
+		{name: "service update rejects extra args", args: []string{"service", "update", "svc", "extra"}, want: "accepts 1 arg(s), received 2"},
+		{name: "service get rejects extra args", args: []string{"service", "get", "svc", "extra"}, want: "accepts 1 arg(s), received 2"},
+		{name: "service delete rejects extra args", args: []string{"service", "delete", "svc", "extra"}, want: "accepts 1 arg(s), received 2"},
+		{name: "instance create rejects extra args", args: []string{"instance", "create", "inst", "extra"}, want: "accepts 1 arg(s), received 2"},
+		{name: "instance update requires a name", args: []string{"instance", "update", "inst"}, want: "instance name is required"},
+		{name: "instance update rejects extra args", args: []string{"instance", "update", "inst", "extra"}, want: "accepts 1 arg(s), received 2"},
+		{name: "instance update-config requires a config source", args: []string{"instance", "update-config", "inst"}, want: "requires --config or --config-json"},
+		{name: "instance update-config rejects extra args", args: []string{"instance", "update-config", "inst", "extra"}, want: "accepts 1 arg(s), received 2"},
+		{name: "instance update-secret requires a secret source", args: []string{"instance", "update-secret", "inst"}, want: "requires --secret or --secret-json"},
+		{name: "instance update-secret rejects extra args", args: []string{"instance", "update-secret", "inst", "extra"}, want: "accepts 1 arg(s), received 2"},
+		{name: "instance get rejects extra args", args: []string{"instance", "get", "inst", "extra"}, want: "accepts 1 arg(s), received 2"},
+		{name: "instance delete rejects extra args", args: []string{"instance", "delete", "inst", "extra"}, want: "accepts 1 arg(s), received 2"},
+		{name: "instance start rejects extra args", args: []string{"instance", "start", "inst", "extra"}, want: "accepts 1 arg(s), received 2"},
+		{name: "capset create rejects extra args", args: []string{"capset", "create", "dev", "extra"}, want: "accepts 1 arg(s), received 2"},
+		{name: "capset update rejects extra args", args: []string{"capset", "update", "dev", "extra"}, want: "accepts 1 arg(s), received 2"},
+		{name: "capset add-instance rejects extra args", args: []string{"capset", "add-instance", "dev", "inst", "extra"}, want: "accepts 2 arg(s), received 3"},
+		{name: "capset remove-instance rejects extra args", args: []string{"capset", "remove-instance", "dev", "inst", "extra"}, want: "accepts 2 arg(s), received 3"},
+		{name: "capset list-instances rejects extra args", args: []string{"capset", "list-instances", "dev", "extra"}, want: "accepts 1 arg(s), received 2"},
+		{name: "capset select-method requires a method", args: []string{"capset", "select-method", "dev", "inst"}, want: "method is required"},
+		{name: "capset select-method rejects extra args", args: []string{"capset", "select-method", "dev", "inst", "m", "extra"}, want: "accepts 3 arg(s), received 4"},
+		{name: "capset unselect-method requires a capset", args: []string{"capset", "unselect-method"}, want: "capset id is required"},
+		{name: "capset unselect-method requires an instance", args: []string{"capset", "unselect-method", "dev"}, want: "instance id is required"},
+		{name: "capset unselect-method rejects extra args", args: []string{"capset", "unselect-method", "dev", "inst", "m", "extra"}, want: "accepts 3 arg(s), received 4"},
+		{name: "capset list-methods rejects extra args", args: []string{"capset", "list-methods", "dev", "extra"}, want: "accepts 1 arg(s), received 2"},
+		{name: "capset add-token rejects extra args", args: []string{"capset", "add-token", "dev", "tok", "extra"}, want: "accepts 2 arg(s), received 3"},
+		{name: "capset list-tokens rejects extra args", args: []string{"capset", "list-tokens", "dev", "extra"}, want: "accepts 1 arg(s), received 2"},
+		{name: "capset remove-token rejects extra args", args: []string{"capset", "remove-token", "dev", "tok", "extra"}, want: "accepts 2 arg(s), received 3"},
+		{name: "capset delete rejects extra args", args: []string{"capset", "delete", "dev", "extra"}, want: "accepts 1 arg(s), received 2"},
+		{name: "admin-token add rejects extra args", args: []string{"admin-token", "add", "tok", "extra"}, want: "accepts 1 arg(s), received 2"},
+		{name: "admin-token get rejects extra args", args: []string{"admin-token", "get", "tok", "extra"}, want: "accepts 1 arg(s), received 2"},
+		{name: "admin-token delete rejects extra args", args: []string{"admin-token", "delete", "tok", "extra"}, want: "accepts 1 arg(s), received 2"},
+		{name: "catalog requires a capset", args: []string{"catalog"}, want: "capset id is required"},
+		{name: "catalog rejects extra args", args: []string{"catalog", "dev", "extra"}, want: "accepts 1 arg(s), received 2"},
+		{name: "catalog rejects conflicting output flags", args: []string{"catalog", "dev", "--json", "--md"}, want: "--json, --md, --openapi-json, and --openapi-yaml are mutually exclusive"},
+		{name: "catalog rejects an openapi flag with a protocol selector", args: []string{"catalog", "dev", "--openapi-json", "--grpc"}, want: "OpenAPI output flags conflict with protocol selector flags"},
+		{name: "logs rejects a negative limit", args: []string{"logs", "--limit", "-1"}, want: "limit must be non-negative"},
+		{name: "logs rejects a negative tail", args: []string{"logs", "--tail", "-1"}, want: "tail must be non-negative"},
+		{name: "logs rejects limit with tail", args: []string{"logs", "--limit", "1", "--tail", "1"}, want: "limit and tail are mutually exclusive"},
+		{name: "logs rejects limit with follow", args: []string{"logs", "--follow", "--limit", "1"}, want: "limit and follow are mutually exclusive"},
+		{name: "instance create rejects invalid config json", args: []string{"instance", "create", "inst", "--service", "svc", "--config-json", "{"}, want: "--config-json: value must be valid JSON"},
+		{name: "admin-token add rejects an unreadable token file", args: []string{"admin-token", "add", "tok", "--token-file", "/nonexistent/token"}, want: "/nonexistent/token"},
+		{name: "admin-token add rejects an empty token source", args: []string{"admin-token", "add", "tok", "--token", "   "}, want: "token source is empty"},
+		{name: "admin-token add rejects two token sources", args: []string{"admin-token", "add", "tok", "--token", "a", "--token-file", "b"}, want: "mutually exclusive"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1597,8 +1649,8 @@ func TestConfigSourceFileErrors(t *testing.T) {
 		args []string
 		want string
 	}{
-		{name: "missing config file", args: []string{"instance", "create", "echo-test", "--service", "echo", "--config", filepath.Join(t.TempDir(), "missing.json"), "--no-start"}, want: "no such file"},
-		{name: "missing secret file", args: []string{"instance", "create", "echo-test", "--service", "echo", "--secret", filepath.Join(t.TempDir(), "missing.json"), "--no-start"}, want: "no such file"},
+		{name: "missing config file", args: []string{"instance", "create", "echo-test", "--service", "echo", "--config", filepath.Join(t.TempDir(), "missing.json"), "--no-start"}, want: "missing.json"},
+		{name: "missing secret file", args: []string{"instance", "create", "echo-test", "--service", "echo", "--secret", filepath.Join(t.TempDir(), "missing.json"), "--no-start"}, want: "missing.json"},
 		{name: "invalid config file", args: []string{"instance", "update-config", "echo-test", "--config", writeTempJSON(t, `{bad`)}, want: "invalid --config"},
 		{name: "invalid secret file", args: []string{"instance", "update-secret", "echo-test", "--secret", writeTempJSON(t, `{bad`)}, want: "invalid --secret"},
 	} {
