@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/chaitin-octobus-badge.png)](https://mseep.ai/app/chaitin-octobus)
+
 <p align="center">
   <img src="octobuslogo.jpg" alt="OctoBus" width="240">
 </p>
