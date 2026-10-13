@@ -1,0 +1,10 @@
+{
+  "config": {
+    "baseUrl": "https://PVE_HOST:8006",
+    "allowInsecureHttp": false
+  },
+  "secret": {
+    "token_id": "root@pam!TOKENID",
+    "token_secret": "PROXMOX_TOKEN"
+  }
+}
