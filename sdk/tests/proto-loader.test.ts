@@ -226,6 +226,11 @@ describe("proto-loader", () => {
     expect(() => readServiceManifest(dir)).toThrow("service.json must not define entry; use package.json bin");
   });
 
+  it("rejects an unknown auth support mode", () => {
+    const dir = writeManifest({ schema: "chaitin.octobus.service.v1", name: "calculator", authSupport: "unknown", proto: validProto() });
+    expect(() => readServiceManifest(dir)).toThrow("service.json authSupport must be platform, personal, or both");
+  });
+
   it("infers package bin target", () => {
     const dir = writeManifest(
       { schema: "chaitin.octobus.service.v1", name: "calculator", proto: validProto() },

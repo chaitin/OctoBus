@@ -983,7 +983,7 @@ func TestScanHelpersReturnScanAndDecodeErrors(t *testing.T) {
 
 	_, err := scanService(scannerFunc(func(dest ...any) error {
 		values := []any{
-			"svc", "Svc", "source", "pkg", "pkgsha", "1.0.0", "proto", "protosha", "desc", "descsha", "descver", "{", "entry", ".", string(domain.RuntimeModeLongRunning), "config.schema.json", "secret.schema.json", "bad-created", "bad-updated",
+			"svc", "Svc", "source", "pkg", "pkgsha", "1.0.0", "proto", "protosha", "desc", "descsha", "descver", "{", "entry", ".", string(domain.RuntimeModeLongRunning), string(domain.AuthSupportPlatform), "config.schema.json", "secret.schema.json", "bad-created", "bad-updated",
 		}
 		scanValues(t, dest, values...)
 		return nil
@@ -1163,7 +1163,7 @@ func scanExposedValues(t *testing.T, dest []any, methodsJSON, methodFullName str
 		"dev:echo-test", "dev", "echo", "echo-test", "echo", 1, 1, "bad-created", "bad-updated",
 		"dev:echo-test:"+methodFullName, "dev:echo-test", methodFullName, "echo", "", 1, "bad-created", "bad-updated",
 		"echo-test", "echo", "Echo Test", 1, string(domain.StatusRunning), 123, "127.0.0.1:1", "entry", `{"mode":"test"}`, "configsha", "bad-created", "bad-updated",
-		"echo", "Echo", "source", "pkg", "pkgsha", "1.0.0", "proto", "protosha", "desc", "descsha", "descver", methodsJSON, "entry", "services/echo", string(domain.RuntimeModeLongRunning), "config.schema.json", "secret.schema.json", "bad-created", "bad-updated",
+		"echo", "Echo", "source", "pkg", "pkgsha", "1.0.0", "proto", "protosha", "desc", "descsha", "descver", methodsJSON, "entry", "services/echo", string(domain.RuntimeModeLongRunning), string(domain.AuthSupportPlatform), "config.schema.json", "secret.schema.json", "bad-created", "bad-updated",
 	)
 }
 

@@ -35,6 +35,42 @@ const (
 	RuntimeModeOnDemand    RuntimeMode = "on-demand"
 )
 
+// AuthSupport describes which credential scopes a Service implementation can
+// use. A missing manifest value defaults to platform because synchronized
+// platform credentials are the normal deployment path.
+type AuthSupport string
+
+const (
+	AuthSupportPlatform AuthSupport = "platform"
+	AuthSupportPersonal AuthSupport = "personal"
+	AuthSupportBoth     AuthSupport = "both"
+)
+
+func NormalizeAuthSupport(value AuthSupport) AuthSupport {
+	if value == "" {
+		return AuthSupportPlatform
+	}
+	return value
+}
+
+func ValidateAuthSupport(value AuthSupport) error {
+	switch NormalizeAuthSupport(value) {
+	case AuthSupportPlatform, AuthSupportPersonal, AuthSupportBoth:
+		return nil
+	default:
+		return fmt.Errorf("invalid authSupport %q: must be platform, personal, or both", value)
+	}
+}
+
+func SupportsPlatformAuth(value AuthSupport) bool {
+	switch NormalizeAuthSupport(value) {
+	case AuthSupportPlatform, AuthSupportBoth:
+		return true
+	default:
+		return false
+	}
+}
+
 type Service struct {
 	ID                  string
 	Name                string
@@ -51,6 +87,7 @@ type Service struct {
 	NodeEntry           string
 	ServiceRoot         string
 	RuntimeMode         RuntimeMode
+	AuthSupport         AuthSupport
 	ConfigSchemaPath    string
 	SecretSchemaPath    string
 	CreatedAt           time.Time
@@ -146,6 +183,7 @@ type ServiceManifest struct {
 	Proto        ManifestProto   `json:"proto"`
 	ConfigSchema string          `json:"configSchema"`
 	SecretSchema string          `json:"secretSchema"`
+	AuthSupport  AuthSupport     `json:"authSupport,omitempty"`
 }
 
 type ManifestRuntime struct {
@@ -173,6 +211,9 @@ func ValidateManifest(m ServiceManifest) error {
 	}
 	if m.Name == "" {
 		return errors.New("service manifest missing name")
+	}
+	if err := ValidateAuthSupport(m.AuthSupport); err != nil {
+		return err
 	}
 	if m.Entry != "" {
 		return errors.New("service manifest must not define entry; use package.json bin")

@@ -117,6 +117,9 @@ func (s *Store) Migrate(ctx context.Context) error {
 	if err := addColumnIfMissing(ctx, s.db, "services", "service_root", "TEXT NOT NULL DEFAULT '.'"); err != nil {
 		return err
 	}
+	if err := addColumnIfMissing(ctx, s.db, "services", "auth_support", "TEXT NOT NULL DEFAULT 'platform'"); err != nil {
+		return err
+	}
 	_, err := s.db.ExecContext(ctx, `UPDATE services SET runtime_mode = 'long-running' WHERE runtime_mode = ''`)
 	return err
 }
@@ -153,10 +156,14 @@ func (s *Store) UpsertService(ctx context.Context, svc domain.Service) error {
 	if svc.RuntimeMode == "" {
 		svc.RuntimeMode = domain.RuntimeModeLongRunning
 	}
+	svc.AuthSupport = domain.NormalizeAuthSupport(svc.AuthSupport)
 	if svc.ServiceRoot == "" {
 		svc.ServiceRoot = "."
 	}
 	if err := domain.ValidateRuntimeMode(svc.RuntimeMode); err != nil {
+		return err
+	}
+	if err := domain.ValidateAuthSupport(svc.AuthSupport); err != nil {
 		return err
 	}
 	methodsJSON, err := descriptors.MarshalMethods(svc.Methods)
@@ -169,8 +176,8 @@ func (s *Store) UpsertService(ctx context.Context, svc domain.Service) error {
 	}
 	svc.UpdatedAt = now
 	_, err = s.db.ExecContext(ctx, `
-INSERT INTO services (id, name, package_source, package_artifact_path, package_sha256, package_version, proto_bundle_path, proto_bundle_sha256, descriptor_path, descriptor_sha256, descriptor_version, methods_json, node_entry, service_root, runtime_mode, config_schema_path, secret_schema_path, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO services (id, name, package_source, package_artifact_path, package_sha256, package_version, proto_bundle_path, proto_bundle_sha256, descriptor_path, descriptor_sha256, descriptor_version, methods_json, node_entry, service_root, runtime_mode, auth_support, config_schema_path, secret_schema_path, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
   name=excluded.name,
   package_source=excluded.package_source,
@@ -186,9 +193,10 @@ ON CONFLICT(id) DO UPDATE SET
   node_entry=excluded.node_entry,
   service_root=excluded.service_root,
   runtime_mode=excluded.runtime_mode,
+  auth_support=excluded.auth_support,
   config_schema_path=excluded.config_schema_path,
   secret_schema_path=excluded.secret_schema_path,
-  updated_at=excluded.updated_at`, svc.ID, svc.Name, svc.PackageSource, svc.PackageArtifactPath, svc.PackageSHA256, svc.PackageVersion, svc.ProtoBundlePath, svc.ProtoBundleSHA256, svc.DescriptorPath, svc.DescriptorSHA256, svc.DescriptorVersion, methodsJSON, svc.NodeEntry, svc.ServiceRoot, string(svc.RuntimeMode), svc.ConfigSchemaPath, svc.SecretSchemaPath, formatTime(svc.CreatedAt), formatTime(svc.UpdatedAt))
+  updated_at=excluded.updated_at`, svc.ID, svc.Name, svc.PackageSource, svc.PackageArtifactPath, svc.PackageSHA256, svc.PackageVersion, svc.ProtoBundlePath, svc.ProtoBundleSHA256, svc.DescriptorPath, svc.DescriptorSHA256, svc.DescriptorVersion, methodsJSON, svc.NodeEntry, svc.ServiceRoot, string(svc.RuntimeMode), string(svc.AuthSupport), svc.ConfigSchemaPath, svc.SecretSchemaPath, formatTime(svc.CreatedAt), formatTime(svc.UpdatedAt))
 	return err
 }
 
@@ -197,15 +205,15 @@ func (s *Store) GetService(ctx context.Context, id string) (domain.Service, erro
 	return scanService(row)
 }
 
-const serviceSelectSQL = `SELECT id, name, package_source, package_artifact_path, package_sha256, package_version, proto_bundle_path, proto_bundle_sha256, descriptor_path, descriptor_sha256, descriptor_version, methods_json, node_entry, service_root, runtime_mode, config_schema_path, secret_schema_path, created_at, updated_at FROM services`
+const serviceSelectSQL = `SELECT id, name, package_source, package_artifact_path, package_sha256, package_version, proto_bundle_path, proto_bundle_sha256, descriptor_path, descriptor_sha256, descriptor_version, methods_json, node_entry, service_root, runtime_mode, auth_support, config_schema_path, secret_schema_path, created_at, updated_at FROM services`
 
 func scanService(scanner interface {
 	Scan(dest ...any) error
 }) (domain.Service, error) {
 	var svc domain.Service
 	var methodsJSON, created, updated string
-	var runtimeMode string
-	if err := scanner.Scan(&svc.ID, &svc.Name, &svc.PackageSource, &svc.PackageArtifactPath, &svc.PackageSHA256, &svc.PackageVersion, &svc.ProtoBundlePath, &svc.ProtoBundleSHA256, &svc.DescriptorPath, &svc.DescriptorSHA256, &svc.DescriptorVersion, &methodsJSON, &svc.NodeEntry, &svc.ServiceRoot, &runtimeMode, &svc.ConfigSchemaPath, &svc.SecretSchemaPath, &created, &updated); err != nil {
+	var runtimeMode, authSupport string
+	if err := scanner.Scan(&svc.ID, &svc.Name, &svc.PackageSource, &svc.PackageArtifactPath, &svc.PackageSHA256, &svc.PackageVersion, &svc.ProtoBundlePath, &svc.ProtoBundleSHA256, &svc.DescriptorPath, &svc.DescriptorSHA256, &svc.DescriptorVersion, &methodsJSON, &svc.NodeEntry, &svc.ServiceRoot, &runtimeMode, &authSupport, &svc.ConfigSchemaPath, &svc.SecretSchemaPath, &created, &updated); err != nil {
 		return domain.Service{}, err
 	}
 	methods, err := descriptors.UnmarshalMethods(methodsJSON)
@@ -217,6 +225,7 @@ func scanService(scanner interface {
 	if svc.RuntimeMode == "" {
 		svc.RuntimeMode = domain.RuntimeModeLongRunning
 	}
+	svc.AuthSupport = domain.NormalizeAuthSupport(domain.AuthSupport(authSupport))
 	if svc.ServiceRoot == "" {
 		svc.ServiceRoot = "."
 	}
@@ -956,7 +965,7 @@ SELECT c.id, c.name, c.description, c.enabled, c.created_at, c.updated_at,
        cm.id, cm.capset_instance_id, cm.method_full_name, cm.rest_alias, cm.mcp_tool_name, cm.enabled, cm.created_at, cm.updated_at,
        i.id, i.service_id, i.name, i.enabled, i.status, i.pid, i.listen_addr, i.node_entry, i.config_json, i.config_sha256, i.created_at, i.updated_at,
        s.id, s.name, s.package_source, s.package_artifact_path, s.package_sha256, s.package_version, s.proto_bundle_path, s.proto_bundle_sha256,
-       s.descriptor_path, s.descriptor_sha256, s.descriptor_version, s.methods_json, s.node_entry, s.service_root, s.runtime_mode, s.config_schema_path, s.secret_schema_path, s.created_at, s.updated_at
+       s.descriptor_path, s.descriptor_sha256, s.descriptor_version, s.methods_json, s.node_entry, s.service_root, s.runtime_mode, s.auth_support, s.config_schema_path, s.secret_schema_path, s.created_at, s.updated_at
 FROM capsets c
 JOIN capset_instances ci ON ci.capset_id = c.id AND ci.enabled = 1
 JOIN capset_methods cm ON cm.capset_instance_id = ci.id AND cm.enabled = 1
@@ -995,7 +1004,7 @@ func scanExposedMethod(scanner interface {
 	var capEnabled, ciIncludeAll, ciEnabled, cmEnabled, instEnabled int
 	var capCreated, capUpdated, ciCreated, ciUpdated, cmCreated, cmUpdated, instCreated, instUpdated string
 	var svcMethodsJSON, svcCreated, svcUpdated string
-	var svcRuntimeMode string
+	var svcRuntimeMode, svcAuthSupport string
 	var status, config string
 	var pid sql.NullInt64
 	if err := scanner.Scan(&item.Capset.ID, &item.Capset.Name, &item.Capset.Description, &capEnabled, &capCreated, &capUpdated,
@@ -1003,7 +1012,7 @@ func scanExposedMethod(scanner interface {
 		&item.CapsetMethod.ID, &item.CapsetMethod.CapsetInstanceID, &item.CapsetMethod.MethodFullName, &item.CapsetMethod.RestAlias, &item.CapsetMethod.MCPToolName, &cmEnabled, &cmCreated, &cmUpdated,
 		&item.Instance.ID, &item.Instance.ServiceID, &item.Instance.Name, &instEnabled, &status, &pid, &item.Instance.ListenAddr, &item.Instance.NodeEntry, &config, &item.Instance.ConfigSHA256, &instCreated, &instUpdated,
 		&service.ID, &service.Name, &service.PackageSource, &service.PackageArtifactPath, &service.PackageSHA256, &service.PackageVersion, &service.ProtoBundlePath, &service.ProtoBundleSHA256,
-		&service.DescriptorPath, &service.DescriptorSHA256, &service.DescriptorVersion, &svcMethodsJSON, &service.NodeEntry, &service.ServiceRoot, &svcRuntimeMode, &service.ConfigSchemaPath, &service.SecretSchemaPath, &svcCreated, &svcUpdated); err != nil {
+		&service.DescriptorPath, &service.DescriptorSHA256, &service.DescriptorVersion, &svcMethodsJSON, &service.NodeEntry, &service.ServiceRoot, &svcRuntimeMode, &svcAuthSupport, &service.ConfigSchemaPath, &service.SecretSchemaPath, &svcCreated, &svcUpdated); err != nil {
 		return ExposedMethod{}, false, err
 	}
 	if cached, ok := serviceCache[service.ID]; ok {
@@ -1018,6 +1027,7 @@ func scanExposedMethod(scanner interface {
 		if service.RuntimeMode == "" {
 			service.RuntimeMode = domain.RuntimeModeLongRunning
 		}
+		service.AuthSupport = domain.NormalizeAuthSupport(domain.AuthSupport(svcAuthSupport))
 		service.CreatedAt = parseTime(svcCreated)
 		service.UpdatedAt = parseTime(svcUpdated)
 		serviceCache[service.ID] = service
@@ -1289,6 +1299,7 @@ CREATE TABLE IF NOT EXISTS services (
   node_entry TEXT NOT NULL DEFAULT '',
   service_root TEXT NOT NULL DEFAULT '.',
   runtime_mode TEXT NOT NULL DEFAULT 'long-running',
+	auth_support TEXT NOT NULL DEFAULT 'platform',
   config_schema_path TEXT NOT NULL DEFAULT '',
   secret_schema_path TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL,
