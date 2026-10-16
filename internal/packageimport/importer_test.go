@@ -37,6 +37,9 @@ func TestImporterImportsDirectoryPackage(t *testing.T) {
 	if res.Service.RuntimeMode != domain.RuntimeModeLongRunning {
 		t.Fatalf("runtime mode=%q", res.Service.RuntimeMode)
 	}
+	if res.Service.AuthSupport != domain.AuthSupportPlatform {
+		t.Fatalf("missing auth support=%q, want %q", res.Service.AuthSupport, domain.AuthSupportPlatform)
+	}
 	if res.Manifest.Name != "echo-wrapper" || res.Service.ServiceRoot != "." {
 		t.Fatalf("single service metadata regressed: result=%+v manifest=%+v", res.Service, res.Manifest)
 	}
@@ -47,6 +50,25 @@ func TestImporterImportsDirectoryPackage(t *testing.T) {
 		if _, err := os.Stat(path); err != nil {
 			t.Fatalf("expected artifact %s: %v", path, err)
 		}
+	}
+}
+
+func TestImporterPreservesAuthSupport(t *testing.T) {
+	dataDir, s := openTestStore(t)
+	pkg := writeTestPackage(t, t.TempDir(), `{"schema":"chaitin.octobus.service.v1","name":"echo-wrapper","authSupport":"personal","proto":{"roots":["proto"],"files":["proto/echo.proto"]}}`)
+	res, err := (&Importer{DataDir: dataDir, Store: s}).Import(t.Context(), Options{ServiceID: "echo", Source: pkg, Offline: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Service.AuthSupport != domain.AuthSupportPersonal {
+		t.Fatalf("auth support=%q, want %q", res.Service.AuthSupport, domain.AuthSupportPersonal)
+	}
+	stored, err := s.GetService(t.Context(), "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.AuthSupport != domain.AuthSupportPersonal {
+		t.Fatalf("stored auth support=%q, want %q", stored.AuthSupport, domain.AuthSupportPersonal)
 	}
 }
 

@@ -13,6 +13,7 @@ export interface ServiceManifest {
   version?: string;
   displayName?: string;
   description?: string;
+  authSupport?: "platform" | "personal" | "both";
   runtime?: unknown;
   sdk?: {
     cli?: {
@@ -415,6 +416,9 @@ function validateServiceManifest(
   }
   if (typeof manifest.name !== "string" || manifest.name.trim() === "") {
     throw new Error("service.json name must be a non-empty string");
+  }
+  if (manifest.authSupport !== undefined && !["platform", "personal", "both"].includes(manifest.authSupport)) {
+    throw new Error("service.json authSupport must be platform, personal, or both");
   }
   if (Object.prototype.hasOwnProperty.call(manifest, "id")) {
     throw new Error("service.json must not define top-level id");

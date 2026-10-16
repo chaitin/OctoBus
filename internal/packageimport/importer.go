@@ -533,6 +533,7 @@ func (i *Importer) buildImportedService(ctx context.Context, opts Options, prepa
 		NodeEntry:           service.NodeEntry,
 		ServiceRoot:         service.ServiceRoot,
 		RuntimeMode:         service.RuntimeMode,
+		AuthSupport:         domain.NormalizeAuthSupport(service.Manifest.AuthSupport),
 		ConfigSchemaPath:    configSchemaPath,
 		SecretSchemaPath:    secretSchemaPath,
 	}

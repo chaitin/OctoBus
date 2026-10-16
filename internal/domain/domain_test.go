@@ -89,6 +89,26 @@ func TestManifestRuntimeMode(t *testing.T) {
 	}
 }
 
+func TestAuthSupportDefaultsAndValidation(t *testing.T) {
+	if got := NormalizeAuthSupport(""); got != AuthSupportPlatform {
+		t.Fatalf("missing auth support=%q, want %q", got, AuthSupportPlatform)
+	}
+	for _, value := range []AuthSupport{AuthSupportPlatform, AuthSupportPersonal, AuthSupportBoth} {
+		if err := ValidateAuthSupport(value); err != nil {
+			t.Fatalf("auth support %q rejected: %v", value, err)
+		}
+	}
+	if err := ValidateAuthSupport("unknown"); err == nil {
+		t.Fatal("unknown auth support accepted")
+	}
+	if !SupportsPlatformAuth(AuthSupportPlatform) || !SupportsPlatformAuth(AuthSupportBoth) {
+		t.Fatal("platform-capable auth support was rejected")
+	}
+	if SupportsPlatformAuth(AuthSupportPersonal) {
+		t.Fatal("personal-only auth support was treated as platform-capable")
+	}
+}
+
 func TestValidateManifestContract(t *testing.T) {
 	valid := ServiceManifest{
 		Schema: ServiceManifestSchemaV1,
@@ -105,6 +125,7 @@ func TestValidateManifestContract(t *testing.T) {
 		{name: "missing schema", edit: func(m *ServiceManifest) { m.Schema = "" }},
 		{name: "schema", edit: func(m *ServiceManifest) { m.Schema = "other" }},
 		{name: "missing name", edit: func(m *ServiceManifest) { m.Name = "" }},
+		{name: "invalid auth support", edit: func(m *ServiceManifest) { m.AuthSupport = "unknown" }},
 		{name: "entry", edit: func(m *ServiceManifest) { m.Entry = "bin/svc" }},
 		{name: "missing proto roots", edit: func(m *ServiceManifest) { m.Proto.Roots = nil }},
 		{name: "missing proto files", edit: func(m *ServiceManifest) { m.Proto.Files = nil }},

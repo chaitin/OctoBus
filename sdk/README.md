@@ -73,7 +73,7 @@ const service = defineService({
 runServiceMain(service);
 ```
 
-`service.json` must not define `id` or `entry`. OctoBus assigns service ids during import, and the runtime entry is resolved from the distribution package root `package.json bin`. For a multi-service package, `service.json.name` must match the root `bin` object key for that service.
+`service.json` must not define `id` or `entry`. OctoBus assigns service ids during import, and the runtime entry is resolved from the distribution package root `package.json bin`. For a multi-service package, `service.json.name` must match the root `bin` object key for that service. The optional `authSupport` field accepts `platform`, `personal`, or `both` and defaults to `platform`.
 
 ## Local Development
 
