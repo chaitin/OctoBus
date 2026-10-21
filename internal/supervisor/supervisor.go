@@ -207,7 +207,11 @@ func (s *Supervisor) CreateInstance(ctx context.Context, req CreateInstanceReque
 			s.mu.Unlock()
 			if tracked || existing.PID != nil {
 				if err := s.stopProcess(ctx, existing, true); err != nil {
-					if normErr := s.normalizeStaticModeRow(ctx, req.ID, domain.RuntimeModeOnDemand); normErr != nil {
+					// Commit the requested override (possibly empty, meaning
+					// inherit) with the on-demand resting state; report the
+					// stop failure. The leftover process is the reconcile
+					// pass's business from here.
+					if normErr := s.normalizeStaticModeRow(ctx, req.ID, req.RuntimeMode); normErr != nil {
 						return domain.Instance{}, fmt.Errorf("stop resident process before switching to on-demand: %w (normalize failed: %v)", err, normErr)
 					}
 					s.writeInstanceConfig(req.ID, config)
@@ -234,8 +238,10 @@ func (s *Supervisor) CreateInstance(ctx context.Context, req CreateInstanceReque
 			}
 		case effectiveAfter == domain.RuntimeModeOnDemand:
 			// Resident stopped above; normalize the row to the logical
-			// on-demand state.
-			if err := s.normalizeStaticModeRow(ctx, req.ID, domain.RuntimeModeOnDemand); err != nil {
+			// on-demand state. merged is already persisted with the
+			// requested override, so rewriting it verbatim is a no-op on the
+			// mode field and fixes only the status fields.
+			if err := s.normalizeStaticModeRow(ctx, req.ID, merged.RuntimeMode); err != nil {
 				return domain.Instance{}, err
 			}
 		case effectiveBefore == domain.RuntimeModeOnDemand:
@@ -827,8 +833,9 @@ func (s *Supervisor) SetRuntimeMode(ctx context.Context, instanceID string, mode
 			// servable state rather than blocking every call behind it. Never
 			// write the pre-stop snapshot back: it still claims the old mode,
 			// running status, and a pid for a process that is no longer
-			// tracked.
-			if normErr := s.normalizeStaticModeRow(ctx, instanceID, domain.RuntimeModeOnDemand); normErr != nil {
+			// tracked. The override is the requested one, empty meaning
+			// inherit again.
+			if normErr := s.normalizeStaticModeRow(ctx, instanceID, mode); normErr != nil {
 				return domain.Instance{}, fmt.Errorf("stop resident process before switching to on-demand: %w (normalize failed: %v)", err, normErr)
 			}
 			return domain.Instance{}, fmt.Errorf("stop resident process before switching to on-demand: %w", err)
@@ -1034,22 +1041,24 @@ func (s *Supervisor) rejectOnDemandRuntimeControl(ctx context.Context, inst doma
 // The target mode is a parameter, not a read from the row: both call sites
 // fire before the mode switch has been committed to the row, so a row-based
 // guard would see the old mode and silently do nothing. The gate must be held.
-// normalizeStaticModeRow commits a switch to on-demand at the row level when
-// the process stop did not complete cleanly: the target mode is persisted
-// together with that mode's resting state (enabled, logically running, no
-// process). Writing the status without the mode would strand the row as "old
-// mode + running + no pid" -- servable by nobody, and the reconcile missing
-// pass would restart the just-abandoned process under the old mode. The gate
-// must be held. A non-on-demand target is a no-op.
-func (s *Supervisor) normalizeStaticModeRow(ctx context.Context, instanceID string, target domain.RuntimeMode) error {
-	if target != domain.RuntimeModeOnDemand {
-		return nil
-	}
+// normalizeStaticModeRow lands an on-demand row in that mode's resting state
+// (enabled, logically running, no process) and persists the instance's
+// runtime-mode override.
+//
+// overrideValue is what the row's runtime_mode field must say afterwards --
+// the caller's requested override, NOT the effective mode. An empty value
+// means "inherit the service mode" and must be preserved as empty: writing
+// the effective mode here would solder an explicit on-demand override onto an
+// inheriting instance, and it would then never follow the service's mode
+// again. Writing no mode at all (an earlier attempt) stranded the row as "old
+// mode, running, no pid", which the reconcile missing pass restarts under the
+// old mode. The gate must be held.
+func (s *Supervisor) normalizeStaticModeRow(ctx context.Context, instanceID string, overrideValue domain.RuntimeMode) error {
 	inst, err := s.Store.GetInstance(ctx, instanceID)
 	if err != nil {
 		return err
 	}
-	inst.RuntimeMode = target
+	inst.RuntimeMode = overrideValue
 	inst.Enabled = true
 	inst.Status = domain.StatusRunning
 	inst.PID = nil

@@ -800,10 +800,10 @@ func TestNormalizeOnDemandWorksWithOldModeStillInRow(t *testing.T) {
 	if err := st.UpsertInstance(ctx, domain.Instance{ID: "od-switch", ServiceID: "echo", Enabled: true, Status: domain.StatusStopped, NodeEntry: "fixture-entry", ConfigJSON: []byte(`{}`), SecretJSON: []byte(`{}`)}); err != nil {
 		t.Fatal(err)
 	}
-	// The row still says long-running; the target is on-demand. The helper
-	// must persist the mode too: status without the mode strands the row as
-	// long-running+running+no pid, which the reconcile missing pass would
-	// resurrect under the old mode.
+	// The row still says long-running; the switch requests the explicit
+	// on-demand override. The helper must persist that override too: status
+	// without the override strands the row as long-running+running+no pid,
+	// which the reconcile missing pass would resurrect under the old mode.
 	unlock := sup.lockInstance("od-switch")
 	if err := sup.normalizeStaticModeRow(ctx, "od-switch", domain.RuntimeModeOnDemand); err != nil {
 		t.Fatal(err)
@@ -814,22 +814,31 @@ func TestNormalizeOnDemandWorksWithOldModeStillInRow(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got.RuntimeMode != domain.RuntimeModeOnDemand {
-		t.Fatalf("target mode not persisted: %q", got.RuntimeMode)
+		t.Fatalf("requested override not persisted: %q", got.RuntimeMode)
 	}
 	if !got.Enabled || got.Status != domain.StatusRunning || got.PID != nil {
 		t.Fatalf("row not normalized while old mode was still stored: %+v", got)
 	}
-	// A non-on-demand target must remain a no-op.
-	unlock = sup.lockInstance("od-switch")
-	if err := sup.normalizeStaticModeRow(ctx, "od-switch", domain.RuntimeModeLongRunning); err != nil {
+
+	// The inherit case: an empty override must stay empty. Writing the
+	// effective mode here would solder an explicit on-demand override onto an
+	// inheriting instance, and it would never follow the service's mode again.
+	if err := st.UpsertInstance(ctx, domain.Instance{ID: "od-inherit", ServiceID: "echo", Enabled: true, Status: domain.StatusStopped, NodeEntry: "fixture-entry", ConfigJSON: []byte(`{}`), SecretJSON: []byte(`{}`)}); err != nil {
 		t.Fatal(err)
 	}
-	unlock()
-	got, err = st.GetInstance(ctx, "od-switch")
+	unlock2 := sup.lockInstance("od-inherit")
+	if err := sup.normalizeStaticModeRow(ctx, "od-inherit", ""); err != nil {
+		t.Fatal(err)
+	}
+	unlock2()
+	got2, err := st.GetInstance(ctx, "od-inherit")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Status != domain.StatusRunning || got.PID != nil {
-		t.Fatalf("a long-running target must not touch the row: %+v", got)
+	if got2.RuntimeMode != "" {
+		t.Fatalf("an empty override must stay empty, got %q", got2.RuntimeMode)
+	}
+	if !got2.Enabled || got2.Status != domain.StatusRunning || got2.PID != nil {
+		t.Fatalf("inherit row not normalized: %+v", got2)
 	}
 }

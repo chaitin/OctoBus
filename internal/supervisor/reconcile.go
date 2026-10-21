@@ -138,8 +138,10 @@ func (s *Supervisor) ReconcileProcesses(ctx context.Context) {
 			}
 			// An on-demand row has no stopped state: it serves enabled and
 			// running with no process. Normalize so the gateway does not
-			// answer Unavailable until the next import rewrote the row.
-			if err := s.normalizeStaticModeRow(ctx, id, domain.EffectiveRuntimeMode(svc, inst)); err != nil {
+			// answer Unavailable until the next import rewrote the row. The
+			// row's own override is preserved verbatim -- a inheriting
+			// instance stays inheriting.
+			if err := s.normalizeStaticModeRow(ctx, id, inst.RuntimeMode); err != nil {
 				logger.Warn("reconcile_surplus_normalize_failed", "instance_id", id, "error", err)
 			}
 			return nil
