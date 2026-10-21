@@ -800,7 +800,10 @@ func TestNormalizeOnDemandWorksWithOldModeStillInRow(t *testing.T) {
 	if err := st.UpsertInstance(ctx, domain.Instance{ID: "od-switch", ServiceID: "echo", Enabled: true, Status: domain.StatusStopped, NodeEntry: "fixture-entry", ConfigJSON: []byte(`{}`), SecretJSON: []byte(`{}`)}); err != nil {
 		t.Fatal(err)
 	}
-	// The row still says long-running; the target is on-demand.
+	// The row still says long-running; the target is on-demand. The helper
+	// must persist the mode too: status without the mode strands the row as
+	// long-running+running+no pid, which the reconcile missing pass would
+	// resurrect under the old mode.
 	unlock := sup.lockInstance("od-switch")
 	if err := sup.normalizeStaticModeRow(ctx, "od-switch", domain.RuntimeModeOnDemand); err != nil {
 		t.Fatal(err)
@@ -809,6 +812,9 @@ func TestNormalizeOnDemandWorksWithOldModeStillInRow(t *testing.T) {
 	got, err := st.GetInstance(ctx, "od-switch")
 	if err != nil {
 		t.Fatal(err)
+	}
+	if got.RuntimeMode != domain.RuntimeModeOnDemand {
+		t.Fatalf("target mode not persisted: %q", got.RuntimeMode)
 	}
 	if !got.Enabled || got.Status != domain.StatusRunning || got.PID != nil {
 		t.Fatalf("row not normalized while old mode was still stored: %+v", got)
