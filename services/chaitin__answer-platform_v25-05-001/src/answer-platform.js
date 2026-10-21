@@ -2,7 +2,10 @@
 // JSON-RPC 2.0 proxy over HTTP with cookie-based session management.
 
 import crypto from 'node:crypto';
+import http from 'node:http';
+import https from 'node:https';
 import { Agent } from 'undici';
+import { SocksProxyAgent } from 'socks-proxy-agent';
 
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
@@ -23,6 +26,7 @@ const GET_SYSTEM_STATUS = 'Answer_Platform.Answer_Platform/GetSystemStatus';
 const SEARCH_ASSETS = 'Answer_Platform.Answer_Platform/SearchAssets';
 const LOGOUT = 'Answer_Platform.Answer_Platform/Logout';
 const GET_AGENT_GROUPS = 'Answer_Platform.Answer_Platform/GetAgentGroups';
+const GET_LICENSE = 'Answer_Platform.Answer_Platform/GetLicense';
 
 const DEFAULT_TIMEOUT_MS = 30000;
 const DEFAULT_MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
@@ -114,6 +118,10 @@ const normalizeBaseUrl = (url) => {
 };
 
 const resolveBaseUrl = (bindings) => normalizeBaseUrl(bindings?.restBaseUrl);
+
+const resolveProxyUrl = (bindings = {}) => String(
+  unwrapScalar(firstDefined(bindings?.proxy_url, bindings?.proxyUrl)) ?? ''
+).trim();
 
 
 const limitPageSize = (val) => {
@@ -208,6 +216,55 @@ const removeSession = (token) => {
 
 let rpcSeq = 0;
 
+// Native http(s) fetch for proxied requests (socks5h etc.) using
+// socks-proxy-agent, avoiding an external curl binary. Returns a fetch-like
+// response object so the rest of rpcCall stays unchanged.
+const proxiedFetch = (url, { method = 'POST', headers = {}, body } = {}, { timeoutMs, proxyUrl, skipTlsVerify } = {}) => new Promise((resolve, reject) => {
+  const target = new URL(url);
+  const mod = target.protocol === 'https:' ? https : http;
+  const agent = new SocksProxyAgent(proxyUrl);
+
+  const req = mod.request(target, {
+    method,
+    headers,
+    agent,
+    rejectUnauthorized: !skipTlsVerify,
+  }, (res) => {
+    const chunks = [];
+    res.on('data', (chunk) => chunks.push(chunk));
+    res.on('end', () => {
+      const bodyText = Buffer.concat(chunks).toString('utf8');
+      const headerMap = {};
+      const setCookies = [];
+      for (const [name, value] of Object.entries(res.headers)) {
+        const key = name.toLowerCase();
+        if (key === 'set-cookie') setCookies.push(...(Array.isArray(value) ? value : [value]));
+        else if (!(key in headerMap)) headerMap[key] = Array.isArray(value) ? value.join(', ') : value;
+      }
+      resolve({
+        ok: res.statusCode >= 200 && res.statusCode < 300,
+        status: res.statusCode,
+        headers: {
+          get: (name) => headerMap[String(name).toLowerCase()] ?? null,
+          getSetCookie: () => setCookies,
+        },
+        text: async () => bodyText,
+      });
+    });
+  });
+
+  req.setTimeout(timeoutMs, () => req.destroy(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })));
+  req.on('error', (err) => {
+    if (err.code === 'ETIMEDOUT' || err.code === 'ESOCKETTIMEDOUT') {
+      reject(errorWithCode('DEADLINE_EXCEEDED', `RPC timeout after ${timeoutMs}ms`));
+    } else {
+      reject(errorWithCode('UNAVAILABLE', err.message || 'proxied request failed'));
+    }
+  });
+  if (body !== undefined && body !== null) req.write(String(body));
+  req.end();
+});
+
 const rpcCall = async (ctx, method, params = {}) => {
   const baseUrl = resolveBaseUrl(ctx?.bindings ?? {});
   if (!baseUrl) throw errorWithCode('INVALID_ARGUMENT', 'restBaseUrl/baseUrl is required (https://...)');
@@ -234,22 +291,32 @@ const rpcCall = async (ctx, method, params = {}) => {
     id: String(++rpcSeq),
   });
 
+  const proxyUrl = resolveProxyUrl(ctx?.bindings ?? {});
+
   let res;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    res = await fetch(`${baseUrl}${RPC_PATH}`, {
-      method: 'POST',
-      headers,
-      body,
-      signal: controller.signal,
-      ...tlsOpts,
+  if (proxyUrl) {
+    res = await proxiedFetch(`${baseUrl}${RPC_PATH}`, { method: 'POST', headers, body }, {
+      timeoutMs,
+      proxyUrl,
+      skipTlsVerify: toBoolean(ctx?.bindings?.skipTlsVerify),
     });
-  } catch (err) {
-    if (err.name === 'AbortError') throw errorWithCode('DEADLINE_EXCEEDED', `RPC timeout after ${timeoutMs}ms`);
-    throw errorWithCode('UNAVAILABLE', err?.cause?.message || err?.message || 'fetch failed');
-  } finally {
-    clearTimeout(timer);
+  } else {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      res = await fetch(`${baseUrl}${RPC_PATH}`, {
+        method: 'POST',
+        headers,
+        body,
+        signal: controller.signal,
+        ...tlsOpts,
+      });
+    } catch (err) {
+      if (err.name === 'AbortError') throw errorWithCode('DEADLINE_EXCEEDED', `RPC timeout after ${timeoutMs}ms`);
+      throw errorWithCode('UNAVAILABLE', err?.cause?.message || err?.message || 'fetch failed');
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   // Capture set-cookie for session persistence
@@ -724,6 +791,48 @@ async function handleGetSystemStatus(req, ctx) {
   };
 }
 
+// --- License ---
+
+// -1 = 永久授权；否则为 Unix 时间戳(秒)，转成 ISO 8601 UTC 日期字符串。
+const formatLicenseTime = (value) => {
+  const n = Number(value);
+  if (Number.isFinite(n) && n > 0) {
+    const d = new Date(n * 1000);
+    if (!Number.isNaN(d.getTime())) return d.toISOString();
+  }
+  return String(value ?? '');
+};
+
+async function handleGetLicense(req, ctx) {
+  const callCtx = resolveCallContext(ctx);
+  const token = requireSessionToken(req);
+
+  const result = await authenticatedRpc(callCtx, token, 'HeraLicenseService.GetLicense', {});
+
+  const data = result?.data ?? result ?? {};
+
+  return {
+    code: resultCode(result),
+    msg: resultMsg(result),
+    company: String(data?.company ?? ''),
+    not_valid_before: formatLicenseTime(data?.not_valid_before),
+    not_valid_after: formatLicenseTime(data?.not_valid_after),
+    permanent: toBoolean(data?.permanent),
+    upgrade_permanent: toBoolean(data?.upgrade_permanent),
+    cannot_upgrade_after: formatLicenseTime(data?.cannot_upgrade_after),
+    cannot_upgrade_before: formatLicenseTime(data?.cannot_upgrade_before),
+    valid_expired: toBoolean(data?.valid_expired),
+    upgrade_expired: toBoolean(data?.upgrade_expired),
+    valid_expired_soon: toBoolean(data?.valid_expired_soon),
+    upgrade_expired_soon: toBoolean(data?.upgrade_expired_soon),
+    product_version: String(data?.product_version ?? ''),
+    license_type: String(data?.license_type ?? ''),
+    max_node_count: Number(data?.max_node_count ?? 0) || 0,
+    traffic_limit: String(data?.traffic_limit ?? ''),
+    raw: toStruct(result ?? {}),
+  };
+}
+
 // --- Assets ---
 
 async function handleSearchAssets(req, ctx) {
@@ -770,6 +879,7 @@ export const handlers = {
   [SEARCH_ASSETS]: adapt(handleSearchAssets),
   [LOGOUT]: adapt(handleLogout),
   [GET_AGENT_GROUPS]: adapt(handleGetAgentGroups),
+  [GET_LICENSE]: adapt(handleGetLicense),
 };
 
 // --- Test exports ---

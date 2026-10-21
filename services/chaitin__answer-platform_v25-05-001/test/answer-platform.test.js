@@ -29,7 +29,7 @@ test.afterEach(() => { globalThis.fetch = originalFetch; });
 
 test('production service exports every proto RPC handler', () => {
   assert.deepEqual(Object.keys(service.handlers).sort(), Object.keys(handlers).sort());
-  const names = ['Login', 'SearchAlarms', 'GetAlarm', 'SearchBlockRules', 'CreateBlockRule',
+  const names = ['Login', 'SearchAlarms', 'GetAlarm', 'GetLicense', 'SearchBlockRules', 'CreateBlockRule',
     'UpdateBlockRuleStatus', 'DeleteBlockRule', 'ListFirewalls', 'CreateBlackList',
     'DeleteBlackList', 'SearchBlackList', 'GetSystemStatus', 'SearchAssets', 'Logout', 'GetAgentGroups'];
   assert.deepEqual(Object.keys(handlers).sort(), names.map(method).sort());

@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@chaitin-ai/octobus-sdk": "^0.6.0",
+    "socks-proxy-agent": "^8.0.5",
     "undici": "^7.16.0"
   }
 }

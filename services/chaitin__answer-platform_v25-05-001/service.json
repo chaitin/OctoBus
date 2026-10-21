@@ -74,6 +74,10 @@
         "Answer_Platform.Answer_Platform/GetAgentGroups": {
           "name": "get-agent-groups",
           "description": "Get available agent/probe groups (required for platform-mode deployments)."
+        },
+        "Answer_Platform.Answer_Platform/GetLicense": {
+          "name": "get-license",
+          "description": "Get license status (validity period, permanent flag, node count, traffic limit)."
         }
       }
     }

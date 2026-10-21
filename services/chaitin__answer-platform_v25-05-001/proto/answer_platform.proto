@@ -20,6 +20,7 @@ service Answer_Platform {
   rpc SearchAssets(SearchAssetsRequest) returns (SearchAssetsResponse) {}
   rpc Logout(LogoutRequest) returns (LogoutResponse) {}
   rpc GetAgentGroups(GetAgentGroupsRequest) returns (GetAgentGroupsResponse) {}
+  rpc GetLicense(GetLicenseRequest) returns (GetLicenseResponse) {}
 }
 
 // --- Login ---
@@ -238,4 +239,31 @@ message GetAgentGroupsResponse {
   int32 code = 1;
   string msg = 2;
   repeated google.protobuf.Struct items = 3;
+}
+
+// --- License ---
+
+message GetLicenseRequest {
+  string session_token = 1;
+}
+
+message GetLicenseResponse {
+  int32 code = 1;
+  string msg = 2;
+  string company = 3;
+  string not_valid_before = 4;   // "-1" = permanent, otherwise ISO 8601 UTC time
+  string not_valid_after = 5;    // "-1" = permanent, otherwise ISO 8601 UTC time
+  bool permanent = 6;
+  bool upgrade_permanent = 7;
+  string cannot_upgrade_after = 8;   // "-1" = permanent, otherwise ISO 8601 UTC time
+  string cannot_upgrade_before = 9;  // "-1" = permanent, otherwise ISO 8601 UTC time
+  bool valid_expired = 10;
+  bool upgrade_expired = 11;
+  bool valid_expired_soon = 12;
+  bool upgrade_expired_soon = 13;
+  string product_version = 14;
+  string license_type = 15;
+  int64 max_node_count = 16;
+  string traffic_limit = 17;
+  google.protobuf.Struct raw = 18;
 }
