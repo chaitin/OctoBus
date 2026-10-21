@@ -250,8 +250,10 @@ func (s *Supervisor) parkLocked(ctx context.Context, instanceID string) bool {
 	return true
 }
 
-// StartScaleToZeroLoop launches the idle-stop and LRU scan. It returns immediately;
-// the loop exits when the supervisor's lifecycle context is cancelled.
+// StartScaleToZeroLoop launches the idle-stop and LRU scan. It returns
+// immediately; the loop exits when the passed context or the supervisor's
+// lifecycle context is cancelled -- Shutdown cancels the latter, so the loop
+// cannot outlive the supervisor even when the caller's context keeps running.
 func (s *Supervisor) StartScaleToZeroLoop(ctx context.Context, ttl time.Duration, maxWarm int) {
 	s.mu.Lock()
 	s.stzIdleTTL = ttl
@@ -266,6 +268,8 @@ func (s *Supervisor) StartScaleToZeroLoop(ctx context.Context, ttl time.Duration
 			select {
 			case <-ctx.Done():
 				return
+			case <-s.lifecycleContext().Done():
+				return
 			case <-ticker.C:
 				s.scanScaleToZero(ctx)
 			}
@@ -274,9 +278,10 @@ func (s *Supervisor) StartScaleToZeroLoop(ctx context.Context, ttl time.Duration
 }
 
 // StartReconcileLoop launches the process reconciliation backstop. It returns
-// immediately; the loop exits when the supervisor's lifecycle context is
-// cancelled. The first pass runs immediately: a daemon that restarted after a
-// kill -9 gets its stale rows repaired on the way up, not five minutes later.
+// immediately; the loop exits when the passed context or the supervisor's
+// lifecycle context is cancelled. The first pass runs immediately: a daemon
+// that restarted after a kill -9 gets its stale rows repaired on the way up,
+// not five minutes later.
 func (s *Supervisor) StartReconcileLoop(ctx context.Context, interval time.Duration) {
 	if interval <= 0 {
 		interval = DefaultReconcileInterval
@@ -292,6 +297,8 @@ func (s *Supervisor) StartReconcileLoop(ctx context.Context, interval time.Durat
 		for {
 			select {
 			case <-ctx.Done():
+				return
+			case <-s.lifecycleContext().Done():
 				return
 			case <-ticker.C:
 				s.ReconcileProcesses(reconcileCtx)

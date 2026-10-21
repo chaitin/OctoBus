@@ -136,6 +136,12 @@ func (s *Supervisor) ReconcileProcesses(ctx context.Context) {
 			if err := s.stopProcess(ctx, inst, inst.Enabled); err != nil {
 				return err
 			}
+			// An on-demand row has no stopped state: it serves enabled and
+			// running with no process. Normalize so the gateway does not
+			// answer Unavailable until the next import rewrote the row.
+			if err := s.normalizeStaticModeRow(ctx, id); err != nil {
+				logger.Warn("reconcile_surplus_normalize_failed", "instance_id", id, "error", err)
+			}
 			return nil
 		})
 		if err == nil {
@@ -177,12 +183,23 @@ func (s *Supervisor) ReconcileProcesses(ctx context.Context) {
 
 	for _, m := range missings {
 		err := s.withGate(m.id, func() error {
-			// Repair the stale row first so recovery does not race its own
-			// UpsertInstance during start.
+			// Re-read and re-verify inside the gate: the snapshot predates it,
+			// and an operator Stop (or a mode change) that landed in between
+			// must win -- recovering over it would silently undo the stop.
 			inst, err := s.Store.GetInstance(ctx, m.id)
 			if err != nil {
 				return err
 			}
+			svc, err := s.Store.GetService(ctx, inst.ServiceID)
+			if err != nil {
+				return err
+			}
+			if !inst.Enabled || !claimsLiveness(inst.Status) ||
+				domain.EffectiveRuntimeMode(svc, inst) != domain.RuntimeModeLongRunning {
+				return nil
+			}
+			// Repair the stale row first so recovery does not race its own
+			// UpsertInstance during start.
 			if inst.PID != nil && !pidAlive(*inst.PID) {
 				inst.PID = nil
 				inst.ListenAddr = ""

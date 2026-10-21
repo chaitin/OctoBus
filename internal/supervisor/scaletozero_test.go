@@ -595,3 +595,187 @@ func TestScaleToZeroEnsureStartedSurvivesCallerCancellation(t *testing.T) {
 	release2()
 	_ = sup.Stop(ctx, "stz-detach")
 }
+
+func TestStartInitializesIdleClock(t *testing.T) {
+	// Every warm path must start the idle clock at process registration: an
+	// admin-started (or restarted, or recovered) scale-to-zero instance buys a
+	// full TTL, not one scan interval. Before the fix only EnsureStarted
+	// initialized the clock, so an explicit start was parked within a minute.
+	dataDir, st := setupScaleToZeroRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "stz-clock", ServiceID: "echo"}); err != nil {
+		t.Fatal(err)
+	}
+	// Admin Start, not EnsureStarted.
+	if err := sup.Start(ctx, "stz-clock"); err != nil {
+		t.Fatal(err)
+	}
+	sup.mu.Lock()
+	activity, ok := sup.lastActivity["stz-clock"]
+	sup.mu.Unlock()
+	if !ok {
+		t.Fatal("admin Start did not initialize the idle clock")
+	}
+	if age := time.Since(activity); age > time.Minute {
+		t.Fatalf("idle clock starts too old: %v", age)
+	}
+	// The scan must not park it.
+	sup.stzIdleTTL = time.Hour
+	sup.stzMaxWarm = 0
+	sup.scanScaleToZero(ctx)
+	if !sup.TracksInstance("stz-clock") {
+		t.Fatal("freshly started instance was parked on the first scan")
+	}
+	_ = sup.Stop(ctx, "stz-clock")
+}
+
+func TestReconcileMissingDoesNotResurrectOperatorStop(t *testing.T) {
+	// The missing-recovery snapshot predates the gate. An operator Stop that
+	// lands after the snapshot must win: recovery inside the gate re-verifies
+	// Enabled instead of silently undoing the stop.
+	dataDir, st, _ := setupSupervisorHelperRuntime(t)
+	ctx := context.Background()
+	svc, err := st.GetService(ctx, "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.RuntimeMode = domain.RuntimeModeLongRunning
+	if err := st.UpsertService(ctx, svc); err != nil {
+		t.Fatal(err)
+	}
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "no-resurrect", ServiceID: "echo", Start: true}); err != nil {
+		t.Fatal(err)
+	}
+	// Simulate the operator Stop landing after the reconcile snapshot: disable
+	// the row and untrack the process while the row still claims liveness.
+	// Wait for the exit watcher to settle first: its own degraded write must
+	// not land after our Enabled=false and re-enable the row behind the test.
+	inst, err := st.GetInstance(ctx, "no-resurrect")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Kill(*inst.PID, syscall.SIGKILL); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, 5*time.Second, func() bool {
+		sup.mu.Lock()
+		tracked := sup.procs["no-resurrect"] != nil
+		sup.mu.Unlock()
+		return !tracked
+	})
+	inst, err = st.GetInstance(ctx, "no-resurrect")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The watcher may or may not have written its degraded row yet; both are
+	// fine. All the scenario needs is a disabled row claiming liveness with a
+	// dead pid -- exactly what an operator stop leaves behind when it lost the
+	// race to a crash.
+	inst.Enabled = false
+	inst.Status = domain.StatusRunning
+	if inst.PID != nil {
+		dead := *inst.PID
+		inst.PID = &dead
+	}
+	if err := st.UpsertInstance(ctx, inst); err != nil {
+		t.Fatal(err)
+	}
+	sup.mu.Lock()
+	delete(sup.procs, "no-resurrect")
+	sup.mu.Unlock()
+
+	sup.ReconcileProcesses(ctx)
+
+	got, err := st.GetInstance(ctx, "no-resurrect")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Enabled {
+		t.Fatal("reconcile resurrected an instance the operator stopped after the snapshot")
+	}
+	if sup.TracksInstance("no-resurrect") {
+		t.Fatal("reconcile started a process for a disabled instance")
+	}
+}
+
+func TestWaitDoesNotClobberFreshGeneration(t *testing.T) {
+	// The exit watcher runs outside the gate. A request that warmed a fresh
+	// process while the old process's wait was between the procs deletion and
+	// the row write must win: the stale degraded write may not clobber the
+	// new generation's running row.
+	dataDir, st := setupScaleToZeroRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "stz-race", ServiceID: "echo"}); err != nil {
+		t.Fatal(err)
+	}
+	release, err := sup.EnsureStarted(ctx, "stz-race")
+	if err != nil {
+		t.Fatal(err)
+	}
+	release()
+	// The old generation dies. wait() will race the fresh start below.
+	old, err := st.GetInstance(ctx, "stz-race")
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldPID := *old.PID
+	oldInst, _ := st.GetInstance(ctx, "stz-race")
+	_ = oldInst
+	if err := syscall.Kill(oldPID, syscall.SIGKILL); err != nil {
+		t.Fatal(err)
+	}
+	// Give the exit watcher time to reach its row-write section, then warm a
+	// fresh generation that the stale write must not destroy.
+	time.Sleep(50 * time.Millisecond)
+	release2, err := sup.EnsureStarted(ctx, "stz-race")
+	if err != nil {
+		t.Fatal(err)
+	}
+	release2()
+	// Wait past the watcher's write window.
+	time.Sleep(500 * time.Millisecond)
+	got, err := st.GetInstance(ctx, "stz-race")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.StatusRunning || got.PID == nil {
+		t.Fatalf("stale exit write clobbered the fresh generation: %+v", got)
+	}
+	_ = sup.Stop(ctx, "stz-race")
+}
+
+func TestNormalizeStaticModeRowAfterStopTimeout(t *testing.T) {
+	// An on-demand instance has no stopped state. After a surplus stop (the
+	// defensive path) or a switch whose stop timed out, the row must land in
+	// enabled/running/no-pid so the gateway keeps serving.
+	dataDir, st, _ := setupSupervisorHelperRuntime(t)
+	ctx := context.Background()
+	svc, err := st.GetService(ctx, "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.RuntimeMode = domain.RuntimeModeOnDemand
+	if err := st.UpsertService(ctx, svc); err != nil {
+		t.Fatal(err)
+	}
+	sup := New(dataDir, st)
+	// A row in the impossible shape the fix exists for: enabled+stopped.
+	if err := st.UpsertInstance(ctx, domain.Instance{ID: "od-norm", ServiceID: "echo", Enabled: true, Status: domain.StatusStopped, NodeEntry: "fixture-entry", ConfigJSON: []byte(`{}`), SecretJSON: []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	unlock := sup.lockInstance("od-norm")
+	if err := sup.normalizeStaticModeRow(ctx, "od-norm"); err != nil {
+		t.Fatal(err)
+	}
+	unlock()
+	got, err := st.GetInstance(ctx, "od-norm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Enabled || got.Status != domain.StatusRunning || got.PID != nil {
+		t.Fatalf("on-demand row not normalized to its resting state: %+v", got)
+	}
+}

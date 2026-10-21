@@ -196,13 +196,21 @@ func (s *Supervisor) CreateInstance(ctx context.Context, req CreateInstanceReque
 		s.mu.Unlock()
 
 		// A mode change into on-demand must not leave a resident process
-		// behind; every other transition is handled after the row write.
+		// behind; every other transition is handled after the row write. A
+		// stop that times out (the process is stuck dying) still commits the
+		// intent: normalize the row to on-demand's resting state so the
+		// gateway sees a servable instance, and report the stop failure -- the
+		// reconcile pass owns the leftover process from here.
 		if effectiveAfter == domain.RuntimeModeOnDemand && effectiveBefore != domain.RuntimeModeOnDemand {
 			s.mu.Lock()
 			s.nextGenerationLocked(req.ID)
 			s.mu.Unlock()
 			if tracked || existing.PID != nil {
 				if err := s.stopProcess(ctx, existing, true); err != nil {
+					if normErr := s.normalizeStaticModeRow(ctx, req.ID); normErr != nil {
+						return domain.Instance{}, fmt.Errorf("stop resident process before switching to on-demand: %w (normalize failed: %v)", err, normErr)
+					}
+					s.writeInstanceConfig(req.ID, config)
 					return domain.Instance{}, fmt.Errorf("stop resident process before switching to on-demand: %w", err)
 				}
 			}
@@ -227,15 +235,7 @@ func (s *Supervisor) CreateInstance(ctx context.Context, req CreateInstanceReque
 		case effectiveAfter == domain.RuntimeModeOnDemand:
 			// Resident stopped above; normalize the row to the logical
 			// on-demand state.
-			inst, err := s.Store.GetInstance(ctx, req.ID)
-			if err != nil {
-				return domain.Instance{}, err
-			}
-			inst.Enabled = true
-			inst.Status = domain.StatusRunning
-			inst.PID = nil
-			inst.ListenAddr = ""
-			if err := s.Store.UpsertInstance(ctx, inst); err != nil {
+			if err := s.normalizeStaticModeRow(ctx, req.ID); err != nil {
 				return domain.Instance{}, err
 			}
 		case effectiveBefore == domain.RuntimeModeOnDemand:
@@ -554,6 +554,11 @@ func (s *Supervisor) startWithAttempt(ctx context.Context, instanceID string, re
 		return startErr
 	}
 	s.procs[instanceID] = state
+	// The idle clock starts when the process becomes tracked, not when the
+	// first request arrives: an admin Start, a Restart, a content-changing
+	// create, a mode switch that keeps the process, or recovery must all buy
+	// the instance a full idle TTL, not one scan interval.
+	s.lastActivity[instanceID] = time.Now()
 	s.mu.Unlock()
 	if err := waitHealth(ctx, addr, 5*time.Second); err != nil {
 		if ctx.Err() != nil && s.lifecycleErr() != nil {
@@ -817,6 +822,12 @@ func (s *Supervisor) SetRuntimeMode(ctx context.Context, instanceID string, mode
 		s.nextGenerationLocked(instanceID)
 		s.mu.Unlock()
 		if err := s.stopProcess(ctx, inst, true); err != nil {
+			// Commit the switch anyway: a stuck-dying process is the reconcile
+			// pass's business from here, and the row must land in on-demand's
+			// servable state rather than blocking every call behind it.
+			if saveErr := s.Store.UpsertInstance(ctx, inst); saveErr == nil {
+				_ = s.normalizeStaticModeRow(ctx, instanceID)
+			}
 			return domain.Instance{}, fmt.Errorf("stop resident process before switching to on-demand: %w", err)
 		}
 		inst, err = s.Store.GetInstance(ctx, instanceID)
@@ -1011,6 +1022,35 @@ func (s *Supervisor) rejectOnDemandRuntimeControl(ctx context.Context, inst doma
 	return nil
 }
 
+// normalizeStaticModeRow rewrites the row of an instance whose effective mode
+// is on-demand into that mode's resting state: enabled, logically running, no
+// process. On-demand has no stopped state -- it serves without one -- so every
+// path that stops a process on such an instance must land the row here, or the
+// gateway answers Unavailable until an import normalizes it. The gate must be
+// held.
+func (s *Supervisor) normalizeStaticModeRow(ctx context.Context, instanceID string) error {
+	inst, err := s.Store.GetInstance(ctx, instanceID)
+	if err != nil {
+		return err
+	}
+	svc, err := s.Store.GetService(ctx, inst.ServiceID)
+	if err != nil {
+		return err
+	}
+	if domain.EffectiveRuntimeMode(svc, inst) != domain.RuntimeModeOnDemand {
+		return nil
+	}
+	inst.Enabled = true
+	inst.Status = domain.StatusRunning
+	inst.PID = nil
+	inst.ListenAddr = ""
+	if err := s.Store.UpsertInstance(ctx, inst); err != nil {
+		return err
+	}
+	s.notifyInstanceChanged(instanceID)
+	return nil
+}
+
 func (s *Supervisor) stopProcess(ctx context.Context, inst domain.Instance, enabled bool) error {
 	if ctx == nil {
 		ctx = context.Background()
@@ -1180,6 +1220,15 @@ func (s *Supervisor) wait(instanceID string, state *processState, stdout, stderr
 	_ = stdout.Close()
 	_ = stderr.Close()
 	close(state.done)
+	// The row mutation below takes the instance gate: wait runs outside it, and
+	// without the gate a request that EnsureStarted-queued during the crash
+	// could warm a fresh process between the procs deletion and the row write
+	// -- the stale degraded write would then destroy the new process's running
+	// row and every request would fail with Unavailable until the idle scan
+	// parked the instance. Holding the gate also re-checks ownership: a
+	// successor (new tracked state) or a row whose pid is not this process's
+	// means the world moved on and this exit owns nothing.
+	unlock := s.lockInstance(instanceID)
 	s.mu.Lock()
 	current := s.procs[instanceID]
 	if current == state {
@@ -1188,19 +1237,27 @@ func (s *Supervisor) wait(instanceID string, state *processState, stdout, stderr
 	s.mu.Unlock()
 	ctx := s.lifecycleContext()
 	if ctx.Err() != nil {
+		unlock()
 		return
 	}
 	inst, getErr := s.Store.GetInstance(ctx, instanceID)
 	if getErr != nil || !inst.Enabled || current != state || ctx.Err() != nil {
+		unlock()
 		return
 	}
-	// A scale-to-zero instance whose process exits is degraded, not restarted: restart-
-	// on-exit would fight the idle stopper and spin processes nobody is
+	// Ownership re-check under the gate: the row must still describe this
+	// process. A successor's start already rewrote pid and status; writing
+	// degraded over it would clobber a live generation.
+	if inst.PID != nil && *inst.PID != processPID(state.cmd) {
+		unlock()
+		return
+	}
+	// A scale-to-zero instance whose process exits is degraded, not restarted:
+	// restart-on-exit would fight the idle stopper and spin processes nobody is
 	// calling. In-flight refs are dropped with the process -- only when no new
-	// generation has started: wait() runs outside the gate, and a ref taken
-	// for a fresh process belongs to that generation. A service lookup failure
-	// is treated as scale-to-zero too: without a mode the safe answer is the one that
-	// cannot spin.
+	// generation has started: a ref taken for a fresh process belongs to that
+	// generation. A service lookup failure is treated as scale-to-zero too:
+	// without a mode the safe answer is the one that cannot spin.
 	svc, svcErr := s.Store.GetService(ctx, inst.ServiceID)
 	if svcErr != nil || domain.EffectiveRuntimeMode(svc, inst) == domain.RuntimeModeScaleToZero {
 		s.mu.Lock()
@@ -1210,26 +1267,20 @@ func (s *Supervisor) wait(instanceID string, state *processState, stdout, stderr
 		s.mu.Unlock()
 		inst.Status = domain.StatusDegraded
 		inst.PID = nil
+		inst.ListenAddr = ""
 		_ = s.Store.UpsertInstance(ctx, inst)
 		s.notifyInstanceChanged(instanceID)
 		s.logger().Warn("instance_degraded", "instance_id", instanceID, "attempt", state.attempt+1)
+		unlock()
 		return
 	}
 	s.logger().Warn("instance_exited", "instance_id", instanceID, "pid", processPID(state.cmd), "attempt", state.attempt+1, "error", err)
-	if err != nil {
-		inst.Status = domain.StatusDegraded
-		inst.PID = nil
-		_ = s.Store.UpsertInstance(ctx, inst)
-		s.notifyInstanceChanged(instanceID)
-		s.logger().Warn("instance_degraded", "instance_id", instanceID, "attempt", state.attempt+1)
-		s.scheduleRestartAfterBackoff(instanceID, state.attempt+1, state.generation)
-		return
-	}
 	inst.Status = domain.StatusDegraded
 	inst.PID = nil
 	_ = s.Store.UpsertInstance(ctx, inst)
 	s.notifyInstanceChanged(instanceID)
 	s.logger().Warn("instance_degraded", "instance_id", instanceID, "attempt", state.attempt+1)
+	unlock()
 	s.scheduleRestartAfterBackoff(instanceID, state.attempt+1, state.generation)
 }
 
