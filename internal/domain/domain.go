@@ -33,6 +33,11 @@ type RuntimeMode string
 const (
 	RuntimeModeLongRunning RuntimeMode = "long-running"
 	RuntimeModeOnDemand    RuntimeMode = "on-demand"
+	// RuntimeModeScaleToZero keeps a resident serve process warm between calls: the
+	// first call starts it (supervisor EnsureStarted), the idle stopper parks
+	// it after OCTOBUS_SCALE_TO_ZERO_IDLE_TTL. It trades the on-demand mode's guaranteed
+	// cold isolation for a warm path, bounded by the warm-pool cap.
+	RuntimeModeScaleToZero RuntimeMode = "scale-to-zero"
 )
 
 type Service struct {
@@ -250,10 +255,10 @@ func ManifestRuntimeMode(m ServiceManifest) (RuntimeMode, error) {
 
 func ValidateRuntimeMode(mode RuntimeMode) error {
 	switch mode {
-	case RuntimeModeLongRunning, RuntimeModeOnDemand:
+	case RuntimeModeLongRunning, RuntimeModeOnDemand, RuntimeModeScaleToZero:
 		return nil
 	default:
-		return fmt.Errorf("invalid runtime.mode %q: must be long-running or on-demand", mode)
+		return fmt.Errorf("invalid runtime.mode %q: must be long-running, on-demand, or scale-to-zero", mode)
 	}
 }
 
