@@ -66,6 +66,16 @@ func (g *Gateway) proxyUnaryStream(stream grpc.ServerStream, item store.ExposedM
 	return stream.SendMsg(newRawFrame(resp))
 }
 
+// releaseStream drops a scale-to-zero request ref when a proxy returns by any
+// path, including a client hangup that never touches the backend stream again.
+// warmStream's release is idempotent, so this is safe alongside the
+// per-message release on EOF and error.
+func releaseStream(client grpc.ClientStream) {
+	if releaser, ok := client.(interface{ Release() }); ok {
+		releaser.Release()
+	}
+}
+
 func (g *Gateway) proxyServerStream(stream grpc.ServerStream, item store.ExposedMethod) error {
 	req := newRawFrame(nil)
 	if err := stream.RecvMsg(req); err != nil {
@@ -75,6 +85,7 @@ func (g *Gateway) proxyServerStream(stream grpc.ServerStream, item store.Exposed
 	if err != nil {
 		return err
 	}
+	defer releaseStream(client)
 	if err := client.SendMsg(req); err != nil {
 		return err
 	}
@@ -101,6 +112,7 @@ func (g *Gateway) proxyClientStream(stream grpc.ServerStream, item store.Exposed
 	if err != nil {
 		return err
 	}
+	defer releaseStream(client)
 	for {
 		req := newRawFrame(nil)
 		err := stream.RecvMsg(req)
@@ -136,6 +148,7 @@ func (g *Gateway) proxyBidiStream(stream grpc.ServerStream, item store.ExposedMe
 	if err != nil {
 		return err
 	}
+	defer releaseStream(client)
 	errc := make(chan error, 2)
 	go func() {
 		for {
