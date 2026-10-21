@@ -1234,12 +1234,16 @@ func (s *Supervisor) wait(instanceID string, state *processState, stdout, stderr
 	}
 	s.mu.Unlock()
 	ctx := s.lifecycleContext()
-	if ctx.Err() != nil {
+	// A deliberate Stop already removed this state, and a restart replaced it:
+	// either way the world moved on and this exit owns nothing. Return before
+	// touching the store -- during shutdown the connection may already be
+	// closing, and a read there can race the daemon's own teardown.
+	if current != state || ctx.Err() != nil {
 		unlock()
 		return
 	}
 	inst, getErr := s.Store.GetInstance(ctx, instanceID)
-	if getErr != nil || !inst.Enabled || current != state || ctx.Err() != nil {
+	if getErr != nil || !inst.Enabled || ctx.Err() != nil {
 		unlock()
 		return
 	}
