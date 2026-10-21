@@ -207,7 +207,7 @@ func (s *Supervisor) CreateInstance(ctx context.Context, req CreateInstanceReque
 			s.mu.Unlock()
 			if tracked || existing.PID != nil {
 				if err := s.stopProcess(ctx, existing, true); err != nil {
-					if normErr := s.normalizeStaticModeRow(ctx, req.ID); normErr != nil {
+					if normErr := s.normalizeStaticModeRow(ctx, req.ID, domain.RuntimeModeOnDemand); normErr != nil {
 						return domain.Instance{}, fmt.Errorf("stop resident process before switching to on-demand: %w (normalize failed: %v)", err, normErr)
 					}
 					s.writeInstanceConfig(req.ID, config)
@@ -235,7 +235,7 @@ func (s *Supervisor) CreateInstance(ctx context.Context, req CreateInstanceReque
 		case effectiveAfter == domain.RuntimeModeOnDemand:
 			// Resident stopped above; normalize the row to the logical
 			// on-demand state.
-			if err := s.normalizeStaticModeRow(ctx, req.ID); err != nil {
+			if err := s.normalizeStaticModeRow(ctx, req.ID, domain.RuntimeModeOnDemand); err != nil {
 				return domain.Instance{}, err
 			}
 		case effectiveBefore == domain.RuntimeModeOnDemand:
@@ -824,9 +824,12 @@ func (s *Supervisor) SetRuntimeMode(ctx context.Context, instanceID string, mode
 		if err := s.stopProcess(ctx, inst, true); err != nil {
 			// Commit the switch anyway: a stuck-dying process is the reconcile
 			// pass's business from here, and the row must land in on-demand's
-			// servable state rather than blocking every call behind it.
-			if saveErr := s.Store.UpsertInstance(ctx, inst); saveErr == nil {
-				_ = s.normalizeStaticModeRow(ctx, instanceID)
+			// servable state rather than blocking every call behind it. Never
+			// write the pre-stop snapshot back: it still claims the old mode,
+			// running status, and a pid for a process that is no longer
+			// tracked.
+			if normErr := s.normalizeStaticModeRow(ctx, instanceID, domain.RuntimeModeOnDemand); normErr != nil {
+				return domain.Instance{}, fmt.Errorf("stop resident process before switching to on-demand: %w (normalize failed: %v)", err, normErr)
 			}
 			return domain.Instance{}, fmt.Errorf("stop resident process before switching to on-demand: %w", err)
 		}
@@ -1022,23 +1025,22 @@ func (s *Supervisor) rejectOnDemandRuntimeControl(ctx context.Context, inst doma
 	return nil
 }
 
-// normalizeStaticModeRow rewrites the row of an instance whose effective mode
-// is on-demand into that mode's resting state: enabled, logically running, no
-// process. On-demand has no stopped state -- it serves without one -- so every
-// path that stops a process on such an instance must land the row here, or the
-// gateway answers Unavailable until an import normalizes it. The gate must be
-// held.
-func (s *Supervisor) normalizeStaticModeRow(ctx context.Context, instanceID string) error {
+// normalizeStaticModeRow rewrites an instance's row into on-demand's resting
+// state: enabled, logically running, no process. On-demand has no stopped
+// state -- it serves without one -- so every path that stops a process while
+// switching to on-demand must land the row here, or the gateway answers
+// Unavailable until an import normalizes it.
+//
+// The target mode is a parameter, not a read from the row: both call sites
+// fire before the mode switch has been committed to the row, so a row-based
+// guard would see the old mode and silently do nothing. The gate must be held.
+func (s *Supervisor) normalizeStaticModeRow(ctx context.Context, instanceID string, target domain.RuntimeMode) error {
+	if target != domain.RuntimeModeOnDemand {
+		return nil
+	}
 	inst, err := s.Store.GetInstance(ctx, instanceID)
 	if err != nil {
 		return err
-	}
-	svc, err := s.Store.GetService(ctx, inst.ServiceID)
-	if err != nil {
-		return err
-	}
-	if domain.EffectiveRuntimeMode(svc, inst) != domain.RuntimeModeOnDemand {
-		return nil
 	}
 	inst.Enabled = true
 	inst.Status = domain.StatusRunning

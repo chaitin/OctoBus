@@ -767,7 +767,7 @@ func TestNormalizeStaticModeRowAfterStopTimeout(t *testing.T) {
 		t.Fatal(err)
 	}
 	unlock := sup.lockInstance("od-norm")
-	if err := sup.normalizeStaticModeRow(ctx, "od-norm"); err != nil {
+	if err := sup.normalizeStaticModeRow(ctx, "od-norm", domain.RuntimeModeOnDemand); err != nil {
 		t.Fatal(err)
 	}
 	unlock()
@@ -777,5 +777,53 @@ func TestNormalizeStaticModeRowAfterStopTimeout(t *testing.T) {
 	}
 	if !got.Enabled || got.Status != domain.StatusRunning || got.PID != nil {
 		t.Fatalf("on-demand row not normalized to its resting state: %+v", got)
+	}
+}
+
+func TestNormalizeOnDemandWorksWithOldModeStillInRow(t *testing.T) {
+	// Both switch-to-on-demand failure paths fire before the target mode has
+	// been committed to the row: the row still carries the old runtime_mode,
+	// so a row-based guard would silently do nothing and leave the instance
+	// enabled/stopped -- unusable by the gateway until an import rewrote it.
+	// The target mode is therefore an explicit parameter.
+	dataDir, st, _ := setupSupervisorHelperRuntime(t)
+	ctx := context.Background()
+	svc, err := st.GetService(ctx, "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.RuntimeMode = domain.RuntimeModeLongRunning
+	if err := st.UpsertService(ctx, svc); err != nil {
+		t.Fatal(err)
+	}
+	sup := New(dataDir, st)
+	if err := st.UpsertInstance(ctx, domain.Instance{ID: "od-switch", ServiceID: "echo", Enabled: true, Status: domain.StatusStopped, NodeEntry: "fixture-entry", ConfigJSON: []byte(`{}`), SecretJSON: []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	// The row still says long-running; the target is on-demand.
+	unlock := sup.lockInstance("od-switch")
+	if err := sup.normalizeStaticModeRow(ctx, "od-switch", domain.RuntimeModeOnDemand); err != nil {
+		t.Fatal(err)
+	}
+	unlock()
+	got, err := st.GetInstance(ctx, "od-switch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Enabled || got.Status != domain.StatusRunning || got.PID != nil {
+		t.Fatalf("row not normalized while old mode was still stored: %+v", got)
+	}
+	// A non-on-demand target must remain a no-op.
+	unlock = sup.lockInstance("od-switch")
+	if err := sup.normalizeStaticModeRow(ctx, "od-switch", domain.RuntimeModeLongRunning); err != nil {
+		t.Fatal(err)
+	}
+	unlock()
+	got, err = st.GetInstance(ctx, "od-switch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.StatusRunning || got.PID != nil {
+		t.Fatalf("a long-running target must not touch the row: %+v", got)
 	}
 }
