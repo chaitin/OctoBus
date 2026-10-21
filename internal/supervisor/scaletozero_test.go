@@ -767,7 +767,7 @@ func TestNormalizeStaticModeRowAfterStopTimeout(t *testing.T) {
 		t.Fatal(err)
 	}
 	unlock := sup.lockInstance("od-norm")
-	if err := sup.normalizeStaticModeRow(ctx, "od-norm", domain.RuntimeModeOnDemand); err != nil {
+	if err := sup.landOnDemandRow(ctx, "od-norm", domain.RuntimeModeOnDemand); err != nil {
 		t.Fatal(err)
 	}
 	unlock()
@@ -805,7 +805,7 @@ func TestNormalizeOnDemandWorksWithOldModeStillInRow(t *testing.T) {
 	// without the override strands the row as long-running+running+no pid,
 	// which the reconcile missing pass would resurrect under the old mode.
 	unlock := sup.lockInstance("od-switch")
-	if err := sup.normalizeStaticModeRow(ctx, "od-switch", domain.RuntimeModeOnDemand); err != nil {
+	if err := sup.landOnDemandRow(ctx, "od-switch", domain.RuntimeModeOnDemand); err != nil {
 		t.Fatal(err)
 	}
 	unlock()
@@ -827,7 +827,7 @@ func TestNormalizeOnDemandWorksWithOldModeStillInRow(t *testing.T) {
 		t.Fatal(err)
 	}
 	unlock2 := sup.lockInstance("od-inherit")
-	if err := sup.normalizeStaticModeRow(ctx, "od-inherit", ""); err != nil {
+	if err := sup.landOnDemandRow(ctx, "od-inherit", ""); err != nil {
 		t.Fatal(err)
 	}
 	unlock2()
@@ -841,4 +841,56 @@ func TestNormalizeOnDemandWorksWithOldModeStillInRow(t *testing.T) {
 	if !got2.Enabled || got2.Status != domain.StatusRunning || got2.PID != nil {
 		t.Fatalf("inherit row not normalized: %+v", got2)
 	}
+}
+
+func TestReconcileSurplusKeepsDisabledResidentStopped(t *testing.T) {
+	// A disabled long-running instance with a tracked process (an operator
+	// stop that lost its process write) enters the surplus pass. Stopping it
+	// must land the row enabled=false/stopped and leave it there: normalizing
+	// it to on-demand's resting state would re-enable the instance and the
+	// next pass's missing scan would start it right back, silently undoing
+	// the operator.
+	dataDir, st, _ := setupSupervisorHelperRuntime(t)
+	ctx := context.Background()
+	svc, err := st.GetService(ctx, "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.RuntimeMode = domain.RuntimeModeLongRunning
+	if err := st.UpsertService(ctx, svc); err != nil {
+		t.Fatal(err)
+	}
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "disabled-surplus", ServiceID: "echo", Start: true}); err != nil {
+		t.Fatal(err)
+	}
+	// Operator-disabled row under a live tracked process.
+	inst, err := st.GetInstance(ctx, "disabled-surplus")
+	if err != nil {
+		t.Fatal(err)
+	}
+	inst.Enabled = false
+	if err := st.UpsertInstance(ctx, inst); err != nil {
+		t.Fatal(err)
+	}
+	if !sup.TracksInstance("disabled-surplus") {
+		t.Fatal("expected the process to still be tracked")
+	}
+
+	sup.ReconcileProcesses(ctx)
+
+	if sup.TracksInstance("disabled-surplus") {
+		t.Fatal("surplus process was not stopped")
+	}
+	got, err := st.GetInstance(ctx, "disabled-surplus")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Enabled || got.Status != domain.StatusStopped || got.PID != nil {
+		t.Fatalf("disabled resident row must stay disabled/stopped, got %+v", got)
+	}
+	// Settle the helper process before t.TempDir cleanup: the surplus stop's
+	// SIGKILL races the cleanup's RemoveAll on a Windows-less best-effort
+	// basis only, and a still-occupied workdir fails the whole test.
+	_ = sup.Shutdown(context.Background())
 }
