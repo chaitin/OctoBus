@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"octobus/internal/domain"
@@ -407,14 +406,4 @@ func bootTime() time.Time {
 		}
 	}
 	return time.Time{}
-}
-
-// killPID sends SIGKILL to pid.
-func killPID(pid int) error {
-	return syscall.Kill(pid, syscall.SIGKILL)
-}
-
-// killPIDProbe sends signal 0 to test liveness.
-func killPIDProbe(pid int) error {
-	return syscall.Kill(pid, 0)
 }
