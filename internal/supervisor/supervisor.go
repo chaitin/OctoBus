@@ -231,6 +231,9 @@ func (s *Supervisor) CreateInstance(ctx context.Context, req CreateInstanceReque
 		if err := s.Store.UpsertInstance(ctx, merged); err != nil {
 			return domain.Instance{}, err
 		}
+		s.mu.Lock()
+		s.scaleToZeroModes[req.ID] = effectiveAfter == domain.RuntimeModeScaleToZero
+		s.mu.Unlock()
 		if err := s.writeInstanceConfig(req.ID, config); err != nil {
 			return domain.Instance{}, err
 		}
@@ -241,7 +244,13 @@ func (s *Supervisor) CreateInstance(ctx context.Context, req CreateInstanceReque
 			// Same mode, new content: a live resident process must reload.
 			if effectiveAfter != domain.RuntimeModeOnDemand && (tracked || existing.PID != nil) {
 				if err := s.restartLocked(ctx, req.ID, merged.Enabled); err != nil {
-					return s.Store.GetInstance(ctx, req.ID)
+					// Report the failure like every other branch: the caller
+					// must see that the sync did not fully land.
+					failed, getErr := s.Store.GetInstance(ctx, req.ID)
+					if getErr != nil {
+						return domain.Instance{}, err
+					}
+					return failed, err
 				}
 			}
 		case effectiveAfter == domain.RuntimeModeOnDemand:
@@ -253,10 +262,20 @@ func (s *Supervisor) CreateInstance(ctx context.Context, req CreateInstanceReque
 				return domain.Instance{}, err
 			}
 		case effectiveBefore == domain.RuntimeModeOnDemand:
-			// Entering a resident mode: start if the operator had it enabled.
-			// On-demand rows are always enabled with no process, so the row's
-			// Enabled reflects the last operator start/stop.
-			if merged.Enabled {
+			// Entering a resident mode. On-demand rows are always enabled with
+			// no process, so the row's Enabled reflects the last operator
+			// start/stop. scale-to-zero enters cold regardless: the first call
+			// warms it, and a bulk sync must not wake every instance of the
+			// service (matching SetRuntimeMode).
+			if effectiveAfter == domain.RuntimeModeScaleToZero {
+				merged.Status = domain.StatusStopped
+				merged.PID = nil
+				merged.ListenAddr = ""
+				if err := s.Store.UpsertInstance(ctx, merged); err != nil {
+					return domain.Instance{}, err
+				}
+				s.notifyInstanceChanged(req.ID)
+			} else if merged.Enabled {
 				if err := s.startLocked(ctx, req.ID); err != nil {
 					failed, getErr := s.Store.GetInstance(ctx, req.ID)
 					if getErr != nil {

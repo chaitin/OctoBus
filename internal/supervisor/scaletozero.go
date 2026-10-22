@@ -270,6 +270,18 @@ func (s *Supervisor) parkLocked(ctx context.Context, instanceID string) bool {
 		s.logger().Warn("scale_to_zero_park_lookup_failed", "instance_id", instanceID, "error", err)
 		return false
 	}
+	svc, err := s.Store.GetService(ctx, inst.ServiceID)
+	if err != nil {
+		s.logger().Warn("scale_to_zero_park_lookup_failed", "instance_id", instanceID, "error", err)
+		return false
+	}
+	// Re-check the effective mode under the gate, which every mode change
+	// holds: a switch to long-running that landed after the scan collected
+	// this id must not be parked -- a parked long-running row is
+	// enabled/stopped, and nothing restarts it from there.
+	if domain.EffectiveRuntimeMode(svc, inst) != domain.RuntimeModeScaleToZero {
+		return false
+	}
 	// parkIfStillIdle released s.mu before calling us, and other instances'
 	// starts and stops write this map concurrently; read it under the lock.
 	s.mu.Lock()

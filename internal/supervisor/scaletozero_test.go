@@ -989,3 +989,106 @@ func TestReconcileRepairsStaleScaleToZeroRow(t *testing.T) {
 		t.Fatal("repairing a stale row must not start the instance")
 	}
 }
+
+// TestScaleToZeroParkRechecksRuntimeMode pins the park guard: a mode switch to
+// long-running that lands after the scan collected the id must not be parked --
+// a parked long-running row is enabled/stopped and nothing restarts it.
+func TestScaleToZeroParkRechecksRuntimeMode(t *testing.T) {
+	dataDir, st := setupScaleToZeroRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "stz-mode", ServiceID: "echo"}); err != nil {
+		t.Fatal(err)
+	}
+	release, err := sup.EnsureStarted(ctx, "stz-mode")
+	if err != nil {
+		t.Fatal(err)
+	}
+	release()
+	// The operator switches the service to long-running while the scan is in
+	// flight; the warm process is kept (SetRuntimeMode semantics).
+	svc, err := st.GetService(ctx, "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.RuntimeMode = domain.RuntimeModeLongRunning
+	if err := st.UpsertService(ctx, svc); err != nil {
+		t.Fatal(err)
+	}
+	sup.mu.Lock()
+	sup.lastActivity["stz-mode"] = time.Now().Add(-2 * time.Minute)
+	sup.mu.Unlock()
+	if sup.parkIfStillIdle(ctx, "stz-mode", time.Now().Add(-time.Minute)) {
+		t.Fatal("parked an instance whose effective mode is no longer scale-to-zero")
+	}
+	if !sup.TracksInstance("stz-mode") {
+		t.Fatal("the park attempt disturbed a long-running process")
+	}
+	_ = sup.Stop(ctx, "stz-mode")
+}
+
+// TestCreateInstanceOnDemandToScaleToZeroStaysCold pins the sync path: flipping
+// an on-demand instance to scale-to-zero lands the cold state and starts
+// nothing -- a bulk sync must not wake every instance of the service.
+func TestCreateInstanceOnDemandToScaleToZeroStaysCold(t *testing.T) {
+	dataDir, st, _ := setupSupervisorHelperRuntime(t)
+	ctx := context.Background()
+	svc, err := st.GetService(ctx, "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.RuntimeMode = domain.RuntimeModeOnDemand
+	if err := st.UpsertService(ctx, svc); err != nil {
+		t.Fatal(err)
+	}
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "od-stz", ServiceID: "echo"}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := sup.CreateInstance(ctx, CreateInstanceRequest{
+		ID: "od-stz", ServiceID: "echo", RuntimeMode: domain.RuntimeModeScaleToZero,
+		Config: json.RawMessage(`{"changed":true}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.StatusStopped || got.PID != nil || got.ListenAddr != "" {
+		t.Fatalf("on-demand to scale-to-zero did not land cold: %+v", got)
+	}
+	if sup.TracksInstance("od-stz") {
+		t.Fatal("sync switched to scale-to-zero started a resident process")
+	}
+	sup.mu.Lock()
+	cached := sup.scaleToZeroModes["od-stz"]
+	sup.mu.Unlock()
+	if !cached {
+		t.Fatal("sync mode change did not refresh the scale-to-zero cache")
+	}
+}
+
+// TestCreateInstanceUpdatePropagatesRestartError pins the error contract: a
+// content-changing sync whose in-place restart fails must report the failure,
+// not a successful read of a stopped instance.
+func TestCreateInstanceUpdatePropagatesRestartError(t *testing.T) {
+	dataDir, st, entry := setupSupervisorHelperRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "stz-restart", ServiceID: "echo", Start: true}); err != nil {
+		t.Fatal(err)
+	}
+	// Break the runtime so the restart's health check fails.
+	entryPath := filepath.Join(dataDir, "artifacts", "services", "echo", "runtime", entry)
+	if err := os.WriteFile(entryPath, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	inst, err := sup.CreateInstance(ctx, CreateInstanceRequest{
+		ID: "stz-restart", ServiceID: "echo", Config: json.RawMessage(`{"changed":true}`),
+	})
+	if err == nil {
+		t.Fatal("a failed in-place restart was reported as success")
+	}
+	if inst.Status != domain.StatusFailed {
+		t.Fatalf("returned status %s, want failed", inst.Status)
+	}
+	_ = sup.Stop(ctx, "stz-restart")
+}
