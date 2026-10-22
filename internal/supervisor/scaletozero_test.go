@@ -1070,6 +1070,9 @@ func TestCreateInstanceOnDemandToScaleToZeroStaysCold(t *testing.T) {
 // content-changing sync whose in-place restart fails must report the failure,
 // not a successful read of a stopped instance.
 func TestCreateInstanceUpdatePropagatesRestartError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture is unix-only")
+	}
 	dataDir, st, entry := setupSupervisorHelperRuntime(t)
 	ctx := context.Background()
 	sup := New(dataDir, st)
