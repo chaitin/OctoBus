@@ -2940,3 +2940,113 @@ func (c dynamicProtoJSONCodec) Unmarshal(data []byte, v any) error {
 	}
 	return protojson.Unmarshal(data, msg)
 }
+
+// countingWarmer is a ScaleToZeroWarmer that only counts release calls; the
+// tests that use it point the row at an already-running backend.
+type countingWarmer struct {
+	releases atomic.Int64
+}
+
+func (w *countingWarmer) EnsureStarted(context.Context, string) (func(), error) {
+	return func() { w.releases.Add(1) }, nil
+}
+
+func (w *countingWarmer) TouchInstance(string) {}
+
+// failingFrontStream is a server-side stream whose SendMsg always fails: the
+// shape of a client that hangs up mid-stream.
+type failingFrontStream struct {
+	grpc.ServerStream
+	ctx context.Context
+	req []byte
+}
+
+func (s *failingFrontStream) Context() context.Context { return s.ctx }
+
+func (s *failingFrontStream) RecvMsg(m any) error {
+	*(m.(*rawFrame)) = *newRawFrame(s.req)
+	return nil
+}
+
+func (s *failingFrontStream) SendMsg(any) error { return errors.New("front stream closed") }
+
+func TestReleaseStreamIsIdempotent(t *testing.T) {
+	released := 0
+	stream := &warmStream{release: func() { released++ }}
+	releaseStream(stream)
+	releaseStream(stream)
+	if released != 1 {
+		t.Fatalf("release calls = %d, want 1", released)
+	}
+	releaseStream(nil) // a non-warm stream must not panic
+}
+
+// TestGRPCProxyReleasesRefWhenFrontStreamFails pins the scale-to-zero ref
+// lifetime: a proxy that returns because the caller went away must still drop
+// the ref, or the instance can never be idle-parked again.
+func TestGRPCProxyReleasesRefWhenFrontStreamFails(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+	st, err := store.Open(filepath.Join(dataDir, "octobus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	compiled := compileFixture(t, dataDir)
+	files, err := protodesc.NewFiles(compiled.Files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reqAny, err := files.FindDescriptorByName("echo.v1.EchoRequest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	respAny, err := files.FindDescriptorByName("echo.v1.EchoResponse")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reqDesc := reqAny.(protoreflect.MessageDescriptor)
+	respDesc := respAny.(protoreflect.MessageDescriptor)
+	backendAddr, stopBackend := startStreamingRawBackend(t, reqDesc, respDesc)
+	defer stopBackend()
+
+	service := domain.Service{
+		ID:                  "echo",
+		Name:                "Echo",
+		PackageSource:       "fixture",
+		PackageArtifactPath: "pkg",
+		PackageSHA256:       "pkgsha",
+		DescriptorPath:      filepath.Join(dataDir, "descriptor.protoset"),
+		DescriptorSHA256:    compiled.DescriptorSHA256,
+		DescriptorVersion:   compiled.DescriptorVersion,
+		NodeEntry:           "echo",
+		Methods:             compiled.Methods,
+		RuntimeMode:         domain.RuntimeModeScaleToZero,
+	}
+	if err := st.UpsertService(ctx, service); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpsertInstance(ctx, domain.Instance{ID: "echo-test", ServiceID: "echo", Name: "Echo Test", Enabled: true, Status: domain.StatusRunning, ListenAddr: backendAddr, NodeEntry: "echo", ConfigJSON: []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.CreateCapset(ctx, domain.Capset{ID: "dev", Name: "Dev", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AddCapsetInstance(ctx, domain.CapsetInstance{ID: "dev:echo-test", CapsetID: "dev", ServiceID: "echo", InstanceID: "echo-test", IncludeAllMethods: true, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AddCapsetMethod(ctx, domain.CapsetMethod{CapsetInstanceID: "dev:echo-test", MethodFullName: "echo.v1.EchoService/ServerStream", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	warmer := &countingWarmer{}
+	gateway := &Gateway{Store: st, ScaleToZeroWarmer: warmer}
+	item := mustFindExposed(t, st, "ServerStream")
+	front := &failingFrontStream{ctx: ctx, req: []byte(*echoRawFrame(t, reqDesc, "server", 2))}
+	if err := gateway.proxyServerStream(front, item); err == nil {
+		t.Fatal("proxy returned nil despite a failing front stream")
+	}
+	if got := warmer.releases.Load(); got != 1 {
+		t.Fatalf("request ref releases = %d, want 1", got)
+	}
+}

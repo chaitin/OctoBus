@@ -48,8 +48,10 @@ type Supervisor struct {
 	generations map[string]int64
 	// lastActivity is the scale-to-zero activity clock, per instance.
 	lastActivity map[string]time.Time
-	// refCounts holds in-flight request counts, per instance.
-	refCounts map[string]int
+	// refCounts holds in-flight request counts keyed by process generation. A
+	// release from a dead generation must not decrement its successor's count,
+	// so the generation is part of the entry.
+	refCounts map[string]instanceRefs
 	// scaleToZeroModes caches whether a tracked instance's effective mode is
 	// scale-to-zero, refreshed by the scale-to-zero scan; the admin import path
 	// consults TracksInstance for warmth.
@@ -100,6 +102,12 @@ type processState struct {
 	generation int64
 }
 
+// instanceRefs is the in-flight request count for one process generation.
+type instanceRefs struct {
+	generation int64
+	count      int
+}
+
 func New(dataDir string, st *store.Store) *Supervisor {
 	if abs, err := filepath.Abs(dataDir); err == nil {
 		dataDir = abs
@@ -112,7 +120,7 @@ func New(dataDir string, st *store.Store) *Supervisor {
 		procs:            map[string]*processState{},
 		generations:      map[string]int64{},
 		lastActivity:     map[string]time.Time{},
-		refCounts:        map[string]int{},
+		refCounts:        map[string]instanceRefs{},
 		scaleToZeroModes: map[string]bool{},
 		lifecycleCtx:     lifecycleCtx,
 		lifecycleCancel:  lifecycleCancel,
@@ -546,9 +554,10 @@ func (s *Supervisor) startWithAttempt(ctx context.Context, instanceID string, re
 		s.mu.Unlock()
 		logger.Warn("instance_start_replaced_tracked_process", "instance_id", instanceID, "previous_pid", processPID(previous.cmd))
 		_ = hardening.Kill(previous.cmd)
-		_ = previous.cmd.Wait()
 		hardening.KillGroup(previous.cmd)
-		close(previous.done)
+		// Do not Wait or close previous.done here: the wait goroutine that
+		// owns this state is already reaping it and closes done itself.
+		// Closing it a second time would panic the daemon.
 		s.mu.Lock()
 		if s.procs[instanceID] == previous {
 			delete(s.procs, instanceID)
@@ -1263,7 +1272,11 @@ func (s *Supervisor) wait(instanceID string, state *processState, stdout, stderr
 	svc, svcErr := s.Store.GetService(ctx, inst.ServiceID)
 	if svcErr != nil || domain.EffectiveRuntimeMode(svc, inst) == domain.RuntimeModeScaleToZero {
 		s.mu.Lock()
-		if current == state {
+		// Drop only this generation's refs. If a successor already took a
+		// ref, the entry belongs to it now; deleting it would let the idle
+		// stopper park a process with a request in flight (and the old
+		// request's eventual release would drop the new one's count).
+		if ref := s.refCounts[instanceID]; ref.generation == state.generation {
 			delete(s.refCounts, instanceID)
 		}
 		s.mu.Unlock()

@@ -1054,9 +1054,11 @@ func instanceEffectiveMode(inst domain.Instance, serviceMode domain.RuntimeMode)
 	return serviceMode
 }
 
-// restartTargets lists the enabled instances of a service whose effective mode
-// is long-running. runtimeMode is the mode the service has (or is about to
-// get), because an instance override wins over it.
+// restartTargets lists the enabled instances of a service that a real import
+// would restart: every long-running instance, plus scale-to-zero instances that
+// are currently warm (a cold one stays cold across an import). runtimeMode is
+// the mode the service has (or is about to get), because an instance override
+// wins over it.
 func (s *Server) restartTargets(ctx context.Context, serviceID string, runtimeMode domain.RuntimeMode) ([]string, error) {
 	instances, err := s.Store.ListEnabledInstancesByService(ctx, serviceID)
 	if err != nil {
@@ -1064,8 +1066,13 @@ func (s *Server) restartTargets(ctx context.Context, serviceID string, runtimeMo
 	}
 	ids := make([]string, 0, len(instances))
 	for _, inst := range instances {
-		if instanceEffectiveMode(inst, runtimeMode) == domain.RuntimeModeLongRunning {
+		switch instanceEffectiveMode(inst, runtimeMode) {
+		case domain.RuntimeModeLongRunning:
 			ids = append(ids, inst.ID)
+		case domain.RuntimeModeScaleToZero:
+			if s.Supervisor != nil && s.Supervisor.TracksInstance(inst.ID) {
+				ids = append(ids, inst.ID)
+			}
 		}
 	}
 	return ids, nil

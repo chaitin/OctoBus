@@ -58,9 +58,10 @@ func (s *Supervisor) EnsureStarted(ctx context.Context, instanceID string) (rele
 	s.lastActivity[instanceID] = time.Now()
 	if state := s.procs[instanceID]; state != nil {
 		s.counters.ScaleToZeroHotHits++
-		s.refCounts[instanceID]++
+		generation := state.generation
+		s.addRefLocked(instanceID, generation)
 		s.mu.Unlock()
-		return func() { s.releaseRef(instanceID) }, nil
+		return func() { s.releaseRef(instanceID, generation) }, nil
 	}
 	s.counters.ScaleToZeroColdStarts++
 	s.mu.Unlock()
@@ -79,24 +80,43 @@ func (s *Supervisor) EnsureStarted(ctx context.Context, instanceID string) (rele
 		return nil, err
 	}
 	s.mu.Lock()
-	s.refCounts[instanceID]++
+	generation := s.generations[instanceID]
+	if state := s.procs[instanceID]; state != nil {
+		generation = state.generation
+	}
+	s.addRefLocked(instanceID, generation)
 	s.mu.Unlock()
-	return func() { s.releaseRef(instanceID) }, nil
+	return func() { s.releaseRef(instanceID, generation) }, nil
 }
 
-func (s *Supervisor) releaseRef(instanceID string) {
+// addRefLocked records one in-flight request against the process generation
+// serving it. The caller must hold s.mu.
+func (s *Supervisor) addRefLocked(instanceID string, generation int64) {
+	ref := s.refCounts[instanceID]
+	if ref.generation != generation {
+		ref = instanceRefs{generation: generation}
+	}
+	ref.count++
+	s.refCounts[instanceID] = ref
+}
+
+// releaseRef drops one in-flight request ref. A release that belongs to a
+// previous generation is a no-op: its process is gone and wait() already
+// dropped that generation's count, so the current entry belongs to a
+// successor.
+func (s *Supervisor) releaseRef(instanceID string, generation int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.refCounts[instanceID] <= 1 {
+	ref := s.refCounts[instanceID]
+	if ref.generation != generation || ref.count == 0 {
+		return
+	}
+	if ref.count == 1 {
 		delete(s.refCounts, instanceID)
 		return
 	}
-	s.refCounts[instanceID]--
-}
-
-// ReleaseInstance drops the request ref taken by EnsureStarted.
-func (s *Supervisor) ReleaseInstance(instanceID string) {
-	s.releaseRef(instanceID)
+	ref.count--
+	s.refCounts[instanceID] = ref
 }
 
 // TracksInstance reports whether the supervisor currently tracks a process for
@@ -134,7 +154,7 @@ func (s *Supervisor) scanScaleToZero(ctx context.Context) {
 		if !s.isScaleToZeroInstance(id) {
 			continue
 		}
-		if s.refCounts[id] > 0 {
+		if s.refCounts[id].count > 0 {
 			continue
 		}
 		if ttl > 0 && now.Sub(s.lastActivity[id]) > ttl {
@@ -160,15 +180,26 @@ func (s *Supervisor) scanScaleToZero(ctx context.Context) {
 	// report; deployments without scale-to-zero instances would otherwise log a
 	// constant zero row around the clock.
 	s.mu.Lock()
-	if len(s.procs) > 0 {
-		s.logger().Info("scale_to_zero_scan_done",
-			"warm", len(s.procs),
-			"cold_starts", s.counters.ScaleToZeroColdStarts,
-			"hot_hits", s.counters.ScaleToZeroHotHits,
-			"idle_stops", s.counters.ScaleToZeroIdleStops,
-			"lru_evictions", s.counters.ScaleToZeroLRUEvicted)
+	warm := 0
+	for id := range s.procs {
+		if s.scaleToZeroModes[id] {
+			warm++
+		}
 	}
+	logSummary := len(s.procs) > 0
+	coldStarts := s.counters.ScaleToZeroColdStarts
+	hotHits := s.counters.ScaleToZeroHotHits
+	idleStops := s.counters.ScaleToZeroIdleStops
+	lruEvictions := s.counters.ScaleToZeroLRUEvicted
 	s.mu.Unlock()
+	if logSummary {
+		s.logger().Info("scale_to_zero_scan_done",
+			"warm", warm,
+			"cold_starts", coldStarts,
+			"hot_hits", hotHits,
+			"idle_stops", idleStops,
+			"lru_evictions", lruEvictions)
+	}
 
 	if warmCap > 0 {
 		for {
@@ -183,7 +214,7 @@ func (s *Supervisor) scanScaleToZero(ctx context.Context) {
 					continue
 				}
 				over++
-				if parked[id] || s.refCounts[id] > 0 {
+				if parked[id] || s.refCounts[id].count > 0 {
 					continue
 				}
 				activity := s.lastActivity[id]
@@ -221,7 +252,7 @@ func (s *Supervisor) parkIfStillIdle(ctx context.Context, instanceID string, sca
 	s.mu.Lock()
 	tracked := s.procs[instanceID] != nil
 	fresh := s.lastActivity[instanceID].After(scannedAt)
-	refHeld := s.refCounts[instanceID] > 0
+	refHeld := s.refCounts[instanceID].count > 0
 	s.mu.Unlock()
 	if !tracked || fresh || refHeld {
 		return false
@@ -239,7 +270,12 @@ func (s *Supervisor) parkLocked(ctx context.Context, instanceID string) bool {
 		s.logger().Warn("scale_to_zero_park_lookup_failed", "instance_id", instanceID, "error", err)
 		return false
 	}
-	if inst.PID == nil && s.procs[instanceID] == nil {
+	// parkIfStillIdle released s.mu before calling us, and other instances'
+	// starts and stops write this map concurrently; read it under the lock.
+	s.mu.Lock()
+	tracked := s.procs[instanceID] != nil
+	s.mu.Unlock()
+	if inst.PID == nil && !tracked {
 		return false
 	}
 	if err := s.stopProcess(ctx, inst, true); err != nil {
@@ -329,10 +365,19 @@ func (s *Supervisor) refreshScaleToZeroModes(ctx context.Context) {
 	for _, inst := range instances {
 		byID[inst.ID] = inst
 	}
-	services := map[string]domain.Service{}
+	// Resolve services outside s.mu: the hot path takes that lock for every
+	// request, and a SQLite read here would stall every scale-to-zero call for
+	// the duration of the scan.
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	trackedIDs := make([]string, 0, len(s.procs))
 	for id := range s.procs {
+		trackedIDs = append(trackedIDs, id)
+	}
+	s.mu.Unlock()
+
+	modes := make(map[string]bool, len(trackedIDs))
+	services := map[string]domain.Service{}
+	for _, id := range trackedIDs {
 		inst, ok := byID[id]
 		if !ok {
 			continue
@@ -345,6 +390,12 @@ func (s *Supervisor) refreshScaleToZeroModes(ctx context.Context) {
 			}
 			services[inst.ServiceID] = svc
 		}
-		s.scaleToZeroModes[id] = domain.EffectiveRuntimeMode(svc, inst) == domain.RuntimeModeScaleToZero
+		modes[id] = domain.EffectiveRuntimeMode(svc, inst) == domain.RuntimeModeScaleToZero
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, scaleToZero := range modes {
+		s.scaleToZeroModes[id] = scaleToZero
 	}
 }

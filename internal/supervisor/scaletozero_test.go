@@ -894,3 +894,98 @@ func TestReconcileSurplusKeepsDisabledResidentStopped(t *testing.T) {
 	// basis only, and a still-occupied workdir fails the whole test.
 	_ = sup.Shutdown(context.Background())
 }
+
+// TestScaleToZeroRefReleaseIsGenerationScoped pins the ownership rule for
+// request refs: when a process exits, wait() drops its generation's count, and
+// a straggler request from that generation must not decrement the ref a
+// successor already took.
+func TestScaleToZeroRefReleaseIsGenerationScoped(t *testing.T) {
+	sup := New(t.TempDir(), nil)
+
+	sup.mu.Lock()
+	sup.addRefLocked("stz-gen", 1)
+	// wait() drops the dead generation's refs (generation matches).
+	if ref := sup.refCounts["stz-gen"]; ref.generation == 1 {
+		delete(sup.refCounts, "stz-gen")
+	}
+	// A request for the successor process takes its own ref first.
+	sup.addRefLocked("stz-gen", 2)
+	sup.mu.Unlock()
+
+	// The old request's release arrives late: it owns nothing now.
+	sup.releaseRef("stz-gen", 1)
+	sup.mu.Lock()
+	got := sup.refCounts["stz-gen"]
+	sup.mu.Unlock()
+	if got.generation != 2 || got.count != 1 {
+		t.Fatalf("old generation release clobbered the successor: %+v", got)
+	}
+
+	// The successor's own release still clears the entry.
+	sup.releaseRef("stz-gen", 2)
+	sup.mu.Lock()
+	_, ok := sup.refCounts["stz-gen"]
+	sup.mu.Unlock()
+	if ok {
+		t.Fatal("successor ref was not released")
+	}
+}
+
+func TestWithinDir(t *testing.T) {
+	dir := filepath.Join(string(filepath.Separator), "data", "instances", "a")
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{dir, true},
+		{filepath.Join(dir, "pkg"), true},
+		{filepath.Join(dir, "..", "b"), false},
+		{filepath.Join(string(filepath.Separator), "data", "instances", "ab"), false},
+		{filepath.Join(string(filepath.Separator), "other"), false},
+	}
+	for _, tc := range cases {
+		if got := withinDir(dir, tc.path); got != tc.want {
+			t.Errorf("withinDir(%q, %q) = %v, want %v", dir, tc.path, got, tc.want)
+		}
+	}
+}
+
+// TestReconcileRepairsStaleScaleToZeroRow covers the kill -9 remnant of a warm
+// scale-to-zero instance: the row claims running with a dead pid, so reconcile
+// must land it back on the cold state (enabled, stopped, no pid/addr) without
+// starting it.
+func TestReconcileRepairsStaleScaleToZeroRow(t *testing.T) {
+	dataDir, st, _ := setupSupervisorHelperRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{
+		ID: "stz-stale", ServiceID: "echo", RuntimeMode: domain.RuntimeModeScaleToZero,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	inst, err := st.GetInstance(ctx, "stz-stale")
+	if err != nil {
+		t.Fatal(err)
+	}
+	inst.Enabled = true
+	inst.Status = domain.StatusRunning
+	dead := 2147483647 - 1
+	inst.PID = &dead
+	inst.ListenAddr = "127.0.0.1:1"
+	if err := st.UpsertInstance(ctx, inst); err != nil {
+		t.Fatal(err)
+	}
+
+	sup.ReconcileProcesses(ctx)
+
+	got, err := st.GetInstance(ctx, "stz-stale")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Enabled || got.Status != domain.StatusStopped || got.PID != nil || got.ListenAddr != "" {
+		t.Fatalf("stale scale-to-zero row not repaired to cold: %+v", got)
+	}
+	if sup.TracksInstance("stz-stale") {
+		t.Fatal("repairing a stale row must not start the instance")
+	}
+}

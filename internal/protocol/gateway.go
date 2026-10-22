@@ -89,7 +89,6 @@ type Gateway struct {
 type ScaleToZeroWarmer interface {
 	EnsureStarted(ctx context.Context, instanceID string) (release func(), err error)
 	TouchInstance(instanceID string)
-	ReleaseInstance(instanceID string)
 }
 
 const (
@@ -1599,8 +1598,11 @@ func (g *Gateway) invokeBackend(ctx context.Context, item store.ExposedMethod, r
 	// cached snapshot the request arrived with may be stale in either
 	// direction. Re-read ListenAddr after warming: EnsureStarted has filled it
 	// for a freshly started instance, and a warm instance's address is stable
-	// for the process's lifetime.
-	if item.Instance.ListenAddr == "" || string(item.Instance.Status) != "running" {
+	// for the process's lifetime. The scale-to-zero path always re-reads: the
+	// snapshot may still claim the previous generation's addr is running after
+	// an idle park plus a cold start landed in between.
+	if domain.EffectiveRuntimeMode(item.Service, item.Instance) == domain.RuntimeModeScaleToZero ||
+		item.Instance.ListenAddr == "" || string(item.Instance.Status) != "running" {
 		fresh, err := g.Store.GetInstance(ctx, item.Instance.ID)
 		if err != nil {
 			return nil, status.Error(codes.Unavailable, "backend instance is not running")
@@ -1638,9 +1640,10 @@ func (g *Gateway) newBackendStream(ctx context.Context, item store.ExposedMethod
 }
 
 // newWarmStream warms a scale-to-zero instance, then opens the backend stream. The
-// request ref is held until the caller closes the stream: the returned
-// wrapper's RecvMsg and SendMsg refresh the activity clock per message, and
-// CloseSend/release drops the ref when the proxy finishes.
+// request ref is held until Release is called: the proxies defer Release, and
+// the returned wrapper's RecvMsg and SendMsg refresh the activity clock per
+// message. RecvMsg/SendMsg also release on error, so a proxy that stops using
+// the stream without an explicit Release still drops the ref.
 func (g *Gateway) newWarmStream(ctx context.Context, item store.ExposedMethod) (grpc.ClientStream, error) {
 	if g.ScaleToZeroWarmer == nil {
 		return nil, status.Error(codes.Unavailable, "scale-to-zero runtime mode is not served by this daemon")
@@ -1678,6 +1681,13 @@ func (w *warmStream) releaseOnce() {
 	w.once.Do(func() {
 		w.release()
 	})
+}
+
+// Release drops the request ref. Proxies defer it so that every early return
+// (a client that hangs up mid-stream, a backend send failure) releases the ref;
+// it is idempotent and safe alongside the per-message release.
+func (w *warmStream) Release() {
+	w.releaseOnce()
 }
 
 func (w *warmStream) RecvMsg(m any) error {

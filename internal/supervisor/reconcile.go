@@ -156,11 +156,12 @@ func (s *Supervisor) ReconcileProcesses(ctx context.Context) {
 	}
 
 	// --- stale rows, then missing ----------------------------------------
-	type missing struct {
-		id     string
-		origin string
-	}
-	var missings []missing
+	// A stale row is a liveness claim with no live process. Every resident
+	// mode can carry one (a kill -9 leaves a scale-to-zero row claiming
+	// running too), so repair all of them; only long-running rows are then
+	// restarted.
+	var scaleToZeroStale []string
+	var missings []string
 	for _, inst := range instances {
 		if !inst.Enabled || !claimsLiveness(inst.Status) {
 			continue
@@ -169,7 +170,8 @@ func (s *Supervisor) ReconcileProcesses(ctx context.Context) {
 		if err != nil {
 			continue
 		}
-		if domain.EffectiveRuntimeMode(svc, inst) != domain.RuntimeModeLongRunning {
+		mode := domain.EffectiveRuntimeMode(svc, inst)
+		if !residentMode(mode) {
 			continue
 		}
 		s.mu.Lock()
@@ -181,15 +183,57 @@ func (s *Supervisor) ReconcileProcesses(ctx context.Context) {
 		if inst.PID != nil && pidAlive(*inst.PID) {
 			continue
 		}
-		missings = append(missings, missing{id: inst.ID, origin: "stale row"})
+		if mode == domain.RuntimeModeLongRunning {
+			missings = append(missings, inst.ID)
+		} else {
+			scaleToZeroStale = append(scaleToZeroStale, inst.ID)
+		}
 	}
 
-	for _, m := range missings {
-		err := s.withGate(m.id, func() error {
+	for _, id := range scaleToZeroStale {
+		err := s.withGate(id, func() error {
+			inst, err := s.Store.GetInstance(ctx, id)
+			if err != nil {
+				return err
+			}
+			svc, err := s.Store.GetService(ctx, inst.ServiceID)
+			if err != nil {
+				return err
+			}
+			if !inst.Enabled || !claimsLiveness(inst.Status) ||
+				domain.EffectiveRuntimeMode(svc, inst) != domain.RuntimeModeScaleToZero {
+				return nil
+			}
+			if inst.PID == nil || pidAlive(*inst.PID) {
+				return nil
+			}
+			s.mu.Lock()
+			tracked := s.procs[id] != nil
+			s.mu.Unlock()
+			if tracked {
+				return nil
+			}
+			inst.PID = nil
+			inst.ListenAddr = ""
+			inst.Status = domain.StatusStopped
+			if err := s.Store.UpsertInstance(ctx, inst); err != nil {
+				return err
+			}
+			s.notifyInstanceChanged(id)
+			logger.Warn("reconcile_stale_row_repaired", "instance_id", id)
+			return nil
+		})
+		if err != nil {
+			logger.Warn("reconcile_stale_row_repair_failed", "instance_id", id, "error", err)
+		}
+	}
+
+	for _, id := range missings {
+		err := s.withGate(id, func() error {
 			// Re-read and re-verify inside the gate: the snapshot predates it,
 			// and an operator Stop (or a mode change) that landed in between
 			// must win -- recovering over it would silently undo the stop.
-			inst, err := s.Store.GetInstance(ctx, m.id)
+			inst, err := s.Store.GetInstance(ctx, id)
 			if err != nil {
 				return err
 			}
@@ -212,21 +256,21 @@ func (s *Supervisor) ReconcileProcesses(ctx context.Context) {
 				}
 			}
 			s.mu.Lock()
-			tracked := s.procs[m.id] != nil
+			tracked := s.procs[id] != nil
 			s.mu.Unlock()
 			if tracked {
 				return nil
 			}
-			return s.startLocked(ctx, m.id)
+			return s.startLocked(ctx, id)
 		})
 		if err != nil {
-			logger.Warn("reconcile_missing_restart_failed", "instance_id", m.id, "error", err)
+			logger.Warn("reconcile_missing_restart_failed", "instance_id", id, "error", err)
 			continue
 		}
 		s.mu.Lock()
 		s.counters.MissingRestarted++
 		s.mu.Unlock()
-		logger.Warn("reconcile_missing_restarted", "instance_id", m.id)
+		logger.Warn("reconcile_missing_restarted", "instance_id", id)
 	}
 
 	s.mu.Lock()
@@ -330,7 +374,11 @@ func inspectServeProcess(pid int, dataDir string) (serveProcess, bool) {
 	if err != nil {
 		return serveProcess{}, false
 	}
-	if cwd != workdir {
+	// Accept the workdir and anything below it: the runtime may chdir into a
+	// package directory after start, and the design attributes a process by
+	// "cwd inside instances/<id>". A second daemon claims the env var but not
+	// this cwd.
+	if !withinDir(workdir, cwd) {
 		return serveProcess{}, false
 	}
 	argvRaw, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/cmdline")
@@ -383,7 +431,19 @@ func processStartTime(stat []byte) time.Time {
 	if btime.IsZero() {
 		return failed
 	}
-	return btime.Add(time.Duration(ticks) * time.Second / clockTickHz)
+	// Multiply by one tick (10ms) rather than by a second: ticks * 1e9
+	// overflows int64 once uptime passes ~2.9 years, which silently breaks
+	// the grace window and stops orphan reaping on long-lived hosts.
+	return btime.Add(time.Duration(ticks) * (time.Second / clockTickHz))
+}
+
+// withinDir reports whether path is dir itself or lies below it.
+func withinDir(dir, path string) bool {
+	rel, err := filepath.Rel(dir, path)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
 // clockTickHz is the userspace ABI value on Linux (sysconf(_SC_CLK_TCK)); the
