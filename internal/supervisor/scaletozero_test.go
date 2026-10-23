@@ -378,7 +378,7 @@ func TestReconcileKillsOrphanServeProcess(t *testing.T) {
 	orphanPID := startOrphanServe(t, dataDir, "orphan-victim")
 	// Wait until the orphan has exec'd its final image: /proc entries for a
 	// fork in flight still carry the shell's argv, and the grace window that
-	// protects production starts would misread it as not-ours.
+	// protects in-flight starts would misread it as not-ours.
 	eventually(t, 5*time.Second, func() bool {
 		_, ok := inspectServeProcess(orphanPID, dataDir)
 		return ok

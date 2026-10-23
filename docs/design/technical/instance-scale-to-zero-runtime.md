@@ -16,7 +16,7 @@ overwrites `procs[instanceID]` without stopping the previous process. The
 replaced `processState` is never killed or waited on: the old Node process
 outlives the supervisor's knowledge of it. Every whole-package sync calls
 `CreateInstance` once per sync instance, so every sync leaks one process per
-instance (observed: +10 processes per sync in staging and production).
+instance.
 
 Fix, in layers:
 
@@ -71,8 +71,8 @@ Fix, in layers:
 
 ## Problem 2: on-demand cold starts
 
-93–95% of production calls to manual instances land within 10 minutes of the
-previous call, while every call pays ~450ms of cold start. The `scale-to-zero` runtime
+Most calls to manual instances land within minutes of the previous call,
+while every call pays a cold start in the hundreds of milliseconds. The `scale-to-zero` runtime
 mode keeps a resident `serve` process warm between calls and stops it after an
 idle timeout.
 
@@ -240,5 +240,5 @@ E2E (real daemon, real fixture services): repeated instance create does not
 grow the process count; scale-to-zero cold start → hot call → idle stop → recall;
 concurrent calls produce one start; daemon shutdown leaves no node processes.
 
-Manual verification on this machine mirrors the production incident: import a
+Manual verification mirrors the leak scenario: import a
 fixture, re-run the create call N times, count node processes before/after.
