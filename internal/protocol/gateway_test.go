@@ -3050,3 +3050,41 @@ func TestGRPCProxyReleasesRefWhenFrontStreamFails(t *testing.T) {
 		t.Fatalf("request ref releases = %d, want 1", got)
 	}
 }
+
+// statusWarmer fails EnsureStarted with a pre-built gRPC status error.
+type statusWarmer struct{ err error }
+
+func (w statusWarmer) EnsureStarted(context.Context, string) (func(), error) {
+	return nil, w.err
+}
+
+func (w statusWarmer) TouchInstance(string) {}
+
+func TestInvokeWarmDoesNotDoubleWrapStatusError(t *testing.T) {
+	want := status.Error(codes.Unavailable, "backend instance is stopped")
+	gateway := &Gateway{ScaleToZeroWarmer: statusWarmer{err: want}}
+	_, err := gateway.invokeWarm(context.Background(), store.ExposedMethod{Instance: domain.Instance{ID: "stz"}}, nil)
+	if status.Code(err) != codes.Unavailable {
+		t.Fatalf("code = %v, want Unavailable", status.Code(err))
+	}
+	if strings.Count(err.Error(), "rpc error") != 1 {
+		t.Fatalf("status error was wrapped twice: %v", err)
+	}
+}
+
+func TestInvokeWarmMapsContextErrors(t *testing.T) {
+	cases := []struct {
+		err  error
+		code codes.Code
+	}{
+		{context.Canceled, codes.Canceled},
+		{context.DeadlineExceeded, codes.DeadlineExceeded},
+	}
+	for _, tc := range cases {
+		gateway := &Gateway{ScaleToZeroWarmer: statusWarmer{err: tc.err}}
+		_, err := gateway.invokeWarm(context.Background(), store.ExposedMethod{Instance: domain.Instance{ID: "stz"}}, nil)
+		if status.Code(err) != tc.code {
+			t.Fatalf("%v mapped to %v, want %v", tc.err, status.Code(err), tc.code)
+		}
+	}
+}

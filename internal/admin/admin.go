@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/labstack/echo/v5"
@@ -1146,22 +1147,51 @@ func (s *Server) restartEnabledServiceInstances(ctx context.Context, serviceID s
 	}
 	s.logger().Info("service_instances_restart_started", "service_id", serviceID, "count", len(actions))
 	ids := make([]string, len(actions))
-	skipRestart := make(map[string]bool, len(actions))
+	onDemand := make(map[string]bool, len(actions))
+	scaleToZero := make(map[string]bool, len(actions))
 	for i, a := range actions {
 		ids[i] = a.id
-		skipRestart[a.id] = a.onDemand || (a.scaleToZero && !s.supervisorTracksInstance(a.id))
+		onDemand[a.id] = a.onDemand
+		scaleToZero[a.id] = a.scaleToZero
+	}
+	var restartedMu sync.Mutex
+	restartedNow := make(map[string]bool, len(actions))
+	markRestarted := func(id string) {
+		restartedMu.Lock()
+		restartedNow[id] = true
+		restartedMu.Unlock()
 	}
 	errs := supervisor.RunBounded(ids, 4, func(id string) error {
-		if skipRestart[id] {
+		switch {
+		case scaleToZero[id]:
+			// Decide warm/cold inside the gate: a stale sample would wake an
+			// instance the idle scan parked just before this call.
+			warm, err := s.Supervisor.RestartIfWarm(ctx, id)
+			if err != nil {
+				return fmt.Errorf("%s: %w", id, err)
+			}
+			if warm {
+				markRestarted(id)
+				return nil
+			}
+			// Cold stays cold; this only normalizes a row that flipped from
+			// on-demand (enabled/running with no process).
 			if err := s.Supervisor.ApplyServiceRuntimeMode(ctx, id); err != nil {
 				return fmt.Errorf("%s: %w", id, err)
 			}
 			return nil
+		case onDemand[id]:
+			if err := s.Supervisor.ApplyServiceRuntimeMode(ctx, id); err != nil {
+				return fmt.Errorf("%s: %w", id, err)
+			}
+			return nil
+		default:
+			if err := s.Supervisor.Restart(ctx, id); err != nil {
+				return fmt.Errorf("%s: %w", id, err)
+			}
+			markRestarted(id)
+			return nil
 		}
-		if err := s.Supervisor.Restart(ctx, id); err != nil {
-			return fmt.Errorf("%s: %w", id, err)
-		}
-		return nil
 	})
 	for _, err := range errs {
 		parts := strings.SplitN(err.Error(), ": ", 2)
@@ -1170,7 +1200,7 @@ func (s *Server) restartEnabledServiceInstances(ctx context.Context, serviceID s
 		}
 	}
 	for _, id := range ids {
-		if msg := errsByInstance[id]; msg != "" || skipRestart[id] {
+		if msg := errsByInstance[id]; msg != "" || !restartedNow[id] {
 			continue
 		}
 		restarted = append(restarted, id)
@@ -1186,12 +1216,6 @@ func (s *Server) restartEnabledServiceInstances(ctx context.Context, serviceID s
 	}
 	s.logger().Info("service_instances_restart_done", "service_id", serviceID, "restarted_count", len(restarted), "failed_count", len(errStrings))
 	return restarted, errStrings
-}
-
-// supervisorTracksInstance reports whether the supervisor currently tracks a
-// process for the instance, i.e. whether a scale-to-zero instance is warm.
-func (s *Server) supervisorTracksInstance(instanceID string) bool {
-	return s.Supervisor.TracksInstance(instanceID)
 }
 
 func (s *Server) handleInstances(w http.ResponseWriter, r *http.Request) {
@@ -1282,15 +1306,25 @@ func (s *Server) handleInstancePath(w http.ResponseWriter, r *http.Request, inst
 				}
 			}
 			if req.Name != nil {
-				inst.Name = *req.Name
-				if err := s.Store.UpsertInstance(r.Context(), inst); err != nil {
-					writeError(w, http.StatusBadRequest, err.Error())
-					return
-				}
-				inst, err = s.Store.GetInstance(r.Context(), instanceID)
-				if err != nil {
-					writeError(w, http.StatusInternalServerError, err.Error())
-					return
+				// Rename under the instance gate: an ungated read-modify-write
+				// could clobber a row a concurrent warm just wrote.
+				if s.Supervisor != nil {
+					inst, err = s.Supervisor.RenameInstance(r.Context(), instanceID, *req.Name)
+					if err != nil {
+						writeError(w, http.StatusBadRequest, err.Error())
+						return
+					}
+				} else {
+					inst.Name = *req.Name
+					if err := s.Store.UpsertInstance(r.Context(), inst); err != nil {
+						writeError(w, http.StatusBadRequest, err.Error())
+						return
+					}
+					inst, err = s.Store.GetInstance(r.Context(), instanceID)
+					if err != nil {
+						writeError(w, http.StatusInternalServerError, err.Error())
+						return
+					}
 				}
 			}
 			writeJSON(w, http.StatusOK, s.instanceResponse(r.Context(), inst))

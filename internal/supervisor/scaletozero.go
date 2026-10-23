@@ -44,42 +44,77 @@ func scanInterval(ttl time.Duration) time.Duration {
 // caller that gives up mid-start must not kill the process everyone else is
 // queued for, nor fail the queued callers with its cancellation. Detachment is
 // bounded -- the start's own 5s health timeout is the ceiling -- so a start
-// nobody waits for cannot outlive the request timeout it replaced. Waiters
-// that hang up while queued simply stop waiting: the gate releases them and
-// their request ctx propagates the cancellation.
+// nobody waits for cannot outlive the request timeout it replaced. A queued
+// caller cannot abandon the mutex wait itself, but its cancellation is observed
+// as soon as it acquires the gate: it returns before taking a ref or touching
+// the process.
 //
 // The returned release drops the request ref taken here. A held ref keeps the
 // idle stopper and the LRU from parking the instance mid-request, streams
 // included.
 func (s *Supervisor) EnsureStarted(ctx context.Context, instanceID string) (release func(), err error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	unlock := s.lockInstance(instanceID)
 	defer unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	s.mu.Lock()
-	s.lastActivity[instanceID] = time.Now()
-	if state := s.procs[instanceID]; state != nil {
+	if s.liveProcessLocked(instanceID) {
+		s.lastActivity[instanceID] = time.Now()
+		state := s.procs[instanceID]
 		s.counters.ScaleToZeroHotHits++
 		generation := state.generation
 		s.addRefLocked(instanceID, generation)
 		s.mu.Unlock()
 		return func() { s.releaseRef(instanceID, generation) }, nil
 	}
-	s.counters.ScaleToZeroColdStarts++
 	s.mu.Unlock()
 	inst, err := s.Store.GetInstance(ctx, instanceID)
 	if err != nil {
 		return nil, err
 	}
 	if !inst.Enabled {
+		// A stopped instance is not a cold start: do not count it or touch its
+		// activity clock.
 		return nil, status.Error(codes.Unavailable, "backend instance is stopped")
 	}
 	// Detach the start from this request: the health-check window and the
 	// process teardown run on their own clock, not the caller's.
 	startCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	defer cancel()
+	s.mu.Lock()
+	if failure, ok := s.startFailures[instanceID]; ok {
+		if time.Since(failure.at) < startFailureWindow {
+			err := failure.err
+			s.mu.Unlock()
+			// Queued callers share the winner's failure instead of each
+			// running another full health-checked start.
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			return nil, err
+		}
+		delete(s.startFailures, instanceID)
+	}
+	s.lastActivity[instanceID] = time.Now()
+	s.counters.ScaleToZeroColdStarts++
+	s.mu.Unlock()
 	if err := s.startLocked(startCtx, instanceID); err != nil {
+		s.mu.Lock()
+		s.startFailures[instanceID] = startFailure{err: err, at: time.Now()}
+		s.mu.Unlock()
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		// The process is warm now; a caller that gave up while the detached
+		// start ran must not take a ref or issue a doomed backend call.
 		return nil, err
 	}
 	s.mu.Lock()
+	delete(s.startFailures, instanceID)
 	generation := s.generations[instanceID]
 	if state := s.procs[instanceID]; state != nil {
 		generation = state.generation
@@ -124,7 +159,7 @@ func (s *Supervisor) releaseRef(instanceID string, generation int64) {
 func (s *Supervisor) TracksInstance(instanceID string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.procs[instanceID] != nil
+	return s.liveProcessLocked(instanceID)
 }
 
 // TouchInstance refreshes a scale-to-zero instance's activity clock without taking its
@@ -141,12 +176,27 @@ func (s *Supervisor) TouchInstance(instanceID string) {
 // scanScaleToZero runs one idle-stop and LRU pass over warm scale-to-zero instances. Only
 // tracked instances count: the reconcile pass owns untracked processes.
 func (s *Supervisor) scanScaleToZero(ctx context.Context) {
-	s.refreshScaleToZeroModes(ctx)
+	s.mu.Lock()
 	ttl := s.stzIdleTTL
 	warmCap := s.stzMaxWarm
+	anyScaleToZero := false
+	for id := range s.procs {
+		if s.scaleToZeroModes[id] {
+			anyScaleToZero = true
+			break
+		}
+	}
+	s.mu.Unlock()
 	if ttl <= 0 && warmCap <= 0 {
 		return
 	}
+	if !anyScaleToZero {
+		// No tracked process is in scale-to-zero mode, so there is nothing to
+		// park. The start paths (and the mode-change paths) keep the cache
+		// current, so this does not miss a switch into the mode.
+		return
+	}
+	s.refreshScaleToZeroModes(ctx)
 	now := time.Now()
 	var idleExpired []string
 	s.mu.Lock()
@@ -170,6 +220,7 @@ func (s *Supervisor) scanScaleToZero(ctx context.Context) {
 			s.mu.Lock()
 			s.counters.ScaleToZeroIdleStops++
 			s.mu.Unlock()
+			s.logger().Info("scale_to_zero_idle_stopped", "instance_id", id)
 		}
 	}
 
@@ -186,13 +237,14 @@ func (s *Supervisor) scanScaleToZero(ctx context.Context) {
 			warm++
 		}
 	}
-	logSummary := len(s.procs) > 0
 	coldStarts := s.counters.ScaleToZeroColdStarts
 	hotHits := s.counters.ScaleToZeroHotHits
 	idleStops := s.counters.ScaleToZeroIdleStops
 	lruEvictions := s.counters.ScaleToZeroLRUEvicted
 	s.mu.Unlock()
-	if logSummary {
+	// An empty pool has nothing to report: a long-running-only deployment must
+	// not get a constant zero row around the clock.
+	if warm > 0 {
 		s.logger().Info("scale_to_zero_scan_done",
 			"warm", warm,
 			"cold_starts", coldStarts,
@@ -237,6 +289,7 @@ func (s *Supervisor) scanScaleToZero(ctx context.Context) {
 			s.mu.Lock()
 			s.counters.ScaleToZeroLRUEvicted++
 			s.mu.Unlock()
+			s.logger().Info("scale_to_zero_lru_evicted", "instance_id", victim)
 		}
 	}
 }
@@ -294,7 +347,7 @@ func (s *Supervisor) parkLocked(ctx context.Context, instanceID string) bool {
 		s.logger().Warn("scale_to_zero_park_failed", "instance_id", instanceID, "error", err)
 		return false
 	}
-	s.logger().Info("scale_to_zero_parked", "instance_id", instanceID)
+	// The callers log the classified event: idle TTL versus LRU eviction.
 	return true
 }
 
@@ -363,23 +416,13 @@ func (s *Supervisor) isScaleToZeroInstance(id string) bool {
 	return s.scaleToZeroModes[id]
 }
 
-// refreshScaleToZeroModes recomputes the scale-to-zero mode cache for every tracked instance.
-// Called at the top of each scale-to-zero scan: the loop is the one place that already
-// walks tracked instances on a period, and mode changes are admin-rate, not
-// request-rate.
+// refreshScaleToZeroModes recomputes the scale-to-zero mode cache for every
+// tracked instance. Called at the top of each scale-to-zero scan. Each tracked
+// instance is read under its own gate: mode changes hold the same gate, so the
+// row cannot be a stale snapshot racing a concurrent SetRuntimeMode -- a
+// snapshot-based refresh could overwrite a fresh cache entry and, combined
+// with the scan's cache gate, strand a warm instance unparked forever.
 func (s *Supervisor) refreshScaleToZeroModes(ctx context.Context) {
-	instances, err := s.Store.ListInstances(ctx)
-	if err != nil {
-		s.logger().Warn("scale_to_zero_mode_refresh_failed", "error", err)
-		return
-	}
-	byID := make(map[string]domain.Instance, len(instances))
-	for _, inst := range instances {
-		byID[inst.ID] = inst
-	}
-	// Resolve services outside s.mu: the hot path takes that lock for every
-	// request, and a SQLite read here would stall every scale-to-zero call for
-	// the duration of the scan.
 	s.mu.Lock()
 	trackedIDs := make([]string, 0, len(s.procs))
 	for id := range s.procs {
@@ -387,27 +430,31 @@ func (s *Supervisor) refreshScaleToZeroModes(ctx context.Context) {
 	}
 	s.mu.Unlock()
 
-	modes := make(map[string]bool, len(trackedIDs))
+	// Read each tracked instance under its own gate and write its cache entry
+	// while still holding that gate. Mode changes hold the same gate, so the
+	// read and the write are atomic against a concurrent SetRuntimeMode or
+	// sync; writing the batch after the gates released could overwrite a fresh
+	// entry with a stale read.
 	services := map[string]domain.Service{}
 	for _, id := range trackedIDs {
-		inst, ok := byID[id]
-		if !ok {
+		unlock := s.lockInstance(id)
+		inst, err := s.Store.GetInstance(ctx, id)
+		if err != nil {
+			unlock()
 			continue
 		}
 		svc, ok := services[inst.ServiceID]
 		if !ok {
 			svc, err = s.Store.GetService(ctx, inst.ServiceID)
 			if err != nil {
+				unlock()
 				continue
 			}
 			services[inst.ServiceID] = svc
 		}
-		modes[id] = domain.EffectiveRuntimeMode(svc, inst) == domain.RuntimeModeScaleToZero
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for id, scaleToZero := range modes {
-		s.scaleToZeroModes[id] = scaleToZero
+		s.mu.Lock()
+		s.scaleToZeroModes[id] = domain.EffectiveRuntimeMode(svc, inst) == domain.RuntimeModeScaleToZero
+		s.mu.Unlock()
+		unlock()
 	}
 }

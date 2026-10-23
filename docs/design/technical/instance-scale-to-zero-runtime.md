@@ -41,7 +41,7 @@ Fix, in layers:
    | Class | Definition | Action |
    |---|---|---|
    | orphan | a serve-shaped process claiming our `OCTOBUS_INSTANCE_ID` and cwd under our data dir, whose instance is not tracked (or whose pid is not the tracked one) | SIGKILL the pid, log `reconcile_orphan_killed` |
-   | missing | DB row enabled + effective long-running, status claims liveness (`starting`/`running`/`degraded`), but no tracked process | start it, log `reconcile_missing_restarted` |
+   | missing | DB row enabled + effective long-running, status claims liveness (`starting`/`running`/`degraded`/`failed`), but no tracked process | start it, log `reconcile_missing_restarted` |
    | surplus | tracked process whose row is disabled or effective on-demand | stop it, log `reconcile_surplus_stopped` |
 
    Orphans are identified by `/proc`: environ must claim the instance id, cwd
@@ -136,8 +136,8 @@ startable.
 | Before → After | Process action |
 |---|---|
 | long-running → on-demand | stop resident; row becomes enabled/running/no pid (existing behavior) |
-| long-running → scale-to-zero | keep resident running (the process is the same) |
-| scale-to-zero → long-running | warm: keep running; cold: start if enabled |
+| long-running → scale-to-zero | keep resident (reload in place when content changed); cold stays cold |
+| scale-to-zero → long-running | warm: keep resident (reload in place when content changed); cold: start if enabled |
 | on-demand → scale-to-zero | normalize fake-running row to cold (enabled/`stopped`/no pid); no start |
 | scale-to-zero → on-demand | stop resident if warm; row becomes enabled/running/no pid |
 | on-demand → long-running | start if enabled (existing behavior, incl. rollback on failure) |
@@ -198,9 +198,11 @@ long-lived streams.
 
 ### Shutdown
 
-`Shutdown` stops warm scale-to-zero instances (tracked or pid-set) alongside
-long-running ones, so no resident process outlives the daemon. Cold scale-to-zero rows
-are left alone.
+`Shutdown` stops the warm scale-to-zero instances it tracks alongside
+long-running ones, so no resident process it owns outlives the daemon. A
+process left untracked by a crash is the reconcile pass's business: the
+row's pid alone is not trusted, since it may have been recycled. Cold
+scale-to-zero rows are left alone.
 
 ## Counters and logs
 

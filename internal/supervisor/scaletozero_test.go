@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -155,6 +156,7 @@ func TestScaleToZeroRefBlocksIdleStop(t *testing.T) {
 	dataDir, st := setupScaleToZeroRuntime(t)
 	ctx := context.Background()
 	sup := New(dataDir, st)
+	t.Cleanup(func() { _ = sup.Stop(context.Background(), "stz-ref") })
 	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "stz-ref", ServiceID: "echo"}); err != nil {
 		t.Fatal(err)
 	}
@@ -354,6 +356,9 @@ func TestCreateInstanceSyncDoesNotFlipOperatorStop(t *testing.T) {
 }
 
 func TestReconcileKillsOrphanServeProcess(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the orphan scan reads /proc (linux only)")
+	}
 	dataDir, st, _ := setupSupervisorHelperRuntime(t)
 	ctx := context.Background()
 	svc, err := st.GetService(ctx, "echo")
@@ -380,7 +385,7 @@ func TestReconcileKillsOrphanServeProcess(t *testing.T) {
 	// fork in flight still carry the shell's argv, and the grace window that
 	// protects in-flight starts would misread it as not-ours.
 	eventually(t, 5*time.Second, func() bool {
-		_, ok := inspectServeProcess(orphanPID, dataDir)
+		_, ok := inspectServeProcess(orphanPID, dataDir, map[string]string{})
 		return ok
 	})
 	// The grace window protects young processes; the test hook shrinks it to
@@ -545,19 +550,13 @@ func TestReconcileStillStopsSurplus(t *testing.T) {
 }
 
 func TestReconcileGraceProtectsUnparseableStartTimes(t *testing.T) {
-	// A /proc stat parse failure must read as brand-new (grace), not as
-	// process-start-of-time (kill). The zero time made the window test pass
-	// for the wrong reason and any transient read failure lethal.
-	before := time.Now()
-	failed := processStartTime(nil)
-	if failed.Before(before) {
-		t.Fatalf("a parse failure must yield a fresh timestamp, got %v (before %v)", failed, before)
+	// A /proc stat parse failure must not invent a start time: the scanner
+	// sees ok=false, substitutes the current time, and marks the process
+	// inexact -- grace-protected and never a kill candidate.
+	start, ok := processStartTime(nil)
+	if ok || !start.IsZero() {
+		t.Fatalf("a parse failure must return (zero, false), got (%v, %v)", start, ok)
 	}
-	// And the window check itself must skip such a process this pass.
-	if failed.Sub(before) < orphanGrace {
-		return
-	}
-	t.Fatal("a fresh timestamp must fall inside the grace window")
 }
 
 func TestScaleToZeroEnsureStartedSurvivesCallerCancellation(t *testing.T) {
@@ -701,10 +700,10 @@ func TestReconcileMissingDoesNotResurrectOperatorStop(t *testing.T) {
 }
 
 func TestWaitDoesNotClobberFreshGeneration(t *testing.T) {
-	// The exit watcher runs outside the gate. A request that warmed a fresh
-	// process while the old process's wait was between the procs deletion and
-	// the row write must win: the stale degraded write may not clobber the
-	// new generation's running row.
+	// wait() takes the instance gate before its procs/row section, so the
+	// fresh start below is serialized against the exit write. What this pins
+	// is the outcome: the stale degraded write may not clobber the new
+	// generation's running row.
 	dataDir, st := setupScaleToZeroRuntime(t)
 	ctx := context.Background()
 	sup := New(dataDir, st)
@@ -722,8 +721,6 @@ func TestWaitDoesNotClobberFreshGeneration(t *testing.T) {
 		t.Fatal(err)
 	}
 	oldPID := *old.PID
-	oldInst, _ := st.GetInstance(ctx, "stz-race")
-	_ = oldInst
 	if err := syscall.Kill(oldPID, syscall.SIGKILL); err != nil {
 		t.Fatal(err)
 	}
@@ -1094,4 +1091,1066 @@ func TestCreateInstanceUpdatePropagatesRestartError(t *testing.T) {
 		t.Fatalf("returned status %s, want failed", inst.Status)
 	}
 	_ = sup.Stop(ctx, "stz-restart")
+}
+
+// TestCreateInstanceModeChangeReloadsChangedContent pins the mode-switch
+// reload: a sync that changes content and runtime mode together must reload
+// the resident process in place, not leave it serving the previous config.
+func TestCreateInstanceModeChangeReloadsChangedContent(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture is unix-only")
+	}
+	dataDir, st, _ := setupSupervisorHelperRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "mode-reload", ServiceID: "echo", Start: true}); err != nil {
+		t.Fatal(err)
+	}
+	before, err := st.GetInstance(ctx, "mode-reload")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before.PID == nil {
+		t.Fatal("expected a warm process before the switch")
+	}
+	got, err := sup.CreateInstance(ctx, CreateInstanceRequest{
+		ID: "mode-reload", ServiceID: "echo", RuntimeMode: domain.RuntimeModeScaleToZero,
+		Config: json.RawMessage(`{"changed":true}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.RuntimeMode != domain.RuntimeModeScaleToZero {
+		t.Fatalf("runtime mode = %s, want scale-to-zero", got.RuntimeMode)
+	}
+	if got.PID == nil || *got.PID == *before.PID {
+		t.Fatalf("warm process was not reloaded on the content change: %+v", got)
+	}
+	if !sup.TracksInstance("mode-reload") {
+		t.Fatal("reload lost the resident process")
+	}
+	_ = sup.Stop(ctx, "mode-reload")
+}
+
+// TestApplyServiceRuntimeModeLandsOnDemandRowColdForScaleToZero pins the
+// service-flip path: an on-demand row (enabled/running, no process) must land
+// on scale-to-zero's cold state when its service switches modes.
+func TestApplyServiceRuntimeModeLandsOnDemandRowColdForScaleToZero(t *testing.T) {
+	dataDir, st, _ := setupSupervisorHelperRuntime(t)
+	ctx := context.Background()
+	svc, err := st.GetService(ctx, "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.RuntimeMode = domain.RuntimeModeOnDemand
+	if err := st.UpsertService(ctx, svc); err != nil {
+		t.Fatal(err)
+	}
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "od-flip", ServiceID: "echo"}); err != nil {
+		t.Fatal(err)
+	}
+	// The service flips on-demand -> scale-to-zero; the import path then calls
+	// ApplyServiceRuntimeMode for the (untracked) instances.
+	svc.RuntimeMode = domain.RuntimeModeScaleToZero
+	if err := st.UpsertService(ctx, svc); err != nil {
+		t.Fatal(err)
+	}
+	if err := sup.ApplyServiceRuntimeMode(ctx, "od-flip"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.GetInstance(ctx, "od-flip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Enabled || got.Status != domain.StatusStopped || got.PID != nil || got.ListenAddr != "" {
+		t.Fatalf("on-demand row did not land cold for scale-to-zero: %+v", got)
+	}
+}
+
+// TestReconcileRepairsDegradedScaleToZeroRow covers the crash remnant: wait()
+// writes degraded with no pid, and reconcile must land that row on the cold
+// state instead of leaving it degraded until the next call.
+func TestReconcileRepairsDegradedScaleToZeroRow(t *testing.T) {
+	dataDir, st, _ := setupSupervisorHelperRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{
+		ID: "stz-degraded", ServiceID: "echo", RuntimeMode: domain.RuntimeModeScaleToZero,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	inst, err := st.GetInstance(ctx, "stz-degraded")
+	if err != nil {
+		t.Fatal(err)
+	}
+	inst.Enabled = true
+	inst.Status = domain.StatusDegraded
+	inst.PID = nil
+	inst.ListenAddr = ""
+	if err := st.UpsertInstance(ctx, inst); err != nil {
+		t.Fatal(err)
+	}
+
+	sup.ReconcileProcesses(ctx)
+
+	got, err := st.GetInstance(ctx, "stz-degraded")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Enabled || got.Status != domain.StatusStopped || got.PID != nil || got.ListenAddr != "" {
+		t.Fatalf("degraded scale-to-zero row not repaired to cold: %+v", got)
+	}
+	if sup.TracksInstance("stz-degraded") {
+		t.Fatal("repairing a degraded row must not start the instance")
+	}
+}
+
+// TestCreateInstanceRebindRunsModeTransition pins the rebind path: the
+// before-mode comes from the OLD service, so moving an instance from an
+// on-demand service to a long-running one starts the resident process instead
+// of leaving a running-looking row with no process.
+func TestCreateInstanceRebindRunsModeTransition(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture is unix-only")
+	}
+	dataDir, st, entry := setupSupervisorHelperRuntime(t)
+	ctx := context.Background()
+	if err := st.UpsertService(ctx, domain.Service{ID: "echo-od", Name: "Echo OD", PackageSource: "fixture", PackageArtifactPath: "pkg", PackageSHA256: "pkgsha", DescriptorPath: "desc", DescriptorSHA256: "descsha", DescriptorVersion: "descsha", NodeEntry: entry, RuntimeMode: domain.RuntimeModeOnDemand}); err != nil {
+		t.Fatal(err)
+	}
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "rebind", ServiceID: "echo-od"}); err != nil {
+		t.Fatal(err)
+	}
+	if sup.TracksInstance("rebind") {
+		t.Fatal("on-demand instance must not have a resident process")
+	}
+
+	got, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "rebind", ServiceID: "echo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ServiceID != "echo" {
+		t.Fatalf("service id = %s, want echo", got.ServiceID)
+	}
+	if !sup.TracksInstance("rebind") {
+		t.Fatal("rebind to a long-running service did not start the resident process")
+	}
+	if got.Status != domain.StatusRunning || got.PID == nil {
+		t.Fatalf("rebound instance not running: %+v", got)
+	}
+	_ = sup.Stop(ctx, "rebind")
+}
+
+// TestApplyServiceRuntimeModeReloadsWarmScaleToZeroProcess pins the warm-race
+// fix: a warm scale-to-zero process must be reloaded in place, never stopped
+// under a request that warmed it between the caller's check and the gate.
+func TestApplyServiceRuntimeModeReloadsWarmScaleToZeroProcess(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture is unix-only")
+	}
+	dataDir, st, _ := setupSupervisorHelperRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{
+		ID: "warm-flip", ServiceID: "echo", RuntimeMode: domain.RuntimeModeScaleToZero, Start: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// New scale-to-zero instances are created cold by design (a start would
+	// defeat the mode for bulk syncs), so warm it the way a request would.
+	release, err := sup.EnsureStarted(ctx, "warm-flip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	release()
+	before, err := st.GetInstance(ctx, "warm-flip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before.PID == nil {
+		t.Fatal("expected a warm process before the flip")
+	}
+	svc, err := st.GetService(ctx, "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.RuntimeMode = domain.RuntimeModeScaleToZero
+	if err := st.UpsertService(ctx, svc); err != nil {
+		t.Fatal(err)
+	}
+	if err := sup.ApplyServiceRuntimeMode(ctx, "warm-flip"); err != nil {
+		t.Fatal(err)
+	}
+	after, err := st.GetInstance(ctx, "warm-flip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !sup.TracksInstance("warm-flip") {
+		t.Fatal("warm process was not kept")
+	}
+	if after.PID == nil || *after.PID == *before.PID {
+		t.Fatalf("warm process was not reloaded: %+v", after)
+	}
+	_ = sup.Stop(ctx, "warm-flip")
+}
+
+// TestReconcileRecycledPIDDoesNotPinStaleRow pins the pid-identity check: a
+// row whose pid is alive but belongs to another process (the shape of a
+// recycled pid after a kill -9) must be repaired and restarted, not skipped.
+func TestReconcileRecycledPIDDoesNotPinStaleRow(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("pid identity reads /proc (linux only)")
+	}
+	dataDir, st, _ := setupSupervisorHelperRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "recycled", ServiceID: "echo", Start: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := sup.Stop(ctx, "recycled"); err != nil {
+		t.Fatal(err)
+	}
+	inst, err := st.GetInstance(ctx, "recycled")
+	if err != nil {
+		t.Fatal(err)
+	}
+	live := os.Getpid()
+	inst.Enabled = true
+	inst.Status = domain.StatusRunning
+	inst.PID = &live
+	inst.ListenAddr = "127.0.0.1:1"
+	if err := st.UpsertInstance(ctx, inst); err != nil {
+		t.Fatal(err)
+	}
+
+	sup.ReconcileProcesses(ctx)
+
+	got, err := st.GetInstance(ctx, "recycled")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.PID == nil || *got.PID == live {
+		t.Fatalf("recycled pid still pins the row: %+v", got)
+	}
+	if !sup.TracksInstance("recycled") {
+		t.Fatal("long-running instance with a recycled pid was not restarted")
+	}
+	_ = sup.Stop(ctx, "recycled")
+}
+
+// TestApplyServiceRuntimeModeNormalizesColdInstanceForOnDemand pins the
+// service-flip path into on-demand: a cold (untracked, enabled/stopped) row
+// must still be normalized to on-demand's enabled/running shape, or every call
+// is rejected and no other pass repairs it.
+func TestApplyServiceRuntimeModeNormalizesColdInstanceForOnDemand(t *testing.T) {
+	dataDir, st := setupScaleToZeroRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "od-cold", ServiceID: "echo"}); err != nil {
+		t.Fatal(err)
+	}
+	// The service flips to on-demand while the instance is cold.
+	svc, err := st.GetService(ctx, "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.RuntimeMode = domain.RuntimeModeOnDemand
+	if err := st.UpsertService(ctx, svc); err != nil {
+		t.Fatal(err)
+	}
+	if err := sup.ApplyServiceRuntimeMode(ctx, "od-cold"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.GetInstance(ctx, "od-cold")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Enabled || got.Status != domain.StatusRunning || got.PID != nil || got.ListenAddr != "" {
+		t.Fatalf("cold row not normalized for on-demand: %+v", got)
+	}
+}
+
+// TestSetRuntimeModeRefreshesIdleClockForWarmProcess pins the keep-resident
+// transition: a long-running process older than the idle TTL must not be
+// parked by the next scan right after it switches to scale-to-zero.
+func TestSetRuntimeModeRefreshesIdleClockForWarmProcess(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture is unix-only")
+	}
+	dataDir, st, _ := setupSupervisorHelperRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "mode-clock", ServiceID: "echo", Start: true}); err != nil {
+		t.Fatal(err)
+	}
+	// The instance has been running for an hour: the clock still holds start.
+	sup.mu.Lock()
+	sup.lastActivity["mode-clock"] = time.Now().Add(-time.Hour)
+	sup.mu.Unlock()
+	// The scan that will judge this instance started before the switch.
+	scannedAt := time.Now()
+	if _, err := sup.SetRuntimeMode(ctx, "mode-clock", domain.RuntimeModeScaleToZero); err != nil {
+		t.Fatal(err)
+	}
+	if !sup.TracksInstance("mode-clock") {
+		t.Fatal("switch to scale-to-zero must keep the warm process")
+	}
+	sup.mu.Lock()
+	activity := sup.lastActivity["mode-clock"]
+	sup.mu.Unlock()
+	if time.Since(activity) > time.Minute {
+		t.Fatalf("idle clock was not refreshed on the keep-resident switch: %v", time.Since(activity))
+	}
+	if sup.parkIfStillIdle(ctx, "mode-clock", scannedAt) {
+		t.Fatal("the fresh clock must keep the instance out of the idle stop")
+	}
+	_ = sup.Stop(ctx, "mode-clock")
+}
+
+// TestCreateInstanceNameOnlyChangeDoesNotRestart pins the cosmetic path: a
+// display-name change must not bounce a live process (the process never reads
+// the name).
+func TestCreateInstanceNameOnlyChangeDoesNotRestart(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture is unix-only")
+	}
+	dataDir, st, _ := setupSupervisorHelperRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "cosmetic", ServiceID: "echo", Start: true}); err != nil {
+		t.Fatal(err)
+	}
+	before, err := st.GetInstance(ctx, "cosmetic")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "cosmetic", ServiceID: "echo", Name: "New Label"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != "New Label" {
+		t.Fatalf("name = %q, want New Label", got.Name)
+	}
+	if got.PID == nil || before.PID == nil || *got.PID != *before.PID {
+		t.Fatalf("a cosmetic change restarted the process: before=%v after=%v", before.PID, got.PID)
+	}
+	if !sup.TracksInstance("cosmetic") {
+		t.Fatal("the live process was disturbed")
+	}
+	_ = sup.Stop(ctx, "cosmetic")
+}
+
+// TestEnsureStartedReplacesExitedTrackedState pins the crash window: a tracked
+// state whose done channel is already closed must be treated as cold (the
+// request would otherwise be sent to a dead address).
+func TestEnsureStartedReplacesExitedTrackedState(t *testing.T) {
+	dataDir, st := setupScaleToZeroRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "stz-exited", ServiceID: "echo"}); err != nil {
+		t.Fatal(err)
+	}
+	exited := &processState{done: make(chan struct{})}
+	close(exited.done)
+	sup.mu.Lock()
+	sup.procs["stz-exited"] = exited
+	sup.mu.Unlock()
+
+	release, err := sup.EnsureStarted(ctx, "stz-exited")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	sup.mu.Lock()
+	current := sup.procs["stz-exited"]
+	sup.mu.Unlock()
+	if current == nil || current == exited {
+		t.Fatal("EnsureStarted reported a hot hit on an exited process")
+	}
+	_ = sup.Stop(ctx, "stz-exited")
+}
+
+// TestRestartIfWarmKeepsColdInstancesCold pins the import helper: a cold
+// scale-to-zero instance must not be woken by a restart request.
+func TestRestartIfWarmKeepsColdInstancesCold(t *testing.T) {
+	dataDir, st := setupScaleToZeroRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "stz-cold-restart", ServiceID: "echo"}); err != nil {
+		t.Fatal(err)
+	}
+	warm, err := sup.RestartIfWarm(ctx, "stz-cold-restart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if warm || sup.TracksInstance("stz-cold-restart") {
+		t.Fatal("RestartIfWarm woke a cold instance")
+	}
+}
+
+// TestStartOnRunningInstanceIsIdempotent pins the start contract: retrying a
+// start on a healthy instance reports success and leaves the process alone.
+func TestStartOnRunningInstanceIsIdempotent(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture is unix-only")
+	}
+	dataDir, st, _ := setupSupervisorHelperRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "start-noop", ServiceID: "echo", Start: true}); err != nil {
+		t.Fatal(err)
+	}
+	before, err := st.GetInstance(ctx, "start-noop")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sup.Start(ctx, "start-noop"); err != nil {
+		t.Fatalf("Start on a running instance: %v", err)
+	}
+	after, err := st.GetInstance(ctx, "start-noop")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before.PID == nil || after.PID == nil || *before.PID != *after.PID {
+		t.Fatalf("Start bounced the process: before=%v after=%v", before.PID, after.PID)
+	}
+	if !sup.TracksInstance("start-noop") {
+		t.Fatal("Start lost the tracked process")
+	}
+	_ = sup.Stop(ctx, "start-noop")
+}
+
+// TestCreateInstanceRetriesFailedInstance pins recovery: a sync retry of an
+// unchanged, enabled instance whose last start failed must try again instead
+// of returning the failed row with a nil error.
+func TestCreateInstanceRetriesFailedInstance(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture is unix-only")
+	}
+	dataDir, st, entry := setupSupervisorHelperRuntime(t)
+	ctx := context.Background()
+	entryPath := filepath.Join(dataDir, "artifacts", "services", "echo", "runtime", entry)
+	if err := os.WriteFile(entryPath, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sup := New(dataDir, st)
+	req := CreateInstanceRequest{ID: "retry-failed", ServiceID: "echo", Start: true}
+	if _, err := sup.CreateInstance(ctx, req); err == nil {
+		t.Fatal("expected the first start to fail")
+	}
+	failed, err := st.GetInstance(ctx, "retry-failed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if failed.Status != domain.StatusFailed {
+		t.Fatalf("status = %s, want failed", failed.Status)
+	}
+	// Fix the runtime and retry the identical request.
+	if err := writeSupervisorHelperEntry(entryPath); err != nil {
+		t.Fatal(err)
+	}
+	got, err := sup.CreateInstance(ctx, req)
+	if err != nil {
+		t.Fatalf("retry did not recover the instance: %v", err)
+	}
+	if got.Status != domain.StatusRunning || got.PID == nil {
+		t.Fatalf("retry left the instance down: %+v", got)
+	}
+	if !sup.TracksInstance("retry-failed") {
+		t.Fatal("retry did not start a process")
+	}
+	_ = sup.Stop(ctx, "retry-failed")
+}
+
+// TestReconcileRestartsFailedLongRunningInstance pins the failed-status
+// recovery: a failed start leaves nothing else to retry it, so the reconcile
+// backstop must treat failed as a liveness claim.
+func TestReconcileRestartsFailedLongRunningInstance(t *testing.T) {
+	dataDir, st, _ := setupSupervisorHelperRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "failed-recover", ServiceID: "echo"}); err != nil {
+		t.Fatal(err)
+	}
+	inst, err := st.GetInstance(ctx, "failed-recover")
+	if err != nil {
+		t.Fatal(err)
+	}
+	inst.Enabled = true
+	inst.Status = domain.StatusFailed
+	inst.PID = nil
+	if err := st.UpsertInstance(ctx, inst); err != nil {
+		t.Fatal(err)
+	}
+	sup.ReconcileProcesses(ctx)
+	if !sup.TracksInstance("failed-recover") {
+		t.Fatal("failed long-running instance was not restarted")
+	}
+	_ = sup.Stop(ctx, "failed-recover")
+}
+
+// TestUpdateConfigRestartKeepsColdScaleToZeroCold pins the cold-instance guard:
+// an explicit --restart reloads content but must not warm a parked instance.
+func TestUpdateConfigRestartKeepsColdScaleToZeroCold(t *testing.T) {
+	dataDir, st := setupScaleToZeroRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "stz-cold-update", ServiceID: "echo"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sup.UpdateConfig(ctx, "stz-cold-update", []byte(`{"changed":true}`), true); err != nil {
+		t.Fatal(err)
+	}
+	if sup.TracksInstance("stz-cold-update") {
+		t.Fatal("--restart warmed a cold scale-to-zero instance")
+	}
+	got, err := st.GetInstance(ctx, "stz-cold-update")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Enabled || got.Status != domain.StatusStopped || got.PID != nil {
+		t.Fatalf("cold instance changed state: %+v", got)
+	}
+}
+
+// TestEnsureStartedSharesRecentStartFailure pins the failure side of the
+// singleflight: callers queued behind a failed start reuse its error instead of
+// each running another health-checked start.
+func TestEnsureStartedSharesRecentStartFailure(t *testing.T) {
+	dataDir, st := setupScaleToZeroRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "stz-fail", ServiceID: "echo"}); err != nil {
+		t.Fatal(err)
+	}
+	failure := errors.New("start failed")
+	sup.mu.Lock()
+	sup.startFailures["stz-fail"] = startFailure{err: failure, at: time.Now()}
+	sup.mu.Unlock()
+	if _, err := sup.EnsureStarted(ctx, "stz-fail"); !errors.Is(err, failure) {
+		t.Fatalf("EnsureStarted err = %v, want the shared failure", err)
+	}
+	if sup.TracksInstance("stz-fail") {
+		t.Fatal("EnsureStarted started a process despite the shared failure")
+	}
+}
+
+// TestRestartIfWarmIgnoresExitedTrackedState pins the warm check: an entry
+// whose process already exited is not warm, and must not be reported as
+// restarted by an import.
+func TestRestartIfWarmIgnoresExitedTrackedState(t *testing.T) {
+	dataDir, st := setupScaleToZeroRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "stz-exited-restart", ServiceID: "echo"}); err != nil {
+		t.Fatal(err)
+	}
+	exited := &processState{done: make(chan struct{})}
+	close(exited.done)
+	sup.mu.Lock()
+	sup.procs["stz-exited-restart"] = exited
+	sup.mu.Unlock()
+	if sup.TracksInstance("stz-exited-restart") {
+		t.Fatal("an exited process was reported as warm")
+	}
+	warm, err := sup.RestartIfWarm(ctx, "stz-exited-restart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if warm {
+		t.Fatal("RestartIfWarm reported a restart for an exited process")
+	}
+}
+
+// TestShutdownAfterInstanceDeleteSucceeds pins forgetInstance: a deleted
+// instance must not leave its generation behind and poison a clean shutdown.
+func TestShutdownAfterInstanceDeleteSucceeds(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture is unix-only")
+	}
+	dataDir, st, _ := setupSupervisorHelperRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "deleted-then-shutdown", ServiceID: "echo", Start: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := sup.DeleteInstance(ctx, "deleted-then-shutdown"); err != nil {
+		t.Fatal(err)
+	}
+	if err := sup.Shutdown(ctx); err != nil {
+		t.Fatalf("shutdown after delete: %v", err)
+	}
+}
+
+// TestEnsureStartedRejectsCanceledContext pins the gate-entry check: a caller
+// that gave up while queued must not take a ref or start the process.
+func TestEnsureStartedRejectsCanceledContext(t *testing.T) {
+	dataDir, st := setupScaleToZeroRuntime(t)
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(context.Background(), CreateInstanceRequest{ID: "stz-canceled", ServiceID: "echo"}); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := sup.EnsureStarted(ctx, "stz-canceled"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("EnsureStarted err = %v, want context.Canceled", err)
+	}
+	if sup.TracksInstance("stz-canceled") {
+		t.Fatal("a canceled request started the instance")
+	}
+	sup.mu.Lock()
+	refs := sup.refCounts["stz-canceled"].count
+	sup.mu.Unlock()
+	if refs != 0 {
+		t.Fatalf("a canceled request took %d refs", refs)
+	}
+}
+
+// TestCreateInstanceFailedScaleToZeroLandsCold pins the sync recovery rule: a
+// failed scale-to-zero row comes back cold, not warm, or a bulk sync would
+// wake every failed instance.
+func TestCreateInstanceFailedScaleToZeroLandsCold(t *testing.T) {
+	dataDir, st := setupScaleToZeroRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "stz-failed-sync", ServiceID: "echo"}); err != nil {
+		t.Fatal(err)
+	}
+	inst, err := st.GetInstance(ctx, "stz-failed-sync")
+	if err != nil {
+		t.Fatal(err)
+	}
+	inst.Enabled = true
+	inst.Status = domain.StatusFailed
+	inst.PID = nil
+	if err := st.UpsertInstance(ctx, inst); err != nil {
+		t.Fatal(err)
+	}
+	got, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "stz-failed-sync", ServiceID: "echo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sup.TracksInstance("stz-failed-sync") {
+		t.Fatal("a failed scale-to-zero instance was warmed by a sync")
+	}
+	if !got.Enabled || got.Status != domain.StatusStopped {
+		t.Fatalf("failed scale-to-zero row did not land cold: %+v", got)
+	}
+}
+
+// TestCreateInstanceContentChangeRecoversFailedRow pins the same-mode recovery:
+// a content-changing sync against a failed, process-less row must start the
+// instance instead of returning it with a nil error.
+func TestCreateInstanceContentChangeRecoversFailedRow(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture is unix-only")
+	}
+	dataDir, st, _ := setupSupervisorHelperRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "failed-content", ServiceID: "echo"}); err != nil {
+		t.Fatal(err)
+	}
+	inst, err := st.GetInstance(ctx, "failed-content")
+	if err != nil {
+		t.Fatal(err)
+	}
+	inst.Enabled = true
+	inst.Status = domain.StatusFailed
+	inst.PID = nil
+	if err := st.UpsertInstance(ctx, inst); err != nil {
+		t.Fatal(err)
+	}
+	got, err := sup.CreateInstance(ctx, CreateInstanceRequest{
+		ID: "failed-content", ServiceID: "echo", Config: json.RawMessage(`{"changed":true}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.StatusRunning || got.PID == nil {
+		t.Fatalf("content-changing sync left the failed row down: %+v", got)
+	}
+	if !sup.TracksInstance("failed-content") {
+		t.Fatal("content-changing sync did not start the process")
+	}
+	_ = sup.Stop(ctx, "failed-content")
+}
+
+// TestUpdateConfigRestartClearsStaleListenAddr pins the disabled-restart write:
+// the pre-stop snapshot must not resurrect the address stopProcess cleared.
+func TestUpdateConfigRestartClearsStaleListenAddr(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture is unix-only")
+	}
+	dataDir, st, _ := setupSupervisorHelperRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "stale-addr", ServiceID: "echo", Start: true}); err != nil {
+		t.Fatal(err)
+	}
+	inst, err := st.GetInstance(ctx, "stale-addr")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The shape the bug needs: disabled row that still carries an address.
+	inst.Enabled = false
+	inst.Status = domain.StatusStopped
+	inst.PID = nil
+	inst.ListenAddr = "127.0.0.1:1"
+	if err := st.UpsertInstance(ctx, inst); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sup.UpdateConfig(ctx, "stale-addr", []byte(`{}`), true); err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.GetInstance(ctx, "stale-addr")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ListenAddr != "" {
+		t.Fatalf("disabled restart restored a stale listen address: %q", got.ListenAddr)
+	}
+}
+
+// TestEnsureStartedDisabledDoesNotCountColdStart pins the metric ordering: a
+// stopped instance is not a cold start and must not touch the activity clock.
+func TestEnsureStartedDisabledDoesNotCountColdStart(t *testing.T) {
+	dataDir, st := setupScaleToZeroRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "stz-disabled-count", ServiceID: "echo"}); err != nil {
+		t.Fatal(err)
+	}
+	inst, err := st.GetInstance(ctx, "stz-disabled-count")
+	if err != nil {
+		t.Fatal(err)
+	}
+	inst.Enabled = false
+	if err := st.UpsertInstance(ctx, inst); err != nil {
+		t.Fatal(err)
+	}
+	sup.mu.Lock()
+	before := sup.counters.ScaleToZeroColdStarts
+	sup.mu.Unlock()
+	if _, err := sup.EnsureStarted(ctx, "stz-disabled-count"); err == nil {
+		t.Fatal("EnsureStarted on a disabled instance returned nil")
+	}
+	sup.mu.Lock()
+	after := sup.counters.ScaleToZeroColdStarts
+	activity := sup.lastActivity["stz-disabled-count"]
+	sup.mu.Unlock()
+	if after != before {
+		t.Fatalf("disabled call counted as a cold start: %d -> %d", before, after)
+	}
+	if !activity.IsZero() {
+		t.Fatalf("disabled call touched the activity clock: %v", activity)
+	}
+}
+
+// TestSetRuntimeModeStalePIDStartsLongRunning pins the failed-row switch: a
+// health-check failure leaves the row failed with a stale pid, and switching
+// to long-running must start a real process, not read the pid as warm.
+func TestSetRuntimeModeStalePIDStartsLongRunning(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture is unix-only")
+	}
+	dataDir, st := setupScaleToZeroRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "stale-pid-switch", ServiceID: "echo"}); err != nil {
+		t.Fatal(err)
+	}
+	inst, err := st.GetInstance(ctx, "stale-pid-switch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The shape a failed start leaves behind: enabled/failed with a stale pid.
+	stale := 2147483647 - 1
+	inst.Enabled = true
+	inst.Status = domain.StatusFailed
+	inst.PID = &stale
+	if err := st.UpsertInstance(ctx, inst); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sup.SetRuntimeMode(ctx, "stale-pid-switch", domain.RuntimeModeLongRunning); err != nil {
+		t.Fatal(err)
+	}
+	if !sup.TracksInstance("stale-pid-switch") {
+		t.Fatal("switch to long-running did not start a process")
+	}
+	_ = sup.Stop(ctx, "stale-pid-switch")
+}
+
+// TestDeleteTrackedOnDemandInstanceStopsProcess pins the delete path: an
+// on-demand instance with a stray tracked process must not leak it.
+func TestDeleteTrackedOnDemandInstanceStopsProcess(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture is unix-only")
+	}
+	dataDir, st, _ := setupSupervisorHelperRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "od-delete", ServiceID: "echo", Start: true}); err != nil {
+		t.Fatal(err)
+	}
+	if !sup.TracksInstance("od-delete") {
+		t.Fatal("expected a warm process")
+	}
+	// The import that flips the service to on-demand lands after the process
+	// was tracked: exactly the surplus shape reconcile exists to clean up.
+	svc, err := st.GetService(ctx, "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.RuntimeMode = domain.RuntimeModeOnDemand
+	if err := st.UpsertService(ctx, svc); err != nil {
+		t.Fatal(err)
+	}
+	if err := sup.DeleteInstance(ctx, "od-delete"); err != nil {
+		t.Fatal(err)
+	}
+	if sup.TracksInstance("od-delete") {
+		t.Fatal("delete left the tracked process behind")
+	}
+	if _, err := st.GetInstance(ctx, "od-delete"); err == nil {
+		t.Fatal("row survived the delete")
+	}
+}
+
+// TestApplyServiceRuntimeModeKeepsOperatorStop pins the stop rule: an import
+// flipping a service's mode must not re-enable an operator-stopped instance.
+func TestApplyServiceRuntimeModeKeepsOperatorStop(t *testing.T) {
+	dataDir, st := setupScaleToZeroRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "stz-stopped-flip", ServiceID: "echo"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := sup.Stop(ctx, "stz-stopped-flip"); err != nil {
+		t.Fatal(err)
+	}
+	svc, err := st.GetService(ctx, "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.RuntimeMode = domain.RuntimeModeOnDemand
+	if err := st.UpsertService(ctx, svc); err != nil {
+		t.Fatal(err)
+	}
+	if err := sup.ApplyServiceRuntimeMode(ctx, "stz-stopped-flip"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.GetInstance(ctx, "stz-stopped-flip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Enabled {
+		t.Fatalf("import re-enabled an operator-stopped instance: %+v", got)
+	}
+}
+
+// TestCreateInstanceNormalizesOnDemandRowShape pins the sync repair: an
+// on-demand row stuck in enabled/stopped is normalized to enabled/running by
+// an otherwise unchanged create.
+func TestCreateInstanceNormalizesOnDemandRowShape(t *testing.T) {
+	dataDir, st, _ := setupSupervisorHelperRuntime(t)
+	ctx := context.Background()
+	svc, err := st.GetService(ctx, "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.RuntimeMode = domain.RuntimeModeOnDemand
+	if err := st.UpsertService(ctx, svc); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpsertInstance(ctx, domain.Instance{ID: "od-shape", ServiceID: "echo", Enabled: true, Status: domain.StatusStopped, NodeEntry: "fixture-entry", ConfigJSON: []byte(`{}`), SecretJSON: []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	sup := New(dataDir, st)
+	got, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "od-shape", ServiceID: "echo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Enabled || got.Status != domain.StatusRunning || got.PID != nil {
+		t.Fatalf("on-demand row shape not normalized: %+v", got)
+	}
+}
+
+// TestLiveProcessLockedIsReadOnly pins the observation contract: an
+// exited-but-unreaped entry is reported cold, and wait() keeps its ownership
+// (the entry is not pruned out from under it).
+func TestLiveProcessLockedIsReadOnly(t *testing.T) {
+	sup := New(t.TempDir(), nil)
+	exited := &processState{done: make(chan struct{})}
+	close(exited.done)
+	sup.mu.Lock()
+	sup.procs["read-only"] = exited
+	live := sup.liveProcessLocked("read-only")
+	_, stillThere := sup.procs["read-only"]
+	sup.mu.Unlock()
+	if live {
+		t.Fatal("an exited process was reported live")
+	}
+	if !stillThere {
+		t.Fatal("liveProcessLocked pruned the entry; wait() loses ownership")
+	}
+}
+
+// TestScanParksAfterModeSwitch pins the scan's cache gate: a long-running
+// instance that switches to scale-to-zero (cache set by the switch) must be
+// parked by the next scan, never stranded warm behind the anyScaleToZero
+// early return.
+func TestScanParksAfterModeSwitch(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture is unix-only")
+	}
+	dataDir, st, _ := setupSupervisorHelperRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "switch-park", ServiceID: "echo", Start: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sup.SetRuntimeMode(ctx, "switch-park", domain.RuntimeModeScaleToZero); err != nil {
+		t.Fatal(err)
+	}
+	if !sup.TracksInstance("switch-park") {
+		t.Fatal("switch lost the resident process")
+	}
+	sup.mu.Lock()
+	sup.stzIdleTTL = time.Minute
+	sup.lastActivity["switch-park"] = time.Now().Add(-2 * time.Minute)
+	sup.mu.Unlock()
+	sup.scanScaleToZero(ctx)
+	if sup.TracksInstance("switch-park") {
+		t.Fatal("the scan never parked the switched instance")
+	}
+	got, err := st.GetInstance(ctx, "switch-park")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Enabled || got.Status != domain.StatusStopped {
+		t.Fatalf("parked row shape wrong: %+v", got)
+	}
+}
+
+// TestSetRuntimeModeEqualModeNormalizesOnDemandShape pins the equal-mode PATCH:
+// an on-demand row stuck in enabled/stopped is normalized when the operator
+// re-applies the mode.
+func TestSetRuntimeModeEqualModeNormalizesOnDemandShape(t *testing.T) {
+	dataDir, st, _ := setupSupervisorHelperRuntime(t)
+	ctx := context.Background()
+	svc, err := st.GetService(ctx, "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.RuntimeMode = domain.RuntimeModeOnDemand
+	if err := st.UpsertService(ctx, svc); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpsertInstance(ctx, domain.Instance{ID: "od-equal", ServiceID: "echo", Enabled: true, Status: domain.StatusStopped, NodeEntry: "fixture-entry", ConfigJSON: []byte(`{}`), SecretJSON: []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	sup := New(dataDir, st)
+	if _, err := sup.SetRuntimeMode(ctx, "od-equal", domain.RuntimeModeOnDemand); err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.GetInstance(ctx, "od-equal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Enabled || got.Status != domain.StatusRunning || got.PID != nil {
+		t.Fatalf("equal-mode PATCH did not normalize the on-demand shape: %+v", got)
+	}
+}
+
+// TestRestartLockedNormalizesCrashRemnant pins the cold-stz shortcut: a row
+// still claiming a running process after a crash is landed cold, and the
+// restart reports success honestly (the content was written, nothing to
+// restart).
+func TestRestartLockedNormalizesCrashRemnant(t *testing.T) {
+	dataDir, st := setupScaleToZeroRuntime(t)
+	ctx := context.Background()
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "stz-remnant", ServiceID: "echo"}); err != nil {
+		t.Fatal(err)
+	}
+	inst, err := st.GetInstance(ctx, "stz-remnant")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The shape a kill -9 remnant leaves: running with a stale pid/addr and
+	// no tracked process.
+	stale := 2147483647 - 1
+	inst.Enabled = true
+	inst.Status = domain.StatusRunning
+	inst.PID = &stale
+	inst.ListenAddr = "127.0.0.1:1"
+	if err := st.UpsertInstance(ctx, inst); err != nil {
+		t.Fatal(err)
+	}
+	unlock := sup.lockInstance("stz-remnant")
+	err = sup.restartLocked(ctx, "stz-remnant", true)
+	unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.GetInstance(ctx, "stz-remnant")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.StatusStopped || got.PID != nil || got.ListenAddr != "" {
+		t.Fatalf("crash remnant not landed cold: %+v", got)
+	}
+	if sup.TracksInstance("stz-remnant") {
+		t.Fatal("the remnant restart warmed the instance")
+	}
+}
+
+// TestCreateInstanceOnDemandRebindRollsBack pins the od -> long-running switch:
+// a failed start must roll the row back to on-demand's servable shape,
+// mirroring SetRuntimeMode's failure handling.
+func TestCreateInstanceOnDemandRebindRollsBack(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell fixture is unix-only")
+	}
+	dataDir, st, entry := setupSupervisorHelperRuntime(t)
+	ctx := context.Background()
+	svc, err := st.GetService(ctx, "echo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.RuntimeMode = domain.RuntimeModeOnDemand
+	if err := st.UpsertService(ctx, svc); err != nil {
+		t.Fatal(err)
+	}
+	sup := New(dataDir, st)
+	if _, err := sup.CreateInstance(ctx, CreateInstanceRequest{ID: "od-rebind", ServiceID: "echo"}); err != nil {
+		t.Fatal(err)
+	}
+	// Break the runtime so the switch's start fails its health check.
+	entryPath := filepath.Join(dataDir, "artifacts", "services", "echo", "runtime", entry)
+	if err := os.WriteFile(entryPath, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got, err := sup.CreateInstance(ctx, CreateInstanceRequest{
+		ID: "od-rebind", ServiceID: "echo", RuntimeMode: domain.RuntimeModeLongRunning,
+	})
+	if err == nil {
+		t.Fatal("expected the switch to fail its health check")
+	}
+	_ = got
+	// The rollback restores the on-demand servable shape with the previous
+	// (empty = inherit) override, mirroring SetRuntimeMode's failure handling.
+	fresh, err := st.GetInstance(ctx, "od-rebind")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fresh.RuntimeMode != "" {
+		t.Fatalf("override = %q, want empty (inherit)", fresh.RuntimeMode)
+	}
+	if fresh.Enabled != true || fresh.Status != domain.StatusRunning || fresh.PID != nil {
+		t.Fatalf("rollback left the row unservable: enabled=%v status=%s pid=%v", fresh.Enabled, fresh.Status, fresh.PID)
+	}
 }

@@ -3,10 +3,13 @@ package supervisor
 import (
 	"bytes"
 	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"octobus/internal/domain"
@@ -47,7 +50,14 @@ func (s *Supervisor) ReconcileProcesses(ctx context.Context) {
 	logger := s.logger()
 	now := time.Now()
 
-	live := s.listServeProcesses()
+	live := map[int]serveProcess{}
+	if runtime.GOOS == "linux" {
+		live = s.listServeProcesses()
+	} else {
+		// Row repair and surplus stops below still work; only process
+		// attribution needs /proc. Say so once instead of warning every pass.
+		s.warnOrphanScanUnavailable(logger)
+	}
 
 	// --- orphans ---------------------------------------------------------
 	orphans := 0
@@ -56,7 +66,7 @@ func (s *Supervisor) ReconcileProcesses(ctx context.Context) {
 		grace = orphanGrace
 	}
 	for pid, info := range live {
-		if now.Sub(info.start) < grace {
+		if !info.exact || now.Sub(info.start) < grace {
 			continue
 		}
 		s.mu.Lock()
@@ -71,6 +81,14 @@ func (s *Supervisor) ReconcileProcesses(ctx context.Context) {
 			continue
 		}
 		orphans++
+		// Re-read the start time before signalling: a scanned process that
+		// exited in the meantime may have had its pid recycled, and the
+		// signal would land on an unrelated process. A mismatch (or a
+		// vanished /proc entry) skips the kill; the next pass re-scans and
+		// decides afresh.
+		if cur, ok := pidStart(pid); !ok || cur != info.start {
+			continue
+		}
 		// Signal the pid directly, never the group: at hardening level off the
 		// runtime shares the daemon's process group, and a group signal would
 		// kill the daemon itself.
@@ -117,6 +135,7 @@ func (s *Supervisor) ReconcileProcesses(ctx context.Context) {
 		if inst.Enabled && residentMode(domain.EffectiveRuntimeMode(svc, inst)) {
 			continue
 		}
+		stopped := false
 		err = s.withGate(id, func() error {
 			inst, err := s.Store.GetInstance(ctx, id)
 			if err != nil {
@@ -132,8 +151,9 @@ func (s *Supervisor) ReconcileProcesses(ctx context.Context) {
 			if !tracked || (inst.Enabled && residentMode(domain.EffectiveRuntimeMode(svc, inst))) {
 				return nil
 			}
-			if err := s.stopProcess(ctx, inst, inst.Enabled); err != nil {
-				return err
+			stopErr := s.stopProcess(ctx, inst, inst.Enabled)
+			if stopErr == nil {
+				stopped = true
 			}
 			// Only an on-demand row has no stopped state: it serves enabled
 			// and running with no process, so the stop must land it there or
@@ -145,9 +165,11 @@ func (s *Supervisor) ReconcileProcesses(ctx context.Context) {
 					logger.Warn("reconcile_surplus_normalize_failed", "instance_id", id, "error", err)
 				}
 			}
-			return nil
+			return stopErr
 		})
-		if err == nil {
+		if err != nil {
+			logger.Warn("reconcile_surplus_stop_failed", "instance_id", id, "error", err)
+		} else if stopped {
 			s.mu.Lock()
 			s.counters.SurplusStopped++
 			s.mu.Unlock()
@@ -180,7 +202,7 @@ func (s *Supervisor) ReconcileProcesses(ctx context.Context) {
 		if tracked {
 			continue
 		}
-		if inst.PID != nil && pidAlive(*inst.PID) {
+		if inst.PID != nil && pidAlive(*inst.PID) && pidOwnedByInstance(*inst.PID, inst.ID) {
 			continue
 		}
 		if mode == domain.RuntimeModeLongRunning {
@@ -204,7 +226,11 @@ func (s *Supervisor) ReconcileProcesses(ctx context.Context) {
 				domain.EffectiveRuntimeMode(svc, inst) != domain.RuntimeModeScaleToZero {
 				return nil
 			}
-			if inst.PID == nil || pidAlive(*inst.PID) {
+			// A degraded row has no pid left to probe: the exit watcher wrote
+			// degraded with PID=nil, and that is exactly the shape the repair
+			// exists for. Only a live pid that still claims this instance
+			// means someone else owns the row.
+			if inst.PID != nil && pidAlive(*inst.PID) && pidOwnedByInstance(*inst.PID, id) {
 				return nil
 			}
 			s.mu.Lock()
@@ -229,6 +255,7 @@ func (s *Supervisor) ReconcileProcesses(ctx context.Context) {
 	}
 
 	for _, id := range missings {
+		restarted := false
 		err := s.withGate(id, func() error {
 			// Re-read and re-verify inside the gate: the snapshot predates it,
 			// and an operator Stop (or a mode change) that landed in between
@@ -246,8 +273,10 @@ func (s *Supervisor) ReconcileProcesses(ctx context.Context) {
 				return nil
 			}
 			// Repair the stale row first so recovery does not race its own
-			// UpsertInstance during start.
-			if inst.PID != nil && !pidAlive(*inst.PID) {
+			// UpsertInstance during start. A pid that is alive but no longer
+			// claims this instance is a recycled pid: clear it so the restart
+			// below writes a real one.
+			if inst.PID != nil && !(pidAlive(*inst.PID) && pidOwnedByInstance(*inst.PID, id)) {
 				inst.PID = nil
 				inst.ListenAddr = ""
 				inst.Status = domain.StatusStopped
@@ -261,32 +290,46 @@ func (s *Supervisor) ReconcileProcesses(ctx context.Context) {
 			if tracked {
 				return nil
 			}
+			restarted = true
 			return s.startLocked(ctx, id)
 		})
 		if err != nil {
 			logger.Warn("reconcile_missing_restart_failed", "instance_id", id, "error", err)
 			continue
 		}
-		s.mu.Lock()
-		s.counters.MissingRestarted++
-		s.mu.Unlock()
-		logger.Warn("reconcile_missing_restarted", "instance_id", id)
+		if restarted {
+			s.mu.Lock()
+			s.counters.MissingRestarted++
+			s.mu.Unlock()
+			logger.Warn("reconcile_missing_restarted", "instance_id", id)
+		}
 	}
 
 	s.mu.Lock()
 	s.counters.ReconcilePasses++
+	passes := s.counters.ReconcilePasses
+	orphansKilled := s.counters.OrphansKilled
+	missingRestarted := s.counters.MissingRestarted
+	surplusStopped := s.counters.SurplusStopped
 	s.mu.Unlock()
 	logger.Info("reconcile_pass_done",
+		"passes", passes,
 		"orphans", orphans,
+		"orphans_killed_total", orphansKilled,
 		"missing", len(missings),
+		"missing_restarted_total", missingRestarted,
+		"surplus_stopped_total", surplusStopped,
 		"tracked", len(trackedIDs),
 		"instances", len(instances))
 }
 
-// claimsLiveness reports whether a row status says a process should exist.
+// claimsLiveness reports whether a row status says a process should exist. A
+// failed start is included: nothing else retries it, and an enabled
+// long-running instance that failed its health check must be recovered by this
+// backstop (a scale-to-zero failed row is repaired to cold instead).
 func claimsLiveness(status domain.InstanceStatus) bool {
 	switch status {
-	case domain.StatusStarting, domain.StatusRunning, domain.StatusDegraded:
+	case domain.StatusStarting, domain.StatusRunning, domain.StatusDegraded, domain.StatusFailed:
 		return true
 	}
 	return false
@@ -308,10 +351,65 @@ func pidAlive(pid int) bool {
 	return killPIDProbe(pid) == nil
 }
 
+// warnOrphanScanUnavailable reports once that the orphan backstop cannot
+// attribute processes on this platform.
+func (s *Supervisor) warnOrphanScanUnavailable(logger *slog.Logger) {
+	s.mu.Lock()
+	warned := s.procScanWarned
+	s.procScanWarned = true
+	s.mu.Unlock()
+	if !warned {
+		logger.Info("reconcile_orphan_scan_unavailable", "goos", runtime.GOOS, "reason", "process attribution requires /proc")
+	}
+}
+
+// instanceIDFromEnviron returns the OCTOBUS_INSTANCE_ID value in a /proc
+// environ blob. Attribution and pid-identity checks share this so the two
+// cannot disagree about who owns a pid.
+func instanceIDFromEnviron(raw []byte) (string, bool) {
+	for _, kv := range bytes.Split(raw, []byte{0}) {
+		if key, value, ok := strings.Cut(string(kv), "="); ok && key == "OCTOBUS_INSTANCE_ID" {
+			return value, true
+		}
+	}
+	return "", false
+}
+
+// pidOwnedByInstance reports whether a live pid still belongs to the instance:
+// on linux its environ must claim the instance id, so a recycled pid that
+// reads as alive no longer pins the row. Platforms without /proc answer true,
+// degrading the caller to the plain pidAlive probe.
+func pidOwnedByInstance(pid int, instanceID string) bool {
+	if runtime.GOOS != "linux" {
+		return true
+	}
+	raw, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/environ")
+	if err != nil {
+		// Gone, or owned by another user: either way not provably ours.
+		return false
+	}
+	value, ok := instanceIDFromEnviron(raw)
+	return ok && value == instanceID
+}
+
+// pidStart re-reads a process's start time for the kill re-check. ok is false
+// when the process is gone or its stat cannot be parsed.
+func pidStart(pid int) (time.Time, bool) {
+	raw, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
+	if err != nil {
+		return time.Time{}, false
+	}
+	return processStartTime(raw)
+}
+
 // serveProcess is one live runtime process found on the host.
 type serveProcess struct {
 	instanceID string
 	start      time.Time
+	// exact reports whether start comes from a parseable /proc stat record.
+	// Only exact processes are kill candidates: an unparseable one stays
+	// grace-protected forever rather than guessed at.
+	exact bool
 }
 
 // listServeProcesses returns the live, serve-shaped runtime processes this
@@ -327,6 +425,9 @@ func (s *Supervisor) listServeProcesses() map[int]serveProcess {
 		return nil
 	}
 	out := make(map[int]serveProcess)
+	// Resolved instance workdirs, memoized per pass: every serve process of
+	// one instance shares the same workdir, and EvalSymlinks is not cheap.
+	workdirs := make(map[string]string)
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -335,7 +436,7 @@ func (s *Supervisor) listServeProcesses() map[int]serveProcess {
 		if err != nil || pid == os.Getpid() {
 			continue
 		}
-		info, ok := inspectServeProcess(pid, s.DataDir)
+		info, ok := inspectServeProcess(pid, s.DataDir, workdirs)
 		if ok {
 			out[pid] = info
 		}
@@ -344,23 +445,14 @@ func (s *Supervisor) listServeProcesses() map[int]serveProcess {
 }
 
 // inspectServeProcess attributes one pid, or reports that it is not ours.
-func inspectServeProcess(pid int, dataDir string) (serveProcess, bool) {
+// workdirs memoizes EvalSymlinks results per instance id across the scan.
+func inspectServeProcess(pid int, dataDir string, workdirs map[string]string) (serveProcess, bool) {
 	envRaw, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/environ")
 	if err != nil {
 		return serveProcess{}, false
 	}
-	instanceID := ""
-	for _, kv := range bytes.Split(envRaw, []byte{0}) {
-		text := string(kv)
-		if text == "" {
-			continue
-		}
-		if key, value, ok := strings.Cut(text, "="); ok && key == "OCTOBUS_INSTANCE_ID" {
-			instanceID = value
-			break
-		}
-	}
-	if instanceID == "" {
+	instanceID, ok := instanceIDFromEnviron(envRaw)
+	if !ok || instanceID == "" {
 		return serveProcess{}, false
 	}
 	if err := domain.ValidateID("instance", instanceID); err != nil {
@@ -370,14 +462,18 @@ func inspectServeProcess(pid int, dataDir string) (serveProcess, bool) {
 	if err != nil {
 		return serveProcess{}, false
 	}
-	workdir, err := filepath.EvalSymlinks(filepath.Join(dataDir, "instances", instanceID))
-	if err != nil {
-		return serveProcess{}, false
+	workdir, ok := workdirs[instanceID]
+	if !ok {
+		resolved, err := filepath.EvalSymlinks(filepath.Join(dataDir, "instances", instanceID))
+		if err != nil {
+			return serveProcess{}, false
+		}
+		workdirs[instanceID] = resolved
+		workdir = resolved
 	}
-	// Accept the workdir and anything below it: the runtime may chdir into a
-	// package directory after start, and the design attributes a process by
-	// "cwd inside instances/<id>". A second daemon claims the env var but not
-	// this cwd.
+	// Accept the workdir and anything below it. A runtime that leaves the
+	// workdir entirely is not attributed: the supervisor only kills what it
+	// can prove belongs to this instance.
 	if !withinDir(workdir, cwd) {
 		return serveProcess{}, false
 	}
@@ -392,7 +488,14 @@ func inspectServeProcess(pid int, dataDir string) (serveProcess, bool) {
 	if err != nil {
 		return serveProcess{}, false
 	}
-	return serveProcess{instanceID: instanceID, start: processStartTime(stat)}, true
+	start, exact := processStartTime(stat)
+	if !exact {
+		// Unparseable start time: report it as brand-new so the grace window
+		// protects the process, and mark it inexact so the killer never
+		// trusts its identity.
+		start = time.Now()
+	}
+	return serveProcess{instanceID: instanceID, start: start, exact: exact}, true
 }
 
 // isServeArgv reports whether argv matches the runtime's serve invocation
@@ -409,32 +512,31 @@ func isServeArgv(argv [][]byte) bool {
 
 // processStartTime extracts field 22 (starttime, in clock ticks since boot)
 // from a /proc/<pid>/stat record. The comm field may contain spaces and
-// parentheses, so parsing starts after its closing parenthesis. The absolute
-// start time is only used for the grace window, so on any parse failure the
-// process is treated as brand new: skipped this pass, reexamined next pass.
-func processStartTime(stat []byte) time.Time {
-	failed := time.Now()
+// parentheses, so parsing starts after its closing parenthesis. ok is false
+// on any parse failure: the caller then treats the process as brand new for
+// the grace window and never trusts its identity.
+func processStartTime(stat []byte) (time.Time, bool) {
 	i := bytes.LastIndexByte(stat, ')')
 	if i < 0 || i+2 >= len(stat) {
-		return failed
+		return time.Time{}, false
 	}
 	fields := strings.Fields(string(stat[i+2:]))
 	// fields[0] is state (field 3); starttime is field 22, i.e. index 19 here.
 	if len(fields) < 20 {
-		return failed
+		return time.Time{}, false
 	}
 	ticks, err := strconv.ParseInt(fields[19], 10, 64)
 	if err != nil {
-		return failed
+		return time.Time{}, false
 	}
 	btime := bootTime()
 	if btime.IsZero() {
-		return failed
+		return time.Time{}, false
 	}
 	// Multiply by one tick (10ms) rather than by a second: ticks * 1e9
 	// overflows int64 once uptime passes ~2.9 years, which silently breaks
 	// the grace window and stops orphan reaping on long-lived hosts.
-	return btime.Add(time.Duration(ticks) * (time.Second / clockTickHz))
+	return btime.Add(time.Duration(ticks) * (time.Second / clockTickHz)), true
 }
 
 // withinDir reports whether path is dir itself or lies below it.
@@ -451,19 +553,31 @@ func withinDir(dir, path string) bool {
 // fixed at 100 for as long /proc has existed.
 const clockTickHz = 100
 
+// bootTime returns the kernel boot time, read once: /proc/stat's btime is
+// constant for the life of the boot, and the orphan scan would otherwise
+// re-read and re-parse the file once per attributed process. A failed first
+// read stays failed (the scan then grace-protects everything) until the next
+// daemon start, which matches the scan's fail-safe posture.
+var (
+	btimeOnce  sync.Once
+	btimeValue time.Time
+)
+
 func bootTime() time.Time {
-	raw, err := os.ReadFile("/proc/stat")
-	if err != nil {
-		return time.Time{}
-	}
-	for _, line := range strings.Split(string(raw), "\n") {
-		if btime, ok := strings.CutPrefix(line, "btime "); ok {
-			seconds, err := strconv.ParseInt(strings.TrimSpace(btime), 10, 64)
-			if err != nil {
-				return time.Time{}
-			}
-			return time.Unix(seconds, 0)
+	btimeOnce.Do(func() {
+		raw, err := os.ReadFile("/proc/stat")
+		if err != nil {
+			return
 		}
-	}
-	return time.Time{}
+		for _, line := range strings.Split(string(raw), "\n") {
+			if btime, ok := strings.CutPrefix(line, "btime "); ok {
+				seconds, err := strconv.ParseInt(strings.TrimSpace(btime), 10, 64)
+				if err != nil {
+					return
+				}
+				btimeValue = time.Unix(seconds, 0)
+			}
+		}
+	})
+	return btimeValue
 }

@@ -170,7 +170,7 @@ recursive 模式不接受用户指定 service id，导入的 service id 来自�
 - `schema` 必须等于 `chaitin.octobus.service.v1`。
 - `name` 是 package 内声明的 service package 名称，不要求等于 npm package name。单 service import 时，OctoBus service id 仍由 `octobus service import SERVICE SOURCE` 的 `SERVICE` 位置参数指定；recursive import 时，导入的 service id 来自各自 `service.json.name`。多 `bin` package 中，`name` 必须匹配根 `package.json bin` object 的 key。
 - `displayName` 和 `description` 是可选展示信息。
-- `runtime.mode` 可选，支持 `long-running` 和 `on-demand`，缺省等价于 `long-running`。
+- `runtime.mode` 可选，支持 `long-running`、`on-demand` 和 `scale-to-zero`，缺省等价于 `long-running`。
 - `proto.roots` 是 proto import root 列表。
 - `proto.files` 是入口 proto 文件列表。
 - `configSchema` 是可选 JSON Schema 文件路径，用于校验 instance config。
@@ -182,7 +182,8 @@ recursive 模式不接受用户指定 service id，导入的 service id 来自�
 - `long-running` service 的 instance 创建或启动后会拉起常驻 Node.js gRPC 子进程；daemon 重启时会恢复 `enabled=true` 的 long-running instances。
 - `on-demand` service 的 instance 不预启动、不保存 PID 或监听地址；请求到达时，OctoBus 为该请求启动一次短生命周期 `invoke` 子进程。
 - `on-demand` instance 会保持 enabled/running 的逻辑状态，但不支持 `start`、`stop`、`restart` 或带 `--restart` 的配置/密钥更新。
-- instance 可以覆盖 Service 的 `runtime.mode`：创建时传 `runtime_mode`，或通过 `PATCH /admin/v1/instances/{id}` 修改；空值表示继承。覆盖为 `on-demand` 时，切换会先停掉常驻进程再进入逻辑 running；切回 `long-running` 时按 enabled 状态重新启动。daemon 重启恢复按有效模式判断，不会拉起按需实例。
+- `scale-to-zero` service 的 instance 不预启动：首次请求拉起常驻 serve 子进程，空闲超过 `OCTOBUS_SCALE_TO_ZERO_IDLE_TTL`（默认 15m）后停回冷态（enabled/stopped、无 PID）；暖池上限由 `OCTOBUS_SCALE_TO_ZERO_MAX_INSTANCES`（默认 32）按 LRU 控制。支持显式 `start`/`stop`：`stop` 停用自动热身（enabled=false），需再次 `start`。daemon 重启后 scale-to-zero 实例回到冷态，不随启动拉起。
+- instance 可以覆盖 Service 的 `runtime.mode`：创建时传 `runtime_mode`，或通过 `PATCH /admin/v1/instances/{id}` 修改；空值表示继承。覆盖为 `on-demand` 时，切换会先停掉常驻进程再进入逻辑 running；覆盖为 `scale-to-zero` 时落冷态（enabled/stopped、无 PID），不主动拉起，已有暖进程则原地重载；切回 `long-running` 时按 enabled 状态重新启动。daemon 重启恢复按有效模式判断，不会拉起按需实例。
 - 覆盖为 `on-demand` 要求包本身实现 `--runtime invoke`（SDK 的 `runServiceMain` 同时支持 serve 和 invoke）；OctoBus 无法在导入时静态验证这一点。
 
 校验规则：

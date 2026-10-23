@@ -39,7 +39,7 @@ daemon 默认监听单一端口 `127.0.0.1:9000`。admin API、gRPC、Connect RP
 
 service package 默认使用 `long-running` 运行模式：instance 创建或启动后会拉起一个常驻 Node.js gRPC 子进程。package 也可以在 `service.json` 中声明 `"runtime":{"mode":"on-demand"}`：这类 instance 不预启动、不保存 PID 或监听地址，每次请求到达时由 OctoBus 启动一次短生命周期 `invoke` 子进程。
 
-第三种模式 `scale-to-zero` 让常驻 `serve` 子进程在调用间保持热身：首个请求拉起它（并发的首批请求合并为一次启动），空闲超过 `OCTOBUS_SCALE_TO_ZERO_IDLE_TTL`（默认 15m）后被停回冷态，热进程池上限为 `OCTOBUS_SCALE_TO_ZERO_MAX_INSTANCES`（默认 32，超出按最久未用淘汰）。被停的 scale-to-zero 实例保留 `enabled` 并回到 `stopped`，下次请求会重新热身。可通过 `instance create/update --runtime-mode scale-to-zero` 按实例设置，也可在 `service.json` 中声明 `"runtime":{"mode":"scale-to-zero"}`；实例随时可以覆盖服务的模式。守护进程还会周期性（`OCTOBUS_RECONCILE_INTERVAL`，默认 5m）将真实运行时进程与存储对账：清理泄漏的 serve 进程、修复陈旧行、重启已启用的死亡 long-running 实例。
+第三种模式 `scale-to-zero` 让常驻 `serve` 子进程在调用间保持热身：首个请求拉起它（并发的首批请求合并为一次启动），空闲超过 `OCTOBUS_SCALE_TO_ZERO_IDLE_TTL`（默认 15m）后被停回冷态，热进程池上限为 `OCTOBUS_SCALE_TO_ZERO_MAX_INSTANCES`（默认 32，超出按最久未用淘汰）。被停的 scale-to-zero 实例保留 `enabled` 并回到 `stopped`，下次请求会重新热身。可通过 `instance create/update --runtime-mode scale-to-zero` 按实例设置，也可在 `service.json` 中声明 `"runtime":{"mode":"scale-to-zero"}`；实例随时可以覆盖服务的模式。守护进程还会周期性（`OCTOBUS_RECONCILE_INTERVAL`，默认 5m）将真实运行时进程与存储对账：在 Linux 上清理泄漏的 serve 进程（归因依赖 `/proc`）；所有平台都会修复陈旧行并重启已启用的死亡 long-running 实例。对已存在的实例执行 `instance create` 只会收敛存储的定义，不会改变运维的启停状态——启停请用 `instance start`/`stop`。
 
 ## 启动 daemon
 

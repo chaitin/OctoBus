@@ -1578,16 +1578,40 @@ func (g *Gateway) invokeRaw(ctx context.Context, item store.ExposedMethod, req [
 	return g.invokeBackend(ctx, item, req)
 }
 
-// invokeWarm warms a scale-to-zero instance, then takes the long-running backend path.
-// The request ref is held across the backend call so the idle stopper cannot
-// park the instance mid-request.
-func (g *Gateway) invokeWarm(ctx context.Context, item store.ExposedMethod, req []byte) ([]byte, error) {
+// warm ensures a scale-to-zero instance is resident and returns the release for
+// its request ref. Error mapping lives here so the unary and streaming paths
+// cannot drift; a canceled or expired request keeps its code instead of
+// becoming a retryable Unavailable.
+func (g *Gateway) warm(ctx context.Context, item store.ExposedMethod) (func(), error) {
 	if g.ScaleToZeroWarmer == nil {
 		return nil, status.Error(codes.Unavailable, "scale-to-zero runtime mode is not served by this daemon")
 	}
 	release, err := g.ScaleToZeroWarmer.EnsureStarted(ctx, item.Instance.ID)
 	if err != nil {
-		return nil, status.Error(codes.Unavailable, err.Error())
+		// The supervisor may already return a gRPC status error; wrapping it
+		// again would double the "rpc error: code = Unavailable" prefix.
+		if _, ok := status.FromError(err); ok {
+			return nil, err
+		}
+		switch {
+		case errors.Is(err, context.Canceled):
+			return nil, status.Error(codes.Canceled, err.Error())
+		case errors.Is(err, context.DeadlineExceeded):
+			return nil, status.Error(codes.DeadlineExceeded, err.Error())
+		default:
+			return nil, status.Error(codes.Unavailable, err.Error())
+		}
+	}
+	return release, nil
+}
+
+// invokeWarm warms a scale-to-zero instance, then takes the long-running backend path.
+// The request ref is held across the backend call so the idle stopper cannot
+// park the instance mid-request.
+func (g *Gateway) invokeWarm(ctx context.Context, item store.ExposedMethod, req []byte) ([]byte, error) {
+	release, err := g.warm(ctx, item)
+	if err != nil {
+		return nil, err
 	}
 	defer release()
 	return g.invokeBackend(ctx, item, req)
@@ -1645,17 +1669,18 @@ func (g *Gateway) newBackendStream(ctx context.Context, item store.ExposedMethod
 // message. RecvMsg/SendMsg also release on error, so a proxy that stops using
 // the stream without an explicit Release still drops the ref.
 func (g *Gateway) newWarmStream(ctx context.Context, item store.ExposedMethod) (grpc.ClientStream, error) {
-	if g.ScaleToZeroWarmer == nil {
-		return nil, status.Error(codes.Unavailable, "scale-to-zero runtime mode is not served by this daemon")
-	}
-	release, err := g.ScaleToZeroWarmer.EnsureStarted(ctx, item.Instance.ID)
+	release, err := g.warm(ctx, item)
 	if err != nil {
-		return nil, status.Error(codes.Unavailable, err.Error())
+		return nil, err
 	}
 	// A warm instance's row already claims running; a freshly warmed one was
 	// filled by EnsureStarted. Re-read for the stale-snapshot case.
 	fresh, err := g.Store.GetInstance(ctx, item.Instance.ID)
-	if err == nil {
+	if err != nil {
+		// Force backendStream's own re-read instead of dialing the stale
+		// snapshot; it surfaces a store failure as Unavailable.
+		item.Instance.ListenAddr = ""
+	} else {
 		item.Instance = fresh
 	}
 	stream, err := g.backendStream(ctx, item)

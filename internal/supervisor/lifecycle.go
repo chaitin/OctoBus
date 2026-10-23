@@ -54,8 +54,34 @@ func (s *Supervisor) restartLocked(ctx context.Context, instanceID string, wasEn
 	if err != nil {
 		return err
 	}
-	if err := s.rejectOnDemandRuntimeControl(ctx, inst); err != nil {
+	svc, err := s.Store.GetService(ctx, inst.ServiceID)
+	if err != nil {
 		return err
+	}
+	mode := domain.EffectiveRuntimeMode(svc, inst)
+	if mode == domain.RuntimeModeOnDemand {
+		return ErrUnsupportedRuntimeControl
+	}
+	s.mu.Lock()
+	tracked := s.liveProcessLocked(instanceID)
+	s.mu.Unlock()
+	if !tracked && mode == domain.RuntimeModeScaleToZero {
+		// A cold scale-to-zero instance has nothing to restart: the caller has
+		// already written the new content, and restarting would warm it for a
+		// full idle TTL. The next call warms it with the new content. A row
+		// still claiming a running/stale process is a crash remnant: land it
+		// cold instead of reporting success over a lying row.
+		if inst.PID != nil || inst.ListenAddr != "" ||
+			inst.Status == domain.StatusRunning || inst.Status == domain.StatusStarting {
+			inst.PID = nil
+			inst.ListenAddr = ""
+			inst.Status = domain.StatusStopped
+			if err := s.Store.UpsertInstance(ctx, inst); err != nil {
+				return err
+			}
+			s.notifyInstanceChanged(instanceID)
+		}
+		return nil
 	}
 	s.logger().Info("instance_restart_requested", "instance_id", instanceID)
 	if err := s.stopProcess(ctx, inst, wasEnabled); err != nil {
@@ -65,6 +91,7 @@ func (s *Supervisor) restartLocked(ctx context.Context, instanceID string, wasEn
 		inst.Enabled = false
 		inst.Status = domain.StatusStopped
 		inst.PID = nil
+		inst.ListenAddr = ""
 		if err := s.Store.UpsertInstance(ctx, inst); err != nil {
 			return err
 		}

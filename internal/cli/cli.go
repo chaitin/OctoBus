@@ -576,7 +576,7 @@ func (c *CLI) instanceUpdateCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&name, "name", "", "instance name")
-	cmd.Flags().StringVar(&runtimeMode, "runtime-mode", "", "override the service runtime mode: long-running, on-demand, or empty to inherit")
+	cmd.Flags().StringVar(&runtimeMode, "runtime-mode", "", "override the service runtime mode: long-running, on-demand, scale-to-zero, or empty to inherit")
 	return cmd
 }
 

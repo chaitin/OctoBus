@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,6 +21,9 @@ import (
 // descendant here and shows up in the count.
 func serveProcessCount(t *testing.T, dataDir string) int {
 	t.Helper()
+	if runtime.GOOS != "linux" {
+		t.Skipf("process scan reads /proc (GOOS=%s)", runtime.GOOS)
+	}
 	entries, err := os.ReadDir("/proc")
 	if err != nil {
 		t.Fatal(err)
@@ -92,9 +96,7 @@ func TestRepeatedInstanceCreateDoesNotLeakProcesses(t *testing.T) {
 	if count := serveProcessCount(t, h.dataDir); count != 1 {
 		t.Fatalf("content-changing create leaked: %d serve processes", count)
 	}
-	inst := h.readDB(`SELECT pid FROM instances WHERE id = ?`, "sync-victim")
 	firstPID := h.readDB(`SELECT pid FROM instances WHERE id = ?`, "sync-victim")
-	_ = inst
 	if firstPID["pid"] == "" {
 		t.Fatal("instance has no pid after restart")
 	}
