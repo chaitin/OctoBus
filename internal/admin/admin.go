@@ -1054,9 +1054,11 @@ func instanceEffectiveMode(inst domain.Instance, serviceMode domain.RuntimeMode)
 	return serviceMode
 }
 
-// restartTargets lists the enabled instances of a service whose effective mode
-// is long-running. runtimeMode is the mode the service has (or is about to
-// get), because an instance override wins over it.
+// restartTargets lists the enabled instances of a service that a real import
+// would restart: every long-running instance, plus scale-to-zero instances that
+// are currently warm (a cold one stays cold across an import). runtimeMode is
+// the mode the service has (or is about to get), because an instance override
+// wins over it.
 func (s *Server) restartTargets(ctx context.Context, serviceID string, runtimeMode domain.RuntimeMode) ([]string, error) {
 	instances, err := s.Store.ListEnabledInstancesByService(ctx, serviceID)
 	if err != nil {
@@ -1064,8 +1066,13 @@ func (s *Server) restartTargets(ctx context.Context, serviceID string, runtimeMo
 	}
 	ids := make([]string, 0, len(instances))
 	for _, inst := range instances {
-		if instanceEffectiveMode(inst, runtimeMode) == domain.RuntimeModeLongRunning {
+		switch instanceEffectiveMode(inst, runtimeMode) {
+		case domain.RuntimeModeLongRunning:
 			ids = append(ids, inst.ID)
+		case domain.RuntimeModeScaleToZero:
+			if s.Supervisor != nil && s.Supervisor.TracksInstance(inst.ID) {
+				ids = append(ids, inst.ID)
+			}
 		}
 	}
 	return ids, nil
@@ -1114,16 +1121,23 @@ func (s *Server) restartEnabledServiceInstances(ctx context.Context, serviceID s
 	var restarted []string
 	errsByInstance := make(map[string]string)
 	type action struct {
-		id       string
-		onDemand bool
+		id          string
+		onDemand    bool
+		scaleToZero bool
 	}
 	actions := make([]action, 0, len(instances))
 	for _, inst := range instances {
-		if instanceEffectiveMode(inst, svc.RuntimeMode) == domain.RuntimeModeOnDemand {
+		switch instanceEffectiveMode(inst, svc.RuntimeMode) {
+		case domain.RuntimeModeOnDemand:
 			actions = append(actions, action{id: inst.ID, onDemand: true})
-			continue
+		case domain.RuntimeModeScaleToZero:
+			// A warm scale-to-zero process is restarted in place (new code must
+			// load); a cold one stays cold: an import must not wake every
+			// scale-to-zero instance of the service, that is what calls are for.
+			actions = append(actions, action{id: inst.ID, scaleToZero: true})
+		default:
+			actions = append(actions, action{id: inst.ID})
 		}
-		actions = append(actions, action{id: inst.ID})
 	}
 	if len(actions) == 0 {
 		s.logger().Info("service_instances_restart_started", "service_id", serviceID, "count", 0)
@@ -1132,13 +1146,13 @@ func (s *Server) restartEnabledServiceInstances(ctx context.Context, serviceID s
 	}
 	s.logger().Info("service_instances_restart_started", "service_id", serviceID, "count", len(actions))
 	ids := make([]string, len(actions))
-	onDemand := make(map[string]bool, len(actions))
+	skipRestart := make(map[string]bool, len(actions))
 	for i, a := range actions {
 		ids[i] = a.id
-		onDemand[a.id] = a.onDemand
+		skipRestart[a.id] = a.onDemand || (a.scaleToZero && !s.supervisorTracksInstance(a.id))
 	}
 	errs := supervisor.RunBounded(ids, 4, func(id string) error {
-		if onDemand[id] {
+		if skipRestart[id] {
 			if err := s.Supervisor.ApplyServiceRuntimeMode(ctx, id); err != nil {
 				return fmt.Errorf("%s: %w", id, err)
 			}
@@ -1156,7 +1170,7 @@ func (s *Server) restartEnabledServiceInstances(ctx context.Context, serviceID s
 		}
 	}
 	for _, id := range ids {
-		if msg := errsByInstance[id]; msg != "" || onDemand[id] {
+		if msg := errsByInstance[id]; msg != "" || skipRestart[id] {
 			continue
 		}
 		restarted = append(restarted, id)
@@ -1172,6 +1186,12 @@ func (s *Server) restartEnabledServiceInstances(ctx context.Context, serviceID s
 	}
 	s.logger().Info("service_instances_restart_done", "service_id", serviceID, "restarted_count", len(restarted), "failed_count", len(errStrings))
 	return restarted, errStrings
+}
+
+// supervisorTracksInstance reports whether the supervisor currently tracks a
+// process for the instance, i.e. whether a scale-to-zero instance is warm.
+func (s *Server) supervisorTracksInstance(instanceID string) bool {
+	return s.Supervisor.TracksInstance(instanceID)
 }
 
 func (s *Server) handleInstances(w http.ResponseWriter, r *http.Request) {

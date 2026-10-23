@@ -39,6 +39,8 @@ daemon 默认监听单一端口 `127.0.0.1:9000`。admin API、gRPC、Connect RP
 
 service package 默认使用 `long-running` 运行模式：instance 创建或启动后会拉起一个常驻 Node.js gRPC 子进程。package 也可以在 `service.json` 中声明 `"runtime":{"mode":"on-demand"}`：这类 instance 不预启动、不保存 PID 或监听地址，每次请求到达时由 OctoBus 启动一次短生命周期 `invoke` 子进程。
 
+第三种模式 `scale-to-zero` 让常驻 `serve` 子进程在调用间保持热身：首个请求拉起它（并发的首批请求合并为一次启动），空闲超过 `OCTOBUS_SCALE_TO_ZERO_IDLE_TTL`（默认 15m）后被停回冷态，热进程池上限为 `OCTOBUS_SCALE_TO_ZERO_MAX_INSTANCES`（默认 32，超出按最久未用淘汰）。被停的 scale-to-zero 实例保留 `enabled` 并回到 `stopped`，下次请求会重新热身。可通过 `instance create/update --runtime-mode scale-to-zero` 按实例设置，也可在 `service.json` 中声明 `"runtime":{"mode":"scale-to-zero"}`；实例随时可以覆盖服务的模式。守护进程还会周期性（`OCTOBUS_RECONCILE_INTERVAL`，默认 5m）将真实运行时进程与存储对账：清理泄漏的 serve 进程、修复陈旧行、重启已启用的死亡 long-running 实例。
+
 ## 启动 daemon
 
 ### 从 npm 安装
@@ -259,6 +261,7 @@ curl -X POST \
 - 使用 `service import --dry-run` 可以在真正导入前预览这次导入会产生什么。响应包含 `dry_run: true`、`update`（是否会覆盖已有 service）、`existing_service`（当前已部署的 service 记录，新建时为 `null`；比对它的 `PackageSHA256` / `DescriptorSHA256` 与确认时记录的基线，即可发现线上是不是已经被人换过），以及真实导入将会写入的 service 记录，其中有完整的 `Methods` 列表、`DescriptorVersion`、`DescriptorSHA256`、`NodeEntry` 和 `RuntimeMode`。dry-run 仍会获取 source、按 `--build` 策略构建并编译 descriptor，但会跳过运行时依赖安装，不写 `artifacts/services/<id>`，不更新 service 记录，也不重启任何 instance。recursive dry-run 返回 `services` 和 `existing_service_ids`。dry-run 不重启任何实例，因此它的 `restarted_instances` 恒为空；真实导入会重启哪些实例由 `would_restart_instances` 给出（recursive 模式按 service 分组）。`--reinstall` 只作用于被跳过的运行时依赖安装，对 `--dry-run` 没有影响，两个 flag 同时传时 CLI 会明确提示；`--offline` 还会作用于构建阶段仍会执行的依赖安装。因此 dry-run 仍会 clone Git source、执行包内 lifecycle script（`prepack`/`prepare`/`build`），它保证的只是 daemon 状态不变
 - `instance` 支持 `list/get/update/delete/update-config/update-secret/start/stop/restart`；`create` 对 `long-running` service 默认会立即启动实例，配置可以来自 `--config`、`--config-json` 或 stdin，敏感信息可以来自 `--secret`、`--secret-json` 或 stdin
 - `on-demand` instance 会保持 enabled/running 的逻辑状态，但 `start/stop/restart` 和带 `--restart` 的配置更新会返回运行模式不支持持久运行时控制的错误
+- `scale-to-zero` instance 以冷态创建（enabled、stopped、无进程）。首个请求将其热身；空闲超过 `OCTOBUS_SCALE_TO_ZERO_IDLE_TTL` 后守护进程将其停回 `stopped`，同时保留 `enabled`。`start/stop/restart` 与 `long-running` 一致：`stop` 会将实例标记为 disabled，直到显式 `start`
 - `capset` 支持 `list/get/update/delete/add-instance/remove-instance`，也可以用 `select-method` / `unselect-method` 精确控制暴露的方法；`add-token/list-tokens/remove-token` 用于管理访问 token
 - `capset add-instance` 接收 capset id 和 instance id 两个位置参数，service 会从 instance 记录反查；该命令默认选择全部 methods，并在执行时静态展开当前 service 的所有 methods；可用 `--no-all-methods` 改为之后通过 `select-method` 精确选择。gRPC catalog 会包含已选择的 unary 和 streaming methods；Connect RPC、MCP 和 OpenAPI 只包含 unary methods。service 后续更新新增 method 时，不会自动暴露到已有 capset
 
