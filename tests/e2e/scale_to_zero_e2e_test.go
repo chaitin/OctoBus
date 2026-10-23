@@ -57,7 +57,7 @@ func serveProcessCount(t *testing.T, dataDir string) int {
 	return count
 }
 
-// TestRepeatedInstanceCreateDoesNotLeakProcesses reproduces the production
+// TestRepeatedInstanceCreateDoesNotLeakProcesses reproduces the whole-package
 // sync leak: the upstream management client's whole-package sync calls
 // instance create once per instance on every sync. Before the fix each call
 // stacked another node process; after, it is a no-op.
