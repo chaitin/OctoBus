@@ -892,39 +892,46 @@ func TestReconcileSurplusKeepsDisabledResidentStopped(t *testing.T) {
 	_ = sup.Shutdown(context.Background())
 }
 
-// TestScaleToZeroRefReleaseIsGenerationScoped pins the ownership rule for
-// request refs: when a process exits, wait() drops its generation's count, and
-// a straggler request from that generation must not decrement the ref a
-// successor already took.
-func TestScaleToZeroRefReleaseIsGenerationScoped(t *testing.T) {
+// TestScaleToZeroRefReleaseIsStateScoped pins the ownership rule for request
+// refs: refs live on the process state, so a straggler release from an exited
+// process decrements the old state and cannot affect its successor.
+func TestScaleToZeroRefReleaseIsStateScoped(t *testing.T) {
 	sup := New(t.TempDir(), nil)
 
+	oldState := &processState{done: make(chan struct{})}
+	newState := &processState{done: make(chan struct{})}
 	sup.mu.Lock()
-	sup.addRefLocked("stz-gen", 1)
-	// wait() drops the dead generation's refs (generation matches).
-	if ref := sup.refCounts["stz-gen"]; ref.generation == 1 {
-		delete(sup.refCounts, "stz-gen")
-	}
-	// A request for the successor process takes its own ref first.
-	sup.addRefLocked("stz-gen", 2)
+	sup.procs["stz-gen"] = oldState
+	oldState.refs++
 	sup.mu.Unlock()
 
-	// The old request's release arrives late: it owns nothing now.
-	sup.releaseRef("stz-gen", 1)
+	// The process exits: wait() removes its state, dropping its refs.
 	sup.mu.Lock()
-	got := sup.refCounts["stz-gen"]
+	delete(sup.procs, "stz-gen")
 	sup.mu.Unlock()
-	if got.generation != 2 || got.count != 1 {
-		t.Fatalf("old generation release clobbered the successor: %+v", got)
+
+	// A request for the successor takes its own ref.
+	sup.mu.Lock()
+	sup.procs["stz-gen"] = newState
+	newState.refs++
+	sup.mu.Unlock()
+
+	// The old request's late release decrements the old state only.
+	sup.releaseRef(oldState)
+	sup.mu.Lock()
+	got := newState.refs
+	sup.mu.Unlock()
+	if got != 1 {
+		t.Fatalf("old release clobbered the successor: refs=%d, want 1", got)
 	}
 
-	// The successor's own release still clears the entry.
-	sup.releaseRef("stz-gen", 2)
+	// The successor's own release still clears its count.
+	sup.releaseRef(newState)
 	sup.mu.Lock()
-	_, ok := sup.refCounts["stz-gen"]
+	got = newState.refs
 	sup.mu.Unlock()
-	if ok {
-		t.Fatal("successor ref was not released")
+	if got != 0 {
+		t.Fatalf("successor ref not released: %d", got)
 	}
 }
 
@@ -1054,12 +1061,6 @@ func TestCreateInstanceOnDemandToScaleToZeroStaysCold(t *testing.T) {
 	}
 	if sup.TracksInstance("od-stz") {
 		t.Fatal("sync switched to scale-to-zero started a resident process")
-	}
-	sup.mu.Lock()
-	cached := sup.scaleToZeroModes["od-stz"]
-	sup.mu.Unlock()
-	if !cached {
-		t.Fatal("sync mode change did not refresh the scale-to-zero cache")
 	}
 }
 
@@ -1701,7 +1702,10 @@ func TestEnsureStartedRejectsCanceledContext(t *testing.T) {
 		t.Fatal("a canceled request started the instance")
 	}
 	sup.mu.Lock()
-	refs := sup.refCounts["stz-canceled"].count
+	refs := 0
+	if st := sup.procs["stz-canceled"]; st != nil {
+		refs = st.refs
+	}
 	sup.mu.Unlock()
 	if refs != 0 {
 		t.Fatalf("a canceled request took %d refs", refs)

@@ -23,20 +23,26 @@ func TestSetRuntimeModeEqualModeKeepsScaleToZeroCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	sup.mu.Lock()
-	cached := sup.scaleToZeroModes["eq-stz"]
+	var cached bool
+	if st := sup.procs["eq-stz"]; st != nil {
+		cached = st.scaleToZero
+	}
 	sup.mu.Unlock()
 	if !cached {
-		t.Fatal("equal-mode switch lost the scale-to-zero cache entry")
+		t.Fatal("equal-mode switch lost the scale-to-zero state on the process")
 	}
 	// And the reverse: switching to long-running must clear it immediately.
 	if _, err := sup.SetRuntimeMode(ctx, "eq-stz", domain.RuntimeModeLongRunning); err != nil {
 		t.Fatal(err)
 	}
 	sup.mu.Lock()
-	cached = sup.scaleToZeroModes["eq-stz"]
+	cached = false
+	if st := sup.procs["eq-stz"]; st != nil {
+		cached = st.scaleToZero
+	}
 	sup.mu.Unlock()
 	if cached {
-		t.Fatal("switch to long-running left a stale scale-to-zero cache entry")
+		t.Fatal("switch to long-running left a stale scale-to-zero state on the process")
 	}
 	_ = sup.Stop(ctx, "eq-stz")
 }

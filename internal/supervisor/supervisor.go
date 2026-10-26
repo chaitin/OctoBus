@@ -48,18 +48,10 @@ type Supervisor struct {
 	generations map[string]int64
 	// lastActivity is the scale-to-zero activity clock, per instance.
 	lastActivity map[string]time.Time
-	// refCounts holds in-flight request counts keyed by process generation. A
-	// release from a dead generation must not decrement its successor's count,
-	// so the generation is part of the entry.
-	refCounts map[string]instanceRefs
 	// startFailures remembers a recent scale-to-zero start failure so callers
 	// queued behind the winner get the same answer instead of each retrying a
 	// full health-checked start.
 	startFailures map[string]startFailure
-	// scaleToZeroModes caches whether a tracked instance's effective mode is
-	// scale-to-zero, refreshed by the scale-to-zero scan; the admin import path
-	// consults TracksInstance for warmth.
-	scaleToZeroModes map[string]bool
 	// stzIdleTTL and stzMaxWarm are set by StartScaleToZeroLoop.
 	stzIdleTTL time.Duration
 	stzMaxWarm int
@@ -103,16 +95,12 @@ type CreateInstanceRequest struct {
 }
 
 type processState struct {
-	cmd        *exec.Cmd
-	done       chan struct{}
-	attempt    int
-	generation int64
-}
-
-// instanceRefs is the in-flight request count for one process generation.
-type instanceRefs struct {
-	generation int64
-	count      int
+	cmd         *exec.Cmd
+	done        chan struct{}
+	attempt     int
+	generation  int64
+	scaleToZero bool
+	refs        int
 }
 
 // startFailureWindow is how long a failed EnsureStarted start is reused by
@@ -131,18 +119,16 @@ func New(dataDir string, st *store.Store) *Supervisor {
 	}
 	lifecycleCtx, lifecycleCancel := context.WithCancel(context.Background())
 	return &Supervisor{
-		DataDir:          dataDir,
-		Store:            st,
-		Logger:           daemonlog.Nop(),
-		procs:            map[string]*processState{},
-		generations:      map[string]int64{},
-		lastActivity:     map[string]time.Time{},
-		refCounts:        map[string]instanceRefs{},
-		startFailures:    map[string]startFailure{},
-		scaleToZeroModes: map[string]bool{},
-		lifecycleCtx:     lifecycleCtx,
-		lifecycleCancel:  lifecycleCancel,
-		restartDelay:     backoff,
+		DataDir:         dataDir,
+		Store:           st,
+		Logger:          daemonlog.Nop(),
+		procs:           map[string]*processState{},
+		generations:     map[string]int64{},
+		lastActivity:    map[string]time.Time{},
+		startFailures:   map[string]startFailure{},
+		lifecycleCtx:    lifecycleCtx,
+		lifecycleCancel: lifecycleCancel,
+		restartDelay:    backoff,
 	}
 }
 
@@ -304,9 +290,6 @@ func (s *Supervisor) CreateInstance(ctx context.Context, req CreateInstanceReque
 					if normErr := s.Store.UpsertInstance(ctx, merged); normErr != nil {
 						return domain.Instance{}, fmt.Errorf("stop resident process before switching to on-demand: %w (normalize failed: %v)", err, normErr)
 					}
-					s.mu.Lock()
-					s.scaleToZeroModes[req.ID] = false
-					s.mu.Unlock()
 					s.notifyInstanceChanged(req.ID)
 					return domain.Instance{}, fmt.Errorf("stop resident process before switching to on-demand: %w", err)
 				}
@@ -323,7 +306,9 @@ func (s *Supervisor) CreateInstance(ctx context.Context, req CreateInstanceReque
 			return domain.Instance{}, err
 		}
 		s.mu.Lock()
-		s.scaleToZeroModes[req.ID] = effectiveAfter == domain.RuntimeModeScaleToZero
+		if state := s.procs[req.ID]; state != nil {
+			state.scaleToZero = effectiveAfter == domain.RuntimeModeScaleToZero
+		}
 		s.mu.Unlock()
 		s.logger().Info("instance_create_updated", "instance_id", req.ID, "service_id", req.ServiceID, "runtime_mode", effectiveAfter, "mode_changed", modeChanged, "content_changed", contentChanged)
 
@@ -415,9 +400,6 @@ func (s *Supervisor) CreateInstance(ctx context.Context, req CreateInstanceReque
 					if upErr := s.Store.UpsertInstance(ctx, merged); upErr != nil {
 						return domain.Instance{}, fmt.Errorf("start long-running instance: %w (rollback failed: %v)", err, upErr)
 					}
-					s.mu.Lock()
-					s.scaleToZeroModes[req.ID] = false
-					s.mu.Unlock()
 					s.notifyInstanceChanged(req.ID)
 					return s.instanceWithError(ctx, req.ID, err)
 				}
@@ -643,12 +625,7 @@ func (s *Supervisor) startWithAttempt(ctx context.Context, instanceID string, re
 		}
 	}()
 	mode := domain.EffectiveRuntimeMode(svc, inst)
-	// Record the mode the process is starting under: the exit decision and the
-	// scan use it as the last known answer when a store read fails or before
-	// the next scan refreshes the cache.
-	s.mu.Lock()
-	s.scaleToZeroModes[instanceID] = mode == domain.RuntimeModeScaleToZero
-	s.mu.Unlock()
+	scaleToZero := mode == domain.RuntimeModeScaleToZero
 	if mode == domain.RuntimeModeOnDemand {
 		startErr = ErrUnsupportedRuntimeControl
 		return ErrUnsupportedRuntimeControl
@@ -752,7 +729,7 @@ func (s *Supervisor) startWithAttempt(ctx context.Context, instanceID string, re
 		return err
 	}
 	logger.Info("instance_started", "instance_id", instanceID, "pid", pid, "listen_addr", addr)
-	state := &processState{cmd: cmd, done: make(chan struct{}), attempt: restartAttempt, generation: generation}
+	state := &processState{cmd: cmd, done: make(chan struct{}), attempt: restartAttempt, generation: generation, scaleToZero: scaleToZero}
 	s.mu.Lock()
 	if err := s.lifecycleErrLocked(); err != nil {
 		s.mu.Unlock()
@@ -1051,13 +1028,14 @@ func (s *Supervisor) SetRuntimeMode(ctx context.Context, instanceID string, mode
 			after = domain.RuntimeModeLongRunning
 		}
 	}
-	// Refresh the scale-to-zero cache before any branch returns: the scan
-	// refreshes it on its own period, and a stale entry would let one scan
-	// treat a freshly non-scale-to-zero (or freshly scale-to-zero) tracked
-	// instance under the old mode. Some branches below return early; they must
-	// not skip this.
+	// Record the new mode on the tracked process before any branch returns: a
+	// branch that keeps the process (scale-to-zero <-> long-running without a
+	// restart) must not leave the scan treating it under the old mode. Branches
+	// that restart the process pick the mode up when they start it.
 	s.mu.Lock()
-	s.scaleToZeroModes[instanceID] = after == domain.RuntimeModeScaleToZero
+	if state := s.procs[instanceID]; state != nil {
+		state.scaleToZero = after == domain.RuntimeModeScaleToZero
+	}
 	s.mu.Unlock()
 	if before == after {
 		inst.RuntimeMode = mode
@@ -1380,8 +1358,6 @@ func (s *Supervisor) forgetInstance(instanceID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.lastActivity, instanceID)
-	delete(s.scaleToZeroModes, instanceID)
-	delete(s.refCounts, instanceID)
 	delete(s.startFailures, instanceID)
 	s.nextGenerationLocked(instanceID)
 }
@@ -1451,7 +1427,6 @@ func (s *Supervisor) stopProcess(ctx context.Context, inst domain.Instance, enab
 	state := s.procs[inst.ID]
 	delete(s.procs, inst.ID)
 	delete(s.lastActivity, inst.ID)
-	delete(s.scaleToZeroModes, inst.ID)
 	s.mu.Unlock()
 	var stopErr error
 	if state != nil && state.cmd.Process != nil {
@@ -1618,13 +1593,10 @@ func (s *Supervisor) wait(instanceID string, state *processState, stdout, stderr
 	unlock := s.lockInstance(instanceID)
 	s.mu.Lock()
 	current := s.procs[instanceID]
-	// The cache records the mode the process started under, which is the fall
-	// back when the service lookup below fails transiently.
-	scaleToZeroAtStart := s.scaleToZeroModes[instanceID]
+	scaleToZeroAtStart := state.scaleToZero
 	if current == state {
 		delete(s.procs, instanceID)
 		delete(s.lastActivity, instanceID)
-		delete(s.scaleToZeroModes, instanceID)
 	}
 	s.mu.Unlock()
 	ctx := s.lifecycleContext()
@@ -1664,13 +1636,9 @@ func (s *Supervisor) wait(instanceID string, state *processState, stdout, stderr
 	}
 	if scaleToZero {
 		s.mu.Lock()
-		// Drop only this generation's refs. If a successor already took a
-		// ref, the entry belongs to it now; deleting it would let the idle
-		// stopper park a process with a request in flight (and the old
-		// request's eventual release would drop the new one's count).
-		if ref := s.refCounts[instanceID]; ref.generation == state.generation {
-			delete(s.refCounts, instanceID)
-		}
+		// Any in-flight request refs live on this state object: discarding the
+		// state drops them. A successor's refs live on its own state, so the
+		// old request's release cannot affect the successor.
 		s.mu.Unlock()
 		inst.Status = domain.StatusDegraded
 		inst.PID = nil
