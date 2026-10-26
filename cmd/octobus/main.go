@@ -62,6 +62,11 @@ func newServeCommand(addr *string) *cobra.Command {
 	var onDemandTimeoutText string
 	var onDemandMaxOutputText string
 	var onDemandConcurrency int
+	var stzIdleTTLText string
+	var scaleToZeroMaxInstances int
+	var stzIdleTTLSet bool
+	var scaleToZeroMaxSet bool
+	var reconcileIntervalText string
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Run the Octobus daemon",
@@ -91,6 +96,31 @@ func newServeCommand(addr *string) *cobra.Command {
 					onDemandConcurrency = parsed
 				}
 			}
+			if !cmd.Flags().Changed("scale-to-zero-idle-ttl") {
+				stzIdleTTLText = os.Getenv("OCTOBUS_SCALE_TO_ZERO_IDLE_TTL")
+			}
+			stzIdleTTLSet = strings.TrimSpace(stzIdleTTLText) != ""
+			if !cmd.Flags().Changed("scale-to-zero-max-instances") {
+				if v := os.Getenv("OCTOBUS_SCALE_TO_ZERO_MAX_INSTANCES"); v != "" {
+					parsed, parseErr := strconv.Atoi(v)
+					if parseErr != nil {
+						return fmt.Errorf("OCTOBUS_SCALE_TO_ZERO_MAX_INSTANCES: %w", parseErr)
+					}
+					if parsed < 0 {
+						return fmt.Errorf("OCTOBUS_SCALE_TO_ZERO_MAX_INSTANCES must not be negative")
+					}
+					scaleToZeroMaxInstances = parsed
+					scaleToZeroMaxSet = true
+				}
+			} else {
+				if scaleToZeroMaxInstances < 0 {
+					return fmt.Errorf("scale-to-zero-max-instances must not be negative")
+				}
+				scaleToZeroMaxSet = true
+			}
+			if !cmd.Flags().Changed("reconcile-interval") {
+				reconcileIntervalText = os.Getenv("OCTOBUS_RECONCILE_INTERVAL")
+			}
 			onDemandTimeout, err := parseOptionalDuration("on-demand-timeout", onDemandTimeoutText)
 			if err != nil {
 				return err
@@ -99,14 +129,27 @@ func newServeCommand(addr *string) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			stzIdleTTL, err := parseOptionalDurationAllowZero("scale-to-zero-idle-ttl", stzIdleTTLText)
+			if err != nil {
+				return err
+			}
+			reconcileInterval, err := parseOptionalDuration("reconcile-interval", reconcileIntervalText)
+			if err != nil {
+				return err
+			}
 			return serve(serveOptions{
-				dataDir:                dataDir,
-				addr:                   *addr,
-				dev:                    dev,
-				runtimeHardening:       level,
-				onDemandTimeout:        onDemandTimeout,
-				onDemandMaxOutputBytes: onDemandMaxOutput,
-				onDemandConcurrency:    onDemandConcurrency,
+				dataDir:                 dataDir,
+				addr:                    *addr,
+				dev:                     dev,
+				runtimeHardening:        level,
+				onDemandTimeout:         onDemandTimeout,
+				onDemandMaxOutputBytes:  onDemandMaxOutput,
+				onDemandConcurrency:     onDemandConcurrency,
+				stzIdleTTL:              stzIdleTTL,
+				stzIdleTTLSet:           stzIdleTTLSet,
+				scaleToZeroMaxInstances: scaleToZeroMaxInstances,
+				scaleToZeroMaxSet:       scaleToZeroMaxSet,
+				reconcileInterval:       reconcileInterval,
 			})
 		},
 	}
@@ -116,6 +159,9 @@ func newServeCommand(addr *string) *cobra.Command {
 	cmd.Flags().StringVar(&onDemandTimeoutText, "on-demand-timeout", "", "per-invocation timeout for on-demand runtimes (default 30s; env OCTOBUS_ONDEMAND_TIMEOUT)")
 	cmd.Flags().StringVar(&onDemandMaxOutputText, "on-demand-max-output", "", "stdout/stderr byte limit for one on-demand invocation (default 8388608; env OCTOBUS_ONDEMAND_MAX_OUTPUT)")
 	cmd.Flags().IntVar(&onDemandConcurrency, "on-demand-concurrency", 0, "maximum concurrent on-demand processes (default 32; env OCTOBUS_ONDEMAND_CONCURRENCY)")
+	cmd.Flags().StringVar(&stzIdleTTLText, "scale-to-zero-idle-ttl", "", "idle duration before a warm scale-to-zero instance is parked (default 15m; 0s disables idle parking; env OCTOBUS_SCALE_TO_ZERO_IDLE_TTL)")
+	cmd.Flags().IntVar(&scaleToZeroMaxInstances, "scale-to-zero-max-instances", -1, "maximum warm scale-to-zero instances before LRU eviction (default 32; 0 disables the cap; env OCTOBUS_SCALE_TO_ZERO_MAX_INSTANCES)")
+	cmd.Flags().StringVar(&reconcileIntervalText, "reconcile-interval", "", "period between runtime process reconciliation passes (default 5m; env OCTOBUS_RECONCILE_INTERVAL)")
 	return cmd
 }
 
@@ -128,10 +174,18 @@ type serveOptions struct {
 	onDemandTimeout        time.Duration
 	onDemandMaxOutputBytes int64
 	onDemandConcurrency    int
-	checkNode              func(context.Context) (hardening.Node, error)
-	stderr                 io.Writer
-	logger                 *slog.Logger
-	startupInventory       func(context.Context, *slog.Logger, *store.Store) error
+	// An unset scale-to-zero pair keeps the defaults; an explicit zero
+	// disables the idle park (0s) or the warm-pool cap (0). reconcileInterval
+	// zero keeps its default.
+	stzIdleTTL              time.Duration
+	stzIdleTTLSet           bool
+	scaleToZeroMaxInstances int
+	scaleToZeroMaxSet       bool
+	reconcileInterval       time.Duration
+	checkNode               func(context.Context) (hardening.Node, error)
+	stderr                  io.Writer
+	logger                  *slog.Logger
+	startupInventory        func(context.Context, *slog.Logger, *store.Store) error
 }
 
 func parseOptionalDuration(name, value string) (time.Duration, error) {
@@ -144,6 +198,24 @@ func parseOptionalDuration(name, value string) (time.Duration, error) {
 	}
 	if parsed <= 0 {
 		return 0, fmt.Errorf("%s must be positive", name)
+	}
+	return parsed, nil
+}
+
+// parseOptionalDurationAllowZero additionally accepts an explicit zero, which
+// for scale-to-zero settings means "disable": a 0s TTL disables idle parking
+// and a 0-instance cap disables LRU eviction. An empty value still means "use
+// the default".
+func parseOptionalDurationAllowZero(name, value string) (time.Duration, error) {
+	if strings.TrimSpace(value) == "" {
+		return 0, nil
+	}
+	parsed, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", name, err)
+	}
+	if parsed < 0 {
+		return 0, fmt.Errorf("%s must not be negative", name)
 	}
 	return parsed, nil
 }
@@ -254,6 +326,7 @@ func serve(opts serveOptions) error {
 	sup.RuntimeNode = runtimeNode
 	sup.RuntimeRulesPath = runtimeRulesPath
 	sup.OnInstanceChanged = gateway.InvalidateInstance
+	gateway.ScaleToZeroWarmer = sup
 	ctx, stop := signal.NotifyContext(context.Background(), shutdownSignals(opts.runtimeHardening, signal.Ignored(syscall.SIGHUP))...)
 	defer stop()
 	// Take the port before touching the data dir. The startup steps below are
@@ -278,6 +351,18 @@ func serve(opts serveOptions) error {
 	}
 	logger.Info("recover_enabled_started")
 	recovered, err := sup.RecoverEnabled(ctx)
+	// The scale-to-zero loop owns idle parking and LRU eviction; the reconcile loop is
+	// the leak backstop. Both stop with the supervisor's lifecycle context.
+	stzIdleTTL := supervisor.DefaultScaleToZeroIdleTTL
+	if opts.stzIdleTTLSet {
+		stzIdleTTL = opts.stzIdleTTL
+	}
+	maxWarm := supervisor.DefaultScaleToZeroMaxInstances
+	if opts.scaleToZeroMaxSet {
+		maxWarm = opts.scaleToZeroMaxInstances
+	}
+	sup.StartScaleToZeroLoop(ctx, stzIdleTTL, maxWarm)
+	sup.StartReconcileLoop(ctx, reconcileIntervalOrDefault(opts.reconcileInterval))
 	supervisorShutdownNeeded := true
 	shutdownSupervisorOnce := func() {
 		if !supervisorShutdownNeeded {
@@ -350,6 +435,13 @@ func shutdownSupervisor(logger *slog.Logger, sup *supervisor.Supervisor) {
 	if err := sup.Shutdown(shutdownCtx); err != nil {
 		logger.Warn("daemon_supervisor_shutdown_failed", "error", err)
 	}
+}
+
+func reconcileIntervalOrDefault(v time.Duration) time.Duration {
+	if v > 0 {
+		return v
+	}
+	return supervisor.DefaultReconcileInterval
 }
 
 func initializeAdminAuth(ctx context.Context, st *store.Store, opts adminAuthOptions) error {

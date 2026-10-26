@@ -887,3 +887,34 @@ func TestShutdownSignalsHandleSIGHUPOnlyAtLevelNode(t *testing.T) {
 		}
 	}
 }
+
+func TestParseOptionalDurationAllowZero(t *testing.T) {
+	// Empty means "use the default"; an explicit 0 means "disable"; negative
+	// is rejected.
+	for _, tc := range []struct {
+		in      string
+		want    time.Duration
+		wantErr bool
+	}{
+		{in: "", want: 0},
+		{in: "0s", want: 0},
+		{in: "15m", want: 15 * time.Minute},
+		{in: "-5s", wantErr: true},
+		{in: "bogus", wantErr: true},
+	} {
+		got, err := parseOptionalDurationAllowZero("test", tc.in)
+		if tc.wantErr {
+			if err == nil {
+				t.Errorf("parse(%q) = %v, want error", tc.in, got)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("parse(%q) unexpected error: %v", tc.in, err)
+			continue
+		}
+		if got != tc.want {
+			t.Errorf("parse(%q) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}

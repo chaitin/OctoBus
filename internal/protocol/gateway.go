@@ -70,6 +70,9 @@ type Gateway struct {
 	// OnDemandConcurrency bounds how many on-demand processes may run at once
 	// across all services. Zero keeps the default.
 	OnDemandConcurrency int
+	// ScaleToZeroWarmer warms scale-to-zero instances before a backend call. It is the
+	// supervisor; nil keeps scale-to-zero instances unrouted (tests without a daemon).
+	ScaleToZeroWarmer ScaleToZeroWarmer
 
 	mu            sync.Mutex
 	conns         map[string]*grpc.ClientConn
@@ -78,6 +81,14 @@ type Gateway struct {
 
 	onDemandOnce  sync.Once
 	onDemandSlots chan struct{}
+}
+
+// ScaleToZeroWarmer is the supervisor's scale-to-zero surface. EnsureStarted merges
+// concurrent callers into one start and returns a release for the request ref
+// that keeps the idle stopper from parking the instance mid-request.
+type ScaleToZeroWarmer interface {
+	EnsureStarted(ctx context.Context, instanceID string) (release func(), err error)
+	TouchInstance(instanceID string)
 }
 
 const (
@@ -1561,6 +1572,67 @@ func (g *Gateway) invokeRaw(ctx context.Context, item store.ExposedMethod, req [
 		}
 		return g.invokeOnDemand(ctx, item, req)
 	}
+	if domain.EffectiveRuntimeMode(item.Service, item.Instance) == domain.RuntimeModeScaleToZero {
+		return g.invokeWarm(ctx, item, req)
+	}
+	return g.invokeBackend(ctx, item, req)
+}
+
+// warm ensures a scale-to-zero instance is resident and returns the release for
+// its request ref. Error mapping lives here so the unary and streaming paths
+// cannot drift; a canceled or expired request keeps its code instead of
+// becoming a retryable Unavailable.
+func (g *Gateway) warm(ctx context.Context, item store.ExposedMethod) (func(), error) {
+	if g.ScaleToZeroWarmer == nil {
+		return nil, status.Error(codes.Unavailable, "scale-to-zero runtime mode is not served by this daemon")
+	}
+	release, err := g.ScaleToZeroWarmer.EnsureStarted(ctx, item.Instance.ID)
+	if err != nil {
+		// The supervisor may already return a gRPC status error; wrapping it
+		// again would double the "rpc error: code = Unavailable" prefix.
+		if _, ok := status.FromError(err); ok {
+			return nil, err
+		}
+		switch {
+		case errors.Is(err, context.Canceled):
+			return nil, status.Error(codes.Canceled, err.Error())
+		case errors.Is(err, context.DeadlineExceeded):
+			return nil, status.Error(codes.DeadlineExceeded, err.Error())
+		default:
+			return nil, status.Error(codes.Unavailable, err.Error())
+		}
+	}
+	return release, nil
+}
+
+// invokeWarm warms a scale-to-zero instance, then takes the long-running backend path.
+// The request ref is held across the backend call so the idle stopper cannot
+// park the instance mid-request.
+func (g *Gateway) invokeWarm(ctx context.Context, item store.ExposedMethod, req []byte) ([]byte, error) {
+	release, err := g.warm(ctx, item)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	return g.invokeBackend(ctx, item, req)
+}
+
+func (g *Gateway) invokeBackend(ctx context.Context, item store.ExposedMethod, req []byte) ([]byte, error) {
+	// A scale-to-zero instance's row flips running->stopped on every idle park, so the
+	// cached snapshot the request arrived with may be stale in either
+	// direction. Re-read ListenAddr after warming: EnsureStarted has filled it
+	// for a freshly started instance, and a warm instance's address is stable
+	// for the process's lifetime. The scale-to-zero path always re-reads: the
+	// snapshot may still claim the previous generation's addr is running after
+	// an idle park plus a cold start landed in between.
+	if domain.EffectiveRuntimeMode(item.Service, item.Instance) == domain.RuntimeModeScaleToZero ||
+		item.Instance.ListenAddr == "" || string(item.Instance.Status) != "running" {
+		fresh, err := g.Store.GetInstance(ctx, item.Instance.ID)
+		if err != nil {
+			return nil, status.Error(codes.Unavailable, "backend instance is not running")
+		}
+		item.Instance = fresh
+	}
 	if item.Instance.ListenAddr == "" || string(item.Instance.Status) != "running" {
 		return nil, status.Error(codes.Unavailable, "backend instance is not running")
 	}
@@ -1584,6 +1656,97 @@ func (g *Gateway) invokeRaw(ctx context.Context, item store.ExposedMethod, req [
 func (g *Gateway) newBackendStream(ctx context.Context, item store.ExposedMethod) (grpc.ClientStream, error) {
 	if domain.EffectiveRuntimeMode(item.Service, item.Instance) == domain.RuntimeModeOnDemand {
 		return nil, status.Error(codes.Unimplemented, "streaming methods are not supported by on-demand runtime")
+	}
+	if domain.EffectiveRuntimeMode(item.Service, item.Instance) == domain.RuntimeModeScaleToZero {
+		return g.newWarmStream(ctx, item)
+	}
+	return g.backendStream(ctx, item)
+}
+
+// newWarmStream warms a scale-to-zero instance, then opens the backend stream. The
+// request ref is held until Release is called: the proxies defer Release, and
+// the returned wrapper's RecvMsg and SendMsg refresh the activity clock per
+// message. RecvMsg/SendMsg also release on error, so a proxy that stops using
+// the stream without an explicit Release still drops the ref.
+func (g *Gateway) newWarmStream(ctx context.Context, item store.ExposedMethod) (grpc.ClientStream, error) {
+	release, err := g.warm(ctx, item)
+	if err != nil {
+		return nil, err
+	}
+	// A warm instance's row already claims running; a freshly warmed one was
+	// filled by EnsureStarted. Re-read for the stale-snapshot case.
+	fresh, err := g.Store.GetInstance(ctx, item.Instance.ID)
+	if err != nil {
+		// Force backendStream's own re-read instead of dialing the stale
+		// snapshot; it surfaces a store failure as Unavailable.
+		item.Instance.ListenAddr = ""
+	} else {
+		item.Instance = fresh
+	}
+	stream, err := g.backendStream(ctx, item)
+	if err != nil {
+		release()
+		return nil, err
+	}
+	return &warmStream{ClientStream: stream, warmer: g.ScaleToZeroWarmer, instanceID: item.Instance.ID, release: release}, nil
+}
+
+// warmStream wraps a backend stream for a scale-to-zero instance: it refreshes the
+// activity clock per frame so a live stream keeps its LRU position, and drops
+// the request ref when the caller finishes reading.
+type warmStream struct {
+	grpc.ClientStream
+	warmer     ScaleToZeroWarmer
+	instanceID string
+	release    func()
+	once       sync.Once
+}
+
+func (w *warmStream) releaseOnce() {
+	w.once.Do(func() {
+		w.release()
+	})
+}
+
+// Release drops the request ref. Proxies defer it so that every early return
+// (a client that hangs up mid-stream, a backend send failure) releases the ref;
+// it is idempotent and safe alongside the per-message release.
+func (w *warmStream) Release() {
+	w.releaseOnce()
+}
+
+func (w *warmStream) RecvMsg(m any) error {
+	err := w.ClientStream.RecvMsg(m)
+	if err != nil {
+		w.releaseOnce()
+		return err
+	}
+	w.warmer.TouchInstance(w.instanceID)
+	return nil
+}
+
+func (w *warmStream) SendMsg(m any) error {
+	err := w.ClientStream.SendMsg(m)
+	if err != nil {
+		w.releaseOnce()
+		return err
+	}
+	w.warmer.TouchInstance(w.instanceID)
+	return nil
+}
+
+func (w *warmStream) CloseSend() error {
+	err := w.ClientStream.CloseSend()
+	return err
+}
+
+func (g *Gateway) backendStream(ctx context.Context, item store.ExposedMethod) (grpc.ClientStream, error) {
+	if item.Instance.ListenAddr == "" || string(item.Instance.Status) != "running" {
+		fresh, err := g.Store.GetInstance(ctx, item.Instance.ID)
+		if err != nil {
+			return nil, status.Error(codes.Unavailable, "backend instance is not running")
+		}
+		item.Instance = fresh
 	}
 	if item.Instance.ListenAddr == "" || string(item.Instance.Status) != "running" {
 		return nil, status.Error(codes.Unavailable, "backend instance is not running")

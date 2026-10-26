@@ -83,4 +83,12 @@ func TestSupervisorAcceptsANilContext(t *testing.T) {
 	if err := sup.Shutdown(nilCtx); err != nil {
 		t.Fatalf("Shutdown(nil) err=%v", err)
 	}
+	// Newer entry points must honor the same contract: a nil context reaches
+	// database/sql as a background context, not a panic.
+	if _, err := sup.EnsureStarted(nilCtx, "nil-ctx"); err == nil {
+		t.Fatal("EnsureStarted(nil) on a missing instance returned nil")
+	}
+	if warm, err := sup.RestartIfWarm(nilCtx, "nil-ctx"); err != nil || warm {
+		t.Fatalf("RestartIfWarm(nil) = (%v, %v), want (false, nil)", warm, err)
+	}
 }

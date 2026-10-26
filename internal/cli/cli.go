@@ -539,7 +539,7 @@ func (c *CLI) instanceCreateCommand() *cobra.Command {
 	cmd.Flags().StringVar(&configJSON, "config-json", "", "config JSON string")
 	cmd.Flags().StringVar(&secretPath, "secret", "", "secret JSON path")
 	cmd.Flags().StringVar(&secretJSON, "secret-json", "", "secret JSON string")
-	cmd.Flags().StringVar(&runtimeMode, "runtime-mode", "", "override the service runtime mode: long-running or on-demand")
+	cmd.Flags().StringVar(&runtimeMode, "runtime-mode", "", "override the service runtime mode: long-running, on-demand, or scale-to-zero")
 	cmd.Flags().BoolVar(&noStart, "no-start", false, "do not start instance after create")
 	return cmd
 }
@@ -576,7 +576,7 @@ func (c *CLI) instanceUpdateCommand() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&name, "name", "", "instance name")
-	cmd.Flags().StringVar(&runtimeMode, "runtime-mode", "", "override the service runtime mode: long-running, on-demand, or empty to inherit")
+	cmd.Flags().StringVar(&runtimeMode, "runtime-mode", "", "override the service runtime mode: long-running, on-demand, scale-to-zero, or empty to inherit")
 	return cmd
 }
 

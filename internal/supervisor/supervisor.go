@@ -2,6 +2,7 @@ package supervisor
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -45,18 +46,41 @@ type Supervisor struct {
 	mu          sync.Mutex
 	procs       map[string]*processState
 	generations map[string]int64
+	// lastActivity is the scale-to-zero activity clock, per instance.
+	lastActivity map[string]time.Time
+	// startFailures remembers a recent scale-to-zero start failure so callers
+	// queued behind the winner get the same answer instead of each retrying a
+	// full health-checked start.
+	startFailures map[string]startFailure
+	// stzIdleTTL and stzMaxWarm are set by StartScaleToZeroLoop.
+	stzIdleTTL time.Duration
+	stzMaxWarm int
+	// counters accumulate scale-to-zero and reconcile events for the log surface.
+	counters struct {
+		ScaleToZeroColdStarts int64
+		ScaleToZeroHotHits    int64
+		ScaleToZeroIdleStops  int64
+		ScaleToZeroLRUEvicted int64
+		OrphansKilled         int64
+		MissingRestarted      int64
+		SurplusStopped        int64
+		ReconcilePasses       int64
+	}
+
+	gates   map[string]*instanceGate
+	gatesMu sync.Mutex
+
+	// orphanGraceForTest overrides the reconcile grace window in tests; zero
+	// keeps the production window. Not set by the daemon.
+	orphanGraceForTest time.Duration
+	// procScanWarned records that the one-time "/proc unavailable" notice was
+	// logged on a platform where the orphan scan cannot run.
+	procScanWarned bool
 
 	lifecycleCtx    context.Context
 	lifecycleCancel context.CancelFunc
 	wg              sync.WaitGroup
 	restartDelay    func(int) time.Duration
-}
-
-type processState struct {
-	cmd        *exec.Cmd
-	done       chan struct{}
-	attempt    int
-	generation int64
 }
 
 type CreateInstanceRequest struct {
@@ -70,6 +94,25 @@ type CreateInstanceRequest struct {
 	RuntimeMode domain.RuntimeMode `json:"runtime_mode"`
 }
 
+type processState struct {
+	cmd         *exec.Cmd
+	done        chan struct{}
+	attempt     int
+	generation  int64
+	scaleToZero bool
+	refs        int
+}
+
+// startFailureWindow is how long a failed EnsureStarted start is reused by
+// callers queued behind it. It only has to cover the instant the gate releases
+// the queued callers.
+const startFailureWindow = time.Second
+
+type startFailure struct {
+	err error
+	at  time.Time
+}
+
 func New(dataDir string, st *store.Store) *Supervisor {
 	if abs, err := filepath.Abs(dataDir); err == nil {
 		dataDir = abs
@@ -81,12 +124,21 @@ func New(dataDir string, st *store.Store) *Supervisor {
 		Logger:          daemonlog.Nop(),
 		procs:           map[string]*processState{},
 		generations:     map[string]int64{},
+		lastActivity:    map[string]time.Time{},
+		startFailures:   map[string]startFailure{},
 		lifecycleCtx:    lifecycleCtx,
 		lifecycleCancel: lifecycleCancel,
 		restartDelay:    backoff,
 	}
 }
 
+// CreateInstance creates an instance, or converges one that already exists.
+// A repeated call from a package sync with unchanged config/secret/name/mode
+// is a read: it returns the stored instance and touches no process. When
+// something changed, the row is updated (preserving operator state:
+// Enabled, Status, PID, CreatedAt) and the resident process is restarted to
+// load the new content. Sync updates what the package defines; it never flips
+// operator intent.
 func (s *Supervisor) CreateInstance(ctx context.Context, req CreateInstanceRequest) (domain.Instance, error) {
 	if err := domain.ValidateID("instance", req.ID); err != nil {
 		return domain.Instance{}, err
@@ -112,59 +164,332 @@ func (s *Supervisor) CreateInstance(ctx context.Context, req CreateInstanceReque
 	if err := validateSecretSchema(svc.SecretSchemaPath, secret); err != nil {
 		return domain.Instance{}, err
 	}
-	if err := s.writeInstanceConfig(req.ID, config); err != nil {
-		return domain.Instance{}, err
-	}
-	effectiveMode := domain.EffectiveRuntimeMode(svc, domain.Instance{RuntimeMode: req.RuntimeMode})
-	// Re-creating an instance with the same id must not leave the previous
-	// resident process behind when the new mode is on-demand.
-	if effectiveMode == domain.RuntimeModeOnDemand {
-		if existing, getErr := s.Store.GetInstance(ctx, req.ID); getErr == nil {
-			s.mu.Lock()
-			tracked := s.procs[req.ID] != nil
-			s.mu.Unlock()
-			if existing.PID != nil || tracked {
+
+	unlock := s.lockInstance(req.ID)
+	defer unlock()
+
+	configHash := domain.ConfigHash(config)
+	secretHash := domain.HashBytes(secret)
+	existing, getErr := s.Store.GetInstance(ctx, req.ID)
+	if getErr == nil {
+		// The instance exists. Decide whether the request changes anything the
+		// process consumes.
+		name := req.Name
+		if name == "" {
+			name = req.ID
+		}
+		modeChanged := existing.RuntimeMode != req.RuntimeMode
+		contentChanged := existing.ConfigSHA256 != configHash ||
+			existing.SecretSHA256 != secretHash ||
+			existing.NodeEntry != svc.NodeEntry ||
+			existing.ServiceID != req.ServiceID
+		cosmeticChanged := existing.Name != name
+		if !modeChanged && !contentChanged && !cosmeticChanged {
+			// An on-demand row must sit in its enabled/running resting shape;
+			// a legacy failed transition can leave it enabled/stopped, which
+			// invokeOnDemand rejects forever. A sync is the one visitor that
+			// can repair it without changing anything the caller asked for.
+			if domain.EffectiveRuntimeMode(svc, existing) == domain.RuntimeModeOnDemand &&
+				(existing.Status != domain.StatusRunning || existing.PID != nil || existing.ListenAddr != "") {
+				if err := s.landOnDemandRow(ctx, req.ID, existing.RuntimeMode); err != nil {
+					return domain.Instance{}, err
+				}
+				return s.Store.GetInstance(ctx, req.ID)
+			}
+			// A previous start may have left the row failed with no process.
+			// A sync retry must be able to recover it: returning the failed
+			// row with a nil error would report success while nothing serves.
+			// Reconcile recovers failed rows too, but a sync retry should not
+			// wait five minutes for it. A failed scale-to-zero row comes back
+			// cold -- starting it here would wake every failed instance on a
+			// bulk sync.
+			mode := domain.EffectiveRuntimeMode(svc, existing)
+			if existing.Enabled && existing.Status == domain.StatusFailed && residentMode(mode) {
 				s.mu.Lock()
-				s.nextGenerationLocked(req.ID)
+				tracked := s.liveProcessLocked(req.ID)
 				s.mu.Unlock()
+				if !tracked {
+					if mode == domain.RuntimeModeScaleToZero {
+						existing.Status = domain.StatusStopped
+						existing.PID = nil
+						existing.ListenAddr = ""
+						if err := s.Store.UpsertInstance(ctx, existing); err != nil {
+							return domain.Instance{}, err
+						}
+						s.notifyInstanceChanged(req.ID)
+						return s.Store.GetInstance(ctx, req.ID)
+					}
+					if err := s.startLocked(ctx, req.ID); err != nil {
+						return s.instanceWithError(ctx, req.ID, err)
+					}
+					return s.Store.GetInstance(ctx, req.ID)
+				}
+			}
+			s.logger().Info("instance_create_noop", "instance_id", req.ID, "service_id", req.ServiceID)
+			return existing, nil
+		}
+
+		// Preserve operator state from the existing row.
+		merged := existing
+		merged.ServiceID = req.ServiceID
+		merged.Name = name
+		merged.NodeEntry = svc.NodeEntry
+		merged.RuntimeMode = req.RuntimeMode
+		merged.ConfigJSON = config
+		merged.ConfigSHA256 = configHash
+		merged.SecretJSON = secret
+		merged.SecretSHA256 = secretHash
+
+		// The transition branches compare the mode the instance actually had:
+		// a rebind to a service with a different mode is a mode change too,
+		// so the before-mode comes from the OLD service's row, not the one
+		// the request is about to write.
+		beforeSvc := svc
+		if existing.ServiceID != req.ServiceID {
+			beforeSvc, err = s.Store.GetService(ctx, existing.ServiceID)
+			if err != nil {
+				return domain.Instance{}, fmt.Errorf("get previous service %s for instance rebind: %w", existing.ServiceID, err)
+			}
+		}
+		effectiveBefore := domain.EffectiveRuntimeMode(beforeSvc, existing)
+		effectiveAfter := domain.EffectiveRuntimeMode(svc, merged)
+
+		s.mu.Lock()
+		tracked := s.liveProcessLocked(req.ID)
+		s.mu.Unlock()
+
+		// A mode change into on-demand must not leave a resident process
+		// behind; every other transition is handled after the row write. A
+		// stop that times out (the process is stuck dying) still commits the
+		// intent: normalize the row to on-demand's resting state so the
+		// gateway sees a servable instance, and report the stop failure -- the
+		// reconcile pass owns the leftover process from here.
+		if effectiveAfter == domain.RuntimeModeOnDemand && effectiveBefore != domain.RuntimeModeOnDemand {
+			s.mu.Lock()
+			s.nextGenerationLocked(req.ID)
+			s.mu.Unlock()
+			if tracked || existing.PID != nil {
 				if err := s.stopProcess(ctx, existing, true); err != nil {
+					// Commit the requested override (possibly empty, meaning
+					// inherit) with the on-demand resting state; report the
+					// stop failure. The leftover process is the reconcile
+					// pass's business from here. Write the config first: a
+					// failed write must not be followed by a row that claims
+					// the new content.
+					if writeErr := s.writeInstanceConfig(req.ID, config); writeErr != nil {
+						return domain.Instance{}, fmt.Errorf("stop resident process before switching to on-demand: %w (write config failed: %v)", err, writeErr)
+					}
+					// Commit this request's row, not a re-read snapshot:
+					// landOnDemandRow would fetch the pre-request row and drop
+					// the new config/secret/name/service along with the
+					// switch, leaving config.json and the row disagreeing.
+					merged.Enabled = true
+					merged.Status = domain.StatusRunning
+					merged.PID = nil
+					merged.ListenAddr = ""
+					if normErr := s.Store.UpsertInstance(ctx, merged); normErr != nil {
+						return domain.Instance{}, fmt.Errorf("stop resident process before switching to on-demand: %w (normalize failed: %v)", err, normErr)
+					}
+					s.notifyInstanceChanged(req.ID)
 					return domain.Instance{}, fmt.Errorf("stop resident process before switching to on-demand: %w", err)
 				}
 			}
 		}
+
+		// Write the config file before committing the row: the hashes in the
+		// row must not claim content the runtime never received, or the next
+		// identical sync would take the no-op path over a stale file.
+		if err := s.writeInstanceConfig(req.ID, config); err != nil {
+			return domain.Instance{}, err
+		}
+		if err := s.Store.UpsertInstance(ctx, merged); err != nil {
+			return domain.Instance{}, err
+		}
+		s.mu.Lock()
+		if state := s.procs[req.ID]; state != nil {
+			state.scaleToZero = effectiveAfter == domain.RuntimeModeScaleToZero
+		}
+		s.mu.Unlock()
+		s.logger().Info("instance_create_updated", "instance_id", req.ID, "service_id", req.ServiceID, "runtime_mode", effectiveAfter, "mode_changed", modeChanged, "content_changed", contentChanged)
+
+		switch {
+		case effectiveBefore == effectiveAfter:
+			// Same mode, new content: a live resident process must reload. A
+			// cosmetic-only change (name) must not bounce it. With no process
+			// and a failed/degraded row, recover the way the no-op path does:
+			// long-running starts, scale-to-zero returns to cold.
+			if effectiveAfter == domain.RuntimeModeOnDemand {
+				// A legacy failed transition can leave the on-demand row in
+				// its enabled/stopped shape; normalize it. If a resident
+				// process somehow predates the row's on-demand mode, stop it
+				// first -- on-demand keeps no resident process.
+				s.mu.Lock()
+				tracked := s.liveProcessLocked(req.ID)
+				s.mu.Unlock()
+				if tracked || existing.PID != nil {
+					s.mu.Lock()
+					s.nextGenerationLocked(req.ID)
+					s.mu.Unlock()
+					if err := s.stopProcess(ctx, merged, true); err != nil {
+						// Land the on-demand state even on a stop failure, but
+						// report the stop: a silent 200 would hide a leaked
+						// process.
+						if normErr := s.landOnDemandRow(ctx, req.ID, merged.RuntimeMode); normErr != nil {
+							return domain.Instance{}, fmt.Errorf("stop resident process: %w (normalize failed: %v)", err, normErr)
+						}
+						return domain.Instance{}, fmt.Errorf("stop resident process: %w", err)
+					}
+				}
+				if err := s.landOnDemandRow(ctx, req.ID, merged.RuntimeMode); err != nil {
+					return domain.Instance{}, err
+				}
+			} else if contentChanged {
+				switch {
+				case tracked || existing.PID != nil:
+					if err := s.restartLocked(ctx, req.ID, merged.Enabled); err != nil {
+						// Report the failure like every other branch: the
+						// caller must see that the sync did not fully land.
+						return s.instanceWithError(ctx, req.ID, err)
+					}
+				case merged.Enabled && (existing.Status == domain.StatusFailed || existing.Status == domain.StatusDegraded):
+					if effectiveAfter == domain.RuntimeModeScaleToZero {
+						merged.Status = domain.StatusStopped
+						merged.PID = nil
+						merged.ListenAddr = ""
+						if err := s.Store.UpsertInstance(ctx, merged); err != nil {
+							return domain.Instance{}, err
+						}
+						s.notifyInstanceChanged(req.ID)
+					} else if err := s.startLocked(ctx, req.ID); err != nil {
+						return s.instanceWithError(ctx, req.ID, err)
+					}
+				}
+			}
+		case effectiveAfter == domain.RuntimeModeOnDemand:
+			// Resident stopped above; normalize the row to the logical
+			// on-demand state. merged is already persisted with the
+			// requested override, so rewriting it verbatim is a no-op on the
+			// mode field and fixes only the status fields.
+			if err := s.landOnDemandRow(ctx, req.ID, merged.RuntimeMode); err != nil {
+				return domain.Instance{}, err
+			}
+		case effectiveBefore == domain.RuntimeModeOnDemand:
+			// Entering a resident mode. On-demand rows are always enabled with
+			// no process, so the row's Enabled reflects the last operator
+			// start/stop. scale-to-zero enters cold regardless: the first call
+			// warms it, and a bulk sync must not wake every instance of the
+			// service (matching SetRuntimeMode).
+			if effectiveAfter == domain.RuntimeModeScaleToZero {
+				merged.Status = domain.StatusStopped
+				merged.PID = nil
+				merged.ListenAddr = ""
+				if err := s.Store.UpsertInstance(ctx, merged); err != nil {
+					return domain.Instance{}, err
+				}
+				s.notifyInstanceChanged(req.ID)
+			} else if merged.Enabled {
+				if err := s.startLocked(ctx, req.ID); err != nil {
+					// Roll back to the servable on-demand shape, mirroring
+					// SetRuntimeMode: the instance must not be left
+					// long-running with no process.
+					merged.RuntimeMode = existing.RuntimeMode
+					merged.Enabled = true
+					merged.Status = domain.StatusRunning
+					merged.PID = nil
+					merged.ListenAddr = ""
+					if upErr := s.Store.UpsertInstance(ctx, merged); upErr != nil {
+						return domain.Instance{}, fmt.Errorf("start long-running instance: %w (rollback failed: %v)", err, upErr)
+					}
+					s.notifyInstanceChanged(req.ID)
+					return s.instanceWithError(ctx, req.ID, err)
+				}
+			}
+		case effectiveBefore == domain.RuntimeModeLongRunning && effectiveAfter == domain.RuntimeModeScaleToZero:
+			// A warm long-running process is the resident state scale-to-zero
+			// wants. Changed content must still reach it (reload in place);
+			// a mode-only change keeps the process and only refreshes its
+			// idle clock, which otherwise still holds the process start time.
+			// Cold stays cold; the next call warms it with the new content.
+			if merged.Enabled && (tracked || existing.PID != nil) {
+				if contentChanged {
+					if err := s.restartLocked(ctx, req.ID, merged.Enabled); err != nil {
+						return s.instanceWithError(ctx, req.ID, err)
+					}
+				} else {
+					s.mu.Lock()
+					s.lastActivity[req.ID] = time.Now()
+					s.mu.Unlock()
+				}
+			}
+		case effectiveBefore == domain.RuntimeModeScaleToZero && effectiveAfter == domain.RuntimeModeLongRunning:
+			// Warm: keep a resident process (long-running never parks), but
+			// reload changed content in place. Cold and enabled: scale-to-zero
+			// rows sit enabled-stopped, so start them to honor long-running's
+			// resident promise.
+			if merged.Enabled {
+				if tracked || existing.PID != nil {
+					if contentChanged {
+						if err := s.restartLocked(ctx, req.ID, merged.Enabled); err != nil {
+							return s.instanceWithError(ctx, req.ID, err)
+						}
+					}
+				} else {
+					if err := s.startLocked(ctx, req.ID); err != nil {
+						return s.instanceWithError(ctx, req.ID, err)
+					}
+				}
+			}
+		}
+		return s.Store.GetInstance(ctx, req.ID)
 	}
+	if !errors.Is(getErr, sql.ErrNoRows) {
+		return domain.Instance{}, getErr
+	}
+
+	// Genuinely new instance: the legacy create path.
 	start := req.Start
 	status := domain.StatusStopped
 	enabled := start
-	if effectiveMode == domain.RuntimeModeOnDemand {
+	effectiveNew := domain.EffectiveRuntimeMode(svc, domain.Instance{RuntimeMode: req.RuntimeMode})
+	switch effectiveNew {
+	case domain.RuntimeModeOnDemand:
+		// On-demand needs no process to serve: created enabled and logically
+		// running with no pid.
 		start = false
 		enabled = true
 		status = domain.StatusRunning
+	case domain.RuntimeModeScaleToZero:
+		// Scale-to-zero serves from cold: created enabled, stopped, started by the
+		// first call. req.Start would warm it immediately, which defeats the
+		// mode for bulk syncs; the explicit admin Start still warms.
+		start = false
+		enabled = true
 	}
-	inst := domain.Instance{ID: req.ID, ServiceID: req.ServiceID, Name: req.Name, Enabled: enabled, Status: status, RuntimeMode: req.RuntimeMode, NodeEntry: svc.NodeEntry, ConfigJSON: config, ConfigSHA256: domain.ConfigHash(config), SecretJSON: secret, SecretSHA256: domain.HashBytes(secret)}
+	inst := domain.Instance{ID: req.ID, ServiceID: req.ServiceID, Name: req.Name, Enabled: enabled, Status: status, RuntimeMode: req.RuntimeMode, NodeEntry: svc.NodeEntry, ConfigJSON: config, ConfigSHA256: configHash, SecretJSON: secret, SecretSHA256: secretHash}
 	if inst.Name == "" {
 		inst.Name = req.ID
 	}
 	if start {
 		inst.Status = domain.StatusStarting
 	}
+	if err := s.writeInstanceConfig(req.ID, config); err != nil {
+		return domain.Instance{}, err
+	}
 	if err := s.Store.UpsertInstance(ctx, inst); err != nil {
 		return domain.Instance{}, err
 	}
-	s.logger().Info("instance_create", "instance_id", inst.ID, "service_id", inst.ServiceID, "runtime_mode", effectiveMode, "start", req.Start)
+	s.logger().Info("instance_create", "instance_id", inst.ID, "service_id", inst.ServiceID, "runtime_mode", domain.EffectiveRuntimeMode(svc, inst), "start", req.Start)
 	if start {
-		if err := s.Start(ctx, req.ID); err != nil {
-			failed, getErr := s.Store.GetInstance(ctx, req.ID)
-			if getErr != nil {
-				return domain.Instance{}, err
-			}
-			return failed, err
+		if err := s.startLocked(ctx, req.ID); err != nil {
+			return s.instanceWithError(ctx, req.ID, err)
 		}
 	}
 	return s.Store.GetInstance(ctx, req.ID)
 }
 
 func (s *Supervisor) UpdateSecret(ctx context.Context, instanceID string, secret []byte, restart bool) (domain.Instance, error) {
+	unlock := s.lockInstance(instanceID)
+	defer unlock()
 	inst, err := s.Store.GetInstance(ctx, instanceID)
 	if err != nil {
 		return domain.Instance{}, err
@@ -189,7 +514,7 @@ func (s *Supervisor) UpdateSecret(ctx context.Context, instanceID string, secret
 		if err := s.rejectOnDemandRuntimeControl(ctx, inst); err != nil {
 			return domain.Instance{}, err
 		}
-		if err := s.Restart(ctx, instanceID); err != nil {
+		if err := s.restartLocked(ctx, instanceID, inst.Enabled); err != nil {
 			return domain.Instance{}, err
 		}
 	}
@@ -197,6 +522,8 @@ func (s *Supervisor) UpdateSecret(ctx context.Context, instanceID string, secret
 }
 
 func (s *Supervisor) UpdateConfig(ctx context.Context, instanceID string, config []byte, restart bool) (domain.Instance, error) {
+	unlock := s.lockInstance(instanceID)
+	defer unlock()
 	inst, err := s.Store.GetInstance(ctx, instanceID)
 	if err != nil {
 		return domain.Instance{}, err
@@ -224,18 +551,54 @@ func (s *Supervisor) UpdateConfig(ctx context.Context, instanceID string, config
 		if err := s.rejectOnDemandRuntimeControl(ctx, inst); err != nil {
 			return domain.Instance{}, err
 		}
-		if err := s.Restart(ctx, instanceID); err != nil {
+		if err := s.restartLocked(ctx, instanceID, inst.Enabled); err != nil {
 			return domain.Instance{}, err
 		}
 	}
 	return s.Store.GetInstance(ctx, instanceID)
 }
 
+// liveProcessLocked reports whether the instance has a tracked process whose
+// done channel is still open. It is a pure observation: an exited-but-unreaped
+// entry stays in the map for wait() to own, and startWithAttempt's adoption
+// path (or stopProcess) removes it when the next lifecycle operation runs. The
+// caller must hold s.mu.
+func (s *Supervisor) liveProcessLocked(instanceID string) bool {
+	state := s.procs[instanceID]
+	if state == nil {
+		return false
+	}
+	select {
+	case <-state.done:
+		return false
+	default:
+		return true
+	}
+}
+
+// instanceWithError returns the stored instance together with err, so a caller
+// can see the state a failed lifecycle operation left behind.
+func (s *Supervisor) instanceWithError(ctx context.Context, instanceID string, err error) (domain.Instance, error) {
+	inst, getErr := s.Store.GetInstance(ctx, instanceID)
+	if getErr != nil {
+		return domain.Instance{}, err
+	}
+	return inst, err
+}
+
 func (s *Supervisor) Start(ctx context.Context, instanceID string) error {
+	unlock := s.lockInstance(instanceID)
+	defer unlock()
 	s.mu.Lock()
-	generation := s.nextGenerationLocked(instanceID)
+	running := s.liveProcessLocked(instanceID)
 	s.mu.Unlock()
-	return s.startWithAttempt(ctx, instanceID, 0, generation)
+	if running {
+		// Starting a running instance is a no-op, not a restart: a caller
+		// retrying a start must not bounce the process it asked to run.
+		s.logger().Info("instance_start_noop", "instance_id", instanceID)
+		return nil
+	}
+	return s.startLocked(ctx, instanceID)
 }
 
 func (s *Supervisor) startWithAttempt(ctx context.Context, instanceID string, restartAttempt int, generation int64) error {
@@ -261,7 +624,9 @@ func (s *Supervisor) startWithAttempt(ctx context.Context, instanceID string, re
 			logger.Error("instance_start_failed", "instance_id", instanceID, "attempt", attempt, "error", startErr)
 		}
 	}()
-	if domain.EffectiveRuntimeMode(svc, inst) == domain.RuntimeModeOnDemand {
+	mode := domain.EffectiveRuntimeMode(svc, inst)
+	scaleToZero := mode == domain.RuntimeModeScaleToZero
+	if mode == domain.RuntimeModeOnDemand {
 		startErr = ErrUnsupportedRuntimeControl
 		return ErrUnsupportedRuntimeControl
 	}
@@ -364,7 +729,7 @@ func (s *Supervisor) startWithAttempt(ctx context.Context, instanceID string, re
 		return err
 	}
 	logger.Info("instance_started", "instance_id", instanceID, "pid", pid, "listen_addr", addr)
-	state := &processState{cmd: cmd, done: make(chan struct{}), attempt: restartAttempt, generation: generation}
+	state := &processState{cmd: cmd, done: make(chan struct{}), attempt: restartAttempt, generation: generation, scaleToZero: scaleToZero}
 	s.mu.Lock()
 	if err := s.lifecycleErrLocked(); err != nil {
 		s.mu.Unlock()
@@ -373,13 +738,59 @@ func (s *Supervisor) startWithAttempt(ctx context.Context, instanceID string, re
 		startErr = err
 		return err
 	}
+	// Defense in depth: the gate serializes start and stop, so a live entry
+	// here means a caller bypassed the gate -- the exact overwrite that
+	// leaked processes before the gate existed. Kill the replaced process
+	// instead of orphaning it, and fail the start: the state is inconsistent
+	// enough that a clean retry is safer than continuing. An exited entry is
+	// different: wait() closes done before it takes the gate, so a start
+	// that wins the gate first sees the dead state -- the normal crash
+	// window, handled by adopting the slot below.
+	previous := s.procs[instanceID]
+	exited := false
+	if previous != nil && previous != state {
+		select {
+		case <-previous.done:
+			delete(s.procs, instanceID)
+			exited = true
+		default:
+			s.mu.Unlock()
+			logger.Warn("instance_start_replaced_tracked_process", "instance_id", instanceID, "previous_pid", processPID(previous.cmd))
+			_ = hardening.Kill(previous.cmd)
+			hardening.KillGroup(previous.cmd)
+			// Do not Wait or close previous.done here: the wait goroutine
+			// that owns this state is already reaping it and closes done
+			// itself. Closing it a second time would panic the daemon.
+			s.mu.Lock()
+			if s.procs[instanceID] == previous {
+				delete(s.procs, instanceID)
+			}
+			s.mu.Unlock()
+			s.cleanupFailedStart(instanceID, state, stdout, stderr)
+			_ = s.persistStoppedInstance(ctx, inst, true)
+			startErr = errors.New("start replaced an existing tracked process")
+			return startErr
+		}
+	}
 	s.procs[instanceID] = state
+	// The idle clock starts when the process becomes tracked, not when the
+	// first request arrives: an admin Start, a Restart, a content-changing
+	// create, a mode switch that keeps the process, or recovery must all buy
+	// the instance a full idle TTL, not one scan interval.
+	s.lastActivity[instanceID] = time.Now()
 	s.mu.Unlock()
+	if exited {
+		logger.Warn("instance_start_adopted_exited_process", "instance_id", instanceID, "previous_pid", processPID(previous.cmd))
+	}
 	if err := waitHealth(ctx, addr, 5*time.Second); err != nil {
 		if ctx.Err() != nil && s.lifecycleErr() != nil {
 			_ = s.persistStoppedInstance(ctx, inst, true)
 		} else {
 			inst.Status = domain.StatusFailed
+			// Clear the process bookkeeping: a stale pid would read as "warm"
+			// to a mode switch or a later start and suppress the recovery.
+			inst.PID = nil
+			inst.ListenAddr = ""
 			_ = s.Store.UpsertInstance(ctx, inst)
 		}
 		s.cleanupFailedStart(instanceID, state, stdout, stderr)
@@ -430,6 +841,8 @@ func (s *Supervisor) cleanupFailedStart(instanceID string, state *processState, 
 }
 
 func (s *Supervisor) Stop(ctx context.Context, instanceID string) error {
+	unlock := s.lockInstance(instanceID)
+	defer unlock()
 	inst, err := s.Store.GetInstance(ctx, instanceID)
 	if err != nil {
 		return err
@@ -454,8 +867,10 @@ func (s *Supervisor) Shutdown(ctx context.Context) error {
 	for id := range s.procs {
 		ids[id] = struct{}{}
 	}
+	// Invalidate pending backoff timers, but do not add these ids to the stop
+	// set: a generation entry without a tracked process has no process to
+	// stop, and a deleted instance's row would fail the stop loop's lookup.
 	for id := range s.generations {
-		ids[id] = struct{}{}
 		s.nextGenerationLocked(id)
 	}
 	s.mu.Unlock()
@@ -478,6 +893,11 @@ func (s *Supervisor) Shutdown(ctx context.Context) error {
 	}
 
 	errs = append(errs, RunBounded(sortedKeys(ids), 4, func(id string) error {
+		// Hold the instance gate like every other lifecycle path: a scan or a
+		// lifecycle op that began before the lifecycle cancel must not race
+		// this stop's row and process writes.
+		unlock := s.lockInstance(id)
+		defer unlock()
 		inst, getErr := s.Store.GetInstance(ctx, id)
 		if getErr != nil {
 			return fmt.Errorf("%s: get instance for supervisor shutdown: %w", id, getErr)
@@ -486,7 +906,11 @@ func (s *Supervisor) Shutdown(ctx context.Context) error {
 		if getErr != nil {
 			return fmt.Errorf("%s: get service for supervisor shutdown: %w", id, getErr)
 		}
-		if domain.EffectiveRuntimeMode(svc, inst) != domain.RuntimeModeLongRunning {
+		mode := domain.EffectiveRuntimeMode(svc, inst)
+		// Long-running keeps its resident promise to the last moment. Scale-to-
+		// zero warm processes are stopped too: a resident process must not outlive
+		// the daemon, but the row stays enabled so the next call re-warms it.
+		if mode != domain.RuntimeModeLongRunning && mode != domain.RuntimeModeScaleToZero {
 			return nil
 		}
 		if err := s.stopProcess(ctx, inst, inst.Enabled); err != nil {
@@ -515,6 +939,8 @@ func (s *Supervisor) Shutdown(ctx context.Context) error {
 }
 
 func (s *Supervisor) Restart(ctx context.Context, instanceID string) error {
+	unlock := s.lockInstance(instanceID)
+	defer unlock()
 	inst, err := s.Store.GetInstance(ctx, instanceID)
 	if err != nil {
 		return err
@@ -531,19 +957,49 @@ func (s *Supervisor) Restart(ctx context.Context, instanceID string) error {
 		inst.Enabled = false
 		inst.Status = domain.StatusStopped
 		inst.PID = nil
+		inst.ListenAddr = ""
 		if err := s.Store.UpsertInstance(ctx, inst); err != nil {
 			return err
 		}
 		s.notifyInstanceChanged(instanceID)
 		return nil
 	}
-	return s.Start(ctx, instanceID)
+	return s.startLocked(ctx, instanceID)
+}
+
+// RestartIfWarm restarts the instance only when it currently has a tracked
+// process, all under the instance gate. Import uses it so the warm/cold
+// decision cannot go stale: a scale-to-zero instance the idle scan parked in
+// the meantime stays cold instead of being woken by a stale "warm" sample.
+func (s *Supervisor) RestartIfWarm(ctx context.Context, instanceID string) (bool, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	unlock := s.lockInstance(instanceID)
+	defer unlock()
+	inst, err := s.Store.GetInstance(ctx, instanceID)
+	if err != nil {
+		return false, err
+	}
+	if err := s.rejectOnDemandRuntimeControl(ctx, inst); err != nil {
+		return false, err
+	}
+	s.mu.Lock()
+	warm := s.liveProcessLocked(instanceID)
+	s.mu.Unlock()
+	if !warm {
+		return false, nil
+	}
+	s.logger().Info("instance_restart_requested", "instance_id", instanceID)
+	return true, s.restartLocked(ctx, instanceID, inst.Enabled)
 }
 
 // SetRuntimeMode changes an instance's mode override ("" inherits the Service
 // mode). It only acts when the effective mode changes: a running resident
 // process must be stopped before the instance can be served on demand, and an
 // instance that becomes long-running again must be started when it is enabled.
+// Scale-to-zero transitions keep a warm process warm: scale-to-zero is a
+// superset of long-running's resident behavior with a parking policy.
 func (s *Supervisor) SetRuntimeMode(ctx context.Context, instanceID string, mode domain.RuntimeMode) (domain.Instance, error) {
 	if err := domain.ValidateInstanceRuntimeMode(mode); err != nil {
 		return domain.Instance{}, err
@@ -553,6 +1009,8 @@ func (s *Supervisor) SetRuntimeMode(ctx context.Context, instanceID string, mode
 		return domain.Instance{}, err
 	}
 	defer finishOperation()
+	unlock := s.lockInstance(instanceID)
+	defer unlock()
 	inst, err := s.Store.GetInstance(ctx, instanceID)
 	if err != nil {
 		return domain.Instance{}, err
@@ -570,6 +1028,15 @@ func (s *Supervisor) SetRuntimeMode(ctx context.Context, instanceID string, mode
 			after = domain.RuntimeModeLongRunning
 		}
 	}
+	// Record the new mode on the tracked process before any branch returns: a
+	// branch that keeps the process (scale-to-zero <-> long-running without a
+	// restart) must not leave the scan treating it under the old mode. Branches
+	// that restart the process pick the mode up when they start it.
+	s.mu.Lock()
+	if state := s.procs[instanceID]; state != nil {
+		state.scaleToZero = after == domain.RuntimeModeScaleToZero
+	}
+	s.mu.Unlock()
 	if before == after {
 		inst.RuntimeMode = mode
 		if err := s.Store.UpsertInstance(ctx, inst); err != nil {
@@ -582,18 +1049,23 @@ func (s *Supervisor) SetRuntimeMode(ctx context.Context, instanceID string, mode
 		// Make a repeated switch idempotent: a previous attempt may have
 		// written the override and then failed to start (or stop) the process.
 		s.mu.Lock()
-		tracked := s.procs[instanceID] != nil
+		tracked := s.liveProcessLocked(instanceID)
 		s.mu.Unlock()
 		startable := inst.Status == domain.StatusRunning || inst.Status == domain.StatusStopped ||
 			inst.Status == domain.StatusFailed || inst.Status == domain.StatusDegraded
 		switch {
-		case after == domain.RuntimeModeLongRunning && inst.Enabled && inst.PID == nil && !tracked && startable:
-			if err := s.Start(ctx, instanceID); err != nil {
+		case after == domain.RuntimeModeLongRunning && inst.Enabled && !tracked && startable:
+			if err := s.startLocked(ctx, instanceID); err != nil {
 				return inst, err
 			}
 			return s.Store.GetInstance(ctx, instanceID)
 		case after == domain.RuntimeModeOnDemand && (inst.PID != nil || tracked):
 			if err := s.stopProcess(ctx, inst, true); err != nil {
+				// A stuck-dying process must not leave the row in the
+				// unservable enabled/stopped shape: land the on-demand state.
+				if normErr := s.landOnDemandRow(ctx, instanceID, mode); normErr != nil {
+					return domain.Instance{}, fmt.Errorf("stop resident process: %w (normalize failed: %v)", err, normErr)
+				}
 				return domain.Instance{}, err
 			}
 			inst, err = s.Store.GetInstance(ctx, instanceID)
@@ -608,6 +1080,14 @@ func (s *Supervisor) SetRuntimeMode(ctx context.Context, instanceID string, mode
 				return domain.Instance{}, err
 			}
 			s.notifyInstanceChanged(instanceID)
+		case after == domain.RuntimeModeOnDemand:
+			// A legacy failed transition can leave the on-demand row in its
+			// enabled/stopped shape; a repeated PATCH is the one visitor that
+			// can repair it.
+			if err := s.landOnDemandRow(ctx, instanceID, mode); err != nil {
+				return domain.Instance{}, err
+			}
+			return s.Store.GetInstance(ctx, instanceID)
 		}
 		return inst, nil
 	}
@@ -617,6 +1097,16 @@ func (s *Supervisor) SetRuntimeMode(ctx context.Context, instanceID string, mode
 		s.nextGenerationLocked(instanceID)
 		s.mu.Unlock()
 		if err := s.stopProcess(ctx, inst, true); err != nil {
+			// Commit the switch anyway: a stuck-dying process is the reconcile
+			// pass's business from here, and the row must land in on-demand's
+			// servable state rather than blocking every call behind it. Never
+			// write the pre-stop snapshot back: it still claims the old mode,
+			// running status, and a pid for a process that is no longer
+			// tracked. The override is the requested one, empty meaning
+			// inherit again.
+			if normErr := s.landOnDemandRow(ctx, instanceID, mode); normErr != nil {
+				return domain.Instance{}, fmt.Errorf("stop resident process before switching to on-demand: %w (normalize failed: %v)", err, normErr)
+			}
 			return domain.Instance{}, fmt.Errorf("stop resident process before switching to on-demand: %w", err)
 		}
 		inst, err = s.Store.GetInstance(ctx, instanceID)
@@ -638,7 +1128,7 @@ func (s *Supervisor) SetRuntimeMode(ctx context.Context, instanceID string, mode
 			return domain.Instance{}, err
 		}
 		if inst.Enabled {
-			if startErr := s.Start(ctx, instanceID); startErr != nil {
+			if startErr := s.startLocked(ctx, instanceID); startErr != nil {
 				// The switch has not completed. Restore the previous override and
 				// the logical on-demand state so the failed request does not leave
 				// the instance marked long-running without a process.
@@ -669,8 +1159,68 @@ func (s *Supervisor) SetRuntimeMode(ctx context.Context, instanceID string, mode
 			}
 			return s.Store.GetInstance(ctx, instanceID)
 		}
-	default:
+	case before == domain.RuntimeModeLongRunning && after == domain.RuntimeModeScaleToZero:
+		// Keep a warm process warm: scale-to-zero parks it on idle instead of
+		// never. Give it a fresh idle clock -- lastActivity still holds the
+		// process start time, and a long-running instance older than the TTL
+		// would otherwise be parked by the next scan.
+		s.mu.Lock()
+		s.lastActivity[instanceID] = time.Now()
+		s.mu.Unlock()
 		inst.RuntimeMode = mode
+	case before == domain.RuntimeModeScaleToZero && after == domain.RuntimeModeLongRunning:
+		inst.RuntimeMode = mode
+		if err := s.Store.UpsertInstance(ctx, inst); err != nil {
+			return domain.Instance{}, err
+		}
+		inst, err = s.Store.GetInstance(ctx, instanceID)
+		if err != nil {
+			return domain.Instance{}, err
+		}
+		// Long-running promises a resident process. Warm stays warm; cold and
+		// enabled must start (a scale-to-zero row parks enabled-stopped). The
+		// live-process check, not the row's pid: a failed start leaves a stale
+		// pid behind that must not read as warm.
+		s.mu.Lock()
+		warm := s.liveProcessLocked(instanceID)
+		s.mu.Unlock()
+		if inst.Enabled && !warm {
+			if err := s.startLocked(ctx, instanceID); err != nil {
+				return inst, err
+			}
+		}
+		return s.Store.GetInstance(ctx, instanceID)
+	case before == domain.RuntimeModeOnDemand && after == domain.RuntimeModeScaleToZero:
+		// Normalize the fake-running row to scale-to-zero's cold state; the first call
+		// warms it through the gateway's EnsureStarted.
+		inst.RuntimeMode = mode
+		inst.Enabled = true
+		inst.Status = domain.StatusStopped
+		inst.PID = nil
+		inst.ListenAddr = ""
+	case before == domain.RuntimeModeScaleToZero && after == domain.RuntimeModeOnDemand:
+		s.mu.Lock()
+		s.nextGenerationLocked(instanceID)
+		s.mu.Unlock()
+		if err := s.stopProcess(ctx, inst, true); err != nil {
+			// Commit the switch anyway: a stuck-dying process is the reconcile
+			// pass's business from here, and the row must land in on-demand's
+			// servable state rather than keep claiming scale-to-zero (which
+			// would make the next request re-warm the instance).
+			if normErr := s.landOnDemandRow(ctx, instanceID, mode); normErr != nil {
+				return domain.Instance{}, fmt.Errorf("stop resident process before switching to on-demand: %w (normalize failed: %v)", err, normErr)
+			}
+			return domain.Instance{}, fmt.Errorf("stop resident process before switching to on-demand: %w", err)
+		}
+		inst, err = s.Store.GetInstance(ctx, instanceID)
+		if err != nil {
+			return domain.Instance{}, err
+		}
+		inst.RuntimeMode = mode
+		inst.Enabled = true
+		inst.Status = domain.StatusRunning
+		inst.PID = nil
+		inst.ListenAddr = ""
 	}
 	if err := s.Store.UpsertInstance(ctx, inst); err != nil {
 		return domain.Instance{}, err
@@ -682,14 +1232,17 @@ func (s *Supervisor) SetRuntimeMode(ctx context.Context, instanceID string, mode
 
 // ApplyServiceRuntimeMode reconciles an instance after its Service's mode
 // changed. An instance that is now effectively on-demand must not keep a
-// resident process; one that stays long-running is left alone here (the import
-// path restarts those separately).
+// resident process; one that is now effectively scale-to-zero must land on the
+// cold state (the import path restarts long-running ones separately, and a
+// warm scale-to-zero process is exactly what the mode wants).
 func (s *Supervisor) ApplyServiceRuntimeMode(ctx context.Context, instanceID string) error {
 	ctx, finishOperation, err := s.beginOperation(ctx)
 	if err != nil {
 		return err
 	}
 	defer finishOperation()
+	unlock := s.lockInstance(instanceID)
+	defer unlock()
 	inst, err := s.Store.GetInstance(ctx, instanceID)
 	if err != nil {
 		return err
@@ -698,34 +1251,65 @@ func (s *Supervisor) ApplyServiceRuntimeMode(ctx context.Context, instanceID str
 	if err != nil {
 		return err
 	}
-	if domain.EffectiveRuntimeMode(svc, inst) != domain.RuntimeModeOnDemand {
+	mode := domain.EffectiveRuntimeMode(svc, inst)
+	if mode != domain.RuntimeModeOnDemand && mode != domain.RuntimeModeScaleToZero {
 		return nil
 	}
 	s.mu.Lock()
 	s.nextGenerationLocked(instanceID)
-	tracked := s.procs[instanceID] != nil
+	tracked := s.liveProcessLocked(instanceID)
 	s.mu.Unlock()
-	if inst.PID != nil || tracked {
-		if err := s.stopProcess(ctx, inst, true); err != nil {
-			return fmt.Errorf("stop resident process after service switched to on-demand: %w", err)
+	// An operator Stop that landed after the import's snapshot must win: a
+	// disabled row is never re-enabled or restarted here.
+	if mode == domain.RuntimeModeOnDemand {
+		if tracked {
+			// An on-demand service must not keep a resident process.
+			if err := s.stopProcess(ctx, inst, inst.Enabled); err != nil {
+				return fmt.Errorf("stop resident process after service switched to on-demand: %w", err)
+			}
 		}
+		if !inst.Enabled {
+			// The stop already landed the disabled/stopped row.
+			return nil
+		}
+		// Normalize even when nothing was tracked: a cold scale-to-zero row
+		// (enabled/stopped) or a degraded long-running row is not servable by
+		// invokeOnDemand, and no other pass repairs it -- reconcile skips
+		// on-demand rows.
+		return s.landOnDemandRow(ctx, instanceID, inst.RuntimeMode)
 	}
-	inst, err = s.Store.GetInstance(ctx, instanceID)
-	if err != nil {
-		return err
+	if mode == domain.RuntimeModeScaleToZero {
+		if tracked {
+			// Warm is what the mode wants, but the import may carry new
+			// content: restart to load it (a restart briefly interrupts the
+			// process; there is no hot reload). Doing the check under the
+			// gate is what keeps it honest: a request that warmed the
+			// instance after the caller's warm/cold check is restarted, not
+			// left stopped.
+			if err := s.restartLocked(ctx, instanceID, inst.Enabled); err != nil {
+				return fmt.Errorf("reload warm process after service switched to scale-to-zero: %w", err)
+			}
+			return nil
+		}
+		// A row that served as on-demand claims enabled/running with no
+		// process; scale-to-zero enters cold instead, and the first call
+		// warms it through the gateway. A disabled row keeps its operator
+		// stop: normalize the shape, not the intent.
+		inst.Status = domain.StatusStopped
+		inst.PID = nil
+		inst.ListenAddr = ""
+		if err := s.Store.UpsertInstance(ctx, inst); err != nil {
+			return err
+		}
+		s.notifyInstanceChanged(instanceID)
+		return nil
 	}
-	inst.Enabled = true
-	inst.Status = domain.StatusRunning
-	inst.PID = nil
-	inst.ListenAddr = ""
-	if err := s.Store.UpsertInstance(ctx, inst); err != nil {
-		return err
-	}
-	s.notifyInstanceChanged(instanceID)
 	return nil
 }
 
 func (s *Supervisor) DeleteInstance(ctx context.Context, instanceID string) error {
+	unlock := s.lockInstance(instanceID)
+	defer unlock()
 	inst, err := s.Store.GetInstance(ctx, instanceID)
 	if err != nil {
 		return err
@@ -735,9 +1319,21 @@ func (s *Supervisor) DeleteInstance(ctx context.Context, instanceID string) erro
 		return err
 	}
 	if domain.EffectiveRuntimeMode(svc, inst) == domain.RuntimeModeOnDemand {
+		// A tracked process can outlive its row here (a stop that lost the
+		// process, an import that flipped the mode first): delete must not
+		// strand it, or it survives every pass and fails the shutdown.
+		s.mu.Lock()
+		tracked := s.liveProcessLocked(instanceID)
+		s.mu.Unlock()
+		if tracked {
+			if err := s.stopProcess(ctx, inst, false); err != nil {
+				return err
+			}
+		}
 		if err := s.Store.DeleteInstance(ctx, instanceID); err != nil {
 			return err
 		}
+		s.forgetInstance(instanceID)
 		s.logger().Info("instance_delete", "instance_id", instanceID)
 		return nil
 	}
@@ -747,8 +1343,45 @@ func (s *Supervisor) DeleteInstance(ctx context.Context, instanceID string) erro
 	if err := s.Store.DeleteInstance(ctx, instanceID); err != nil {
 		return err
 	}
+	s.forgetInstance(instanceID)
 	s.logger().Info("instance_delete", "instance_id", instanceID)
 	return nil
+}
+
+// forgetInstance drops the in-memory bookkeeping for a deleted instance so the
+// maps do not grow with instance churn. The generation counter is bumped, not
+// deleted: a pending crash-restart timer keyed to an older generation must not
+// match a future instance with the same id, whose counter would otherwise
+// restart at 1. One counter per distinct instance id over the daemon's
+// lifetime is the cost.
+func (s *Supervisor) forgetInstance(instanceID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.lastActivity, instanceID)
+	delete(s.startFailures, instanceID)
+	s.nextGenerationLocked(instanceID)
+}
+
+// RenameInstance sets the instance's display name under the instance gate, so
+// the read-modify-write cannot clobber a concurrent lifecycle change (a warm
+// scale-to-zero row rewritten with a pre-warm stopped snapshot).
+func (s *Supervisor) RenameInstance(ctx context.Context, instanceID, name string) (domain.Instance, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	unlock := s.lockInstance(instanceID)
+	defer unlock()
+	inst, err := s.Store.GetInstance(ctx, instanceID)
+	if err != nil {
+		return domain.Instance{}, err
+	}
+	inst.Name = name
+	if err := s.Store.UpsertInstance(ctx, inst); err != nil {
+		return domain.Instance{}, err
+	}
+	// No notifyInstanceChanged here: a rename changes nothing the gateway
+	// routes on, and the notify closes cached connections mid-call.
+	return s.Store.GetInstance(ctx, instanceID)
 }
 
 func (s *Supervisor) rejectOnDemandRuntimeControl(ctx context.Context, inst domain.Instance) error {
@@ -759,6 +1392,23 @@ func (s *Supervisor) rejectOnDemandRuntimeControl(ctx context.Context, inst doma
 	if domain.EffectiveRuntimeMode(svc, inst) == domain.RuntimeModeOnDemand {
 		return ErrUnsupportedRuntimeControl
 	}
+	return nil
+}
+
+func (s *Supervisor) landOnDemandRow(ctx context.Context, instanceID string, overrideValue domain.RuntimeMode) error {
+	inst, err := s.Store.GetInstance(ctx, instanceID)
+	if err != nil {
+		return err
+	}
+	inst.RuntimeMode = overrideValue
+	inst.Enabled = true
+	inst.Status = domain.StatusRunning
+	inst.PID = nil
+	inst.ListenAddr = ""
+	if err := s.Store.UpsertInstance(ctx, inst); err != nil {
+		return err
+	}
+	s.notifyInstanceChanged(instanceID)
 	return nil
 }
 
@@ -776,6 +1426,7 @@ func (s *Supervisor) stopProcess(ctx context.Context, inst domain.Instance, enab
 	s.nextGenerationLocked(inst.ID)
 	state := s.procs[inst.ID]
 	delete(s.procs, inst.ID)
+	delete(s.lastActivity, inst.ID)
 	s.mu.Unlock()
 	var stopErr error
 	if state != nil && state.cmd.Process != nil {
@@ -931,35 +1582,80 @@ func (s *Supervisor) wait(instanceID string, state *processState, stdout, stderr
 	_ = stdout.Close()
 	_ = stderr.Close()
 	close(state.done)
+	// The row mutation below takes the instance gate: wait runs outside it, and
+	// without the gate a request that EnsureStarted-queued during the crash
+	// could warm a fresh process between the procs deletion and the row write
+	// -- the stale degraded write would then destroy the new process's running
+	// row and every request would fail with Unavailable until the idle scan
+	// parked the instance. Holding the gate also re-checks ownership: a
+	// successor (new tracked state) or a row whose pid is not this process's
+	// means the world moved on and this exit owns nothing.
+	unlock := s.lockInstance(instanceID)
 	s.mu.Lock()
 	current := s.procs[instanceID]
+	scaleToZeroAtStart := state.scaleToZero
 	if current == state {
 		delete(s.procs, instanceID)
+		delete(s.lastActivity, instanceID)
 	}
 	s.mu.Unlock()
 	ctx := s.lifecycleContext()
-	if ctx.Err() != nil {
+	// A deliberate Stop already removed this state, and a restart replaced it:
+	// either way the world moved on and this exit owns nothing. Return before
+	// touching the store -- during shutdown the connection may already be
+	// closing, and a read there can race the daemon's own teardown.
+	if current != state || ctx.Err() != nil {
+		unlock()
 		return
 	}
 	inst, getErr := s.Store.GetInstance(ctx, instanceID)
-	if getErr != nil || !inst.Enabled || current != state || ctx.Err() != nil {
+	if getErr != nil || !inst.Enabled || ctx.Err() != nil {
+		unlock()
 		return
 	}
-	s.logger().Warn("instance_exited", "instance_id", instanceID, "pid", processPID(state.cmd), "attempt", state.attempt+1, "error", err)
-	if err != nil {
+	// Ownership re-check under the gate: the row must still describe this
+	// process. A successor's start already rewrote pid and status; writing
+	// degraded over it would clobber a live generation.
+	if inst.PID != nil && *inst.PID != processPID(state.cmd) {
+		unlock()
+		return
+	}
+	// A scale-to-zero instance whose process exits is degraded, not restarted:
+	// restart-on-exit would fight the idle stopper and spin processes nobody is
+	// calling. In-flight refs are dropped with the process -- only when no new
+	// generation has started: a ref taken for a fresh process belongs to that
+	// generation. When the service lookup fails transiently, fall back to the
+	// mode the process started under instead of guessing: mistaking a
+	// long-running exit for scale-to-zero would silently drop its restart.
+	svc, svcErr := s.Store.GetService(ctx, inst.ServiceID)
+	scaleToZero := scaleToZeroAtStart
+	if svcErr == nil {
+		scaleToZero = domain.EffectiveRuntimeMode(svc, inst) == domain.RuntimeModeScaleToZero
+	} else {
+		s.logger().Warn("instance_exit_mode_lookup_failed", "instance_id", instanceID, "error", svcErr)
+	}
+	if scaleToZero {
+		s.mu.Lock()
+		// Any in-flight request refs live on this state object: discarding the
+		// state drops them. A successor's refs live on its own state, so the
+		// old request's release cannot affect the successor.
+		s.mu.Unlock()
 		inst.Status = domain.StatusDegraded
 		inst.PID = nil
+		inst.ListenAddr = ""
 		_ = s.Store.UpsertInstance(ctx, inst)
 		s.notifyInstanceChanged(instanceID)
 		s.logger().Warn("instance_degraded", "instance_id", instanceID, "attempt", state.attempt+1)
-		s.scheduleRestartAfterBackoff(instanceID, state.attempt+1, state.generation)
+		unlock()
 		return
 	}
+	s.logger().Warn("instance_exited", "instance_id", instanceID, "pid", processPID(state.cmd), "attempt", state.attempt+1, "error", err)
 	inst.Status = domain.StatusDegraded
 	inst.PID = nil
 	_ = s.Store.UpsertInstance(ctx, inst)
 	s.notifyInstanceChanged(instanceID)
 	s.logger().Warn("instance_degraded", "instance_id", instanceID, "attempt", state.attempt+1)
+	unlock()
 	s.scheduleRestartAfterBackoff(instanceID, state.attempt+1, state.generation)
 }
 
@@ -991,21 +1687,40 @@ func (s *Supervisor) restartAfterBackoff(instanceID string, attempt int, generat
 	if !s.generationMatches(instanceID, generation) {
 		return
 	}
-	inst, err := s.Store.GetInstance(ctx, instanceID)
-	if err != nil || !inst.Enabled {
+	// Take the gate like every other start: an operator Start (or any lifecycle
+	// operation) that lands while the backoff timer was sleeping serializes
+	// here instead of racing startWithAttempt's proc registration. The
+	// generation recheck inside the gate makes the operator's start win: it
+	// bumped the generation, so this backoff attempt stands down.
+	unlock := s.lockInstance(instanceID)
+	if !s.generationMatches(instanceID, generation) {
+		unlock()
 		return
 	}
-	if err := s.startWithAttempt(ctx, instanceID, attempt, generation); err != nil {
-		if ctx.Err() != nil || !s.generationMatches(instanceID, generation) {
-			return
-		}
-		s.logger().Warn("instance_degraded", "instance_id", instanceID, "attempt", attempt+1)
-		inst.Status = domain.StatusDegraded
-		inst.PID = nil
-		_ = s.Store.UpsertInstance(ctx, inst)
-		s.notifyInstanceChanged(instanceID)
-		s.scheduleRestartAfterBackoff(instanceID, attempt+1, generation)
+	inst, err := s.Store.GetInstance(ctx, instanceID)
+	if err != nil || !inst.Enabled {
+		unlock()
+		return
 	}
+	err = s.startWithAttempt(ctx, instanceID, attempt, generation)
+	if err == nil {
+		unlock()
+		return
+	}
+	// Keep the gate through the degraded write: a concurrent start that bumps
+	// the generation between the check and the write would otherwise have its
+	// running row clobbered by this stale degraded one.
+	if ctx.Err() != nil || !s.generationMatches(instanceID, generation) {
+		unlock()
+		return
+	}
+	s.logger().Warn("instance_degraded", "instance_id", instanceID, "attempt", attempt+1)
+	inst.Status = domain.StatusDegraded
+	inst.PID = nil
+	_ = s.Store.UpsertInstance(ctx, inst)
+	s.notifyInstanceChanged(instanceID)
+	unlock()
+	s.scheduleRestartAfterBackoff(instanceID, attempt+1, generation)
 }
 
 func (s *Supervisor) nextGenerationLocked(instanceID string) int64 {
@@ -1117,7 +1832,8 @@ func waitProcessDone(ctx context.Context, done <-chan struct{}, timeout time.Dur
 }
 
 func shouldStopOnShutdown(inst domain.Instance, svc domain.Service) bool {
-	if domain.EffectiveRuntimeMode(svc, inst) != domain.RuntimeModeLongRunning {
+	mode := domain.EffectiveRuntimeMode(svc, inst)
+	if mode != domain.RuntimeModeLongRunning && mode != domain.RuntimeModeScaleToZero {
 		return false
 	}
 	if inst.PID != nil {

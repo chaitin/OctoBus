@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/labstack/echo/v5"
@@ -1054,9 +1055,11 @@ func instanceEffectiveMode(inst domain.Instance, serviceMode domain.RuntimeMode)
 	return serviceMode
 }
 
-// restartTargets lists the enabled instances of a service whose effective mode
-// is long-running. runtimeMode is the mode the service has (or is about to
-// get), because an instance override wins over it.
+// restartTargets lists the enabled instances of a service that a real import
+// would restart: every long-running instance, plus scale-to-zero instances that
+// are currently warm (a cold one stays cold across an import). runtimeMode is
+// the mode the service has (or is about to get), because an instance override
+// wins over it.
 func (s *Server) restartTargets(ctx context.Context, serviceID string, runtimeMode domain.RuntimeMode) ([]string, error) {
 	instances, err := s.Store.ListEnabledInstancesByService(ctx, serviceID)
 	if err != nil {
@@ -1064,8 +1067,13 @@ func (s *Server) restartTargets(ctx context.Context, serviceID string, runtimeMo
 	}
 	ids := make([]string, 0, len(instances))
 	for _, inst := range instances {
-		if instanceEffectiveMode(inst, runtimeMode) == domain.RuntimeModeLongRunning {
+		switch instanceEffectiveMode(inst, runtimeMode) {
+		case domain.RuntimeModeLongRunning:
 			ids = append(ids, inst.ID)
+		case domain.RuntimeModeScaleToZero:
+			if s.Supervisor != nil && s.Supervisor.TracksInstance(inst.ID) {
+				ids = append(ids, inst.ID)
+			}
 		}
 	}
 	return ids, nil
@@ -1114,16 +1122,23 @@ func (s *Server) restartEnabledServiceInstances(ctx context.Context, serviceID s
 	var restarted []string
 	errsByInstance := make(map[string]string)
 	type action struct {
-		id       string
-		onDemand bool
+		id          string
+		onDemand    bool
+		scaleToZero bool
 	}
 	actions := make([]action, 0, len(instances))
 	for _, inst := range instances {
-		if instanceEffectiveMode(inst, svc.RuntimeMode) == domain.RuntimeModeOnDemand {
+		switch instanceEffectiveMode(inst, svc.RuntimeMode) {
+		case domain.RuntimeModeOnDemand:
 			actions = append(actions, action{id: inst.ID, onDemand: true})
-			continue
+		case domain.RuntimeModeScaleToZero:
+			// A warm scale-to-zero process is restarted in place (new code must
+			// load); a cold one stays cold: an import must not wake every
+			// scale-to-zero instance of the service, that is what calls are for.
+			actions = append(actions, action{id: inst.ID, scaleToZero: true})
+		default:
+			actions = append(actions, action{id: inst.ID})
 		}
-		actions = append(actions, action{id: inst.ID})
 	}
 	if len(actions) == 0 {
 		s.logger().Info("service_instances_restart_started", "service_id", serviceID, "count", 0)
@@ -1133,21 +1148,50 @@ func (s *Server) restartEnabledServiceInstances(ctx context.Context, serviceID s
 	s.logger().Info("service_instances_restart_started", "service_id", serviceID, "count", len(actions))
 	ids := make([]string, len(actions))
 	onDemand := make(map[string]bool, len(actions))
+	scaleToZero := make(map[string]bool, len(actions))
 	for i, a := range actions {
 		ids[i] = a.id
 		onDemand[a.id] = a.onDemand
+		scaleToZero[a.id] = a.scaleToZero
+	}
+	var restartedMu sync.Mutex
+	restartedNow := make(map[string]bool, len(actions))
+	markRestarted := func(id string) {
+		restartedMu.Lock()
+		restartedNow[id] = true
+		restartedMu.Unlock()
 	}
 	errs := supervisor.RunBounded(ids, 4, func(id string) error {
-		if onDemand[id] {
+		switch {
+		case scaleToZero[id]:
+			// Decide warm/cold inside the gate: a stale sample would wake an
+			// instance the idle scan parked just before this call.
+			warm, err := s.Supervisor.RestartIfWarm(ctx, id)
+			if err != nil {
+				return fmt.Errorf("%s: %w", id, err)
+			}
+			if warm {
+				markRestarted(id)
+				return nil
+			}
+			// Cold stays cold; this only normalizes a row that flipped from
+			// on-demand (enabled/running with no process).
 			if err := s.Supervisor.ApplyServiceRuntimeMode(ctx, id); err != nil {
 				return fmt.Errorf("%s: %w", id, err)
 			}
 			return nil
+		case onDemand[id]:
+			if err := s.Supervisor.ApplyServiceRuntimeMode(ctx, id); err != nil {
+				return fmt.Errorf("%s: %w", id, err)
+			}
+			return nil
+		default:
+			if err := s.Supervisor.Restart(ctx, id); err != nil {
+				return fmt.Errorf("%s: %w", id, err)
+			}
+			markRestarted(id)
+			return nil
 		}
-		if err := s.Supervisor.Restart(ctx, id); err != nil {
-			return fmt.Errorf("%s: %w", id, err)
-		}
-		return nil
 	})
 	for _, err := range errs {
 		parts := strings.SplitN(err.Error(), ": ", 2)
@@ -1156,7 +1200,7 @@ func (s *Server) restartEnabledServiceInstances(ctx context.Context, serviceID s
 		}
 	}
 	for _, id := range ids {
-		if msg := errsByInstance[id]; msg != "" || onDemand[id] {
+		if msg := errsByInstance[id]; msg != "" || !restartedNow[id] {
 			continue
 		}
 		restarted = append(restarted, id)
@@ -1262,15 +1306,25 @@ func (s *Server) handleInstancePath(w http.ResponseWriter, r *http.Request, inst
 				}
 			}
 			if req.Name != nil {
-				inst.Name = *req.Name
-				if err := s.Store.UpsertInstance(r.Context(), inst); err != nil {
-					writeError(w, http.StatusBadRequest, err.Error())
-					return
-				}
-				inst, err = s.Store.GetInstance(r.Context(), instanceID)
-				if err != nil {
-					writeError(w, http.StatusInternalServerError, err.Error())
-					return
+				// Rename under the instance gate: an ungated read-modify-write
+				// could clobber a row a concurrent warm just wrote.
+				if s.Supervisor != nil {
+					inst, err = s.Supervisor.RenameInstance(r.Context(), instanceID, *req.Name)
+					if err != nil {
+						writeError(w, http.StatusBadRequest, err.Error())
+						return
+					}
+				} else {
+					inst.Name = *req.Name
+					if err := s.Store.UpsertInstance(r.Context(), inst); err != nil {
+						writeError(w, http.StatusBadRequest, err.Error())
+						return
+					}
+					inst, err = s.Store.GetInstance(r.Context(), instanceID)
+					if err != nil {
+						writeError(w, http.StatusInternalServerError, err.Error())
+						return
+					}
 				}
 			}
 			writeJSON(w, http.StatusOK, s.instanceResponse(r.Context(), inst))
