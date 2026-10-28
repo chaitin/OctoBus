@@ -844,6 +844,224 @@ describe('SearchAggregationStatistics', () => {
   });
 });
 
+describe('GetDeviceList', () => {
+  beforeEach(() => { originalFetch = globalThis.fetch; });
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('validates token and endpoint before calling upstream', async () => {
+    await assert.rejects(
+      () => rpcdef(makeCtx({ secret: {} }))['/Chaitin_COSMOS.Chaitin_COSMOS/GetDeviceList'](),
+      (err) => err instanceof GrpcError && err.code === 3 && err.message.includes('api_token'),
+    );
+    await assert.rejects(
+      () => rpcdef(makeCtx({ config: { endpoint: '' } }))['/Chaitin_COSMOS.Chaitin_COSMOS/GetDeviceList'](),
+      (err) => err instanceof GrpcError && err.code === 3 && err.message.includes('endpoint'),
+    );
+  });
+
+  it('calls AgentService.SearchDeviceList with x-menu-name=79', async () => {
+    const { mockFetch, calls } = mockFetchSuccess({ data: [], total: 0 });
+    installMock(mockFetch);
+
+    const ctx = makeCtx({ req: { organization_ids: [552] } });
+    await rpcdef(ctx)['/Chaitin_COSMOS.Chaitin_COSMOS/GetDeviceList']();
+
+    const call = calls[0];
+    assert.equal(call.url, `${MOCK_ENDPOINT}/pedestal/rpc`);
+    assert.equal(call.options.headers['x-menu-name'], '79');
+    const body = parseSentBody(call);
+    assert.equal(body.method, 'AgentService.SearchDeviceList');
+    assert.deepEqual(body.params.organization_ids, [552]);
+  });
+
+  it('maps organization_ids array of numbers and strings', async () => {
+    const { mockFetch, calls } = mockFetchSuccess({ data: [], total: 0 });
+    installMock(mockFetch);
+
+    const ctx = makeCtx({ req: { organization_ids: [552, '553', 554] } });
+    await rpcdef(ctx)['/Chaitin_COSMOS.Chaitin_COSMOS/GetDeviceList']();
+
+    const body = parseSentBody(calls[0]);
+    assert.deepEqual(body.params.organization_ids, [552, 553, 554]);
+  });
+
+  it('maps organization_ids as a single number', async () => {
+    const { mockFetch, calls } = mockFetchSuccess({ data: [], total: 0 });
+    installMock(mockFetch);
+
+    const ctx = makeCtx({ req: { organization_ids: 552 } });
+    await rpcdef(ctx)['/Chaitin_COSMOS.Chaitin_COSMOS/GetDeviceList']();
+
+    const body = parseSentBody(calls[0]);
+    assert.deepEqual(body.params.organization_ids, [552]);
+  });
+
+  it('throws INVALID_ARGUMENT when organization_ids is an empty array', async () => {
+    const ctx = makeCtx({ req: { organization_ids: [] } });
+    const defs = rpcdef(ctx);
+    await assert.rejects(
+      () => defs['/Chaitin_COSMOS.Chaitin_COSMOS/GetDeviceList'](),
+      (err) => err instanceof GrpcError && err.code === 3 && err.message.includes('organization_ids'),
+    );
+  });
+
+  it('throws INVALID_ARGUMENT when organization_ids is missing', async () => {
+    const ctx = makeCtx({ req: {} });
+    const defs = rpcdef(ctx);
+    await assert.rejects(
+      () => defs['/Chaitin_COSMOS.Chaitin_COSMOS/GetDeviceList'](),
+      (err) => err instanceof GrpcError && err.code === 3 && err.message.includes('organization_ids'),
+    );
+  });
+
+  it('maps count and offset', async () => {
+    const { mockFetch, calls } = mockFetchSuccess({ data: [], total: 0 });
+    installMock(mockFetch);
+
+    const ctx = makeCtx({ req: { organization_ids: [552], count: '50', offset: '100' } });
+    await rpcdef(ctx)['/Chaitin_COSMOS.Chaitin_COSMOS/GetDeviceList']();
+
+    const body = parseSentBody(calls[0]);
+    assert.equal(body.params.count, 50);
+    assert.equal(body.params.offset, 100);
+  });
+
+  it('maps upstream device array and total', async () => {
+    const upstreamData = [
+      { id: 2001, name: '全悉（新）', ip: '10.0.0.2', status: 1, last_receive_time: '2026-10-20', today_parse_count: 0 },
+      { id: 2380, name: 'FW', ip: '10.0.0.1', status: 1, last_receive_time: '2026-10-27', today_parse_count: 42 },
+    ];
+    const { mockFetch } = mockFetchSuccess({ data: upstreamData, total: 2 });
+    installMock(mockFetch);
+
+    const ctx = makeCtx({ req: { organization_ids: [552] } });
+    const result = await rpcdef(ctx)['/Chaitin_COSMOS.Chaitin_COSMOS/GetDeviceList']();
+
+    assert.equal(result.data.devices.length, 2);
+    assert.deepEqual(result.data.devices[0], upstreamData[0]);
+    assert.equal(result.data.total, 2);
+  });
+
+  it('derives total from device count when total is missing', async () => {
+    const upstreamData = [{ id: 1 }, { id: 2 }, { id: 3 }];
+    const { mockFetch } = mockFetchSuccess({ data: upstreamData });
+    installMock(mockFetch);
+
+    const ctx = makeCtx({ req: { organization_ids: [552] } });
+    const result = await rpcdef(ctx)['/Chaitin_COSMOS.Chaitin_COSMOS/GetDeviceList']();
+
+    assert.equal(result.data.devices.length, 3);
+    assert.equal(result.data.total, 3);
+  });
+
+  it('handles empty data array', async () => {
+    const { mockFetch } = mockFetchSuccess({ data: [] });
+    installMock(mockFetch);
+
+    const ctx = makeCtx({ req: { organization_ids: [552] } });
+    const result = await rpcdef(ctx)['/Chaitin_COSMOS.Chaitin_COSMOS/GetDeviceList']();
+
+    assert.equal(result.data.devices.length, 0);
+    assert.equal(result.data.total, 0);
+  });
+
+  it('selects insecure dispatcher when skipTlsVerify=true', async () => {
+    const { _test } = await import('../src/cosmos.js');
+    let capturedDispatcher = null;
+    const { mockFetch } = mockFetchSuccess({ data: [] });
+    installMock(async (url, options) => {
+      capturedDispatcher = options?.dispatcher;
+      return mockFetch(url, options);
+    });
+
+    const ctx = makeCtx({
+      config: { endpoint: MOCK_ENDPOINT, skipTlsVerify: true },
+      req: { organization_ids: [552] },
+    });
+    await rpcdef(ctx)['/Chaitin_COSMOS.Chaitin_COSMOS/GetDeviceList']();
+
+    assert.equal(capturedDispatcher, _test.INSECURE_DISPATCHER);
+  });
+});
+
+describe('GetOrganizationList', () => {
+  beforeEach(() => { originalFetch = globalThis.fetch; });
+  afterEach(() => { globalThis.fetch = originalFetch; });
+
+  it('validates token and endpoint before calling upstream', async () => {
+    await assert.rejects(
+      () => rpcdef(makeCtx({ secret: {} }))['/Chaitin_COSMOS.Chaitin_COSMOS/GetOrganizationList'](),
+      (err) => err instanceof GrpcError && err.code === 3 && err.message.includes('api_token'),
+    );
+    await assert.rejects(
+      () => rpcdef(makeCtx({ config: { endpoint: '' } }))['/Chaitin_COSMOS.Chaitin_COSMOS/GetOrganizationList'](),
+      (err) => err instanceof GrpcError && err.code === 3 && err.message.includes('endpoint'),
+    );
+  });
+
+  it('calls UserService.GetUserOrgList with x-menu-name=79', async () => {
+    const { mockFetch, calls } = mockFetchSuccess({ data: [] });
+    installMock(mockFetch);
+
+    const ctx = makeCtx({ req: {} });
+    await rpcdef(ctx)['/Chaitin_COSMOS.Chaitin_COSMOS/GetOrganizationList']();
+
+    const call = calls[0];
+    assert.equal(call.options.headers['x-menu-name'], '79');
+    const body = parseSentBody(call);
+    assert.equal(body.method, 'UserService.GetUserOrgList');
+  });
+
+  it('maps with_user_count and with_device_count booleans', async () => {
+    const { mockFetch, calls } = mockFetchSuccess({ data: [] });
+    installMock(mockFetch);
+
+    const ctx = makeCtx({ req: { with_user_count: true, with_device_count: false } });
+    await rpcdef(ctx)['/Chaitin_COSMOS.Chaitin_COSMOS/GetOrganizationList']();
+
+    const body = parseSentBody(calls[0]);
+    assert.equal(body.params.with_user_count, true);
+    assert.equal(body.params.with_device_count, false);
+  });
+
+  it('omits with_user_count/with_device_count when not provided', async () => {
+    const { mockFetch, calls } = mockFetchSuccess({ data: [] });
+    installMock(mockFetch);
+
+    const ctx = makeCtx({ req: {} });
+    await rpcdef(ctx)['/Chaitin_COSMOS.Chaitin_COSMOS/GetOrganizationList']();
+
+    const body = parseSentBody(calls[0]);
+    assert.equal(body.params.with_user_count, undefined);
+    assert.equal(body.params.with_device_count, undefined);
+  });
+
+  it('maps upstream organization array', async () => {
+    const upstreamData = [
+      { id: 900, name: '示例组织A', parent_id: 0 },
+      { id: 901, name: '子组织A', parent_id: 900 },
+    ];
+    const { mockFetch } = mockFetchSuccess({ data: upstreamData });
+    installMock(mockFetch);
+
+    const ctx = makeCtx({ req: {} });
+    const result = await rpcdef(ctx)['/Chaitin_COSMOS.Chaitin_COSMOS/GetOrganizationList']();
+
+    assert.equal(result.data.organizations.length, 2);
+    assert.deepEqual(result.data.organizations[0], upstreamData[0]);
+  });
+
+  it('handles empty organization array', async () => {
+    const { mockFetch } = mockFetchSuccess({ data: [] });
+    installMock(mockFetch);
+
+    const ctx = makeCtx({ req: {} });
+    const result = await rpcdef(ctx)['/Chaitin_COSMOS.Chaitin_COSMOS/GetOrganizationList']();
+
+    assert.equal(result.data.organizations.length, 0);
+  });
+});
+
 describe('Error handling — upstream HTTP errors', () => {
   beforeEach(() => { originalFetch = globalThis.fetch; });
   afterEach(() => { globalThis.fetch = originalFetch; });
@@ -1045,13 +1263,29 @@ describe('TLS — per-request undici dispatcher (no process.env side effects)', 
     if (savedEnv !== undefined) process.env.NODE_TLS_REJECT_UNAUTHORIZED = savedEnv;
   });
 
-  it('no skipTlsVerify config is honored — TLS is always enforced via dispatcher', async () => {
-    const savedEnv = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-    delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-
-    // Even if someone tries to pass skipTlsVerify in config, it should have no effect
+  it('skipTlsVerify=false (default) selects the secure dispatcher', async () => {
+    const { _test } = await import('../src/cosmos.js');
+    let capturedDispatcher = null;
     const { mockFetch } = mockFetchSuccess({ data: [] });
-    installMock(mockFetch);
+    installMock(async (url, options) => {
+      capturedDispatcher = options?.dispatcher;
+      return mockFetch(url, options);
+    });
+
+    const ctx = makeCtx({ req: { ids: ['id1'] } });
+    await rpcdef(ctx)['/Chaitin_COSMOS.Chaitin_COSMOS/SearchLogInfo']();
+
+    assert.equal(capturedDispatcher, _test.SECURE_DISPATCHER);
+  });
+
+  it('skipTlsVerify=true selects the insecure dispatcher', async () => {
+    const { _test } = await import('../src/cosmos.js');
+    let capturedDispatcher = null;
+    const { mockFetch } = mockFetchSuccess({ data: [] });
+    installMock(async (url, options) => {
+      capturedDispatcher = options?.dispatcher;
+      return mockFetch(url, options);
+    });
 
     const ctx = makeCtx({
       config: { endpoint: MOCK_ENDPOINT, skipTlsVerify: true },
@@ -1059,10 +1293,7 @@ describe('TLS — per-request undici dispatcher (no process.env side effects)', 
     });
     await rpcdef(ctx)['/Chaitin_COSMOS.Chaitin_COSMOS/SearchLogInfo']();
 
-    // process.env should NOT be touched regardless
-    assert.equal(process.env.NODE_TLS_REJECT_UNAUTHORIZED, undefined);
-
-    if (savedEnv !== undefined) process.env.NODE_TLS_REJECT_UNAUTHORIZED = savedEnv;
+    assert.equal(capturedDispatcher, _test.INSECURE_DISPATCHER);
   });
 });
 
@@ -1331,19 +1562,23 @@ describe('Security boundaries', () => {
 });
 
 describe('Legacy handler wrapping — handlers export', () => {
-  it('handlers object contains all three method keys', async () => {
-    const { handlers, METHOD_SEARCH_LOG_INFO_FULL, METHOD_SEARCH_LOG_LIST_FULL, METHOD_SEARCH_AGGREGATION_FULL } = await import('../src/cosmos.js');
+  it('handlers object contains all five method keys', async () => {
+    const { handlers, METHOD_SEARCH_LOG_INFO_FULL, METHOD_SEARCH_LOG_LIST_FULL, METHOD_SEARCH_AGGREGATION_FULL, METHOD_GET_DEVICE_LIST_FULL, METHOD_GET_ORGANIZATION_LIST_FULL } = await import('../src/cosmos.js');
 
     assert.ok(typeof handlers[METHOD_SEARCH_LOG_INFO_FULL] === 'function');
     assert.ok(typeof handlers[METHOD_SEARCH_LOG_LIST_FULL] === 'function');
     assert.ok(typeof handlers[METHOD_SEARCH_AGGREGATION_FULL] === 'function');
+    assert.ok(typeof handlers[METHOD_GET_DEVICE_LIST_FULL] === 'function');
+    assert.ok(typeof handlers[METHOD_GET_ORGANIZATION_LIST_FULL] === 'function');
   });
 
   it('exported method names match expected gRPC paths', async () => {
-    const { METHOD_SEARCH_LOG_INFO_FULL, METHOD_SEARCH_LOG_LIST_FULL, METHOD_SEARCH_AGGREGATION_FULL } = await import('../src/cosmos.js');
+    const { METHOD_SEARCH_LOG_INFO_FULL, METHOD_SEARCH_LOG_LIST_FULL, METHOD_SEARCH_AGGREGATION_FULL, METHOD_GET_DEVICE_LIST_FULL, METHOD_GET_ORGANIZATION_LIST_FULL } = await import('../src/cosmos.js');
 
     assert.equal(METHOD_SEARCH_LOG_INFO_FULL, 'Chaitin_COSMOS.Chaitin_COSMOS/SearchLogInfo');
     assert.equal(METHOD_SEARCH_LOG_LIST_FULL, 'Chaitin_COSMOS.Chaitin_COSMOS/SearchLogList');
     assert.equal(METHOD_SEARCH_AGGREGATION_FULL, 'Chaitin_COSMOS.Chaitin_COSMOS/SearchAggregationStatistics');
+    assert.equal(METHOD_GET_DEVICE_LIST_FULL, 'Chaitin_COSMOS.Chaitin_COSMOS/GetDeviceList');
+    assert.equal(METHOD_GET_ORGANIZATION_LIST_FULL, 'Chaitin_COSMOS.Chaitin_COSMOS/GetOrganizationList');
   });
 });

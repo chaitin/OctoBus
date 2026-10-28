@@ -30,6 +30,14 @@
         "Chaitin_COSMOS.Chaitin_COSMOS/SearchAggregationStatistics": {
           "name": "search-aggregation-statistics",
           "description": "Get Cosmos log aggregation statistics."
+        },
+        "Chaitin_COSMOS.Chaitin_COSMOS/GetDeviceList": {
+          "name": "get-device-list",
+          "description": "Get device list by organization (status, last receive time, today's parse count)."
+        },
+        "Chaitin_COSMOS.Chaitin_COSMOS/GetOrganizationList": {
+          "name": "get-organization-list",
+          "description": "Get the organization tree."
         }
       }
     }

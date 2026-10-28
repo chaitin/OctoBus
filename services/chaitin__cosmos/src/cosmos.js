@@ -11,6 +11,8 @@ const RPC_PATH = '/pedestal/rpc';
 const METHOD_SEARCH_LOG_INFO = '/Chaitin_COSMOS.Chaitin_COSMOS/SearchLogInfo';
 const METHOD_SEARCH_LOG_LIST = '/Chaitin_COSMOS.Chaitin_COSMOS/SearchLogList';
 const METHOD_SEARCH_AGGREGATION = '/Chaitin_COSMOS.Chaitin_COSMOS/SearchAggregationStatistics';
+const METHOD_GET_DEVICE_LIST = '/Chaitin_COSMOS.Chaitin_COSMOS/GetDeviceList';
+const METHOD_GET_ORGANIZATION_LIST = '/Chaitin_COSMOS.Chaitin_COSMOS/GetOrganizationList';
 
 const grpcCodeFor = (code) => ({
   INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT,
@@ -151,20 +153,16 @@ const buildAuthHeader = (token) => {
 };
 
 // Required headers for Cosmos Pedestal RPC (from API docs):
-// - x-menu-name: identifies the UI menu context (31 = log search)
+// - x-menu-name: identifies the UI menu context (31 = log search, 79 = device/org management)
 // - x-request-path: identifies the RPC gateway path
-const PEDESTAL_REQUIRED_HEADERS = {
-  'x-menu-name': '31',
-  'x-request-path': 'pedestal',
-};
+// x-menu-name is parameterized per call — see callPedestalRpc.
 
-// Per-request undici dispatcher that enforces TLS certificate verification.
-// This is a per-request configuration — it does NOT modify process.env or
-// affect any other HTTP connections in the same Node.js process.
-// If you need to connect to a Cosmos deployment with a self-signed cert,
-// configure a custom CA via NODE_EXTRA_CA_CERTS or add the CA to the
-// system trust store.
+// Per-request undici dispatchers. The secure dispatcher enforces TLS certificate
+// verification; the insecure one is selected only when config sets skipTlsVerify.
+// This is per-request configuration — it does NOT modify process.env or affect
+// any other HTTP connections in the same Node.js process.
 const SECURE_DISPATCHER = new UndiciAgent({ connect: { rejectUnauthorized: true } });
+const INSECURE_DISPATCHER = new UndiciAgent({ connect: { rejectUnauthorized: false } });
 
 const readResponseText = async (response) => {
   const declared = Number(response.headers?.get?.('content-length'));
@@ -196,12 +194,13 @@ const readResponseText = async (response) => {
   return text;
 };
 
-const callPedestalRpc = async (endpoint, rpcMethod, params, token, baseHeaders, timeoutMs) => {
+const callPedestalRpc = async (endpoint, rpcMethod, params, token, baseHeaders, timeoutMs, { dispatcher = SECURE_DISPATCHER, menuName = '31' } = {}) => {
   const url = `${endpoint}${RPC_PATH}`;
   const headers = {
     ...baseHeaders,
     'Content-Type': 'application/json',
-    ...PEDESTAL_REQUIRED_HEADERS,
+    'x-menu-name': menuName,
+    'x-request-path': 'pedestal',
     ...buildAuthHeader(token),
   };
 
@@ -217,7 +216,7 @@ const callPedestalRpc = async (endpoint, rpcMethod, params, token, baseHeaders, 
     headers,
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(timeoutMs),
-    dispatcher: SECURE_DISPATCHER,
+    dispatcher,
     redirect: 'manual',
   };
 
@@ -290,6 +289,9 @@ export function rpcdef(ctx) {
   const baseHeaders = parseHeaders(bindings.headers);
   const meta = ctx.meta || {};
 
+  const skipTlsVerify = toBoolean(firstDefined(bindings.skipTlsVerify, bindings.skip_tls_verify));
+  const dispatcher = skipTlsVerify ? INSECURE_DISPATCHER : SECURE_DISPATCHER;
+
   const getToken = () => {
     // Deliberately do not read credentials from config/bindings/request payloads.
     // This follows the OctoBus convention that credentials belong in secret config,
@@ -339,7 +341,7 @@ export function rpcdef(ctx) {
     logFlow('SearchLogInfo:start', { ids_count: ids.length });
 
     const params = { ids };
-    const result = await callPedestalRpc(normalizedEndpoint, 'LogService.SearchLogInfo', params, token, baseHeaders, timeoutMs);
+    const result = await callPedestalRpc(normalizedEndpoint, 'LogService.SearchLogInfo', params, token, baseHeaders, timeoutMs, { dispatcher });
 
     const dataArr = result?.data;
     const records = Array.isArray(dataArr) ? dataArr.map(mapLogRecord) : [];
@@ -446,7 +448,7 @@ export function rpcdef(ctx) {
 
     logFlow('SearchLogList:start', { keyword: params.keyword, count: params.count });
 
-    const result = await callPedestalRpc(normalizedEndpoint, 'LogService.SearchLogList', params, token, baseHeaders, timeoutMs);
+    const result = await callPedestalRpc(normalizedEndpoint, 'LogService.SearchLogList', params, token, baseHeaders, timeoutMs, { dispatcher });
 
     // Cosmos SearchLogList response: result.data is an array of log records
     // start_time/end_time may appear at result.data level or at result level
@@ -586,7 +588,7 @@ export function rpcdef(ctx) {
 
     logFlow('SearchAggregation:start', { key: params.key, count: params.count });
 
-    const result = await callPedestalRpc(normalizedEndpoint, 'LogService.SearchAggregationStatistics', params, token, baseHeaders, timeoutMs);
+    const result = await callPedestalRpc(normalizedEndpoint, 'LogService.SearchAggregationStatistics', params, token, baseHeaders, timeoutMs, { dispatcher });
 
     // Cosmos SearchAggregationStatistics response:
     // result.data is an array of aggregation groups, result.total is the total count
@@ -626,10 +628,91 @@ export function rpcdef(ctx) {
     };
   };
 
+  const callGetDeviceList = async (req) => {
+    const token = getToken();
+    if (!token) {
+      throw errorWithCode('INVALID_ARGUMENT', 'api_token is required (configure via secret)');
+    }
+    if (!normalizedEndpoint) {
+      throw errorWithCode('INVALID_ARGUMENT', 'endpoint is required (http/https)');
+    }
+
+    const rawOrgIds = firstDefined(req?.organization_ids, req?.organizationIds, req?.OrganizationIds);
+    let orgIds;
+    if (Array.isArray(rawOrgIds)) {
+      orgIds = rawOrgIds.map((id) => toPositiveInt(id)).filter((n) => n !== null);
+    } else {
+      const single = toPositiveInt(rawOrgIds);
+      orgIds = single === null ? [] : [single];
+    }
+    if (orgIds.length === 0) {
+      throw errorWithCode('INVALID_ARGUMENT', 'organization_ids must contain at least one positive integer');
+    }
+
+    const params = { organization_ids: orgIds };
+    const count = toPositiveInt(firstDefined(req?.count, req?.Count));
+    if (count !== null) params.count = count;
+    const offset = toPositiveInt(firstDefined(req?.offset, req?.Offset));
+    if (offset !== null) params.offset = offset;
+
+    logFlow('GetDeviceList:start', { org_ids: orgIds, count: params.count });
+
+    const result = await callPedestalRpc(normalizedEndpoint, 'AgentService.SearchDeviceList', params, token, baseHeaders, timeoutMs, { dispatcher, menuName: '79' });
+
+    const dataField = result?.data;
+    const devices = Array.isArray(dataField)
+      ? dataField.map((d) => (d && typeof d === 'object' ? d : {}))
+      : [];
+    const total = toPositiveInt(result?.total) ?? devices.length;
+
+    logFlow('GetDeviceList:done', { count: devices.length, total });
+
+    return {
+      err: toValue(null),
+      msg: toValue(null),
+      data: { devices, total },
+    };
+  };
+
+  const callGetOrganizationList = async (req) => {
+    const token = getToken();
+    if (!token) {
+      throw errorWithCode('INVALID_ARGUMENT', 'api_token is required (configure via secret)');
+    }
+    if (!normalizedEndpoint) {
+      throw errorWithCode('INVALID_ARGUMENT', 'endpoint is required (http/https)');
+    }
+
+    const params = {};
+    const rawUserCount = firstDefined(req?.with_user_count, req?.withUserCount);
+    if (rawUserCount !== undefined && rawUserCount !== null) params.with_user_count = toBoolean(rawUserCount);
+    const rawDeviceCount = firstDefined(req?.with_device_count, req?.withDeviceCount);
+    if (rawDeviceCount !== undefined && rawDeviceCount !== null) params.with_device_count = toBoolean(rawDeviceCount);
+
+    logFlow('GetOrganizationList:start', params);
+
+    const result = await callPedestalRpc(normalizedEndpoint, 'UserService.GetUserOrgList', params, token, baseHeaders, timeoutMs, { dispatcher, menuName: '79' });
+
+    const dataField = result?.data;
+    const organizations = Array.isArray(dataField)
+      ? dataField.map((o) => (o && typeof o === 'object' ? o : {}))
+      : [];
+
+    logFlow('GetOrganizationList:done', { count: organizations.length });
+
+    return {
+      err: toValue(null),
+      msg: toValue(null),
+      data: { organizations },
+    };
+  };
+
   return {
     [METHOD_SEARCH_LOG_INFO]: async () => callSearchLogInfo(ctx.req),
     [METHOD_SEARCH_LOG_LIST]: async () => callSearchLogList(ctx.req),
     [METHOD_SEARCH_AGGREGATION]: async () => callSearchAggregationStatistics(ctx.req),
+    [METHOD_GET_DEVICE_LIST]: async () => callGetDeviceList(ctx.req),
+    [METHOD_GET_ORGANIZATION_LIST]: async () => callGetOrganizationList(ctx.req),
   };
 }
 
@@ -671,6 +754,8 @@ const registerHandlers = (ctx = {}) => ({
   [METHOD_SEARCH_LOG_INFO]: wrapLegacyHandler(ctx, METHOD_SEARCH_LOG_INFO),
   [METHOD_SEARCH_LOG_LIST]: wrapLegacyHandler(ctx, METHOD_SEARCH_LOG_LIST),
   [METHOD_SEARCH_AGGREGATION]: wrapLegacyHandler(ctx, METHOD_SEARCH_AGGREGATION),
+  [METHOD_GET_DEVICE_LIST]: wrapLegacyHandler(ctx, METHOD_GET_DEVICE_LIST),
+  [METHOD_GET_ORGANIZATION_LIST]: wrapLegacyHandler(ctx, METHOD_GET_ORGANIZATION_LIST),
 });
 
 const sdkHandlers = registerHandlers({});
@@ -678,11 +763,15 @@ const sdkHandlers = registerHandlers({});
 export const METHOD_SEARCH_LOG_INFO_FULL = 'Chaitin_COSMOS.Chaitin_COSMOS/SearchLogInfo';
 export const METHOD_SEARCH_LOG_LIST_FULL = 'Chaitin_COSMOS.Chaitin_COSMOS/SearchLogList';
 export const METHOD_SEARCH_AGGREGATION_FULL = 'Chaitin_COSMOS.Chaitin_COSMOS/SearchAggregationStatistics';
+export const METHOD_GET_DEVICE_LIST_FULL = 'Chaitin_COSMOS.Chaitin_COSMOS/GetDeviceList';
+export const METHOD_GET_ORGANIZATION_LIST_FULL = 'Chaitin_COSMOS.Chaitin_COSMOS/GetOrganizationList';
 
 export const handlers = {
   [METHOD_SEARCH_LOG_INFO_FULL]: (ctx) => sdkHandlers[METHOD_SEARCH_LOG_INFO](ctx),
   [METHOD_SEARCH_LOG_LIST_FULL]: (ctx) => sdkHandlers[METHOD_SEARCH_LOG_LIST](ctx),
   [METHOD_SEARCH_AGGREGATION_FULL]: (ctx) => sdkHandlers[METHOD_SEARCH_AGGREGATION](ctx),
+  [METHOD_GET_DEVICE_LIST_FULL]: (ctx) => sdkHandlers[METHOD_GET_DEVICE_LIST](ctx),
+  [METHOD_GET_ORGANIZATION_LIST_FULL]: (ctx) => sdkHandlers[METHOD_GET_ORGANIZATION_LIST](ctx),
 };
 
 export const _test = {
@@ -698,4 +787,6 @@ export const _test = {
   toPositiveInt,
   toValue,
   unwrapString,
+  SECURE_DISPATCHER,
+  INSECURE_DISPATCHER,
 };

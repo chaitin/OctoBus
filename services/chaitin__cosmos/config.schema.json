@@ -21,6 +21,11 @@
       "minimum": 1,
       "default": 5000,
       "description": "HTTP timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for self-signed Cosmos deployments."
     }
   }
 }

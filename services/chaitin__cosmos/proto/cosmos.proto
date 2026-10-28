@@ -14,6 +14,12 @@ service Chaitin_COSMOS {
 
   // 获取日志聚合统计，按指定维度聚合并返回时序数据
   rpc SearchAggregationStatistics(SearchAggregationStatisticsRequest) returns (SearchAggregationStatisticsResponse) {}
+
+  // 获取设备列表（巡检点2：状态、最近数据接收时间、今日解析量等）
+  rpc GetDeviceList(GetDeviceListRequest) returns (GetDeviceListResponse) {}
+
+  // 获取组织机构树
+  rpc GetOrganizationList(GetOrganizationListRequest) returns (GetOrganizationListResponse) {}
 }
 
 // ─── SearchLogInfo ───
@@ -135,4 +141,43 @@ message CosmoLogRecord {
   // 使用 google.protobuf.Struct 保留完整的原始数据，
   // 避免 proto 字段名 (snake_case) 与 protobuf-es JS 表示 (camelCase) 的转换问题
   google.protobuf.Struct raw = 1;
+}
+
+// ─── GetDeviceList ───
+
+message GetDeviceListRequest {
+  repeated int64 organization_ids = 1; // 组织机构 ID（一个 orgid 已涵盖其所有子组织）
+  google.protobuf.Int64Value count = 2; // 分页大小，可选，默认 50
+  google.protobuf.Int64Value offset = 3; // 分页偏移，可选，默认 0
+}
+
+message GetDeviceListResponse {
+  google.protobuf.Value err = 1;
+  google.protobuf.Value msg = 2;
+  GetDeviceListData data = 3;
+}
+
+message GetDeviceListData {
+  // 每项为原始设备 JSON 对象，用 Struct 保留全量字段：
+  // id/name/ip/status/last_receive_time/today_parse_count/today_non_standard_count/...
+  repeated google.protobuf.Struct devices = 1;
+  int64 total = 2;
+}
+
+// ─── GetOrganizationList ───
+
+message GetOrganizationListRequest {
+  google.protobuf.BoolValue with_user_count = 1; // 是否返回用户数，可选
+  google.protobuf.BoolValue with_device_count = 2; // 是否返回设备数，可选
+}
+
+message GetOrganizationListResponse {
+  google.protobuf.Value err = 1;
+  google.protobuf.Value msg = 2;
+  GetOrganizationListData data = 3;
+}
+
+message GetOrganizationListData {
+  // 每项为原始组织节点 JSON 对象：id/name/parent_id/user_count/device_count
+  repeated google.protobuf.Struct organizations = 1;
 }

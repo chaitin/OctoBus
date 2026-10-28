@@ -7,6 +7,8 @@ OctoBus service package for Chaitin Cosmos (万象) platform log APIs via Pedest
 - **SearchLogInfo**: Get log details by IDs
 - **SearchLogList**: Search log list with keyword, time range, condition query, filters, and pagination
 - **SearchAggregationStatistics**: Get log aggregation statistics with time-series data
+- **GetDeviceList**: Get device list by organization (status, last receive time, today's parse count)
+- **GetOrganizationList**: Get the organization tree
 
 ## Configuration
 
@@ -15,6 +17,7 @@ OctoBus service package for Chaitin Cosmos (万象) platform log APIs via Pedest
 | `endpoint` | string | yes | Cosmos Pedestal RPC base URL, e.g. `https://cosmos.example.com` |
 | `headers` | object | no | Extra non-protocol HTTP headers. Authentication, framing, host, and Cosmos routing headers cannot be overridden. |
 | `timeoutMs` | integer | no | HTTP timeout in ms, default 5000 |
+| `skipTlsVerify` | boolean | no | Skip TLS certificate verification for self-signed deployments, default false |
 
 ## Secret
 
@@ -33,8 +36,9 @@ This service validates TLS certificates by default. If your Cosmos deployment us
    ```bash
    export NODE_EXTRA_CA_CERTS=/path/to/ca-bundle.pem
    ```
+3. **Self-signed deployments:** Set `skipTlsVerify: true` in the instance config to bypass certificate verification per request.
 
-Per-request TLS bypass (`skipTlsVerify`) is intentionally **not** supported. HTTP endpoints are rejected except for loopback addresses used by local development and the deterministic OctoBus smoke test. Redirects are not followed, and upstream responses are limited to 4 MiB.
+HTTP endpoints are rejected except for loopback addresses used by local development and the deterministic OctoBus smoke test. Redirects are not followed, and upstream responses are limited to 4 MiB.
 
 ## Quick Start
 
