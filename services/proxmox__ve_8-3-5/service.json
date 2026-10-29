@@ -1,0 +1,49 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "ve-8-3-5",
+  "displayName": "Proxmox VE 8.3.5",
+  "description": "OctoBus package for Proxmox VE 8.3.5 read-only inventory RPCs (cluster nodes, QEMU VMs, LXC containers, storage, and node status).",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/proxmox_ve_8_3_5.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Proxmox_VE_8_3_5.Proxmox_VE_8_3_5/ListNodes": {
+          "name": "list-nodes",
+          "description": "List cluster nodes from the Proxmox VE 8.3.5 API."
+        },
+        "Proxmox_VE_8_3_5.Proxmox_VE_8_3_5/ListQemuVMs": {
+          "name": "list-qemu-vms",
+          "description": "List QEMU/KVM virtual machines on a Proxmox VE 8.3.5 node."
+        },
+        "Proxmox_VE_8_3_5.Proxmox_VE_8_3_5/GetQemuVMConfig": {
+          "name": "get-qemu-vm-config",
+          "description": "Get the configuration of a QEMU/KVM virtual machine on Proxmox VE 8.3.5."
+        },
+        "Proxmox_VE_8_3_5.Proxmox_VE_8_3_5/ListLXCs": {
+          "name": "list-lxcs",
+          "description": "List LXC containers on a Proxmox VE 8.3.5 node."
+        },
+        "Proxmox_VE_8_3_5.Proxmox_VE_8_3_5/ListStorage": {
+          "name": "list-storage",
+          "description": "List storage pools on a Proxmox VE 8.3.5 node."
+        },
+        "Proxmox_VE_8_3_5.Proxmox_VE_8_3_5/GetNodeStatus": {
+          "name": "get-node-status",
+          "description": "Get status information for a Proxmox VE 8.3.5 node."
+        }
+      }
+    }
+  }
+}
