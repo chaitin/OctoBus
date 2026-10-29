@@ -74,6 +74,47 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Question recommendations (profile mode when Query is absent)
+  if (method === 'GET' && url.pathname === '/api/v1/user/question_recommendations') {
+    const Query = url.searchParams.get('Query');
+    sendJson(res, 200, {
+      Code: 0,
+      Message: 'success',
+      Data: {
+        Items: [{
+          Title: Query ? `推荐问题: ${Query}` : '画像推荐问题',
+          Url: 'https://www.zhihu.com/question/123',
+        }],
+      },
+    });
+    log('question_recommendations:', Query ?? '(profile)');
+    return;
+  }
+
+  // Question answers (answer summaries for one question URL)
+  if (method === 'GET' && url.pathname === '/api/v1/content/question_answers') {
+    const QuestionUrl = url.searchParams.get('QuestionUrl');
+    if (!QuestionUrl) {
+      sendJson(res, 200, { Code: 10001, Message: 'QuestionUrl is required', Data: {} });
+      return;
+    }
+    sendJson(res, 200, {
+      Code: 0,
+      Message: 'success',
+      Data: {
+        Items: [{
+          ContentType: 'answer',
+          ContentToken: '456',
+          Url: `${QuestionUrl}/answer/456`,
+          Summary: '这是一段回答摘要……',
+        }],
+        Paging: { IsEnd: true, NextOffset: 1, Totals: 1 },
+      },
+    });
+    log('question_answers:', QuestionUrl);
+    return;
+  }
+
   // Knowledge bases
   if (method === 'GET' && url.pathname === '/api/v1/knowledge/bases') {
     sendJson(res, 200, {
