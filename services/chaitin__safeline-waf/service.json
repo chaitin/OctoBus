@@ -62,6 +62,22 @@
         "Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/UpdateDetectorState": {
           "name": "update-detector-state",
           "description": "Update SafeLine detector state."
+        },
+        "Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/GetProfile": {
+          "name": "get-profile",
+          "description": "Get current user profile (reachability + API token check)."
+        },
+        "Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/GetOverview": {
+          "name": "get-overview",
+          "description": "Get request/attack/deny statistics."
+        },
+        "Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/SearchDetectLog": {
+          "name": "search-detect-log",
+          "description": "Search attack detection logs by time range and filters."
+        },
+        "Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/GetESIndices": {
+          "name": "get-es-indices",
+          "description": "Get ES index info (docs count / health) for data reporting health check."
         }
       }
     }
