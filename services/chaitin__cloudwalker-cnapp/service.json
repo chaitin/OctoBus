@@ -1,8 +1,8 @@
 {
   "schema": "chaitin.octobus.service.v1",
-  "name": "cloudwalker",
-  "displayName": "CloudWalker",
-  "description": "OctoBus package for CloudWalker cluster and vulnerability read APIs.",
+  "name": "cloudwalker-cnapp",
+  "displayName": "CloudWalker CNAPP",
+  "description": "OctoBus package for CloudWalker CNAPP (container security) cluster and vulnerability read APIs.",
   "runtime": {
     "mode": "long-running"
   },

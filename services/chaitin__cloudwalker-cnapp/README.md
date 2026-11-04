@@ -1,9 +1,9 @@
-# CloudWalker OctoBus Service
+# CloudWalker CNAPP OctoBus Service
 
-长亭科技牧云（CloudWalker）集群与漏洞只读查询适配器。
+长亭科技牧云 CloudWalker CNAPP（容器安全）集群与漏洞只读查询适配器。
 
 ```bash
-octobus service import cloudwalker ./services/chaitin__cloudwalker
+octobus service import cloudwalker-cnapp ./services/chaitin__cloudwalker-cnapp
 ```
 
 ## Package Files
@@ -14,14 +14,14 @@ octobus service import cloudwalker ./services/chaitin__cloudwalker
 - `secret.schema.json` — 密钥配置：`token`（必填）、`cookie`（可选）。
 - `src/cloudwalker.js` — 上游 REST API 请求映射、响应归一化、错误分类。
 - `src/service.js` — OctoBus SDK `defineService` 封装。
-- `bin/cloudwalker.js` — 服务本地可执行入口。
+- `bin/cloudwalker-cnapp.js` — 服务本地可执行入口。
 - `test/cloudwalker.test.js` — node:test 覆盖：请求映射、响应归一化、错误分类、SDK handler。
 - `test/cloudwalker-client.test.js` — 扩展客户端测试：HTML 响应检测、fallback 逻辑、零值保留。
 - `test/mock_upstream.js` — 本地 mock 上游，覆盖成功 / 认证失败 / 5xx / 超时。
 
 ## 支持版本
 
-- **目标产品**: 长亭科技牧云 CloudWalker
+- **目标产品**: 长亭科技牧云 CloudWalker CNAPP（容器安全）
 - **适配版本**: VM-S10-26.06.002
 
 ## 认证方式
@@ -110,7 +110,7 @@ Handler 优先使用 `ctx.config` / `ctx.secret`，其次回退到环境变量 `
 
 ```bash
 octobus capset create prod
-octobus capset add-instance prod --service cloudwalker --instance cloudwalker-demo
+octobus capset add-instance prod --service cloudwalker-cnapp --instance cloudwalker-cnapp-demo
 ```
 
 ## Known Limitations
@@ -125,8 +125,8 @@ octobus capset add-instance prod --service cloudwalker --instance cloudwalker-de
 
 ```bash
 cd services
-npm run validate -- --service-dir chaitin__cloudwalker
-npm test -- --service-dir chaitin__cloudwalker
+npm run validate -- --service-dir chaitin__cloudwalker-cnapp
+npm test -- --service-dir chaitin__cloudwalker-cnapp
 npm run pack:check
 ```
 
@@ -134,23 +134,23 @@ npm run pack:check
 
 ```bash
 # 导入服务
-octobus service import cloudwalker ./services/chaitin__cloudwalker
+octobus service import cloudwalker-cnapp ./services/chaitin__cloudwalker-cnapp
 
 # 创建实例
-octobus instance create cloudwalker-demo \
-  --service cloudwalker \
+octobus instance create cloudwalker-cnapp-demo \
+  --service cloudwalker-cnapp \
   --config-json '{"baseUrl":"https://cnapp.demo.chaitin.cn","referer":"https://cnapp.demo.chaitin.cn/profile/apitoken"}' \
   --secret-json '{"token":"<TOKEN>","cookie":"<COOKIE>"}'
 
 # 创建 capset 并绑定实例
 octobus capset create prod
-octobus capset add-instance prod --service cloudwalker --instance cloudwalker-demo
+octobus capset add-instance prod --service cloudwalker-cnapp --instance cloudwalker-cnapp-demo
 
 # 验证方法注册
 octobus catalog prod --all --json
 
 # 调用测试
-curl -X POST http://127.0.0.1:9000/capsets/prod/connect/cloudwalker-demo/CloudWalker.CloudWalker/ListClusters \
+curl -X POST http://127.0.0.1:9000/capsets/prod/connect/cloudwalker-cnapp-demo/Chaitin_CloudWalker.Chaitin_CloudWalker/ListClusters \
   -H 'Content-Type: application/json' \
   -d '{"pageSize": 5}'
 ```

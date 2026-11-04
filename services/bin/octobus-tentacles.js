@@ -101,9 +101,9 @@ const services = {
     entryFile: "../huayulab__ngaf/bin/huayulab-ngaf.js",
     serviceModule: "../huayulab__ngaf/src/service.js",
   },
-  "cloudwalker": {
-    entryFile: "../chaitin__cloudwalker/bin/cloudwalker.js",
-    serviceModule: "../chaitin__cloudwalker/src/service.js",
+  "cloudwalker-cnapp": {
+    entryFile: "../chaitin__cloudwalker-cnapp/bin/cloudwalker-cnapp.js",
+    serviceModule: "../chaitin__cloudwalker-cnapp/src/service.js",
   },
   "t-answer-ndr": {
     entryFile: "../chaitin__t-answer-ndr/bin/t-answer-ndr.js",

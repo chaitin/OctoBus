@@ -1,10 +1,10 @@
 {
-  "name": "cloudwalker",
+  "name": "cloudwalker-cnapp",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "bin": {
-    "cloudwalker": "bin/cloudwalker.js"
+    "cloudwalker-cnapp": "bin/cloudwalker-cnapp.js"
   },
   "scripts": {
     "test": "node --test test/cloudwalker.test.js test/cloudwalker-client.test.js"
