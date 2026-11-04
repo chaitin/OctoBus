@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["baseUrl"],
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "牧云 CWPP 设备 base URL（https://<ip>）。"
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "跳过 TLS 证书校验（设备自签证书）。"
+    },
+    "proxy_url": {
+      "type": "string",
+      "description": "可选 SOCKS/HTTP 代理 URL，如 socks5h://user:pass@host:port。"
+    },
+    "proxyUrl": {
+      "type": "string",
+      "description": "proxy_url 的别名。"
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 30000,
+      "description": "HTTP 超时毫秒数。"
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "可选额外 HTTP 请求头。"
+    }
+  }
+}

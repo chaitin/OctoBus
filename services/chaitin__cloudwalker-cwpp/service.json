@@ -1,0 +1,37 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "cloudwalker-cwpp",
+  "displayName": "牧云 CWPP（主机安全）",
+  "description": "OctoBus package for CloudWalker CWPP (牧云主机安全) host/agent status and real-time threat event read APIs via JSON-RPC 2.0.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/cloudwalker_cwpp.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Chaitin_CloudWalker_CWPP.Chaitin_CloudWalker_CWPP/ListRealTimeEvents": {
+          "name": "list-real-time-events",
+          "description": "Get recent real-time threat events (security alarms/intrusion events)."
+        },
+        "Chaitin_CloudWalker_CWPP.Chaitin_CloudWalker_CWPP/GetHostAssetList": {
+          "name": "get-host-asset-list",
+          "description": "Get host asset list (host/agent online status)."
+        },
+        "Chaitin_CloudWalker_CWPP.Chaitin_CloudWalker_CWPP/GetAgentGroupTree": {
+          "name": "get-agent-group-tree",
+          "description": "Get agent group tree (host/agent online status)."
+        }
+      }
+    }
+  }
+}
