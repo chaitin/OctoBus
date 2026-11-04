@@ -1,0 +1,225 @@
+syntax = "proto3";
+
+package Answer_Platform_V26;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/wrappers.proto";
+
+// Chaitin Answer-Platform (全悉) V26.07.002 — OpenAPI / API-Token 形式。
+//
+// 与 v25-05-001（cookie 会话）不同，本服务每个请求都在 HTTP 头带上
+// `API-Token`（来自 instance secret），无 Login / 会话概念。
+// 上游为 JSON-RPC 2.0 over HTTP POST /rpc，params 为字典（命名参数）。
+//
+// 响应字段一律用 google.protobuf.Struct 保留原始数据，避免
+// protobuf-es 的 snake_case ↔ camelCase 转换问题；分页字段 total/page_total
+// 用 int64 显式暴露，方便 agent 直接读取。
+service Answer_Platform_V26 {
+  // ─── 告警 ───
+  rpc GetAlarm(GetAlarmRequest) returns (GetAlarmResponse) {}
+  rpc GetAlarmDocument(GetAlarmDocumentRequest) returns (GetAlarmDocumentResponse) {}
+  rpc SearchAlarmCustomIntelligenceList(SearchAlarmCustomIntelligenceListRequest) returns (SearchAlarmCustomIntelligenceListResponse) {}
+  rpc SearchAlarmCustomRuleList(SearchAlarmCustomRuleListRequest) returns (SearchAlarmCustomRuleListResponse) {}
+  rpc SearchAlarmList(SearchAlarmListRequest) returns (SearchAlarmListResponse) {}
+
+  // ─── 资产 ───
+  rpc SearchAssetIdentify(SearchAssetIdentifyRequest) returns (SearchAssetIdentifyResponse) {}
+  rpc GetAssetInfo(GetAssetInfoRequest) returns (GetAssetInfoResponse) {}
+  rpc GetAssetList(GetAssetListRequest) returns (GetAssetListResponse) {}
+  rpc SearchAssetTree(SearchAssetTreeRequest) returns (SearchAssetTreeResponse) {}
+  rpc SearchGroups(SearchGroupsRequest) returns (SearchGroupsResponse) {}
+  rpc SearchTags(SearchTagsRequest) returns (SearchTagsResponse) {}
+
+  // ─── PCAP 检测 ───
+  rpc GetPcapDetectAlarm(GetPcapDetectAlarmRequest) returns (GetPcapDetectAlarmResponse) {}
+  rpc GetPcapDetectAlarmDocument(GetPcapDetectAlarmDocumentRequest) returns (GetPcapDetectAlarmDocumentResponse) {}
+  rpc GetPcapDetectTaskList(GetPcapDetectTaskListRequest) returns (GetPcapDetectTaskListResponse) {}
+  rpc SearchPcapDetectAlarmList(SearchPcapDetectAlarmListRequest) returns (SearchPcapDetectAlarmListResponse) {}
+
+  // ─── 抓包任务 ───
+  rpc SearchTcpdumpProcess(SearchTcpdumpProcessRequest) returns (SearchTcpdumpProcessResponse) {}
+}
+
+// ─── 告警 ───
+
+message GetAlarmRequest {
+  string doc_id = 1; // 告警 id
+}
+
+message GetAlarmResponse {
+  google.protobuf.Struct data = 1; // 告警详情（全量原始字段）
+}
+
+message GetAlarmDocumentRequest {
+  string doc_id = 1; // 告警 id
+}
+
+message GetAlarmDocumentResponse {
+  google.protobuf.Struct data = 1; // 告警原始数据
+}
+
+message SearchAlarmCustomIntelligenceListRequest {
+  google.protobuf.Int64Value count = 1;  // 每页条数
+  google.protobuf.Int64Value offset = 2; // 分页偏移
+  google.protobuf.Struct filters = 3;    // 可选过滤字段（id/ioc/name/type/status/remarks/created_at/updated_at）
+}
+
+message SearchAlarmCustomIntelligenceListResponse {
+  repeated google.protobuf.Struct items = 1;
+  int64 total = 2;
+}
+
+message SearchAlarmCustomRuleListRequest {
+  google.protobuf.Int64Value count = 1;
+  google.protobuf.Int64Value offset = 2;
+  google.protobuf.Struct filters = 3; // id/name/status/remarks/created_at/updated_at
+}
+
+message SearchAlarmCustomRuleListResponse {
+  repeated google.protobuf.Struct items = 1;
+  int64 total = 2;
+}
+
+message SearchAlarmListRequest {
+  google.protobuf.Int64Value time_range_start = 1; // 时间范围开始（Unix 秒）
+  google.protobuf.Int64Value time_range_end = 2;   // 时间范围结束（Unix 秒）
+  google.protobuf.Int64Value count = 3;            // 每页条数
+  google.protobuf.Int64Value offset = 4;           // 分页偏移
+  repeated string keyword = 5;                     // 关键词（源 IP / 摘要等）
+  // 其余可选过滤字段（severity/result/attacker/victim/src_ip/dest_ip/classify/phase/tag/
+  // type/name/tool/url/username/password/xff/hostname/direction/... ）。
+  // 条件过滤统一为 [{"oper":"=","target":"..."}] 结构，原样透传。
+  google.protobuf.Struct filters = 6;
+}
+
+message SearchAlarmListResponse {
+  repeated google.protobuf.Struct items = 1;
+  int64 page_total = 2;
+  int64 total = 3;
+}
+
+// ─── 资产 ───
+
+message SearchAssetIdentifyRequest {
+  google.protobuf.Int64Value count = 1;
+  google.protobuf.Int64Value offset = 2;
+  string name = 3;          // 名称
+  string ip_addr = 4;       // IP
+  string asset_type = 5;    // 资产类型
+  google.protobuf.Int64Value group_id = 6;    // 资产组 ID
+  google.protobuf.Int64Value importance = 7;  // 重要性 1 重要 / 2 不重要
+  google.protobuf.Struct filters = 8;         // 其余可选字段（mac/os/port/service/tag_id/time_start/time_end）
+}
+
+message SearchAssetIdentifyResponse {
+  repeated google.protobuf.Struct items = 1;
+  int64 total = 2;
+}
+
+message GetAssetInfoRequest {
+  google.protobuf.Int64Value id = 1; // 资产 id
+}
+
+message GetAssetInfoResponse {
+  google.protobuf.Struct data = 1; // 资产详情
+}
+
+message GetAssetListRequest {
+  google.protobuf.Int64Value count = 1;
+  google.protobuf.Int64Value offset = 2;
+  string name = 3;
+  string ip = 4;
+  google.protobuf.Int64Value group_id = 5;
+  string asset_type = 6;
+  google.protobuf.Int64Value importance = 7;
+  google.protobuf.Struct filters = 8; // 其余可选字段（id/mac/tag_id）
+}
+
+message GetAssetListResponse {
+  repeated google.protobuf.Struct items = 1;
+  int64 total = 2;
+}
+
+message SearchAssetTreeRequest {
+  string name = 1; // 资产树节点名
+}
+
+message SearchAssetTreeResponse {
+  repeated google.protobuf.Struct items = 1;
+}
+
+message SearchGroupsRequest {
+  google.protobuf.Int64Value depth = 1;     // 树深度
+  google.protobuf.Int64Value id = 2;        // 根组 ID
+  google.protobuf.BoolValue with_asset = 3; // 是否携带资产
+}
+
+message SearchGroupsResponse {
+  repeated google.protobuf.Struct items = 1;
+}
+
+message SearchTagsRequest {
+  string name = 1; // 标签名
+}
+
+message SearchTagsResponse {
+  repeated google.protobuf.Struct items = 1;
+}
+
+// ─── PCAP 检测 ───
+
+message GetPcapDetectAlarmRequest {
+  string doc_id = 1;
+}
+
+message GetPcapDetectAlarmResponse {
+  google.protobuf.Struct data = 1;
+}
+
+message GetPcapDetectAlarmDocumentRequest {
+  string doc_id = 1;
+}
+
+message GetPcapDetectAlarmDocumentResponse {
+  google.protobuf.Struct data = 1;
+}
+
+message GetPcapDetectTaskListRequest {
+  google.protobuf.Int64Value limit = 1;
+  google.protobuf.Int64Value offset = 2;
+}
+
+message GetPcapDetectTaskListResponse {
+  // 上游返回字段名为 pcap_detect_task_list，此处归一化为 items。
+  repeated google.protobuf.Struct items = 1;
+  int64 total = 2;
+}
+
+message SearchPcapDetectAlarmListRequest {
+  google.protobuf.Int64Value time_range_start = 1;
+  google.protobuf.Int64Value time_range_end = 2;
+  google.protobuf.Int64Value count = 3;
+  google.protobuf.Int64Value offset = 4;
+  repeated string keyword = 5;
+  google.protobuf.Struct filters = 6; // severity/result/attacker/victim/src_ip/dest_ip/pcap_detect_task_id/module/source/...
+}
+
+message SearchPcapDetectAlarmListResponse {
+  repeated google.protobuf.Struct items = 1;
+  int64 page_total = 2;
+  int64 total = 3;
+}
+
+// ─── 抓包任务 ───
+
+message SearchTcpdumpProcessRequest {
+  google.protobuf.Int64Value count = 1;
+  google.protobuf.Int64Value offset = 2;
+  string device = 3;            // 设备
+  google.protobuf.Int64Value id = 4; // 任务 id
+}
+
+message SearchTcpdumpProcessResponse {
+  repeated google.protobuf.Struct items = 1;
+  int64 total = 2;
+}
