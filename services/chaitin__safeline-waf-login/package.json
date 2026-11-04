@@ -1,0 +1,14 @@
+{
+  "name": "safeline-waf-login",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "safeline-waf-login": "bin/safeline-waf-login.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.6.0",
+    "socks-proxy-agent": "^8.0.5",
+    "undici": "^7.16.0"
+  }
+}
