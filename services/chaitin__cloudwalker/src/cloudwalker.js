@@ -1,3 +1,7 @@
+import http from 'node:http';
+import https from 'node:https';
+import { SocksProxyAgent } from 'socks-proxy-agent';
+
 const grpcStatus = Object.freeze({
   INVALID_ARGUMENT: 3,
   NOT_FOUND: 5,
@@ -376,12 +380,57 @@ const buildHttpError = (status, payload) => {
   });
 };
 
+const toBoolean = (value) => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') return ['true', '1', 'yes', 'y', 'on'].includes(value.trim().toLowerCase());
+  return false;
+};
+
+// Native http(s) fetch for proxied requests (socks5h etc.) using socks-proxy-agent,
+// returning a fetch-like response object compatible with readPayload/get().
+const proxiedFetch = (url, { headers = {} } = {}, { proxyUrl, skipTlsVerify, timeoutMs = 30000 } = {}) => new Promise((resolve, reject) => {
+  const target = new URL(url);
+  const mod = target.protocol === 'https:' ? https : http;
+  const agent = new SocksProxyAgent(proxyUrl);
+
+  const req = mod.request(target, {
+    method: 'GET',
+    headers,
+    agent,
+    rejectUnauthorized: !skipTlsVerify,
+  }, (res) => {
+    const chunks = [];
+    res.on('data', (chunk) => chunks.push(chunk));
+    res.on('end', () => {
+      const bodyText = Buffer.concat(chunks).toString('utf8');
+      const headerMap = {};
+      for (const [name, value] of Object.entries(res.headers)) {
+        const key = name.toLowerCase();
+        if (!(key in headerMap)) headerMap[key] = Array.isArray(value) ? value.join(', ') : value;
+      }
+      resolve({
+        ok: res.statusCode >= 200 && res.statusCode < 300,
+        status: res.statusCode,
+        headers: { get: (name) => headerMap[String(name).toLowerCase()] ?? null },
+        text: async () => bodyText,
+      });
+    });
+  });
+
+  req.setTimeout(timeoutMs, () => req.destroy(Object.assign(new Error('timeout'), { name: 'TimeoutError', code: 'ETIMEDOUT' })));
+  req.on('error', (err) => reject(err));
+  req.end();
+});
+
 export class CloudWalkerClient {
-  constructor({ baseUrl, token, cookie = '', referer = '', fetchImpl }) {
+  constructor({ baseUrl, token, cookie = '', referer = '', fetchImpl, proxyUrl = '', skipTlsVerify = false }) {
     this.baseUrl = String(baseUrl || '').replace(/\/$/, '');
     this.token = token;
     this.cookie = cookie;
     this.referer = referer;
+    this.proxyUrl = proxyUrl;
+    this.skipTlsVerify = toBoolean(skipTlsVerify);
     // Use provided fetchImpl or fall back to global fetch
     // Note: In some environments, global fetch may have issues with HTTPS
     this.fetchImpl = fetchImpl || fetch;
@@ -410,20 +459,37 @@ export class CloudWalkerClient {
     }
 
     let response;
-    try {
-      response = await this.fetchImpl(url, {
-        method: 'GET',
-        headers,
-        redirect: 'manual',
-        signal: AbortSignal.timeout(30000),
-      });
-    } catch (networkError) {
-      const isTimeout = networkError.name === 'TimeoutError' || networkError.name === 'AbortError';
-      throw new CloudWalkerError(networkError.message || 'CloudWalker upstream unreachable', {
-        code: isTimeout ? grpcStatus.DEADLINE_EXCEEDED : grpcStatus.UNAVAILABLE,
-        details: networkError.message || 'Network error',
-        httpStatus: undefined,
-      });
+    if (this.proxyUrl) {
+      try {
+        response = await proxiedFetch(url, { headers }, {
+          proxyUrl: this.proxyUrl,
+          skipTlsVerify: this.skipTlsVerify,
+          timeoutMs: 30000,
+        });
+      } catch (networkError) {
+        const isTimeout = networkError.name === 'TimeoutError' || networkError.code === 'ETIMEDOUT';
+        throw new CloudWalkerError(networkError.message || 'CloudWalker upstream unreachable', {
+          code: isTimeout ? grpcStatus.DEADLINE_EXCEEDED : grpcStatus.UNAVAILABLE,
+          details: networkError.message || 'Network error',
+          httpStatus: undefined,
+        });
+      }
+    } else {
+      try {
+        response = await this.fetchImpl(url, {
+          method: 'GET',
+          headers,
+          redirect: 'manual',
+          signal: AbortSignal.timeout(30000),
+        });
+      } catch (networkError) {
+        const isTimeout = networkError.name === 'TimeoutError' || networkError.name === 'AbortError';
+        throw new CloudWalkerError(networkError.message || 'CloudWalker upstream unreachable', {
+          code: isTimeout ? grpcStatus.DEADLINE_EXCEEDED : grpcStatus.UNAVAILABLE,
+          details: networkError.message || 'Network error',
+          httpStatus: undefined,
+        });
+      }
     }
 
     // Detect session-expired redirects (302 to /login) before they are silently followed
@@ -736,6 +802,12 @@ const resolveCookie = (bindings) =>
 const resolveReferer = (bindings) =>
   bindings.referer ?? '';
 
+const resolveProxyUrl = (bindings = {}) =>
+  String(bindings.proxyUrl ?? bindings.proxy_url ?? '').trim();
+
+const resolveSkipTlsVerify = (bindings = {}) =>
+  toBoolean(bindings.skipTlsVerify);
+
 const buildClientOptions = (ctx = {}) => {
   const callCtx = resolveCallContext(ctx);
   const bindings = callCtx.bindings;
@@ -744,6 +816,8 @@ const buildClientOptions = (ctx = {}) => {
     token: resolveToken(bindings),
     cookie: resolveCookie(bindings),
     referer: resolveReferer(bindings),
+    proxyUrl: resolveProxyUrl(bindings),
+    skipTlsVerify: resolveSkipTlsVerify(bindings),
   };
 };
 

@@ -10,6 +10,7 @@
     "test": "node --test test/cloudwalker.test.js test/cloudwalker-client.test.js"
   },
   "dependencies": {
-    "@chaitin-ai/octobus-sdk": "^0.6.0"
+    "@chaitin-ai/octobus-sdk": "^0.6.0",
+    "socks-proxy-agent": "^8.0.5"
   }
 }
