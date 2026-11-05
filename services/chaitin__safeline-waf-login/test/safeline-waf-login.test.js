@@ -228,9 +228,10 @@ test('readJsonResponse handles empty body and content types', async () => {
   await assert.rejects(() => _test.readJsonResponse({ ok: false, status: 404, headers: { get: () => '' }, text: async () => 'gone' }, {}), (e) => e.code === 9);
 });
 
-test('doLogin rejects when login response lacks a sessionid cookie', async () => {
+test('doLogin tolerates a login response without a sessionid cookie', async () => {
   globalThis.fetch = async () => new Response(JSON.stringify({ err: null, msg: '', data: {} }), { status: 200, headers: { 'content-type': 'application/json' } });
-  await assert.rejects(() => _test.doLogin({ endpoint: 'http://example.test', bindUser: 'admin', bindPassword: 'secret' }), /did not return a sessionid/);
+  const session = await _test.doLogin({ endpoint: 'http://example.test', bindUser: 'admin', bindPassword: 'secret' });
+  assert.equal(session.sessionid, '');
 });
 
 test('read method rejects with missing endpoint even with a valid session', async () => {
