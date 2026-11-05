@@ -802,8 +802,12 @@ const resolveCookie = (bindings) =>
 const resolveReferer = (bindings) =>
   bindings.referer ?? '';
 
-const resolveProxyUrl = (bindings = {}) =>
-  String(bindings.proxyUrl ?? bindings.proxy_url ?? '').trim();
+const resolveProxyUrl = (bindings = {}) => {
+  const raw = String(bindings.proxyUrl ?? bindings.proxy_url ?? '').trim();
+  // Only socks:// schemes are routable through SocksProxyAgent; a plain http(s)
+  // URL (e.g. the smoke harness synthesizing the mock upstream) is not a proxy.
+  return /^socks(4a?|5h?)?:\/\//i.test(raw) ? raw : '';
+};
 
 const resolveSkipTlsVerify = (bindings = {}) =>
   toBoolean(bindings.skipTlsVerify);
