@@ -151,7 +151,7 @@ test('internal helpers normalize bindings, headers, errors, and call context', a
   assert.deepEqual(_test.parseHeaders('[]'), {});
   assert.deepEqual(_test.parseHeaders(['bad']), {});
 
-  assert.deepEqual(_test.toValue(['x', null]), { listValue: { values: [{ stringValue: 'x' }] } });
+  assert.deepEqual(_test.toValue(['x', null]), { listValue: { values: [{ stringValue: 'x' }, { nullValue: 'NULL_VALUE' }] } });
   assert.deepEqual(_test.toValue({ a: undefined, b: null }), {
     structValue: {
       fields: {
@@ -427,7 +427,7 @@ test('ListIPGroups validates filters and maps list variants', async () => {
   assert.equal(captured.init.method, 'GET');
   assert.deepEqual(res.data.items, [{ id: 7, name: 'group' }]);
   assert.equal(res.data.total, 1);
-  assert.deepEqual(res.err, undefined);
+  assert.deepEqual(res.err, { nullValue: 'NULL_VALUE' });
   assert.deepEqual(res.msg, { stringValue: 'ok' });
 });
 
@@ -1213,7 +1213,7 @@ test('SDK handlers accept request plus inner context arguments', async () => {
   assert.equal(captured.init.headers['x-engine-instance'], 'inst-camel');
   assert.equal(captured.init.headers['x-request-id'], 'req-camel');
   assert.deepEqual(JSON.parse(captured.init.body), { id__in: [5] });
-  assert.deepEqual(res, { err: undefined, msg: undefined, data: null });
+  assert.deepEqual(res, { err: { nullValue: 'NULL_VALUE' }, msg: { nullValue: 'NULL_VALUE' }, data: null });
 });
 
 test('remaining validation and response branches stay compatible', async () => {
@@ -1473,7 +1473,7 @@ test('SearchDetectLog handles empty data and non-integer total', async () => {
     text: async () => '',
   }));
   const empty = await loadSearchDetectLogHandler({ api_token: 'token' });
-  assert.deepEqual(await empty(), { err: undefined, msg: { stringValue: '' }, data: { items: [], total: 0 } });
+  assert.deepEqual(await empty(), { err: { nullValue: 'NULL_VALUE' }, msg: { stringValue: '' }, data: { items: [], total: 0 } });
 
   setFetch(async () => ({
     ok: true,
@@ -1482,7 +1482,7 @@ test('SearchDetectLog handles empty data and non-integer total', async () => {
     text: async () => JSON.stringify({ err: null, msg: '', data: { items: 'bad', total: 'x' } }),
   }));
   const bad = await loadSearchDetectLogHandler({ api_token: 'token' });
-  assert.deepEqual(await bad(), { err: undefined, msg: { stringValue: '' }, data: { items: [], total: 0 } });
+  assert.deepEqual(await bad(), { err: { nullValue: 'NULL_VALUE' }, msg: { stringValue: '' }, data: { items: [], total: 0 } });
 });
 
 test('SearchDetectLog maps business errors to NOT_FOUND', async () => {

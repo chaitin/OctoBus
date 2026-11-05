@@ -46,21 +46,17 @@ const errorWithCode = (code, message) => {
 };
 
 const toValue = (val) => {
-  if (val === undefined || val === null) return undefined;
+  if (val === undefined || val === null) return { nullValue: 'NULL_VALUE' };
   if (typeof val === 'string') return { stringValue: val };
   if (typeof val === 'number') return { numberValue: val };
   if (typeof val === 'boolean') return { boolValue: val };
   if (Array.isArray(val)) {
-    const values = val
-      .map((item) => toValue(item))
-      .filter((item) => item !== undefined);
-    return { listValue: { values } };
+    return { listValue: { values: val.map((item) => toValue(item)) } };
   }
   if (typeof val === 'object') {
     const fields = {};
     for (const [k, v] of Object.entries(val)) {
-      const normalized = toValue(v);
-      fields[k] = normalized === undefined ? { nullValue: 'NULL_VALUE' } : normalized;
+      fields[k] = toValue(v);
     }
     return { structValue: { fields } };
   }
@@ -468,7 +464,11 @@ export function rpcdef(ctx) {
   const bindings = mergedBindings(ctx);
   const restBaseUrl = bindings.restBaseUrl || bindings.rest_base_url || bindings.baseUrl || bindings.base_url || bindings.endpoint || '';
   const timeoutMs = firstDefined(ctx.limits?.timeoutMs, bindings.timeoutMs) || DEFAULT_TIMEOUT_MS;
-  const proxyUrl = String(firstDefined(bindings.proxy_url, bindings.proxyUrl) || '').trim();
+  const rawProxyUrl = String(firstDefined(bindings.proxy_url, bindings.proxyUrl) || '').trim();
+  // Only socks:// schemes are routable through SocksProxyAgent; a plain
+  // http(s) URL (e.g. the smoke harness synthesizing the mock upstream) is
+  // not a proxy, so fall back to a direct connection instead of throwing.
+  const proxyUrl = /^socks(4a?|5h?)?:\/\//i.test(rawProxyUrl) ? rawProxyUrl : '';
   const baseHeaders = parseHeaders(bindings.headers);
   const meta = ctx.meta || {};
   const skipTlsVerify = Boolean(bindings.tlsInsecureSkipVerify || bindings.skipTlsVerify || bindings.skip_tls_verify || bindings.tls_insecure_skip_verify);
