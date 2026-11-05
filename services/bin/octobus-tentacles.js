@@ -105,6 +105,10 @@ const services = {
     entryFile: "../chaitin__cloudwalker/bin/cloudwalker.js",
     serviceModule: "../chaitin__cloudwalker/src/service.js",
   },
+  "cloudwalker-cwpp": {
+    entryFile: "../chaitin__cloudwalker-cwpp/bin/cloudwalker-cwpp.js",
+    serviceModule: "../chaitin__cloudwalker-cwpp/src/service.js",
+  },
   "t-answer-ndr": {
     entryFile: "../chaitin__t-answer-ndr/bin/t-answer-ndr.js",
     serviceModule: "../chaitin__t-answer-ndr/src/service.js",

@@ -1,0 +1,8 @@
+{
+  "method": "Chaitin_CloudWalker_CWPP.Chaitin_CloudWalker_CWPP/GetHostAssetList",
+  "request": {
+    "count": 1,
+    "offset": 0
+  },
+  "expectUpstream": true
+}
