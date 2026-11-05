@@ -1,6 +1,9 @@
 // Chaitin_WAF_SAFELINE Safeline DetectLogAggregateView proxy
 // Bindings: restBaseUrl/baseUrl (required), headers (optional), timeoutMs (optional)
 
+import http from 'node:http';
+import https from 'node:https';
+import { SocksProxyAgent } from 'socks-proxy-agent';
 import { GrpcError, grpcStatus } from '@chaitin-ai/octobus-sdk';
 
 const DEFAULT_TIMEOUT_MS = 1500;
@@ -21,6 +24,10 @@ const GET_DETECTOR_STATE_PATH = '/Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/GetD
 const UPDATE_DETECTOR_STATE_PATH = '/Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/UpdateDetectorState';
 const BLOCK_IP_PATH = '/Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/BlockIP';
 const UNBLOCK_IP_PATH = '/Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/UnblockIP';
+const GET_PROFILE_PATH = '/Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/GetProfile';
+const GET_OVERVIEW_PATH = '/Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/GetOverview';
+const SEARCH_DETECT_LOG_PATH = '/Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/SearchDetectLog';
+const GET_ES_INDICES_PATH = '/Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/GetESIndices';
 
 const grpcCodeFor = (code) => ({
   INVALID_ARGUMENT: grpcStatus.INVALID_ARGUMENT,
@@ -28,6 +35,8 @@ const grpcCodeFor = (code) => ({
   PERMISSION_DENIED: grpcStatus.PERMISSION_DENIED,
   UNAVAILABLE: grpcStatus.UNAVAILABLE,
   DEADLINE_EXCEEDED: grpcStatus.DEADLINE_EXCEEDED,
+  NOT_FOUND: grpcStatus.NOT_FOUND,
+  INTERNAL: grpcStatus.INTERNAL,
 })[code] ?? grpcStatus.UNKNOWN;
 
 const errorWithCode = (code, message) => {
@@ -37,21 +46,17 @@ const errorWithCode = (code, message) => {
 };
 
 const toValue = (val) => {
-  if (val === undefined || val === null) return undefined;
+  if (val === undefined || val === null) return { nullValue: 'NULL_VALUE' };
   if (typeof val === 'string') return { stringValue: val };
   if (typeof val === 'number') return { numberValue: val };
   if (typeof val === 'boolean') return { boolValue: val };
   if (Array.isArray(val)) {
-    const values = val
-      .map((item) => toValue(item))
-      .filter((item) => item !== undefined);
-    return { listValue: { values } };
+    return { listValue: { values: val.map((item) => toValue(item)) } };
   }
   if (typeof val === 'object') {
     const fields = {};
     for (const [k, v] of Object.entries(val)) {
-      const normalized = toValue(v);
-      fields[k] = normalized === undefined ? { nullValue: 'NULL_VALUE' } : normalized;
+      fields[k] = toValue(v);
     }
     return { structValue: { fields } };
   }
@@ -75,6 +80,30 @@ const normalizeList = (json) => {
   if (json && Array.isArray(json.data)) return json.data;
   if (json && json.data && Array.isArray(json.data.list)) return json.data.list;
   return null;
+};
+
+// google.protobuf.Struct 输入还原为普通 JSON 对象，用于透传 FilterV2API 的 __ 过滤字段。
+const unwrapValue = (v) => {
+  if (v === undefined || v === null) return null;
+  const kind = v?.kind;
+  if (kind === undefined || typeof v !== 'object') return v;
+  switch (kind.case) {
+    case 'nullValue': return null;
+    case 'numberValue': return kind.value;
+    case 'stringValue': return kind.value;
+    case 'boolValue': return kind.value;
+    case 'structValue': return unwrapStruct(kind.value);
+    case 'listValue': return (kind.value?.values ?? []).map(unwrapValue);
+    default: return null;
+  }
+};
+
+const unwrapStruct = (s) => {
+  if (s === undefined || s === null) return {};
+  const fields = s?.fields ?? {};
+  const out = {};
+  for (const [k, v] of Object.entries(fields)) out[k] = unwrapValue(v);
+  return out;
 };
 
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj ?? {}, key);
@@ -151,6 +180,48 @@ const fetchWithTimeout = async (url, init = {}, options = {}) => {
     }
   }
 };
+
+// socks5/http 代理走原生 http(s).request + SocksProxyAgent（纯 Node，无 curl 依赖）。
+const proxiedFetch = (url, { method = 'GET', headers = {}, body } = {}, { timeoutMs, proxyUrl, skipTlsVerify } = {}) => new Promise((resolve, reject) => {
+  const target = new URL(url);
+  const mod = target.protocol === 'https:' ? https : http;
+  const agent = new SocksProxyAgent(proxyUrl);
+
+  const req = mod.request(target, {
+    method,
+    headers,
+    agent,
+    rejectUnauthorized: !skipTlsVerify,
+  }, (res) => {
+    const chunks = [];
+    res.on('data', (chunk) => chunks.push(chunk));
+    res.on('end', () => {
+      const bodyText = Buffer.concat(chunks).toString('utf8');
+      const headerMap = {};
+      for (const [name, value] of Object.entries(res.headers)) {
+        const key = name.toLowerCase();
+        if (!(key in headerMap)) headerMap[key] = Array.isArray(value) ? value.join(', ') : value;
+      }
+      resolve({
+        ok: res.statusCode >= 200 && res.statusCode < 300,
+        status: res.statusCode,
+        headers: { get: (name) => headerMap[String(name).toLowerCase()] ?? null },
+        text: async () => bodyText,
+      });
+    });
+  });
+
+  req.setTimeout(timeoutMs, () => req.destroy(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })));
+  req.on('error', (err) => {
+    if (err.code === 'ETIMEDOUT' || err.code === 'ESOCKETTIMEDOUT') {
+      reject(errorWithCode('DEADLINE_EXCEEDED', `RPC timeout after ${timeoutMs}ms`));
+    } else {
+      reject(errorWithCode('UNAVAILABLE', err.message || 'proxied request failed'));
+    }
+  });
+  if (body !== undefined && body !== null) req.write(String(body));
+  req.end();
+});
 
 const mergedBindings = (ctx = {}) => ({
   ...(ctx?.config ?? {}),
@@ -272,6 +343,7 @@ const toQueryNumber = (val, allowZero = false) => {
 
 const toInt64 = (val) => {
   if (val === undefined || val === null) return null;
+  if (typeof val === 'object' && 'value' in val) return toInt64(val.value);
   const num = Number(val);
   if (!Number.isInteger(num) || Number.isNaN(num)) return null;
   return num;
@@ -391,7 +463,12 @@ const mapIpGroupResponse = (json) => ({
 export function rpcdef(ctx) {
   const bindings = mergedBindings(ctx);
   const restBaseUrl = bindings.restBaseUrl || bindings.rest_base_url || bindings.baseUrl || bindings.base_url || bindings.endpoint || '';
-  const timeoutMs = ctx.limits?.timeoutMs || DEFAULT_TIMEOUT_MS;
+  const timeoutMs = firstDefined(ctx.limits?.timeoutMs, bindings.timeoutMs) || DEFAULT_TIMEOUT_MS;
+  const rawProxyUrl = String(firstDefined(bindings.proxy_url, bindings.proxyUrl) || '').trim();
+  // Only socks:// schemes are routable through SocksProxyAgent; a plain
+  // http(s) URL (e.g. the smoke harness synthesizing the mock upstream) is
+  // not a proxy, so fall back to a direct connection instead of throwing.
+  const proxyUrl = /^socks(4a?|5h?)?:\/\//i.test(rawProxyUrl) ? rawProxyUrl : '';
   const baseHeaders = parseHeaders(bindings.headers);
   const meta = ctx.meta || {};
   const skipTlsVerify = Boolean(bindings.tlsInsecureSkipVerify || bindings.skipTlsVerify || bindings.skip_tls_verify || bindings.tls_insecure_skip_verify);
@@ -432,6 +509,9 @@ export function rpcdef(ctx) {
 
   const fetchSafeline = async (url, init) => {
     try {
+      if (proxyUrl) {
+        return await proxiedFetch(url, init, { timeoutMs, proxyUrl, skipTlsVerify });
+      }
       return await fetchWithTimeout(url, init, { timeoutMs, skipTlsVerify });
     } catch (e) {
       const reason = e?.cause?.message || e?.message || 'fetch failed';
@@ -447,6 +527,24 @@ export function rpcdef(ctx) {
       throw errorWithCode('FAILED_PRECONDITION', `upstream http ${status}: ${text}`);
     }
     throw errorWithCode('UNAVAILABLE', `upstream http ${status}: ${text}`);
+  };
+
+  // 巡检只读方法：Safeline 业务级 err（如 login-required）直接映射为 gRPC 错误，便于 agent 判定失败。
+  const throwForBusinessError = (json) => {
+    const err = json?.err;
+    if (err === null || err === undefined) return;
+    const suffix = json?.msg ? `: ${json.msg}` : '';
+    const code = String(err).toLowerCase();
+    if (code.includes('login') || code.includes('permission') || code.includes('forbidden') || code.includes('auth') || code.includes('denied')) {
+      throw errorWithCode('PERMISSION_DENIED', `${err}${suffix}`);
+    }
+    if (code.includes('invalid') || code.includes('required') || code.includes('bad')) {
+      throw errorWithCode('INVALID_ARGUMENT', `${err}${suffix}`);
+    }
+    if (code.includes('not_found') || code.includes('notfound') || code.includes('not found')) {
+      throw errorWithCode('NOT_FOUND', `${err}${suffix}`);
+    }
+    throw errorWithCode('INTERNAL', `${err}${suffix}`);
   };
 
   const readJsonResponse = async (res, emptyValue) => {
@@ -1002,6 +1100,96 @@ export function rpcdef(ctx) {
     return result;
   };
 
+  const requireBaseUrl = () => {
+    const baseUrl = normalizeBaseUrl(restBaseUrl);
+    if (!baseUrl) {
+      throw errorWithCode('INVALID_ARGUMENT', 'restBaseUrl/baseUrl is required (http/https)');
+    }
+    return baseUrl;
+  };
+
+  const callGetProfile = async (req) => {
+    const token = requireApiToken();
+    const baseUrl = requireBaseUrl();
+    const url = `${baseUrl}/api/ProfileAPI`;
+    const res = await fetchSafeline(url, { method: 'GET', headers: buildHeaders(token) });
+    const json = await readJsonResponse(res, { err: null, msg: '', data: {} });
+    throwForBusinessError(json);
+    return { err: toValue(json?.err), msg: toValue(json?.msg), data: json?.data ?? {} };
+  };
+
+  const callGetOverview = async (req) => {
+    const token = requireApiToken();
+    const baseUrl = requireBaseUrl();
+    const duration = String(firstDefined(req?.duration, req?.Duration) || '').trim();
+    if (!duration) {
+      throw errorWithCode('INVALID_ARGUMENT', 'duration is required');
+    }
+    const queryParts = [`duration=${encodeURIComponent(duration)}`];
+    const totalVal = firstDefined(req?.total, req?.Total);
+    if (totalVal !== undefined && totalVal !== null) {
+      const b = toBoolean(totalVal);
+      if (b !== null) queryParts.push(`total=${b ? 'true' : 'false'}`);
+    }
+    const optionalParams = [
+      ['location', ['location', 'Location']],
+      ['request_number', ['request_number', 'requestNumber']],
+      ['src_ip', ['src_ip', 'srcIp']],
+      ['attack_type', ['attack_type', 'attackType']],
+      ['risk_level', ['risk_level', 'riskLevel']],
+      ['host', ['host', 'Host']],
+    ];
+    for (const [key, keys] of optionalParams) {
+      const val = pickStringField(req, keys);
+      if (val !== undefined && val !== '') queryParts.push(`${key}=${encodeURIComponent(val)}`);
+    }
+    const url = `${baseUrl}/api/OverviewAPI?${queryParts.join('&')}`;
+    const res = await fetchSafeline(url, { method: 'GET', headers: buildHeaders(token) });
+    const json = await readJsonResponse(res, { err: null, msg: '', data: {} });
+    throwForBusinessError(json);
+    return { err: toValue(json?.err), msg: toValue(json?.msg), data: json?.data ?? {} };
+  };
+
+  const callSearchDetectLog = async (req) => {
+    const token = requireApiToken();
+    const baseUrl = requireBaseUrl();
+    const queryParts = ['scope=log:detect_log'];
+    const count = toQueryNumber(firstDefined(req?.count, req?.Count));
+    const offset = toQueryNumber(firstDefined(req?.offset, req?.Offset), true);
+    if (count !== undefined) queryParts.push(`count=${count}`);
+    if (offset !== undefined) queryParts.push(`offset=${offset}`);
+    const tStart = toInt64(firstDefined(req?.time_range_start, req?.timeRangeStart));
+    const tEnd = toInt64(firstDefined(req?.time_range_end, req?.timeRangeEnd));
+    if (tStart !== null) queryParts.push(`req_start_time__gte=${tStart}`);
+    if (tEnd !== null) queryParts.push(`req_start_time__lte=${tEnd}`);
+    for (const [k, v] of Object.entries(unwrapStruct(firstDefined(req?.filters, req?.Filters)))) {
+      if (v === null || v === undefined) continue;
+      queryParts.push(`${encodeURIComponent(k)}=${encodeURIComponent(Array.isArray(v) ? v.join(',') : String(v))}`);
+    }
+    const url = `${baseUrl}/api/FilterV2API?${queryParts.join('&')}`;
+    const res = await fetchSafeline(url, { method: 'GET', headers: buildHeaders(token) });
+    const json = await readJsonResponse(res, { err: null, msg: '', data: { items: [], total: 0 } });
+    throwForBusinessError(json);
+    const data = json?.data && typeof json.data === 'object' ? json.data : {};
+    const items = Array.isArray(data?.items) ? data.items : [];
+    const total = (() => {
+      const n = Number(data?.total);
+      return Number.isInteger(n) && !Number.isNaN(n) ? n : 0;
+    })();
+    return { err: toValue(json?.err), msg: toValue(json?.msg), data: { items, total } };
+  };
+
+  const callGetESIndices = async (req) => {
+    const token = requireApiToken();
+    const baseUrl = requireBaseUrl();
+    const alias = String(firstDefined(req?.alias, req?.Alias) || 'detect_log').trim() || 'detect_log';
+    const url = `${baseUrl}/api/ESIndices?alias=${encodeURIComponent(alias)}`;
+    const res = await fetchSafeline(url, { method: 'GET', headers: buildHeaders(token) });
+    const json = await readJsonResponse(res, { err: null, msg: '', data: {} });
+    throwForBusinessError(json);
+    return { err: toValue(json?.err), msg: toValue(json?.msg), data: json?.data ?? {} };
+  };
+
   return {
     [METHOD_PATH]: async () => callAggregate(requestWithDefaults(ctx.req)),
     [CREATE_IP_GROUP_PATH]: async () => callCreateIpGroup(requestWithDefaults(ctx.req)),
@@ -1013,7 +1201,11 @@ export function rpcdef(ctx) {
     [GET_DETECTOR_STATE_PATH]: async () => callGetDetectorState(requestWithDefaults(ctx.req)),
     [UPDATE_DETECTOR_STATE_PATH]: async () => callUpdateDetectorState(requestWithDefaults(ctx.req)),
     [BLOCK_IP_PATH]: async () => callBlockIp(requestWithDefaults(ctx.req)),
-    [UNBLOCK_IP_PATH]: async () => callUnblockIp(requestWithDefaults(ctx.req))
+    [UNBLOCK_IP_PATH]: async () => callUnblockIp(requestWithDefaults(ctx.req)),
+    [GET_PROFILE_PATH]: async () => callGetProfile(requestWithDefaults(ctx.req)),
+    [GET_OVERVIEW_PATH]: async () => callGetOverview(requestWithDefaults(ctx.req)),
+    [SEARCH_DETECT_LOG_PATH]: async () => callSearchDetectLog(requestWithDefaults(ctx.req)),
+    [GET_ES_INDICES_PATH]: async () => callGetESIndices(requestWithDefaults(ctx.req))
   };
 }
 
@@ -1061,6 +1253,10 @@ const registerHandlers = (ctx = {}) => ({
   [UPDATE_DETECTOR_STATE_PATH]: wrapLegacyHandler(ctx, UPDATE_DETECTOR_STATE_PATH),
   [BLOCK_IP_PATH]: wrapLegacyHandler(ctx, BLOCK_IP_PATH),
   [UNBLOCK_IP_PATH]: wrapLegacyHandler(ctx, UNBLOCK_IP_PATH),
+  [GET_PROFILE_PATH]: wrapLegacyHandler(ctx, GET_PROFILE_PATH),
+  [GET_OVERVIEW_PATH]: wrapLegacyHandler(ctx, GET_OVERVIEW_PATH),
+  [SEARCH_DETECT_LOG_PATH]: wrapLegacyHandler(ctx, SEARCH_DETECT_LOG_PATH),
+  [GET_ES_INDICES_PATH]: wrapLegacyHandler(ctx, GET_ES_INDICES_PATH),
 });
 
 export const METHOD_AGGREGATE_DETECT_LOG_BY_SRC_IP_FULL = 'Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/AggregateDetectLogBySrcIP';
@@ -1074,6 +1270,10 @@ export const METHOD_BLOCK_IP_FULL = 'Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/B
 export const METHOD_UNBLOCK_IP_FULL = 'Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/UnblockIP';
 export const METHOD_GET_DETECTOR_STATE_FULL = 'Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/GetDetectorState';
 export const METHOD_UPDATE_DETECTOR_STATE_FULL = 'Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/UpdateDetectorState';
+export const METHOD_GET_PROFILE_FULL = 'Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/GetProfile';
+export const METHOD_GET_OVERVIEW_FULL = 'Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/GetOverview';
+export const METHOD_SEARCH_DETECT_LOG_FULL = 'Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/SearchDetectLog';
+export const METHOD_GET_ES_INDICES_FULL = 'Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/GetESIndices';
 
 const sdkHandlers = registerHandlers({});
 
@@ -1089,6 +1289,10 @@ export const handlers = {
   [METHOD_UNBLOCK_IP_FULL]: (ctx) => sdkHandlers[UNBLOCK_IP_PATH](ctx),
   [METHOD_GET_DETECTOR_STATE_FULL]: (ctx) => sdkHandlers[GET_DETECTOR_STATE_PATH](ctx),
   [METHOD_UPDATE_DETECTOR_STATE_FULL]: (ctx) => sdkHandlers[UPDATE_DETECTOR_STATE_PATH](ctx),
+  [METHOD_GET_PROFILE_FULL]: (ctx) => sdkHandlers[GET_PROFILE_PATH](ctx),
+  [METHOD_GET_OVERVIEW_FULL]: (ctx) => sdkHandlers[GET_OVERVIEW_PATH](ctx),
+  [METHOD_SEARCH_DETECT_LOG_FULL]: (ctx) => sdkHandlers[SEARCH_DETECT_LOG_PATH](ctx),
+  [METHOD_GET_ES_INDICES_FULL]: (ctx) => sdkHandlers[GET_ES_INDICES_PATH](ctx),
 };
 
 export const _test = {
@@ -1100,6 +1304,7 @@ export const _test = {
   mergedBindings,
   normalizeList,
   parseHeaders,
+  proxiedFetch,
   registerHandlers,
   resolveCallContext,
   toBoolean,
@@ -1108,4 +1313,6 @@ export const _test = {
   toQueryNumber,
   toValue,
   unwrapString,
+  unwrapStruct,
+  unwrapValue,
 };

@@ -38,6 +38,19 @@ service Chaitin_WAF_SAFELINE {
 
   // 修改检测开关
   rpc UpdateDetectorState(UpdateDetectorStateRequest) returns (UpdateDetectorStateResponse) {}
+
+  // ─── 巡检只读 ───
+  // 获取当前用户信息（连通性 + API-Token 有效性检查）
+  rpc GetProfile(GetProfileRequest) returns (GetProfileResponse) {}
+
+  // 获取请求/攻击/拦截统计
+  rpc GetOverview(GetOverviewRequest) returns (GetOverviewResponse) {}
+
+  // 按时间范围/条件查询攻击检测日志（scope=log:detect_log）
+  rpc SearchDetectLog(SearchDetectLogRequest) returns (SearchDetectLogResponse) {}
+
+  // 查看 ES 索引信息（数据上报健康：docs_count/creation_date/health）
+  rpc GetESIndices(GetESIndicesRequest) returns (GetESIndicesResponse) {}
 }
 
 message AggregateDetectLogRequest {
@@ -236,4 +249,65 @@ message DetectLogAggregateRecord {
   string matched_threat_tag = 25; // 威胁情报 IP 命中标签
   string flag = 26; // 标记
   string count = 27; // 日志总数，保留为字符串以避免语义歧义
+}
+
+// ─── 巡检只读 ───
+
+message GetProfileRequest {
+  string api_token = 1 [deprecated = true]; // 访问凭证，必填
+}
+
+message GetProfileResponse {
+  google.protobuf.Value err = 1; // Safeline err 字段，200 且为空表示业务成功
+  google.protobuf.Value msg = 2; // Safeline msg 字段，透传，可为空
+  google.protobuf.Struct data = 3; // 当前用户信息（id/username/roles/permissions 等）
+}
+
+message GetOverviewRequest {
+  string api_token = 1 [deprecated = true]; // 访问凭证，必填
+  string duration = 2; // 统计时间范围，必填：h|today|yesterday|d|7doh
+  google.protobuf.BoolValue total = 3; // 是否返回请求/攻击/拦截总数
+  string location = 4; // 攻击者地理位置分布范围：world|china|all
+  string request_number = 5; // 变化趋势统计范围：request|attack|deny
+  string src_ip = 6; // 最多 IP TOP5 统计范围：request|attack|deny
+  string attack_type = 7; // 攻击类型分布：attack
+  string risk_level = 8; // 威胁等级分布：attack
+  string host = 9; // 最多域名 TOP5：attack
+}
+
+message GetOverviewResponse {
+  google.protobuf.Value err = 1;
+  google.protobuf.Value msg = 2;
+  google.protobuf.Struct data = 3; // total{request,deny,attack} 及各项分布/趋势
+}
+
+message SearchDetectLogRequest {
+  string api_token = 1 [deprecated = true]; // 访问凭证，必填
+  google.protobuf.Int64Value count = 2; // 分页大小，可选，>0
+  google.protobuf.Int64Value offset = 3; // 分页偏移，可选，>=0
+  google.protobuf.Int64Value time_range_start = 4; // 请求开始时间 >=（req_start_time__gte，Unix 秒）
+  google.protobuf.Int64Value time_range_end = 5; // 请求开始时间 <=（req_start_time__lte，Unix 秒）
+  google.protobuf.Struct filters = 6; // 其余 __ 过滤字段原样透传（如 attack_type__in/risk_level__in/src_ip__exact）
+}
+
+message SearchDetectLogResponse {
+  google.protobuf.Value err = 1;
+  google.protobuf.Value msg = 2;
+  SearchDetectLogData data = 3;
+}
+
+message SearchDetectLogData {
+  repeated google.protobuf.Struct items = 1; // 攻击日志（event_id/src_ip/attack_type/timestamp/risk_level_num/action 等）
+  int64 total = 2; // 结果总量
+}
+
+message GetESIndicesRequest {
+  string api_token = 1 [deprecated = true]; // 访问凭证，必填
+  string alias = 2; // 索引别名，必填，默认 detect_log
+}
+
+message GetESIndicesResponse {
+  google.protobuf.Value err = 1;
+  google.protobuf.Value msg = 2;
+  google.protobuf.Struct data = 3; // alias/indices[{index,creation_date,docs_count,health,status,store_size}]/searchable_days/saved_days
 }

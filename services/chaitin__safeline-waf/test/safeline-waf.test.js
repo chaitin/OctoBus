@@ -12,6 +12,10 @@ const detectorStatePath = '/Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/GetDetecto
 const updateDetectorStatePath = '/Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/UpdateDetectorState';
 const blockIpPath = '/Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/BlockIP';
 const unblockIpPath = '/Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/UnblockIP';
+const getProfilePath = '/Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/GetProfile';
+const getOverviewPath = '/Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/GetOverview';
+const searchDetectLogPath = '/Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/SearchDetectLog';
+const getEsIndicesPath = '/Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/GetESIndices';
 
 const buildCtx = (req = {}, overrides = {}) => {
   const legacyToken = req?.api_token ?? req?.apiToken;
@@ -99,6 +103,30 @@ const loadUnblockIpHandler = async (req, overrides = {}) => {
   return rpcdef(ctx)[unblockIpPath];
 };
 
+const loadGetProfileHandler = async (req, overrides = {}) => {
+  const { rpcdef } = await import('../src/safeline-waf.js');
+  const ctx = buildCtx(req, overrides);
+  return rpcdef(ctx)[getProfilePath];
+};
+
+const loadGetOverviewHandler = async (req, overrides = {}) => {
+  const { rpcdef } = await import('../src/safeline-waf.js');
+  const ctx = buildCtx(req, overrides);
+  return rpcdef(ctx)[getOverviewPath];
+};
+
+const loadSearchDetectLogHandler = async (req, overrides = {}) => {
+  const { rpcdef } = await import('../src/safeline-waf.js');
+  const ctx = buildCtx(req, overrides);
+  return rpcdef(ctx)[searchDetectLogPath];
+};
+
+const loadGetEsIndicesHandler = async (req, overrides = {}) => {
+  const { rpcdef } = await import('../src/safeline-waf.js');
+  const ctx = buildCtx(req, overrides);
+  return rpcdef(ctx)[getEsIndicesPath];
+};
+
 const mockFetch = (impl) => {
   setFetch(async (...args) => impl(...args));
 };
@@ -123,7 +151,7 @@ test('internal helpers normalize bindings, headers, errors, and call context', a
   assert.deepEqual(_test.parseHeaders('[]'), {});
   assert.deepEqual(_test.parseHeaders(['bad']), {});
 
-  assert.deepEqual(_test.toValue(['x', null]), { listValue: { values: [{ stringValue: 'x' }] } });
+  assert.deepEqual(_test.toValue(['x', null]), { listValue: { values: [{ stringValue: 'x' }, { nullValue: 'NULL_VALUE' }] } });
   assert.deepEqual(_test.toValue({ a: undefined, b: null }), {
     structValue: {
       fields: {
@@ -399,7 +427,7 @@ test('ListIPGroups validates filters and maps list variants', async () => {
   assert.equal(captured.init.method, 'GET');
   assert.deepEqual(res.data.items, [{ id: 7, name: 'group' }]);
   assert.equal(res.data.total, 1);
-  assert.deepEqual(res.err, undefined);
+  assert.deepEqual(res.err, { nullValue: 'NULL_VALUE' });
   assert.deepEqual(res.msg, { stringValue: 'ok' });
 });
 
@@ -1185,7 +1213,7 @@ test('SDK handlers accept request plus inner context arguments', async () => {
   assert.equal(captured.init.headers['x-engine-instance'], 'inst-camel');
   assert.equal(captured.init.headers['x-request-id'], 'req-camel');
   assert.deepEqual(JSON.parse(captured.init.body), { id__in: [5] });
-  assert.deepEqual(res, { err: undefined, msg: undefined, data: null });
+  assert.deepEqual(res, { err: { nullValue: 'NULL_VALUE' }, msg: { nullValue: 'NULL_VALUE' }, data: null });
 });
 
 test('remaining validation and response branches stay compatible', async () => {
@@ -1309,4 +1337,204 @@ test('remaining HTTP error branches are mapped consistently', async () => {
   }));
   const detectorUnavailable = await loadUpdateDetectorStateHandler({ api_token: 'token', is_enabled: true });
   await assert.rejects(() => detectorUnavailable(), /UNAVAILABLE: upstream http 503: update detector down/);
+});
+
+test('GetProfile requires api_token and a valid base URL', async () => {
+  const noToken = await loadGetProfileHandler({});
+  await assert.rejects(() => noToken(), /INVALID_ARGUMENT: api_token is required/);
+
+  const badBaseUrl = await loadGetProfileHandler({ api_token: 'token' }, { bindings: { restBaseUrl: 'bad' } });
+  await assert.rejects(() => badBaseUrl(), /restBaseUrl\/baseUrl is required/);
+});
+
+test('GetProfile forwards GET and maps profile data', async () => {
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url, init };
+    return {
+      ok: true,
+      status: 200,
+      headers: new Map([['content-type', 'application/json']]),
+      text: async () => JSON.stringify({ err: null, msg: 'ok', data: { id: 1, username: 'admin' } }),
+    };
+  });
+  const handler = await loadGetProfileHandler({ api_token: 'token' });
+  const res = await handler();
+  assert.equal(captured.url, 'http://localhost:18080/api/ProfileAPI');
+  assert.equal(captured.init.method, 'GET');
+  assert.equal(captured.init.headers['API-TOKEN'], 'token');
+  assert.equal(res.data.id, 1);
+  assert.equal(res.data.username, 'admin');
+});
+
+test('GetProfile maps business errors to PERMISSION_DENIED', async () => {
+  setFetch(async () => ({
+    ok: true,
+    status: 200,
+    headers: new Map([['content-type', 'application/json']]),
+    text: async () => JSON.stringify({ err: 'login-required', msg: 'please login' }),
+  }));
+  const handler = await loadGetProfileHandler({ api_token: 'token' });
+  await assert.rejects(() => handler(), /PERMISSION_DENIED: login-required: please login/);
+});
+
+test('GetOverview requires duration', async () => {
+  const noToken = await loadGetOverviewHandler({});
+  await assert.rejects(() => noToken(), /INVALID_ARGUMENT: api_token is required/);
+
+  const noDuration = await loadGetOverviewHandler({ api_token: 'token' });
+  await assert.rejects(() => noDuration(), /INVALID_ARGUMENT: duration is required/);
+});
+
+test('GetOverview forwards duration, total, and optional distribution params', async () => {
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url, init };
+    return {
+      ok: true,
+      status: 200,
+      headers: new Map([['content-type', 'application/json']]),
+      text: async () => JSON.stringify({ err: null, msg: 'ok', data: { total: { request: 10 } } }),
+    };
+  });
+  const handler = await loadGetOverviewHandler({
+    api_token: 'token',
+    duration: 'd',
+    total: { value: true },
+    location: 'china',
+    attack_type: 'attack',
+  });
+  const res = await handler();
+  assert.match(captured.url, /\/api\/OverviewAPI\?/);
+  assert.match(captured.url, /duration=d/);
+  assert.match(captured.url, /total=true/);
+  assert.match(captured.url, /location=china/);
+  assert.match(captured.url, /attack_type=attack/);
+  assert.equal(captured.init.method, 'GET');
+  assert.deepEqual(res.data, { total: { request: 10 } });
+});
+
+test('GetOverview maps business errors to INVALID_ARGUMENT', async () => {
+  setFetch(async () => ({
+    ok: true,
+    status: 200,
+    headers: new Map([['content-type', 'application/json']]),
+    text: async () => JSON.stringify({ err: 'invalid-duration', msg: 'bad' }),
+  }));
+  const handler = await loadGetOverviewHandler({ api_token: 'token', duration: 'x' });
+  await assert.rejects(() => handler(), /INVALID_ARGUMENT: invalid-duration: bad/);
+});
+
+test('SearchDetectLog forwards scope, pagination, time range, and filters', async () => {
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url, init };
+    return {
+      ok: true,
+      status: 200,
+      headers: new Map([['content-type', 'application/json']]),
+      text: async () => JSON.stringify({ err: null, msg: 'ok', data: { items: [{ event_id: 'e1' }], total: 1 } }),
+    };
+  });
+  const handler = await loadSearchDetectLogHandler({
+    api_token: 'token',
+    count: { value: 10 },
+    offset: { value: 0 },
+    time_range_start: { value: 1792503600 },
+    time_range_end: { value: 1792503700 },
+    filters: {
+      fields: {
+        attack_type__in: { kind: { case: 'listValue', value: { values: [
+          { kind: { case: 'stringValue', value: 'xss' } },
+          { kind: { case: 'stringValue', value: 'sqli' } },
+        ] } } },
+        risk_level__in: { kind: { case: 'stringValue', value: 'high' } },
+      },
+    },
+  });
+  const res = await handler();
+  assert.match(captured.url, /scope=log:detect_log/);
+  assert.match(captured.url, /count=10/);
+  assert.match(captured.url, /offset=0/);
+  assert.match(captured.url, /req_start_time__gte=1792503600/);
+  assert.match(captured.url, /req_start_time__lte=1792503700/);
+  assert.match(captured.url, /attack_type__in=xss%2Csqli/);
+  assert.match(captured.url, /risk_level__in=high/);
+  assert.equal(captured.init.method, 'GET');
+  assert.deepEqual(res.data.items, [{ event_id: 'e1' }]);
+  assert.equal(res.data.total, 1);
+});
+
+test('SearchDetectLog handles empty data and non-integer total', async () => {
+  setFetch(async () => ({
+    ok: true,
+    status: 200,
+    headers: new Map([['content-type', 'application/json']]),
+    text: async () => '',
+  }));
+  const empty = await loadSearchDetectLogHandler({ api_token: 'token' });
+  assert.deepEqual(await empty(), { err: { nullValue: 'NULL_VALUE' }, msg: { stringValue: '' }, data: { items: [], total: 0 } });
+
+  setFetch(async () => ({
+    ok: true,
+    status: 200,
+    headers: new Map([['content-type', 'application/json']]),
+    text: async () => JSON.stringify({ err: null, msg: '', data: { items: 'bad', total: 'x' } }),
+  }));
+  const bad = await loadSearchDetectLogHandler({ api_token: 'token' });
+  assert.deepEqual(await bad(), { err: { nullValue: 'NULL_VALUE' }, msg: { stringValue: '' }, data: { items: [], total: 0 } });
+});
+
+test('SearchDetectLog maps business errors to NOT_FOUND', async () => {
+  setFetch(async () => ({
+    ok: true,
+    status: 200,
+    headers: new Map([['content-type', 'application/json']]),
+    text: async () => JSON.stringify({ err: 'not_found', msg: 'no such scope' }),
+  }));
+  const handler = await loadSearchDetectLogHandler({ api_token: 'token' });
+  await assert.rejects(() => handler(), /NOT_FOUND: not_found: no such scope/);
+});
+
+test('GetESIndices defaults alias to detect_log', async () => {
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url, init };
+    return {
+      ok: true,
+      status: 200,
+      headers: new Map([['content-type', 'application/json']]),
+      text: async () => JSON.stringify({ err: null, msg: 'ok', data: { indices: [{ health: 'green' }] } }),
+    };
+  });
+  const handler = await loadGetEsIndicesHandler({ api_token: 'token' });
+  const res = await handler();
+  assert.equal(captured.url, 'http://localhost:18080/api/ESIndices?alias=detect_log');
+  assert.equal(captured.init.method, 'GET');
+  assert.deepEqual(res.data, { indices: [{ health: 'green' }] });
+});
+
+test('GetESIndices forwards custom alias and maps business errors', async () => {
+  let captured;
+  setFetch(async (url, init) => {
+    captured = { url, init };
+    return {
+      ok: true,
+      status: 200,
+      headers: new Map([['content-type', 'application/json']]),
+      text: async () => JSON.stringify({ err: null, msg: 'ok', data: {} }),
+    };
+  });
+  const custom = await loadGetEsIndicesHandler({ api_token: 'token', alias: 'detect_log-2026.11' });
+  await custom();
+  assert.match(captured.url, /alias=detect_log-2026\.11/);
+
+  setFetch(async () => ({
+    ok: true,
+    status: 200,
+    headers: new Map([['content-type', 'application/json']]),
+    text: async () => JSON.stringify({ err: 'internal', msg: 'boom' }),
+  }));
+  const bad = await loadGetEsIndicesHandler({ api_token: 'token' });
+  await assert.rejects(() => bad(), /INTERNAL: internal: boom/);
 });
