@@ -14,6 +14,10 @@ const requireFromServices = createRequire(path.join(servicesRoot, "package.json"
 const grpc = requireFromServices("@grpc/grpc-js");
 const protoLoader = requireFromServices("@grpc/proto-loader");
 const octobusBin = path.join(repoRoot, "bin", "octobus");
+// The daemon refuses to start on a fresh data dir until an admin token is
+// provisioned. Seed a fixed smoke token at startup and use the same token for
+// every CLI invocation so the harness is self-contained (mirrors tests/e2e).
+const smokeAdminToken = "octobus-smoke-admin-token";
 
 const options = parseArgs(process.argv.slice(2));
 const selectedServiceDirs = options.serviceDirs.length > 0
@@ -31,7 +35,7 @@ const mock = await startMockUpstream();
 const addr = `127.0.0.1:${await freePort()}`;
 const daemon = spawn(octobusBin, ["serve", "--addr", addr, "--data-dir", dataDir], {
   cwd: repoRoot,
-  env: { ...process.env, OCTOBUS_ADDR: addr, OCTOBUS_DATA_DIR: dataDir },
+  env: { ...process.env, OCTOBUS_ADDR: addr, OCTOBUS_DATA_DIR: dataDir, OCTOBUS_BOOTSTRAP_ADMIN_TOKEN: smokeAdminToken },
   stdio: ["ignore", "pipe", "pipe"],
 });
 
@@ -414,7 +418,7 @@ function cli(addr, args, { timeoutMs, allowFailure = false } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(octobusBin, args, {
       cwd: repoRoot,
-      env: { ...process.env, OCTOBUS_ADDR: addr },
+      env: { ...process.env, OCTOBUS_ADDR: addr, OCTOBUS_ADMIN_TOKEN: smokeAdminToken },
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
@@ -768,12 +772,21 @@ function sleep(ms) {
 }
 
 function waitProcess(child) {
+  // If the process already exited before this helper is called, the "close"
+  // event has already fired and a fresh listener would never be invoked,
+  // hanging the caller. Resolve or reject from the recorded exit state first.
+  if (child.exitCode !== null || child.signalCode !== null) {
+    if (child.exitCode === 0 || (child.exitCode === null && child.signalCode !== null)) {
+      return Promise.resolve();
+    }
+    return Promise.reject(new Error(`process exited with code ${child.exitCode}`));
+  }
   return new Promise((resolve, reject) => {
-    child.once("close", (code) => {
+    child.once("close", (code, signal) => {
       if (code === 0 || code === null) {
         resolve();
       } else {
-        reject(new Error(`process exited with code ${code}`));
+        reject(new Error(`process exited with code ${code}${signal ? ` (${signal})` : ""}`));
       }
     });
   });
