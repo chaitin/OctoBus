@@ -307,7 +307,10 @@ export function rpcdef(ctx) {
 
   const skipTlsVerify = toBoolean(firstDefined(bindings.skipTlsVerify, bindings.skip_tls_verify));
   const dispatcher = skipTlsVerify ? INSECURE_DISPATCHER : SECURE_DISPATCHER;
-  const proxyUrl = String(firstNonEmpty(bindings.proxy_url, bindings.proxyUrl) ?? '').trim();
+  const rawProxyUrl = String(firstNonEmpty(bindings.proxy_url, bindings.proxyUrl) ?? '').trim();
+  // Only socks:// schemes are routable through SocksProxyAgent; a plain http(s)
+  // URL (e.g. the smoke harness synthesizing the mock upstream) is not a proxy.
+  const proxyUrl = /^socks(4a?|5h?)?:\/\//i.test(rawProxyUrl) ? rawProxyUrl : '';
 
   const getToken = () => {
     // 凭据只从 secret 取，不从 config/bindings/请求体取（OctoBus 约定）
