@@ -272,7 +272,10 @@ const rpcCall = async (ctx, upstreamMethod, params) => {
     id: randomUUID(),
   });
 
-  const proxyUrl = String(firstDefined(bindings.proxy_url, bindings.proxyUrl) ?? '').trim();
+  const rawProxyUrl = String(firstDefined(bindings.proxy_url, bindings.proxyUrl) ?? '').trim();
+  // Only socks:// schemes are routable through SocksProxyAgent; a plain http(s)
+  // URL (e.g. the smoke harness synthesizing the mock upstream) is not a proxy.
+  const proxyUrl = /^socks(4a?|5h?)?:\/\//i.test(rawProxyUrl) ? rawProxyUrl : '';
 
   let res;
   if (proxyUrl) {
