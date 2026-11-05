@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package Chaitin_CloudWalker_CWPP;
+
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/struct.proto";
+
+// 牧云（CloudWalker CWPP 主机安全）JSON-RPC 2.0 代理。
+// 目标设备：https://<ip>/rpc，认证 Cookie: API-Token=<token>。
+service Chaitin_CloudWalker_CWPP {
+  // 实时威胁事件（安全告警/入侵事件：暴力破解、恶意文件、反弹 shell 等）
+  rpc ListRealTimeEvents(ListRealTimeEventsRequest) returns (ListRealTimeEventsResponse) {}
+
+  // 主机资产列表（主机/探针在线状态：host_state、last_seen_at、agent 版本等）
+  rpc GetHostAssetList(GetHostAssetListRequest) returns (GetHostAssetListResponse) {}
+
+  // 探针分组树（主机/探针在线状态：分组层级 + 每台主机的 host_state/host_ip）
+  rpc GetAgentGroupTree(GetAgentGroupTreeRequest) returns (GetAgentGroupTreeResponse) {}
+}
+
+// ─── ListRealTimeEvents ───
+
+message ListRealTimeEventsRequest {
+  google.protobuf.Int64Value count = 1; // 返回最近事件条数，可选（不传则取上游默认）
+}
+
+message ListRealTimeEventsResponse {
+  google.protobuf.Value err = 1;
+  google.protobuf.Value msg = 2;
+  ListRealTimeEventsData data = 3;
+}
+
+message ListRealTimeEventsData {
+  // 每项为原始事件 JSON 对象，用 Struct 保留全量字段：
+  // id/type/display_name/state/level/read/created_at/updated_at/host_view{...}
+  repeated google.protobuf.Struct events = 1;
+}
+
+// ─── GetHostAssetList ───
+
+message GetHostAssetListRequest {
+  google.protobuf.Int64Value count = 1;  // 分页大小，可选，默认 100
+  google.protobuf.Int64Value offset = 2; // 分页偏移，可选，默认 0
+}
+
+message GetHostAssetListResponse {
+  google.protobuf.Value err = 1;
+  google.protobuf.Value msg = 2;
+  GetHostAssetListData data = 3;
+}
+
+message GetHostAssetListData {
+  // 每项为原始主机 JSON 对象，用 Struct 保留全量字段：
+  // id/host_ip/host_name/os_release_name/host_state/last_seen_at/version/group_name/...
+  repeated google.protobuf.Struct hosts = 1;
+  int64 total = 2; // 主机总数（上游返回）
+}
+
+// ─── GetAgentGroupTree ───
+
+// 牧云文档：GetAgentGroupTree 无请求参数（请求示例为 {}）
+message GetAgentGroupTreeRequest {}
+
+message GetAgentGroupTreeResponse {
+  google.protobuf.Value err = 1;
+  google.protobuf.Value msg = 2;
+  GetAgentGroupTreeData data = 3;
+}
+
+message GetAgentGroupTreeData {
+  // 分组树根节点数组，每项为原始 JSON（含 children/host_state/host_ip/total 等）
+  repeated google.protobuf.Struct nodes = 1;
+}
