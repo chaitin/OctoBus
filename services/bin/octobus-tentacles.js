@@ -69,6 +69,10 @@ const services = {
     entryFile: "../chaitin__safeline-waf/bin/safeline-waf.js",
     serviceModule: "../chaitin__safeline-waf/src/service.js",
   },
+  "safeline-waf-login": {
+    entryFile: "../chaitin__safeline-waf-login/bin/safeline-waf-login.js",
+    serviceModule: "../chaitin__safeline-waf-login/src/service.js",
+  },
   "safeline-waf-eliminate-false-positive": {
     entryFile: "../chaitin__safeline-waf-eliminate-false-positive/bin/safeline-waf-eliminate-false-positive.js",
     serviceModule: "../chaitin__safeline-waf-eliminate-false-positive/src/service.js",

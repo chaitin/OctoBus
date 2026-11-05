@@ -1,0 +1,5 @@
+{
+  "method": "Chaitin_WAF_SAFELINE_LOGIN.Chaitin_WAF_SAFELINE_LOGIN/Login",
+  "request": {},
+  "expectUpstream": true
+}
