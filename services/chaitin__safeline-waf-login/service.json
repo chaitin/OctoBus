@@ -1,0 +1,45 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "safeline-waf-login",
+  "displayName": "SafeLine WAF (Account/Password)",
+  "description": "OctoBus package for Chaitin SafeLine WAF console login (account/password) and inspection read methods, for deployments without OpenAPI/API-Token.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/safeline_waf_login.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Chaitin_WAF_SAFELINE_LOGIN.Chaitin_WAF_SAFELINE_LOGIN/Login": {
+          "name": "login",
+          "description": "Login to SafeLine console with account/password and return a session token."
+        },
+        "Chaitin_WAF_SAFELINE_LOGIN.Chaitin_WAF_SAFELINE_LOGIN/GetProfile": {
+          "name": "get-profile",
+          "description": "Get current user profile (reachability + session check)."
+        },
+        "Chaitin_WAF_SAFELINE_LOGIN.Chaitin_WAF_SAFELINE_LOGIN/GetOverview": {
+          "name": "get-overview",
+          "description": "Get request/attack/deny statistics."
+        },
+        "Chaitin_WAF_SAFELINE_LOGIN.Chaitin_WAF_SAFELINE_LOGIN/SearchDetectLog": {
+          "name": "search-detect-log",
+          "description": "Search attack detection logs by time range and filters."
+        },
+        "Chaitin_WAF_SAFELINE_LOGIN.Chaitin_WAF_SAFELINE_LOGIN/GetESIndices": {
+          "name": "get-es-indices",
+          "description": "Get ES index info (docs count / health) for data reporting health check."
+        }
+      }
+    }
+  }
+}

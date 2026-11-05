@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "endpoint": {
+      "type": "string",
+      "description": "SafeLine WAF console base URL, for example https://safeline.example.com."
+    },
+    "restBaseUrl": {
+      "type": "string",
+      "description": "Legacy alias for endpoint."
+    },
+    "baseUrl": {
+      "type": "string",
+      "description": "Legacy alias for endpoint."
+    },
+    "headers": {
+      "type": "object",
+      "default": {},
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional extra HTTP headers sent to SafeLine."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1500,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for private SafeLine deployments."
+    },
+    "proxy_url": {
+      "type": "string",
+      "description": "Optional HTTP/SOCKS proxy URL for reaching the device, e.g. socks5h://user:pass@host:port."
+    },
+    "proxyUrl": {
+      "type": "string",
+      "description": "Alias for proxy_url."
+    }
+  }
+}

@@ -1,0 +1,104 @@
+syntax = "proto3";
+
+package Chaitin_WAF_SAFELINE_LOGIN;
+
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/struct.proto";
+
+// SafeLine WAF 控制台账号密码版（无 OpenAPI/API-Token 能力的授权场景）。
+// 通过 /api/LoginAPI 登录拿到 Django sessionid 会话，后续读接口走 Cookie 会话认证。
+service Chaitin_WAF_SAFELINE_LOGIN {
+  // 账号密码登录，返回会话 token（后续读方法需携带 session_token）
+  rpc Login(LoginRequest) returns (LoginResponse) {}
+
+  // 获取当前用户信息（连通性 + 会话有效性检查）
+  rpc GetProfile(GetProfileRequest) returns (GetProfileResponse) {}
+
+  // 获取请求/攻击/拦截统计
+  rpc GetOverview(GetOverviewRequest) returns (GetOverviewResponse) {}
+
+  // 按时间范围/条件查询攻击检测日志（scope=log:detect_log）
+  rpc SearchDetectLog(SearchDetectLogRequest) returns (SearchDetectLogResponse) {}
+
+  // 查看 ES 索引信息（数据上报健康：docs_count/creation_date/health）
+  rpc GetESIndices(GetESIndicesRequest) returns (GetESIndicesResponse) {}
+}
+
+// --- Login ---
+
+message LoginRequest {}
+
+message LoginResponse {
+  int32 code = 1; // 0 表示成功
+  string msg = 2;
+  string session_token = 3; // 会话 token，供后续读方法携带
+  string username = 4; // 登录用户名
+  repeated string permissions = 5; // 用户权限列表
+}
+
+// --- GetProfile ---
+
+message GetProfileRequest {
+  string session_token = 1; // 会话 token，来自 Login
+}
+
+message GetProfileResponse {
+  google.protobuf.Value err = 1; // SafeLine err 字段，200 且为空表示业务成功
+  google.protobuf.Value msg = 2; // SafeLine msg 字段，透传，可为空
+  google.protobuf.Struct data = 3; // 当前用户信息（id/username/permissions 等）
+}
+
+// --- GetOverview ---
+
+message GetOverviewRequest {
+  string session_token = 1; // 会话 token，来自 Login
+  string duration = 2; // 统计时间范围，必填：h|today|yesterday|d|7doh
+  google.protobuf.BoolValue total = 3; // 是否返回请求/攻击/拦截总数
+  string location = 4; // 攻击者地理位置分布范围：world|china|all
+  string request_number = 5; // 变化趋势统计范围：request|attack|deny
+  string src_ip = 6; // 最多 IP TOP5 统计范围：request|attack|deny
+  string attack_type = 7; // 攻击类型分布：attack
+  string risk_level = 8; // 威胁等级分布：attack
+  string host = 9; // 最多域名 TOP5：attack
+}
+
+message GetOverviewResponse {
+  google.protobuf.Value err = 1;
+  google.protobuf.Value msg = 2;
+  google.protobuf.Struct data = 3; // total{request,deny,attack} 及各项分布/趋势
+}
+
+// --- SearchDetectLog ---
+
+message SearchDetectLogRequest {
+  string session_token = 1; // 会话 token，来自 Login
+  google.protobuf.Int64Value count = 2; // 分页大小，可选，>0
+  google.protobuf.Int64Value offset = 3; // 分页偏移，可选，>=0
+  google.protobuf.Int64Value time_range_start = 4; // 请求开始时间 >=（req_start_time__gte，Unix 秒）
+  google.protobuf.Int64Value time_range_end = 5; // 请求开始时间 <=（req_start_time__lte，Unix 秒）
+  google.protobuf.Struct filters = 6; // 其余 __ 过滤字段原样透传（如 attack_type__in/risk_level__in/src_ip__exact）
+}
+
+message SearchDetectLogResponse {
+  google.protobuf.Value err = 1;
+  google.protobuf.Value msg = 2;
+  SearchDetectLogData data = 3;
+}
+
+message SearchDetectLogData {
+  repeated google.protobuf.Struct items = 1; // 攻击日志（event_id/src_ip/attack_type/timestamp/risk_level_num/action 等）
+  int64 total = 2; // 结果总量
+}
+
+// --- GetESIndices ---
+
+message GetESIndicesRequest {
+  string session_token = 1; // 会话 token，来自 Login
+  string alias = 2; // 索引别名，必填，默认 detect_log
+}
+
+message GetESIndicesResponse {
+  google.protobuf.Value err = 1;
+  google.protobuf.Value msg = 2;
+  google.protobuf.Struct data = 3; // alias/indices[{index,creation_date,docs_count,health,status,store_size}]/searchable_days/saved_days
+}
