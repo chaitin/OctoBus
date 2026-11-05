@@ -35,9 +35,12 @@ Use `endpoint` for the SafeLine REST API base URL. Legacy aliases `restBaseUrl`,
     "X-Extra": "demo"
   },
   "timeoutMs": 1500,
-  "skipTlsVerify": false
+  "skipTlsVerify": false,
+  "proxy_url": "socks5h://user:pass@host:port"
 }
 ```
+
+For private SafeLine deployments reachable only over an MSS-provided socks5 tunnel, set `proxy_url` (alias `proxyUrl`). When set, the service routes HTTP requests through a SOCKS5 proxy using `socks-proxy-agent`; otherwise it connects directly via `undici`.
 
 Use `secret.apiToken` or `secret.api_token` for the SafeLine `API-TOKEN` header:
 
@@ -62,17 +65,23 @@ Deprecated request `api_token` / `apiToken` and deprecated config token fields a
 - `Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/UnblockIP`
 - `Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/GetDetectorState`
 - `Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/UpdateDetectorState`
+- `Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/GetProfile`
+- `Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/GetOverview`
+- `Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/SearchDetectLog`
+- `Chaitin_WAF_SAFELINE.Chaitin_WAF_SAFELINE/GetESIndices`
 
 ## Behavior Notes
 
 - `AggregateDetectLogBySrcIP` calls `GET /api/DetectLogAggregateView`.
-- Read RPCs: `AggregateDetectLogBySrcIP`, `ListIPGroups`, and `GetDetectorState`.
+- Read RPCs: `AggregateDetectLogBySrcIP`, `ListIPGroups`, `GetDetectorState`, `GetProfile`, `GetOverview`, `SearchDetectLog`, and `GetESIndices`.
 - Write RPCs: `CreateIPGroup`, `UpdateIPGroup`, `DeleteIPGroup`, `AddIPGroupItems`, `DeleteIPGroupItems`, `BlockIP`, `UnblockIP`, and `UpdateDetectorState`.
 - IP group CRUD calls `/api/IPGroupAPI`; IP group item add/delete calls `/api/EditIPGroupItem`; detector state calls `/api/EnableDisableDetectorAPI`.
+- Inspection read methods: `GetProfile` calls `GET /api/ProfileAPI` (reachability + token validity); `GetOverview` calls `GET /api/OverviewAPI` (`duration` required, optional distribution params); `SearchDetectLog` calls `GET /api/FilterV2API?scope=log:detect_log` with `count`/`offset` and `req_start_time__gte/lte` derived from `time_range_start`/`time_range_end` plus arbitrary `filters`; `GetESIndices` calls `GET /api/ESIndices?alias=...` (default `detect_log`).
 - HTTP 401/403 maps to `PERMISSION_DENIED`.
 - Other HTTP 4xx responses map to `FAILED_PRECONDITION`.
 - HTTP 5xx, network, and TLS failures map to `UNAVAILABLE`.
 - Non-JSON success bodies map to `UNKNOWN`.
+- Business errors (`{ "err": "..." }` envelope) map to gRPC: login/permission/forbidden/auth/denied → `PERMISSION_DENIED`; invalid/required/bad → `INVALID_ARGUMENT`; not_found → `NOT_FOUND`; otherwise `INTERNAL`.
 - Timeout uses AbortController and `skipTlsVerify` uses a per-request dispatcher. Errors do not return the API token or complete upstream raw body.
 
 ## Limitations

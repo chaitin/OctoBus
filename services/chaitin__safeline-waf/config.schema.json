@@ -34,6 +34,14 @@
       "default": false,
       "description": "Skip TLS certificate verification for private SafeLine deployments."
     },
+    "proxy_url": {
+      "type": "string",
+      "description": "Optional HTTP/SOCKS proxy URL for reaching the device, e.g. socks5h://user:pass@host:port."
+    },
+    "proxyUrl": {
+      "type": "string",
+      "description": "Alias for proxy_url."
+    },
     "apiToken": {
       "type": "string",
       "deprecated": true,
