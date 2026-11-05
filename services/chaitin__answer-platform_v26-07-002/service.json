@@ -1,0 +1,85 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "answer-platform-v26",
+  "displayName": "Chaitin Answer-Platform V26.07.002 (OpenAPI)",
+  "description": "OctoBus package for Chaitin Answer-Platform (全悉) V26.07.002 read APIs via OpenAPI JSON-RPC with API-Token header — alarm search/detail, asset list/detail/tree/groups/tags, pcap detect alarm/task, and tcpdump process search.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": ["proto"],
+    "files": ["proto/answer_platform_v26.proto"]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Answer_Platform_V26.Answer_Platform_V26/GetAlarm": {
+          "name": "get-alarm",
+          "description": "Get detailed information for a single alarm."
+        },
+        "Answer_Platform_V26.Answer_Platform_V26/GetAlarmDocument": {
+          "name": "get-alarm-document",
+          "description": "Get raw data for a single alarm."
+        },
+        "Answer_Platform_V26.Answer_Platform_V26/SearchAlarmCustomIntelligenceList": {
+          "name": "search-alarm-custom-intelligence-list",
+          "description": "Page through custom threat intelligence entries."
+        },
+        "Answer_Platform_V26.Answer_Platform_V26/SearchAlarmCustomRuleList": {
+          "name": "search-alarm-custom-rule-list",
+          "description": "Page through custom alarm rules."
+        },
+        "Answer_Platform_V26.Answer_Platform_V26/SearchAlarmList": {
+          "name": "search-alarm-list",
+          "description": "Search threat alarms with time range and filters."
+        },
+        "Answer_Platform_V26.Answer_Platform_V26/SearchAssetIdentify": {
+          "name": "search-asset-identify",
+          "description": "Search asset identification list."
+        },
+        "Answer_Platform_V26.Answer_Platform_V26/GetAssetInfo": {
+          "name": "get-asset-info",
+          "description": "Get details for a single asset."
+        },
+        "Answer_Platform_V26.Answer_Platform_V26/GetAssetList": {
+          "name": "get-asset-list",
+          "description": "Get the asset list."
+        },
+        "Answer_Platform_V26.Answer_Platform_V26/SearchAssetTree": {
+          "name": "search-asset-tree",
+          "description": "Search the asset tree by name."
+        },
+        "Answer_Platform_V26.Answer_Platform_V26/SearchGroups": {
+          "name": "search-groups",
+          "description": "Query the asset group tree."
+        },
+        "Answer_Platform_V26.Answer_Platform_V26/SearchTags": {
+          "name": "search-tags",
+          "description": "Query asset tags."
+        },
+        "Answer_Platform_V26.Answer_Platform_V26/GetPcapDetectAlarm": {
+          "name": "get-pcap-detect-alarm",
+          "description": "Get pcap detection alarm detail."
+        },
+        "Answer_Platform_V26.Answer_Platform_V26/GetPcapDetectAlarmDocument": {
+          "name": "get-pcap-detect-alarm-document",
+          "description": "Get pcap detection alarm raw data."
+        },
+        "Answer_Platform_V26.Answer_Platform_V26/GetPcapDetectTaskList": {
+          "name": "get-pcap-detect-task-list",
+          "description": "Get the pcap detection task list."
+        },
+        "Answer_Platform_V26.Answer_Platform_V26/SearchPcapDetectAlarmList": {
+          "name": "search-pcap-detect-alarm-list",
+          "description": "Search pcap detection alarms."
+        },
+        "Answer_Platform_V26.Answer_Platform_V26/SearchTcpdumpProcess": {
+          "name": "search-tcpdump-process",
+          "description": "Search tcpdump process/task list."
+        }
+      }
+    }
+  }
+}

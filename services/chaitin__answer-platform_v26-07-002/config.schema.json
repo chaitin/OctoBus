@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["restBaseUrl"],
+  "properties": {
+    "restBaseUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "Answer-Platform management base URL with https scheme (e.g. https://192.168.24.60)."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 30000,
+      "description": "HTTP timeout in milliseconds."
+    },
+    "maxResponseBytes": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 4194304,
+      "description": "Maximum upstream JSON-RPC response size in bytes."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for self-signed deployments."
+    },
+    "proxy_url": {
+      "type": "string",
+      "description": "Optional HTTP/SOCKS proxy URL for reaching the device, e.g. socks5h://user:pass@host:port."
+    },
+    "proxyUrl": {
+      "type": "string",
+      "description": "Alias for proxy_url."
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional additional HTTP headers."
+    }
+  }
+}

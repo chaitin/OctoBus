@@ -65,6 +65,10 @@ const services = {
     entryFile: "../chaitin__answer-platform_v25-05-001/bin/answer-platform.js",
     serviceModule: "../chaitin__answer-platform_v25-05-001/src/service.js",
   },
+  "answer-platform-v26": {
+    entryFile: "../chaitin__answer-platform_v26-07-002/bin/answer-platform-v26.js",
+    serviceModule: "../chaitin__answer-platform_v26-07-002/src/service.js",
+  },
   "safeline-waf": {
     entryFile: "../chaitin__safeline-waf/bin/safeline-waf.js",
     serviceModule: "../chaitin__safeline-waf/src/service.js",

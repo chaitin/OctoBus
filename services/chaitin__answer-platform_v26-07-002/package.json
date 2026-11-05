@@ -1,0 +1,14 @@
+{
+  "name": "answer-platform-v26",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "answer-platform-v26": "bin/answer-platform-v26.js"
+  },
+  "dependencies": {
+    "@chaitin-ai/octobus-sdk": "^0.6.1",
+    "socks-proxy-agent": "^8.0.5",
+    "undici": "^7.16.0"
+  }
+}
