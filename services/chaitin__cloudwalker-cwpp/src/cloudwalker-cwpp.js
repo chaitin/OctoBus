@@ -476,9 +476,13 @@ export const _test = {
   parseHeaders,
   registerHandlers,
   resolveCallContext,
+  sanitizeHeaders,
   toBoolean,
   toPositiveInt,
   toValue,
+  validateTimeoutMs,
+  readResponseText,
+  mergeCtx,
   SECURE_DISPATCHER,
   INSECURE_DISPATCHER,
 };
