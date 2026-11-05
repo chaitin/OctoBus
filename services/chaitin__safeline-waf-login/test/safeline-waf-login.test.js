@@ -1,5 +1,6 @@
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
+import http from 'node:http';
 
 import { GrpcError } from '@chaitin-ai/octobus-sdk';
 import { handlers, _test } from '../src/safeline-waf-login.js';
@@ -28,7 +29,7 @@ const login = async (mock) => {
 };
 
 test.beforeEach(() => _test.clearSessions());
-test.afterEach(() => { globalThis.fetch = originalFetch; });
+test.afterEach(() => { globalThis.fetch = originalFetch; mock.restoreAll(); });
 
 test('production service exports every proto RPC handler', () => {
   assert.deepEqual(Object.keys(service.handlers).sort(), Object.keys(handlers).sort());
@@ -199,4 +200,107 @@ test('session cache expires entries and remains bounded', () => {
     Date.now = originalNow;
     _test.clearSessions();
   }
+});
+
+test('remaining value/error helpers are covered', () => {
+  assert.deepEqual(_test.toValue(10n), { stringValue: '10' });
+  assert.equal(_test.toBoolean(5), null);
+  assert.equal(_test.toBoolean(null), null);
+  assert.equal(_test.pickFirst({}, ['nope']), undefined);
+  assert.equal(_test.pickFirst({ a: { value: 5 } }, ['a']), 5);
+
+  assert.throws(() => _test.throwForHttpError(400, 'bad'), (e) => e.code === 9);
+  assert.throws(() => _test.throwForHttpError(401, 'x'), (e) => e.code === 7);
+  assert.throws(() => _test.throwForHttpError(500, 'x'), (e) => e.code === 14);
+
+  assert.throws(() => _test.throwForBusinessError({ err: 'invalid-param', msg: 'm' }), (e) => e.code === 3);
+  assert.throws(() => _test.throwForBusinessError({ err: 'not_found', msg: 'm' }), (e) => e.code === 5);
+  assert.throws(() => _test.throwForBusinessError({ err: 'login-required' }), (e) => e.code === 7);
+  assert.throws(() => _test.throwForBusinessError({ err: 'something-else' }), (e) => e.code === 13);
+  assert.doesNotThrow(() => _test.throwForBusinessError({ err: null }));
+  assert.doesNotThrow(() => _test.throwForBusinessError({}));
+});
+
+test('readJsonResponse handles empty body and content types', async () => {
+  assert.equal(await _test.readJsonResponse({ ok: true, headers: { get: () => '' }, text: async () => '' }, 'EMPTY'), 'EMPTY');
+  assert.deepEqual(await _test.readJsonResponse({ ok: true, headers: { get: () => 'application/json' }, text: async () => '{"a":1}' }, {}), { a: 1 });
+  await assert.rejects(() => _test.readJsonResponse({ ok: true, headers: { get: () => 'text/plain' }, text: async () => 'oops' }, {}), /not valid JSON/);
+  await assert.rejects(() => _test.readJsonResponse({ ok: false, status: 404, headers: { get: () => '' }, text: async () => 'gone' }, {}), (e) => e.code === 9);
+});
+
+test('doLogin rejects when login response lacks a sessionid cookie', async () => {
+  globalThis.fetch = async () => new Response(JSON.stringify({ err: null, msg: '', data: {} }), { status: 200, headers: { 'content-type': 'application/json' } });
+  await assert.rejects(() => _test.doLogin({ endpoint: 'http://example.test', bindUser: 'admin', bindPassword: 'secret' }), /did not return a sessionid/);
+});
+
+test('read method rejects with missing endpoint even with a valid session', async () => {
+  _test.setSession('tok', { sessionid: 's' });
+  await assert.rejects(() => invoke('GetProfile', context('', { session_token: 'tok' })), /endpoint is required/);
+});
+
+const buildFakeRequest = (statusCode, headers, bodyText) => {
+  const resListeners = {};
+  const reqListeners = {};
+  const res = {
+    statusCode,
+    headers,
+    on: (ev, cb) => { resListeners[ev] = cb; return res; },
+  };
+  const req = {
+    setTimeout: () => req,
+    on: (ev, cb) => { reqListeners[ev] = cb; return req; },
+    write: () => req,
+    end: () => req,
+    destroy: (err) => { reqListeners.error?.(err); },
+  };
+  return {
+    req,
+    res,
+    deliver: () => { resListeners.data?.(Buffer.from(bodyText)); resListeners.end?.(); },
+    fail: (err) => reqListeners.error?.(err),
+  };
+};
+
+test('proxiedFetch and fetchSafeline use the socks5 transport', async () => {
+  mock.method(http, 'request', (target, options, cb) => {
+    const f = buildFakeRequest(200, { 'content-type': 'application/json', 'set-cookie': ['a=1', 'b=2'] }, '{"ok":true}');
+    cb(f.res);
+    f.deliver();
+    return f.req;
+  });
+
+  const res = await _test.proxiedFetch('http://example.test/api', { method: 'GET', headers: {} }, { timeoutMs: 1000, proxyUrl: 'socks5://127.0.0.1:1080', skipTlsVerify: false });
+  assert.equal(res.ok, true);
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.headers.getSetCookie(), ['a=1', 'b=2']);
+  assert.equal(await res.text(), '{"ok":true}');
+
+  const sf = await _test.fetchSafeline('http://example.test/api', { method: 'GET', headers: {} }, { proxy_url: 'socks5://127.0.0.1:1080' });
+  assert.equal(sf.ok, true);
+});
+
+test('proxiedFetch maps network error to UNAVAILABLE', async () => {
+  mock.method(http, 'request', (target, options, cb) => {
+    const f = buildFakeRequest(200, {}, '');
+    cb(f.res);
+    setTimeout(() => f.fail(new Error('ECONNREFUSED')), 5);
+    return f.req;
+  });
+  await assert.rejects(() => _test.proxiedFetch('http://example.test/api', {}, { timeoutMs: 1000, proxyUrl: 'socks5://127.0.0.1:1080' }), (e) => e.code === 14);
+});
+
+test('proxiedFetch maps timeout to DEADLINE_EXCEEDED', async () => {
+  mock.method(http, 'request', (target, options, cb) => {
+    const f = buildFakeRequest(200, {}, '');
+    cb(f.res);
+    setTimeout(() => f.fail(Object.assign(new Error('t'), { code: 'ETIMEDOUT' })), 5);
+    return f.req;
+  });
+  await assert.rejects(() => _test.proxiedFetch('http://example.test/api', {}, { timeoutMs: 1000, proxyUrl: 'socks5://127.0.0.1:1080' }), (e) => e.code === 4);
+});
+
+test('fetchSafeline uses insecure dispatcher when skipTlsVerify is set', async () => {
+  globalThis.fetch = async () => new Response(JSON.stringify({ err: null, msg: '', data: {} }), { status: 200, headers: { 'content-type': 'application/json' } });
+  const res = await _test.fetchSafeline('http://example.test/api', { method: 'GET', headers: {} }, { skipTlsVerify: true, timeoutMs: 1000 });
+  assert.equal(res.ok, true);
 });
