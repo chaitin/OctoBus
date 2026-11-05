@@ -10,6 +10,19 @@
     "referer": {
       "type": "string",
       "description": "Browser referer header used by CloudWalker session-based authentication flows."
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip TLS certificate verification for self-signed deployments."
+    },
+    "proxy_url": {
+      "type": "string",
+      "description": "Optional HTTP/SOCKS proxy URL for reaching the device, e.g. socks5h://user:pass@host:port."
+    },
+    "proxyUrl": {
+      "type": "string",
+      "description": "Alias for proxy_url."
     }
   },
   "required": ["baseUrl"]
