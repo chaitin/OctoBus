@@ -877,3 +877,19 @@ export const handlers = {
   [METHOD_LIST_MICROSERVICE_VULN_EVENTS_FULL]: (ctx) => callSdkHandler(ctx, METHOD_LIST_MICROSERVICE_VULN_EVENTS_PATH),
   [METHOD_GET_MICROSERVICE_VULN_EVENT_FULL]: (ctx) => callSdkHandler(ctx, METHOD_GET_MICROSERVICE_VULN_EVENT_PATH),
 };
+
+// Internal helpers exposed for the service test suite (mirrors the _test pattern
+// used by other tentacles so that pure functions are unit-testable without a network).
+export const _test = {
+  toBoolean,
+  normalizeCluster,
+  normalizeVulnEvent,
+  isJsonContentType,
+  resolveBaseUrl,
+  resolveToken,
+  resolveCookie,
+  resolveReferer,
+  resolveProxyUrl,
+  resolveSkipTlsVerify,
+  buildClientOptions,
+};

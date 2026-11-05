@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 import http from 'node:http';
+import https from 'node:https';
 import { URL } from 'node:url';
 
-import { createClient, handlers } from '../src/cloudwalker.js';
+import { createClient, handlers, _test } from '../src/cloudwalker.js';
 
 const requests = [];
 
@@ -325,5 +326,109 @@ describe('cloudwalker handlers', () => {
       context({ eventId: 'ms-event-1' }),
     );
     assert.equal(microserviceEvent.eventId, 'ms-event-1');
+  });
+});
+
+describe('cloudwalker proxy transport', () => {
+  function fakeHttpResponse({ statusCode = 200, headers = {}, body = '' } = {}) {
+    let dataHandler;
+    let endHandler;
+    const res = {
+      statusCode,
+      headers,
+      on(event, cb) {
+        if (event === 'data') dataHandler = cb;
+        if (event === 'end') endHandler = cb;
+        return res;
+      },
+    };
+    const buffer = Buffer.from(body);
+    queueMicrotask(() => {
+      if (buffer.length && dataHandler) dataHandler(buffer);
+      if (endHandler) endHandler();
+    });
+    return res;
+  }
+
+  function fakeHttpRequest({ onError = null } = {}) {
+    let errorHandler;
+    const req = {
+      setTimeout: () => req,
+      on(event, cb) {
+        if (event === 'error') errorHandler = cb;
+        return req;
+      },
+      end: () => {},
+    };
+    if (onError) queueMicrotask(() => errorHandler && errorHandler(onError));
+    return req;
+  }
+
+  it('routes requests through the socks agent when proxyUrl is set', async (t) => {
+    const calls = [];
+    t.mock.method(http, 'request', (target, options, callback) => {
+      calls.push({ target, options });
+      callback(fakeHttpResponse({
+        statusCode: 200,
+        headers: { 'content-type': 'application/json', 'set-cookie': ['a=1', 'b=2'] },
+        body: JSON.stringify({ data: { data: { items: [] } } }),
+      }));
+      return fakeHttpRequest();
+    });
+
+    const client = createClient({ baseUrl: 'http://example.test', token: 't', proxyUrl: 'socks5h://127.0.0.1:1080', skipTlsVerify: true });
+    const payload = await client.get('/probe');
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].target.host, 'example.test');
+    assert.ok(calls[0].options.agent);
+    assert.equal(calls[0].options.rejectUnauthorized, false);
+    assert.deepEqual(payload, { data: { data: { items: [] } } });
+  });
+
+  it('maps proxy network errors to UNAVAILABLE and timeouts to DEADLINE_EXCEEDED', async (t) => {
+    t.mock.method(http, 'request', () => fakeHttpRequest({ onError: Object.assign(new Error('connection refused'), { code: 'ECONNREFUSED' }) }));
+    const client = createClient({ baseUrl: 'http://example.test', token: 't', proxyUrl: 'socks5h://127.0.0.1:1080' });
+    await assert.rejects(() => client.get('/probe'), { code: 14 });
+
+    t.mock.method(http, 'request', () => fakeHttpRequest({ onError: Object.assign(new Error('timeout'), { name: 'TimeoutError', code: 'ETIMEDOUT' }) }));
+    await assert.rejects(() => client.get('/probe'), { code: 4 });
+  });
+});
+
+describe('cloudwalker helpers', () => {
+  it('normalizes null and non-object inputs to empty defaults', () => {
+    assert.deepEqual(_test.normalizeCluster(null), {});
+    assert.deepEqual(_test.normalizeVulnEvent(null), {});
+  });
+
+  it('coerces boolean-like values consistently', () => {
+    assert.equal(_test.toBoolean(true), true);
+    assert.equal(_test.toBoolean(false), false);
+    assert.equal(_test.toBoolean(0), false);
+    assert.equal(_test.toBoolean(1), true);
+    assert.equal(_test.toBoolean('true'), true);
+    assert.equal(_test.toBoolean('off'), false);
+    assert.equal(_test.toBoolean(undefined), false);
+  });
+
+  it('detects JSON content types', () => {
+    assert.equal(_test.isJsonContentType(''), false);
+    assert.equal(_test.isJsonContentType('application/json'), true);
+    assert.equal(_test.isJsonContentType('application/vnd.api+json'), true);
+    assert.equal(_test.isJsonContentType('text/html'), false);
+  });
+
+  it('resolves client options from config, secret and bindings', () => {
+    const options = _test.buildClientOptions({
+      config: { base_url: 'https://host.example', access_token: 'tok' },
+      secret: { referer: 'https://ref.example' },
+      bindings: { proxy_url: 'socks5h://127.0.0.1:1080', skipTlsVerify: 'yes' },
+    });
+    assert.equal(options.baseUrl, 'https://host.example');
+    assert.equal(options.token, 'tok');
+    assert.equal(options.referer, 'https://ref.example');
+    assert.equal(options.proxyUrl, 'socks5h://127.0.0.1:1080');
+    assert.equal(options.skipTlsVerify, true);
   });
 });
