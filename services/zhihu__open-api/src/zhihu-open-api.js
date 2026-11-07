@@ -10,6 +10,8 @@ export const METHODS = {
   ZHIHU_SEARCH: `${PREFIX}/ZhihuSearch`,
   GLOBAL_SEARCH: `${PREFIX}/GlobalSearch`,
   GET_HOT_LIST: `${PREFIX}/GetHotList`,
+  GET_QUESTION_RECOMMENDATIONS: `${PREFIX}/GetQuestionRecommendations`,
+  GET_QUESTION_ANSWERS: `${PREFIX}/GetQuestionAnswers`,
   LIST_KNOWLEDGE_BASES: `${PREFIX}/ListKnowledgeBases`,
   LIST_KNOWLEDGE_BASE_ITEMS: `${PREFIX}/ListKnowledgeBaseItems`,
   UPLOAD_KNOWLEDGE_FILE: `${PREFIX}/UploadKnowledgeFile`,
@@ -105,8 +107,12 @@ const nonNegativeInteger = (value, field) => {
 
 // Zhihu servers clamp out-of-range counts/limits instead of rejecting them, so
 // the service mirrors that behavior: values are clamped into [1, max].
+// proto3 decodes an omitted numeric field to 0, and 0 is never a valid Count or
+// Limit (the upstream clamps to >= 1), so treat 0 as "unset" and fall back to
+// the documented default instead of clamping it to 1.
 const clampedPositiveInteger = (value, field, max, fallback) => {
-  const number = Number(value === undefined || value === null || value === '' ? fallback : value);
+  const unset = value === undefined || value === null || value === '' || Number(value) === 0;
+  const number = Number(unset ? fallback : value);
   if (!Number.isFinite(number)) {
     throw errorWithCode('INVALID_ARGUMENT', `${field} must be an integer`);
   }
@@ -160,6 +166,32 @@ export const buildGlobalSearchQuery = (request = {}) => ({
 
 export const buildHotListQuery = (request = {}) => ({
   Limit: clampedPositiveInteger(request.limit ?? request.Limit, 'Limit', 30, 30),
+});
+
+// Question recommendations: the Open Platform distinguishes an absent Query
+// (recommend from the caller's profile) from an explicitly blank one (an
+// error), but a proto3 string cannot carry that distinction across the wire —
+// the runtime fills an omitted Query with "". Treat a trimmed-empty Query as
+// profile mode (omit the parameter) so profile recommendations work over
+// Connect/gRPC, and use a non-empty Query as the topic.
+export const buildQuestionRecommendationsQuery = (request = {}) => {
+  const params = {
+    Count: clampedPositiveInteger(request.count ?? request.Count, 'Count', 20, 5),
+  };
+  const topic = asString(request.query ?? request.Query);
+  if (topic) params.Query = topic;
+  return params;
+};
+
+// Question answers: page through the answers of one question (from its full
+// Zhihu URL). QuestionUrl is required; Offset/Limit mirror the upstream page.
+export const buildQuestionAnswersQuery = (request = {}) => ({
+  QuestionUrl: requiredString(
+    request.question_url ?? request.questionUrl ?? request.QuestionUrl,
+    'question_url',
+  ),
+  Offset: offsetParam(request.offset ?? request.Offset),
+  Limit: clampedPositiveInteger(request.limit ?? request.Limit, 'Limit', 50, 20),
 });
 
 // APIIDs is a comma-separated list of quota item ids. Normalize whitespace and
@@ -425,6 +457,21 @@ export const handlers = {
     const result = await callApi(settings, 'GET', '/api/v1/content/hot_list', { query: buildQuery(buildHotListQuery(req)) });
     return data(result.data);
   }),
+  [METHODS.GET_QUESTION_RECOMMENDATIONS]: wrap(async (settings, req, meta) => {
+    const query = buildQuestionRecommendationsQuery(req);
+    const topic = query.Query ?? '';
+    logInfo(meta, 'GetQuestionRecommendations:start', { topic: topic || '(profile)' });
+    const result = await callApi(settings, 'GET', '/api/v1/user/question_recommendations', { query: buildQuery(query) });
+    logInfo(meta, 'GetQuestionRecommendations:success', { topic: topic || '(profile)' });
+    return data(result.data);
+  }),
+  [METHODS.GET_QUESTION_ANSWERS]: wrap(async (settings, req, meta) => {
+    const query = buildQuestionAnswersQuery(req);
+    logInfo(meta, 'GetQuestionAnswers:start', { questionUrl: query.QuestionUrl });
+    const result = await callApi(settings, 'GET', '/api/v1/content/question_answers', { query: buildQuery(query) });
+    logInfo(meta, 'GetQuestionAnswers:success', { questionUrl: query.QuestionUrl });
+    return data(result.data);
+  }),
   [METHODS.GET_QUOTA]: wrap(async (settings, req) => {
     const result = await callApi(settings, 'GET', '/api/v1/quota', { query: buildQuery(buildGetQuotaQuery(req)) });
     return data(result.data);
@@ -504,6 +551,8 @@ export const _test = {
   buildKnowledgeBaseItemsQuery,
   buildKnowledgeSearchBody,
   buildQuery,
+  buildQuestionRecommendationsQuery,
+  buildQuestionAnswersQuery,
   buildUploadForm,
   buildUserCollectionsQuery,
   buildUserContentsQuery,
