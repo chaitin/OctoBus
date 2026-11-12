@@ -1,0 +1,633 @@
+{
+  "schema": "chaitin.octobus.service.v1",
+  "name": "ruifosang-dps-version",
+  "displayName": "Ruifosang DPS",
+  "description": "OctoBus package for the Ruifosang DPS platform API (v1, OpenAPI 3.1.0). Exposes assets and fingerprint confirmation, enrichment, sensors and fleet, capture and storage configuration, packet/record/file queries, protocol analysis, reporting, threat intel, admin and health endpoints.",
+  "runtime": {
+    "mode": "long-running"
+  },
+  "proto": {
+    "roots": [
+      "proto"
+    ],
+    "files": [
+      "proto/dps.proto"
+    ]
+  },
+  "configSchema": "config.schema.json",
+  "secretSchema": "secret.schema.json",
+  "sdk": {
+    "cli": {
+      "commands": {
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetLiveness": {
+          "name": "get-liveness",
+          "description": "存活探针：用于检查服务进程是否仍在运行。 (GET /livez)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetReadiness": {
+          "name": "get-readiness",
+          "description": "就绪探针：用于检查服务是否已准备好接收业务请求；未就绪时可能返回 503。 (GET /readyz)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListAssets": {
+          "name": "list-assets",
+          "description": "按时间范围及可选筛选条件查询资产列表，支持分页和排序。 (GET /v1/assets)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListDeviceCandidates": {
+          "name": "list-device-candidates",
+          "description": "查询或确认设备指纹识别产生的候选设备记录。 (GET /v1/assets/device-candidates)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ConfirmDeviceCandidates": {
+          "name": "confirm-device-candidates",
+          "description": "提交人工确认信息，将指定候选对象或识别结果确认为业务记录。 (POST /v1/assets/device-candidates/confirm)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListDeviceCandidateDetails": {
+          "name": "list-device-candidate-details",
+          "description": "根据详情记录 ID 查询该条记录关联的明细数据，并支持分页读取。 (GET /v1/assets/device-candidates/details/{detail_id})"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListDeviceCandidateSummaries": {
+          "name": "list-device-candidate-summaries",
+          "description": "获取符合筛选条件的数据摘要，部分接口使用游标进行分页。 (GET /v1/assets/device-candidates/summary)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetAssetOverview": {
+          "name": "get-asset-overview",
+          "description": "获取指定业务范围和时间区间的汇总概览数据。 (GET /v1/assets/overview)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListProvisionalEndpoints": {
+          "name": "list-provisional-endpoints",
+          "description": "查询或确认尚未归并为正式资产的临时端点记录。 (GET /v1/assets/provisional-endpoints)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ConfirmProvisionalEndpoints": {
+          "name": "confirm-provisional-endpoints",
+          "description": "提交人工确认信息，将指定候选对象或识别结果确认为业务记录。 (POST /v1/assets/provisional-endpoints/confirm)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListProvisionalEndpointDetails": {
+          "name": "list-provisional-endpoint-details",
+          "description": "根据详情记录 ID 查询该条记录关联的明细数据，并支持分页读取。 (GET /v1/assets/provisional-endpoints/details/{detail_id})"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListProvisionalEndpointSummaries": {
+          "name": "list-provisional-endpoint-summaries",
+          "description": "获取符合筛选条件的数据摘要，部分接口使用游标进行分页。 (GET /v1/assets/provisional-endpoints/summary)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListServiceComponents": {
+          "name": "list-service-components",
+          "description": "查询或确认资产识别出的服务组件及其关联明细。 (GET /v1/assets/service-components)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ConfirmServiceComponents": {
+          "name": "confirm-service-components",
+          "description": "提交人工确认信息，将指定候选对象或识别结果确认为业务记录。 (POST /v1/assets/service-components/confirm)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListServiceComponentDetails": {
+          "name": "list-service-component-details",
+          "description": "根据详情记录 ID 查询该条记录关联的明细数据，并支持分页读取。 (GET /v1/assets/service-components/details/{detail_id})"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListServiceComponentSummaries": {
+          "name": "list-service-component-summaries",
+          "description": "获取符合筛选条件的数据摘要，部分接口使用游标进行分页。 (GET /v1/assets/service-components/summary)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetAsset": {
+          "name": "get-asset",
+          "description": "查询或更新指定资产的详情信息。 (GET /v1/assets/{id})"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PatchAsset": {
+          "name": "patch-asset",
+          "description": "查询或更新指定资产的详情信息。 (PATCH /v1/assets/{id})"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/RefingerprintAsset": {
+          "name": "refingerprint-asset",
+          "description": "触发指定资产的重新指纹识别或重新归类操作。 (POST /v1/assets/{id}/refingerprint)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListAssetServices": {
+          "name": "list-asset-services",
+          "description": "查询指定资产关联的服务信息。 (GET /v1/assets/{id}/services)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/CommitEnrichmentBatch": {
+          "name": "commit-enrichment-batch",
+          "description": "该接口属于“平台服务”模块，用于提交/执行该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。 (POST /v1/enrichment/batch/commit)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PreviewEnrichmentBatch": {
+          "name": "preview-enrichment-batch",
+          "description": "该接口属于“平台服务”模块，用于提交/执行该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。 (POST /v1/enrichment/batch/preview)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListBuiltinEnrichmentPackages": {
+          "name": "list-builtin-enrichment-packages",
+          "description": "该接口属于“平台服务”模块，用于查询/获取该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。 (GET /v1/enrichment/builtin)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListEnrichmentOverrides": {
+          "name": "list-enrichment-overrides",
+          "description": "该接口属于“平台服务”模块，用于查询/获取该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。 (GET /v1/enrichment/overrides)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PutEnrichmentOverride": {
+          "name": "put-enrichment-override",
+          "description": "该接口属于“平台服务”模块，用于创建或整体更新该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。 (PUT /v1/enrichment/overrides/{id})"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/DeleteEnrichmentOverride": {
+          "name": "delete-enrichment-override",
+          "description": "该接口属于“平台服务”模块，用于删除该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。 (DELETE /v1/enrichment/overrides/{id})"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PreviewEnrichment": {
+          "name": "preview-enrichment",
+          "description": "该接口属于“平台服务”模块，用于提交/执行该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。 (POST /v1/enrichment/preview)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PublishEnrichment": {
+          "name": "publish-enrichment",
+          "description": "发布当前配置或规则集；请关注接口返回的版本、摘要及发布结果。 (POST /v1/enrichment/publish)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListEnrichmentSuggestions": {
+          "name": "list-enrichment-suggestions",
+          "description": "该接口属于“平台服务”模块，用于查询/获取该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。 (GET /v1/enrichment/suggestions)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListEnrichmentVersions": {
+          "name": "list-enrichment-versions",
+          "description": "该接口属于“平台服务”模块，用于查询/获取该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。 (GET /v1/enrichment/versions)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/RestoreEnrichmentVersion": {
+          "name": "restore-enrichment-version",
+          "description": "该接口属于“平台服务”模块，用于提交/执行该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。 (POST /v1/enrichment/versions/{version}/restore)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/EstimateScanExport": {
+          "name": "estimate-scan-export",
+          "description": "该接口属于“平台服务”模块，用于提交/执行该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。 (POST /v1/export/scan-estimate)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetFileRestoreConfig": {
+          "name": "get-file-restore-config",
+          "description": "根据请求条件检索网络流量中关联的文件记录。 (GET /v1/file-restore/config)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PutFileRestoreConfig": {
+          "name": "put-file-restore-config",
+          "description": "根据请求条件检索网络流量中关联的文件记录。 (PUT /v1/file-restore/config)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/SwitchAdminScope": {
+          "name": "switch-admin-scope",
+          "description": "切换当前管理会话的租户/作用域上下文。 (POST /v1/admin/scope-switch)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/CreateAdminUser": {
+          "name": "create-admin-user",
+          "description": "创建平台用户，并根据请求内容分配相应的用户属性或角色。 (POST /v1/admin/users)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListAppRules": {
+          "name": "list-app-rules",
+          "description": "管理应用识别规则，包括查询、更新、删除、排序和发布规则集。 (GET /v1/app-rules)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PublishAppRules": {
+          "name": "publish-app-rules",
+          "description": "发布当前配置或规则集；请关注接口返回的版本、摘要及发布结果。 (POST /v1/app-rules/publish)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ReorderAppRules": {
+          "name": "reorder-app-rules",
+          "description": "按请求中提供的 ID 顺序调整条目优先级或展示顺序。 (POST /v1/app-rules/reorder)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetAppRulesetInfo": {
+          "name": "get-app-ruleset-info",
+          "description": "管理应用识别规则，包括查询、更新、删除、排序和发布规则集。 (GET /v1/app-rules/ruleset)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PutAppRule": {
+          "name": "put-app-rule",
+          "description": "管理应用识别规则，包括查询、更新、删除、排序和发布规则集。 (PUT /v1/app-rules/{rule_id})"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/DeleteAppRule": {
+          "name": "delete-app-rule",
+          "description": "管理应用识别规则，包括查询、更新、删除、排序和发布规则集。 (DELETE /v1/app-rules/{rule_id})"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListApps": {
+          "name": "list-apps",
+          "description": "查询或维护应用目录条目及其应用识别元数据。 (GET /v1/apps)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PutAppEntry": {
+          "name": "put-app-entry",
+          "description": "查询或维护应用目录条目及其应用识别元数据。 (PUT /v1/apps/{engine_id}/{selector_id})"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/Login": {
+          "name": "login",
+          "description": "提交身份凭据以建立登录会话。 (POST /v1/auth/login)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/Logout": {
+          "name": "logout",
+          "description": "结束当前登录会话。 (POST /v1/auth/logout)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetMe": {
+          "name": "get-me",
+          "description": "该接口属于“身份认证”模块，用于查询/获取该模块中的业务数据。处理登录、登出及当前身份相关操作。 (GET /v1/auth/me)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/LoginWithPassword": {
+          "name": "login-with-password",
+          "description": "提交身份凭据以建立登录会话。 (POST /v1/auth/password/login)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListFacets": {
+          "name": "list-facets",
+          "description": "该接口属于“统计维度”模块，用于查询/获取该模块中的业务数据。查询用于统计分析的维度和可选项。 (GET /v1/facets)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/QueryFacets": {
+          "name": "query-facets",
+          "description": "该接口属于“统计维度”模块，用于提交/执行该模块中的业务数据。查询用于统计分析的维度和可选项。 (POST /v1/facets/query)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetFacetSchema": {
+          "name": "get-facet-schema",
+          "description": "该接口属于“统计维度”模块，用于查询/获取该模块中的业务数据。查询用于统计分析的维度和可选项。 (GET /v1/facets/schema)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListFileFields": {
+          "name": "list-file-fields",
+          "description": "根据请求条件检索网络流量中关联的文件记录。 (GET /v1/files/fields)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/SearchFiles": {
+          "name": "search-files",
+          "description": "根据请求条件检索网络流量中关联的文件记录。 (POST /v1/files/search)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetFileStats": {
+          "name": "get-file-stats",
+          "description": "根据请求条件检索网络流量中关联的文件记录。 (POST /v1/files/stats)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListArchiveEntries": {
+          "name": "list-archive-entries",
+          "description": "根据请求条件检索网络流量中关联的文件记录。 (GET /v1/files/{sha256}/archive/entries)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListArchiveEntriesWithPassword": {
+          "name": "list-archive-entries-with-password",
+          "description": "根据请求条件检索网络流量中关联的文件记录。 (POST /v1/files/{sha256}/archive/entries)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetArchiveEntryBytes": {
+          "name": "get-archive-entry-bytes",
+          "description": "根据请求条件检索网络流量中关联的文件记录。 (GET /v1/files/{sha256}/archive/entries/{index}/bytes)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetArchiveEntryBytesWithPassword": {
+          "name": "get-archive-entry-bytes-with-password",
+          "description": "根据请求条件检索网络流量中关联的文件记录。 (POST /v1/files/{sha256}/archive/entries/{index}/bytes)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/HeadArchiveEntryBytes": {
+          "name": "head-archive-entry-bytes",
+          "description": "根据请求条件检索网络流量中关联的文件记录。 (HEAD /v1/files/{sha256}/archive/entries/{index}/bytes)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetFileBytes": {
+          "name": "get-file-bytes",
+          "description": "根据请求条件检索网络流量中关联的文件记录。 (GET /v1/files/{sha256}/bytes)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/EnrollSensor": {
+          "name": "enroll-sensor",
+          "description": "该接口属于“探针管理”模块，用于提交/执行该模块中的业务数据。管理探针信息、配置、状态及分发相关操作。 (POST /v1/fleet/enroll)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListSensorGroups": {
+          "name": "list-sensor-groups",
+          "description": "该接口属于“探针管理”模块，用于查询/获取该模块中的业务数据。管理探针信息、配置、状态及分发相关操作。 (GET /v1/fleet/groups)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/SensorHeartbeat": {
+          "name": "sensor-heartbeat",
+          "description": "该接口属于“探针管理”模块，用于提交/执行该模块中的业务数据。管理探针信息、配置、状态及分发相关操作。 (POST /v1/fleet/heartbeat)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListSensors": {
+          "name": "list-sensors",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (GET /v1/fleet/sensors)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetSensor": {
+          "name": "get-sensor",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (GET /v1/fleet/sensors/{id})"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PatchSensor": {
+          "name": "patch-sensor",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (PATCH /v1/fleet/sensors/{id})"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetSensorAppRuleset": {
+          "name": "get-sensor-app-ruleset",
+          "description": "管理应用识别规则，包括查询、更新、删除、排序和发布规则集。 (GET /v1/fleet/sensors/{id}/app-ruleset)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ApproveSensor": {
+          "name": "approve-sensor",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (POST /v1/fleet/sensors/{id}/approve)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PutSensorCaptureConfig": {
+          "name": "put-sensor-capture-config",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (PUT /v1/fleet/sensors/{id}/capture-config)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PutSensorCaptureFilter": {
+          "name": "put-sensor-capture-filter",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (PUT /v1/fleet/sensors/{id}/capture-filter)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListSensorCaptureFilterAudit": {
+          "name": "list-sensor-capture-filter-audit",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (GET /v1/fleet/sensors/{id}/capture-filter/audit)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetSensorCaptureFilterCapability": {
+          "name": "get-sensor-capture-filter-capability",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (GET /v1/fleet/sensors/{id}/capture-filter/capability)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ValidateSensorCaptureFilter": {
+          "name": "validate-sensor-capture-filter",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (POST /v1/fleet/sensors/{id}/capture-filter/validate)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetSensorConfig": {
+          "name": "get-sensor-config",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (GET /v1/fleet/sensors/{id}/config)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/DecommissionSensor": {
+          "name": "decommission-sensor",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (POST /v1/fleet/sensors/{id}/decommission)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PutSensorDedupConfig": {
+          "name": "put-sensor-dedup-config",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (PUT /v1/fleet/sensors/{id}/dedup-config)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetSensorFieldCatalog": {
+          "name": "get-sensor-field-catalog",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (GET /v1/fleet/sensors/{id}/field-catalog)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PublishSensorFieldCatalog": {
+          "name": "publish-sensor-field-catalog",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (POST /v1/fleet/sensors/{id}/field-catalog)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListSensorLogicalLinks": {
+          "name": "list-sensor-logical-links",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (GET /v1/fleet/sensors/{id}/logical-links)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PutSensorLogicalLinks": {
+          "name": "put-sensor-logical-links",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (PUT /v1/fleet/sensors/{id}/logical-links)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetSensorMetrics": {
+          "name": "get-sensor-metrics",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (GET /v1/fleet/sensors/{id}/metrics)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetSensorNetgroupDict": {
+          "name": "get-sensor-netgroup-dict",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (GET /v1/fleet/sensors/{id}/netgroup-dict)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PutSensorNpmConfig": {
+          "name": "put-sensor-npm-config",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (PUT /v1/fleet/sensors/{id}/npm-config)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PutSensorObjectStorage": {
+          "name": "put-sensor-object-storage",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (PUT /v1/fleet/sensors/{id}/object-storage)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PutSensorPcapDirs": {
+          "name": "put-sensor-pcap-dirs",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (PUT /v1/fleet/sensors/{id}/pcap-dirs)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetSensorProtocolAnalysis": {
+          "name": "get-sensor-protocol-analysis",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (GET /v1/fleet/sensors/{id}/protocol-analysis)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PutSensorProtocolAnalysis": {
+          "name": "put-sensor-protocol-analysis",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (PUT /v1/fleet/sensors/{id}/protocol-analysis)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PublishSensorProtocolParseCapability": {
+          "name": "publish-sensor-protocol-parse-capability",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (POST /v1/fleet/sensors/{id}/protocol-parse-capability)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/RecommissionSensor": {
+          "name": "recommission-sensor",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (POST /v1/fleet/sensors/{id}/recommission)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PutSensorStorageConfig": {
+          "name": "put-sensor-storage-config",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (PUT /v1/fleet/sensors/{id}/storage-config)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PutSensorStorageFilter": {
+          "name": "put-sensor-storage-filter",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (PUT /v1/fleet/sensors/{id}/storage-filter)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PutSensorStorageProfile": {
+          "name": "put-sensor-storage-profile",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (PUT /v1/fleet/sensors/{id}/storage-profile)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetSensorStorageInventory": {
+          "name": "get-sensor-storage-inventory",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (GET /v1/fleet/sensors/{id}/storage/inventory)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetSensorSvid": {
+          "name": "get-sensor-svid",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (GET /v1/fleet/sensors/{id}/svid)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/RenewSensorSvid": {
+          "name": "renew-sensor-svid",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (POST /v1/fleet/sensors/{id}/svid)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PutSensorWatermark": {
+          "name": "put-sensor-watermark",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (PUT /v1/fleet/sensors/{id}/watermark)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetHealth": {
+          "name": "get-health",
+          "description": "该接口属于“健康检查”模块，用于查询/获取该模块中的业务数据。检查服务或依赖组件的存活状态与可用状态。 (GET /v1/health)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PageMultiIntervisitEdges": {
+          "name": "page-multi-intervisit-edges",
+          "description": "该接口属于“访问关系分析”模块，用于提交/执行该模块中的业务数据。分析资产、主机或服务之间的访问关系。 (POST /v1/intervisit/edges/multi/page)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/SearchMultiIntervisitEdges": {
+          "name": "search-multi-intervisit-edges",
+          "description": "该接口属于“访问关系分析”模块，用于提交/执行该模块中的业务数据。分析资产、主机或服务之间的访问关系。 (POST /v1/intervisit/edges/multi/search)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PageIntervisitEdges": {
+          "name": "page-intervisit-edges",
+          "description": "该接口属于“访问关系分析”模块，用于提交/执行该模块中的业务数据。分析资产、主机或服务之间的访问关系。 (POST /v1/intervisit/edges/page)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/SearchIntervisitEdges": {
+          "name": "search-intervisit-edges",
+          "description": "该接口属于“访问关系分析”模块，用于提交/执行该模块中的业务数据。分析资产、主机或服务之间的访问关系。 (POST /v1/intervisit/edges/search)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/SearchIntervisitTopology": {
+          "name": "search-intervisit-topology",
+          "description": "该接口属于“访问关系分析”模块，用于提交/执行该模块中的业务数据。分析资产、主机或服务之间的访问关系。 (POST /v1/intervisit/topology/search)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListJobs": {
+          "name": "list-jobs",
+          "description": "该接口属于“任务管理”模块，用于查询/获取该模块中的业务数据。任务的创建、提交、执行状态查询与生命周期管理。 (GET /v1/jobs)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/CreateJob": {
+          "name": "create-job",
+          "description": "该接口属于“任务管理”模块，用于提交/执行该模块中的业务数据。任务的创建、提交、执行状态查询与生命周期管理。 (POST /v1/jobs)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetJob": {
+          "name": "get-job",
+          "description": "该接口属于“任务管理”模块，用于查询/获取该模块中的业务数据。任务的创建、提交、执行状态查询与生命周期管理。 (GET /v1/jobs/{id})"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/DeleteJob": {
+          "name": "delete-job",
+          "description": "该接口属于“任务管理”模块，用于删除该模块中的业务数据。任务的创建、提交、执行状态查询与生命周期管理。 (DELETE /v1/jobs/{id})"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetJobArtifact": {
+          "name": "get-job-artifact",
+          "description": "该接口属于“任务管理”模块，用于查询/获取该模块中的业务数据。任务的创建、提交、执行状态查询与生命周期管理。 (GET /v1/jobs/{id}/artifacts/{name})"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/CancelJob": {
+          "name": "cancel-job",
+          "description": "该接口属于“任务管理”模块，用于提交/执行该模块中的业务数据。任务的创建、提交、执行状态查询与生命周期管理。 (POST /v1/jobs/{id}/cancel)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetMetricsPipeline": {
+          "name": "get-metrics-pipeline",
+          "description": "该接口属于“采集管道监控”模块，用于查询/获取该模块中的业务数据。查看采集链路、管道运行情况及监控信息。 (GET /v1/metrics-pipeline)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListNetgroups": {
+          "name": "list-netgroups",
+          "description": "该接口属于“网段管理”模块，用于查询/获取该模块中的业务数据。管理网络网段及其属性。 (GET /v1/netgroups)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PublishNetgroupDict": {
+          "name": "publish-netgroup-dict",
+          "description": "发布当前配置或规则集；请关注接口返回的版本、摘要及发布结果。 (POST /v1/netgroups/publish)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PutNetgroup": {
+          "name": "put-netgroup",
+          "description": "该接口属于“网段管理”模块，用于创建或整体更新该模块中的业务数据。管理网络网段及其属性。 (PUT /v1/netgroups/{id})"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListNpmFields": {
+          "name": "list-npm-fields",
+          "description": "该接口属于“网络性能监控”模块，用于查询/获取该模块中的业务数据。查询网络性能指标和监控数据。 (GET /v1/npm/fields)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetNpmSeries": {
+          "name": "get-npm-series",
+          "description": "该接口属于“网络性能监控”模块，用于查询/获取该模块中的业务数据。查询网络性能指标和监控数据。 (GET /v1/npm/series)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetNpmTop": {
+          "name": "get-npm-top",
+          "description": "该接口属于“网络性能监控”模块，用于查询/获取该模块中的业务数据。查询网络性能指标和监控数据。 (GET /v1/npm/top)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetBranding": {
+          "name": "get-branding",
+          "description": "该接口属于“品牌设置”模块，用于查询/获取该模块中的业务数据。读取或更新平台品牌、名称及视觉展示配置。 (GET /v1/oem/branding)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PutBranding": {
+          "name": "put-branding",
+          "description": "该接口属于“品牌设置”模块，用于创建或整体更新该模块中的业务数据。读取或更新平台品牌、名称及视觉展示配置。 (PUT /v1/oem/branding)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetPacketQueryCapabilities": {
+          "name": "get-packet-query-capabilities",
+          "description": "根据请求条件检索网络数据包及其相关信息。 (GET /v1/packets/capabilities)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetPacketDetail": {
+          "name": "get-packet-detail",
+          "description": "根据请求条件检索网络数据包及其相关信息。 (POST /v1/packets/detail)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/QueryPacketFacets": {
+          "name": "query-packet-facets",
+          "description": "根据请求条件检索网络数据包及其相关信息。 (POST /v1/packets/facets)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/QueryPacketFacetsBatch": {
+          "name": "query-packet-facets-batch",
+          "description": "根据请求条件检索网络数据包及其相关信息。 (POST /v1/packets/facets/batch)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetPacketHistogram": {
+          "name": "get-packet-histogram",
+          "description": "根据请求条件检索网络数据包及其相关信息。 (POST /v1/packets/histogram)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListPackets": {
+          "name": "list-packets",
+          "description": "根据请求条件检索网络数据包及其相关信息。 (POST /v1/packets/list)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/SearchPackets": {
+          "name": "search-packets",
+          "description": "根据请求条件检索网络数据包及其相关信息。 (POST /v1/packets/search)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListPacketSensors": {
+          "name": "list-packet-sensors",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (GET /v1/packets/sensors)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/StreamPackets": {
+          "name": "stream-packets",
+          "description": "根据请求条件检索网络数据包及其相关信息。 (POST /v1/packets/stream)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListPortgroups": {
+          "name": "list-portgroups",
+          "description": "该接口属于“端口组管理”模块，用于查询/获取该模块中的业务数据。管理端口组及端口集合配置。 (GET /v1/portgroups)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PutPortgroup": {
+          "name": "put-portgroup",
+          "description": "该接口属于“端口组管理”模块，用于创建或整体更新该模块中的业务数据。管理端口组及端口集合配置。 (PUT /v1/portgroups/{id})"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/QueryProtocolAnalysis": {
+          "name": "query-protocol-analysis",
+          "description": "该接口属于“协议分析”模块，用于提交/执行该模块中的业务数据。查询和分析网络协议相关数据。 (POST /v1/protocol-analysis/query)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListProtocolAnalysisScenarios": {
+          "name": "list-protocol-analysis-scenarios",
+          "description": "该接口属于“协议分析”模块，用于查询/获取该模块中的业务数据。查询和分析网络协议相关数据。 (GET /v1/protocol-analysis/scenarios)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListProtocolAnalysisSensors": {
+          "name": "list-protocol-analysis-sensors",
+          "description": "管理探针/传感器相关信息、配置或运行状态。 (GET /v1/protocol-analysis/sensors)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListRecordFields": {
+          "name": "list-record-fields",
+          "description": "该接口属于“会话检索”模块，用于查询/获取该模块中的业务数据。按时间、网络条件等筛选和查看网络会话记录。 (GET /v1/records/fields)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PageRecords": {
+          "name": "page-records",
+          "description": "该接口属于“会话检索”模块，用于提交/执行该模块中的业务数据。按时间、网络条件等筛选和查看网络会话记录。 (POST /v1/records/page)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/SearchRecords": {
+          "name": "search-records",
+          "description": "该接口属于“会话检索”模块，用于提交/执行该模块中的业务数据。按时间、网络条件等筛选和查看网络会话记录。 (POST /v1/records/search)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ExportReport": {
+          "name": "export-report",
+          "description": "管理或查询报表任务及其生成结果。 (POST /v1/reports/export)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/RenderReport": {
+          "name": "render-report",
+          "description": "管理或查询报表任务及其生成结果。 (POST /v1/reports/render)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListReportSchedules": {
+          "name": "list-report-schedules",
+          "description": "管理或查询报表任务及其生成结果。 (GET /v1/reports/schedules)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/CreateReportSchedule": {
+          "name": "create-report-schedule",
+          "description": "管理或查询报表任务及其生成结果。 (POST /v1/reports/schedules)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/DeleteReportSchedule": {
+          "name": "delete-report-schedule",
+          "description": "管理或查询报表任务及其生成结果。 (DELETE /v1/reports/schedules/{id})"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/UpdateReportSchedule": {
+          "name": "update-report-schedule",
+          "description": "管理或查询报表任务及其生成结果。 (PATCH /v1/reports/schedules/{id})"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListReportExecutions": {
+          "name": "list-report-executions",
+          "description": "管理或查询报表任务及其生成结果。 (GET /v1/reports/schedules/{id}/executions)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListReportTemplates": {
+          "name": "list-report-templates",
+          "description": "管理或查询报表任务及其生成结果。 (GET /v1/reports/templates)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PreviewScenarioPipeline": {
+          "name": "preview-scenario-pipeline",
+          "description": "该接口属于“场景管理”模块，用于提交/执行该模块中的业务数据。管理平台分析场景及其配置。 (POST /v1/scenarios/preview-pipeline)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListSites": {
+          "name": "list-sites",
+          "description": "查询或维护站点配置及站点信息。 (GET /v1/sites)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PutSite": {
+          "name": "put-site",
+          "description": "查询或维护站点配置及站点信息。 (PUT /v1/sites/{id})"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/DeleteSite": {
+          "name": "delete-site",
+          "description": "查询或维护站点配置及站点信息。 (DELETE /v1/sites/{id})"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PreviewThreatIntelMapping": {
+          "name": "preview-threat-intel-mapping",
+          "description": "查询或管理威胁情报相关数据。 (POST /v1/threat-intel/mapping/preview)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListThreatIntelSourceProfiles": {
+          "name": "list-threat-intel-source-profiles",
+          "description": "根据请求条件检索网络流量中关联的文件记录。 (GET /v1/threat-intel/source-profiles)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/ListThreatIntelSources": {
+          "name": "list-threat-intel-sources",
+          "description": "查询或管理威胁情报相关数据。 (GET /v1/threat-intel/sources)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/CreateThreatIntelSource": {
+          "name": "create-threat-intel-source",
+          "description": "查询或管理威胁情报相关数据。 (POST /v1/threat-intel/sources)"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/GetThreatIntelSource": {
+          "name": "get-threat-intel-source",
+          "description": "查询或管理威胁情报相关数据。 (GET /v1/threat-intel/sources/{id})"
+        },
+        "Ruifosang_DPS_Version.Ruifosang_DPS_Version/PublishThreatIntelSourceVersion": {
+          "name": "publish-threat-intel-source-version",
+          "description": "查询或管理威胁情报相关数据。 (POST /v1/threat-intel/sources/{id}/versions)"
+        }
+      }
+    }
+  }
+}

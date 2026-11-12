@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "baseUrl": {
+      "type": "string",
+      "description": "DPS 平台根地址，例如 https://dps.example.com（不带结尾斜杠）。必填。"
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "description": "随每个请求发送的额外 HTTP 头，例如反向代理的 X-Forwarded-* 或自定义租户头。"
+    },
+    "cookie": {
+      "type": "string",
+      "description": "会话 Cookie。可在此配置固定会话，也可用 Login / LoginWithPassword 返回的 set-cookie 头。"
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 15000,
+      "description": "单次 HTTP 请求超时（毫秒）。"
+    },
+    "skipTlsVerify": {
+      "type": "boolean",
+      "default": false,
+      "description": "私有部署使用自签证书时跳过 TLS 校验。"
+    }
+  }
+}
