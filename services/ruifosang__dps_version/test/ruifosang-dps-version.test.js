@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { GrpcError, grpcStatus } from "@chaitin-ai/octobus-sdk";
+import { GrpcError, grpcStatus, loadServicePackage } from "@chaitin-ai/octobus-sdk";
 
 import { ENDPOINTS } from "../src/endpoints.js";
 import { _test, handlers } from "../src/ruifosang-dps-version.js";
@@ -534,6 +534,36 @@ test("describeFailure handles empty and malformed problem payloads", () => {
   const parsed = _test.describeFailure(409, '{"title":"conflict","status":409}', []);
   assert.equal(parsed.message, "HTTP 409 | conflict");
   assert.deepEqual(parsed.problem, { title: "conflict", status: 409 });
+});
+
+test("a path parameter omitted by the caller never decodes to zero", async () => {
+  // Regression: proto3 implicit presence turned an absent numeric path parameter into 0,
+  // so DeleteSite with no id issued DELETE /v1/sites/0. The request must travel through the
+  // real protobuf codec, because only the wire round-trip loses presence.
+  const runtime = loadServicePackage(new URL("..", import.meta.url).pathname);
+  const definition = runtime.grpcServices[0].definition;
+  const calls = captureFetch(() => makeResponse(204));
+
+  for (const [rpc, request] of [
+    ["DeleteSite", {}],
+    ["DeleteAppRule", {}],
+    ["HeadArchiveEntryBytes", { sha256: "aa".repeat(32) }],
+    ["PutAppEntry", { body: { x: 1 } }],
+  ]) {
+    const decoded = definition[rpc].requestDeserialize(definition[rpc].requestSerialize(request));
+    await expectGrpc(
+      () => handlers[SERVICE + "/" + rpc](buildCtx(decoded)),
+      grpcStatus.INVALID_ARGUMENT,
+    );
+  }
+  assert.equal(calls.length, 0, "no request may be sent for a missing path parameter");
+
+  // An explicit zero is a real value and must still be sent.
+  const zero = definition.HeadArchiveEntryBytes.requestDeserialize(
+    definition.HeadArchiveEntryBytes.requestSerialize({ sha256: "aa".repeat(32), index: 0 }),
+  );
+  await handlers[SERVICE + "/HeadArchiveEntryBytes"](buildCtx(zero));
+  assert.match(calls[0].url, /\/archive\/entries\/0\/bytes$/);
 });
 
 test("collectHeaders tolerates responses without getSetCookie", () => {

@@ -731,7 +731,7 @@ message ConfirmDeviceCandidatesRequest {
 // 根据详情记录 ID 查询该条记录关联的明细数据，并支持分页读取。
 message ListDeviceCandidateDetailsRequest {
   // path, required
-  string detail_id = 1;
+  optional string detail_id = 1;
   // query, optional
   optional string cursor = 2;
   // query, optional
@@ -796,7 +796,7 @@ message ConfirmProvisionalEndpointsRequest {
 // 根据详情记录 ID 查询该条记录关联的明细数据，并支持分页读取。
 message ListProvisionalEndpointDetailsRequest {
   // path, required
-  string detail_id = 1;
+  optional string detail_id = 1;
   // query, optional
   optional string cursor = 2;
   // query, optional
@@ -852,7 +852,7 @@ message ConfirmServiceComponentsRequest {
 // 根据详情记录 ID 查询该条记录关联的明细数据，并支持分页读取。
 message ListServiceComponentDetailsRequest {
   // path, required
-  string detail_id = 1;
+  optional string detail_id = 1;
   // query, optional
   optional string cursor = 2;
   // query, optional
@@ -882,7 +882,7 @@ message ListServiceComponentSummariesRequest {
 // 查询或更新指定资产的详情信息。
 message GetAssetRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
   // query, required
   optional int64 from_sec = 2;
   // query, required
@@ -893,7 +893,7 @@ message GetAssetRequest {
 // 查询或更新指定资产的详情信息。
 message PatchAssetRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
   // Upstream JSON body. Vendor schema: assetpatchrequest.
   google.protobuf.Struct body = 2;
 }
@@ -902,7 +902,7 @@ message PatchAssetRequest {
 // 触发指定资产的重新指纹识别或重新归类操作。
 message RefingerprintAssetRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
   // Upstream JSON body. Vendor schema: assetrefingerprintrequest.
   google.protobuf.Struct body = 2;
 }
@@ -911,7 +911,7 @@ message RefingerprintAssetRequest {
 // 查询指定资产关联的服务信息。
 message ListAssetServicesRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
   // query, required
   optional int64 from_sec = 2;
   // query, required
@@ -948,7 +948,7 @@ message ListEnrichmentOverridesRequest {
 // 该接口属于“平台服务”模块，用于创建或整体更新该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。
 message PutEnrichmentOverrideRequest {
   // path, required: 0=create; positive=update
-  int64 id = 1;
+  optional int64 id = 1;
   // Upstream JSON body. Vendor schema: putenrichmentoverriderequest.
   google.protobuf.Struct body = 2;
 }
@@ -957,7 +957,7 @@ message PutEnrichmentOverrideRequest {
 // 该接口属于“平台服务”模块，用于删除该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。
 message DeleteEnrichmentOverrideRequest {
   // path, required
-  int64 id = 1;
+  optional int64 id = 1;
   // query, required
   optional int64 expected_draft_revision = 2;
 }
@@ -1005,7 +1005,7 @@ message ListEnrichmentVersionsRequest {
 // 该接口属于“平台服务”模块，用于提交/执行该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。
 message RestoreEnrichmentVersionRequest {
   // path, required
-  int64 version = 1;
+  optional int64 version = 1;
   // Upstream JSON body. Vendor schema: restoreenrichmentrequest.
   google.protobuf.Struct body = 2;
 }
@@ -1072,7 +1072,7 @@ message GetAppRulesetInfoRequest {
 // 管理应用识别规则，包括查询、更新、删除、排序和发布规则集。
 message PutAppRuleRequest {
   // path, required
-  int64 rule_id = 1;
+  optional int64 rule_id = 1;
   // Upstream JSON body. Vendor schema: appruledto.
   google.protobuf.Struct body = 2;
 }
@@ -1081,7 +1081,7 @@ message PutAppRuleRequest {
 // 管理应用识别规则，包括查询、更新、删除、排序和发布规则集。
 message DeleteAppRuleRequest {
   // path, required
-  int64 rule_id = 1;
+  optional int64 rule_id = 1;
 }
 
 // ListAppsRequest — GET /v1/apps
@@ -1094,9 +1094,9 @@ message ListAppsRequest {
 // 查询或维护应用目录条目及其应用识别元数据。
 message PutAppEntryRequest {
   // path, required
-  int32 engine_id = 1;
+  optional int32 engine_id = 1;
   // path, required
-  int32 selector_id = 2;
+  optional int32 selector_id = 2;
   // Upstream JSON body. Vendor schema: appentrydto.
   google.protobuf.Struct body = 3;
 }
@@ -1179,14 +1179,14 @@ message GetFileStatsRequest {
 // 根据请求条件检索网络流量中关联的文件记录。
 message ListArchiveEntriesRequest {
   // path, required: 64 位小写 hex
-  string sha256 = 1;
+  optional string sha256 = 1;
 }
 
 // ListArchiveEntriesWithPasswordRequest — POST /v1/files/{sha256}/archive/entries
 // 根据请求条件检索网络流量中关联的文件记录。
 message ListArchiveEntriesWithPasswordRequest {
   // path, required: 64 位小写 hex
-  string sha256 = 1;
+  optional string sha256 = 1;
   // Upstream JSON body. Vendor schema: filearchiveaccessrequest.
   google.protobuf.Struct body = 2;
 }
@@ -1195,9 +1195,9 @@ message ListArchiveEntriesWithPasswordRequest {
 // 根据请求条件检索网络流量中关联的文件记录。
 message GetArchiveEntryBytesRequest {
   // path, required: 64 位小写 hex
-  string sha256 = 1;
+  optional string sha256 = 1;
   // path, required: 归档目录条目序号
-  int32 index = 2;
+  optional int32 index = 2;
   // header, optional: 单段字节范围，例如 bytes=0-65535
   optional string range = 3;
 }
@@ -1206,9 +1206,9 @@ message GetArchiveEntryBytesRequest {
 // 根据请求条件检索网络流量中关联的文件记录。
 message GetArchiveEntryBytesWithPasswordRequest {
   // path, required: 64 位小写 hex
-  string sha256 = 1;
+  optional string sha256 = 1;
   // path, required: 归档目录条目序号
-  int32 index = 2;
+  optional int32 index = 2;
   // header, optional: 单段字节范围，例如 bytes=0-65535
   optional string range = 3;
   // Upstream JSON body. Vendor schema: filearchiveaccessrequest.
@@ -1219,9 +1219,9 @@ message GetArchiveEntryBytesWithPasswordRequest {
 // 根据请求条件检索网络流量中关联的文件记录。
 message HeadArchiveEntryBytesRequest {
   // path, required: 64 位小写 hex
-  string sha256 = 1;
+  optional string sha256 = 1;
   // path, required: 归档目录条目序号
-  int32 index = 2;
+  optional int32 index = 2;
   // header, optional: 单段字节范围，例如 bytes=0-65535
   optional string range = 3;
 }
@@ -1230,7 +1230,7 @@ message HeadArchiveEntryBytesRequest {
 // 根据请求条件检索网络流量中关联的文件记录。
 message GetFileBytesRequest {
   // path, required: 64 位小写 hex
-  string sha256 = 1;
+  optional string sha256 = 1;
 }
 
 // EnrollSensorRequest — POST /v1/fleet/enroll
@@ -1268,14 +1268,14 @@ message ListSensorsRequest {
 // 管理探针/传感器相关信息、配置或运行状态。
 message GetSensorRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
 }
 
 // PatchSensorRequest — PATCH /v1/fleet/sensors/{id}
 // 管理探针/传感器相关信息、配置或运行状态。
 message PatchSensorRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
   // Upstream JSON body. Vendor schema: sensormetadatarequest.
   google.protobuf.Struct body = 2;
 }
@@ -1284,21 +1284,21 @@ message PatchSensorRequest {
 // 管理应用识别规则，包括查询、更新、删除、排序和发布规则集。
 message GetSensorAppRulesetRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
 }
 
 // ApproveSensorRequest — POST /v1/fleet/sensors/{id}/approve
 // 管理探针/传感器相关信息、配置或运行状态。
 message ApproveSensorRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
 }
 
 // PutSensorCaptureConfigRequest — PUT /v1/fleet/sensors/{id}/capture-config
 // 管理探针/传感器相关信息、配置或运行状态。
 message PutSensorCaptureConfigRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
   // Upstream JSON body. Vendor schema: captureconfigdto.
   google.protobuf.Struct body = 2;
 }
@@ -1307,7 +1307,7 @@ message PutSensorCaptureConfigRequest {
 // 管理探针/传感器相关信息、配置或运行状态。
 message PutSensorCaptureFilterRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
   // Upstream JSON body. Vendor schema: capturefilterconfigrequest.
   google.protobuf.Struct body = 2;
 }
@@ -1324,21 +1324,21 @@ message ListSensorCaptureFilterAuditRequest {
   // query, optional
   optional int32 limit = 4;
   // path, required
-  string id = 5;
+  optional string id = 5;
 }
 
 // GetSensorCaptureFilterCapabilityRequest — GET /v1/fleet/sensors/{id}/capture-filter/capability
 // 管理探针/传感器相关信息、配置或运行状态。
 message GetSensorCaptureFilterCapabilityRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
 }
 
 // ValidateSensorCaptureFilterRequest — POST /v1/fleet/sensors/{id}/capture-filter/validate
 // 管理探针/传感器相关信息、配置或运行状态。
 message ValidateSensorCaptureFilterRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
   // Upstream JSON body. Vendor schema: capturefilterconfigrequest.
   google.protobuf.Struct body = 2;
 }
@@ -1347,21 +1347,21 @@ message ValidateSensorCaptureFilterRequest {
 // 管理探针/传感器相关信息、配置或运行状态。
 message GetSensorConfigRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
 }
 
 // DecommissionSensorRequest — POST /v1/fleet/sensors/{id}/decommission
 // 管理探针/传感器相关信息、配置或运行状态。
 message DecommissionSensorRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
 }
 
 // PutSensorDedupConfigRequest — PUT /v1/fleet/sensors/{id}/dedup-config
 // 管理探针/传感器相关信息、配置或运行状态。
 message PutSensorDedupConfigRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
   // Upstream JSON body. Vendor schema: dedupconfigdto.
   google.protobuf.Struct body = 2;
 }
@@ -1370,14 +1370,14 @@ message PutSensorDedupConfigRequest {
 // 管理探针/传感器相关信息、配置或运行状态。
 message GetSensorFieldCatalogRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
 }
 
 // PublishSensorFieldCatalogRequest — POST /v1/fleet/sensors/{id}/field-catalog
 // 管理探针/传感器相关信息、配置或运行状态。
 message PublishSensorFieldCatalogRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
   // Upstream JSON body. Vendor schema: fieldcatalogsnapshotrequest.
   google.protobuf.Struct body = 2;
 }
@@ -1386,14 +1386,14 @@ message PublishSensorFieldCatalogRequest {
 // 管理探针/传感器相关信息、配置或运行状态。
 message ListSensorLogicalLinksRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
 }
 
 // PutSensorLogicalLinksRequest — PUT /v1/fleet/sensors/{id}/logical-links
 // 管理探针/传感器相关信息、配置或运行状态。
 message PutSensorLogicalLinksRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
   // Upstream JSON body. Vendor schema: logicallinksrequest.
   google.protobuf.Struct body = 2;
 }
@@ -1402,7 +1402,7 @@ message PutSensorLogicalLinksRequest {
 // 管理探针/传感器相关信息、配置或运行状态。
 message GetSensorMetricsRequest {
   // path, required: 探针 sensor_id
-  string id = 1;
+  optional string id = 1;
   // query, required: 指标 key(白名单,见 metrics field registry)
   optional string metric = 2;
   // query, required: 窗口起点(unix 秒)
@@ -1419,14 +1419,14 @@ message GetSensorMetricsRequest {
 // 管理探针/传感器相关信息、配置或运行状态。
 message GetSensorNetgroupDictRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
 }
 
 // PutSensorNpmConfigRequest — PUT /v1/fleet/sensors/{id}/npm-config
 // 管理探针/传感器相关信息、配置或运行状态。
 message PutSensorNpmConfigRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
   // Upstream JSON body. Vendor schema: npmconfigrequest.
   google.protobuf.Struct body = 2;
 }
@@ -1435,7 +1435,7 @@ message PutSensorNpmConfigRequest {
 // 管理探针/传感器相关信息、配置或运行状态。
 message PutSensorObjectStorageRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
   // Upstream JSON body. Vendor schema: objectstorageconfigrequest.
   google.protobuf.Struct body = 2;
 }
@@ -1444,7 +1444,7 @@ message PutSensorObjectStorageRequest {
 // 管理探针/传感器相关信息、配置或运行状态。
 message PutSensorPcapDirsRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
   // Upstream JSON body. Vendor schema: storageruntimecfgdto.
   google.protobuf.Struct body = 2;
 }
@@ -1453,7 +1453,7 @@ message PutSensorPcapDirsRequest {
 // 管理探针/传感器相关信息、配置或运行状态。
 message GetSensorProtocolAnalysisRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
 }
 
 // PutSensorProtocolAnalysisRequest — PUT /v1/fleet/sensors/{id}/protocol-analysis
@@ -1462,7 +1462,7 @@ message PutSensorProtocolAnalysisRequest {
   // header, required: get 回读的 desired_config_version，使用双引号 etag 形式
   optional string if_match = 1 [json_name = "if-match"];
   // path, required
-  string id = 2;
+  optional string id = 2;
   // Upstream JSON body. Vendor schema: protocolanalysisconfigdto.
   google.protobuf.Struct body = 3;
 }
@@ -1471,7 +1471,7 @@ message PutSensorProtocolAnalysisRequest {
 // 管理探针/传感器相关信息、配置或运行状态。
 message PublishSensorProtocolParseCapabilityRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
   // Upstream JSON body. Vendor schema: protocolparsecapabilitysnapshotrequest.
   google.protobuf.Struct body = 2;
 }
@@ -1480,14 +1480,14 @@ message PublishSensorProtocolParseCapabilityRequest {
 // 管理探针/传感器相关信息、配置或运行状态。
 message RecommissionSensorRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
 }
 
 // PutSensorStorageConfigRequest — PUT /v1/fleet/sensors/{id}/storage-config
 // 管理探针/传感器相关信息、配置或运行状态。
 message PutSensorStorageConfigRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
   // Upstream JSON body. Vendor schema: storagepolicydto.
   google.protobuf.Struct body = 2;
 }
@@ -1496,7 +1496,7 @@ message PutSensorStorageConfigRequest {
 // 管理探针/传感器相关信息、配置或运行状态。
 message PutSensorStorageFilterRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
   // Upstream JSON body. Vendor schema: storagefilterconfigrequest.
   google.protobuf.Struct body = 2;
 }
@@ -1505,7 +1505,7 @@ message PutSensorStorageFilterRequest {
 // 管理探针/传感器相关信息、配置或运行状态。
 message PutSensorStorageProfileRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
   // Upstream JSON body. Vendor schema: storageprofileconfigdto.
   google.protobuf.Struct body = 2;
 }
@@ -1514,21 +1514,21 @@ message PutSensorStorageProfileRequest {
 // 管理探针/传感器相关信息、配置或运行状态。
 message GetSensorStorageInventoryRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
 }
 
 // GetSensorSvidRequest — GET /v1/fleet/sensors/{id}/svid
 // 管理探针/传感器相关信息、配置或运行状态。
 message GetSensorSvidRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
 }
 
 // RenewSensorSvidRequest — POST /v1/fleet/sensors/{id}/svid
 // 管理探针/传感器相关信息、配置或运行状态。
 message RenewSensorSvidRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
   // Upstream JSON body. Vendor schema: enrollrequest.
   google.protobuf.Struct body = 2;
 }
@@ -1537,7 +1537,7 @@ message RenewSensorSvidRequest {
 // 管理探针/传感器相关信息、配置或运行状态。
 message PutSensorWatermarkRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
   // Upstream JSON body. Vendor schema: watermarkconfigrequest.
   google.protobuf.Struct body = 2;
 }
@@ -1609,30 +1609,30 @@ message CreateJobRequest {
 // 该接口属于“任务管理”模块，用于查询/获取该模块中的业务数据。任务的创建、提交、执行状态查询与生命周期管理。
 message GetJobRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
 }
 
 // DeleteJobRequest — DELETE /v1/jobs/{id}
 // 该接口属于“任务管理”模块，用于删除该模块中的业务数据。任务的创建、提交、执行状态查询与生命周期管理。
 message DeleteJobRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
 }
 
 // GetJobArtifactRequest — GET /v1/jobs/{id}/artifacts/{name}
 // 该接口属于“任务管理”模块，用于查询/获取该模块中的业务数据。任务的创建、提交、执行状态查询与生命周期管理。
 message GetJobArtifactRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
   // path, required
-  string name = 2;
+  optional string name = 2;
 }
 
 // CancelJobRequest — POST /v1/jobs/{id}/cancel
 // 该接口属于“任务管理”模块，用于提交/执行该模块中的业务数据。任务的创建、提交、执行状态查询与生命周期管理。
 message CancelJobRequest {
   // path, required
-  string id = 1;
+  optional string id = 1;
 }
 
 // GetMetricsPipelineRequest — GET /v1/metrics-pipeline
@@ -1658,7 +1658,7 @@ message PublishNetgroupDictRequest {
 // 该接口属于“网段管理”模块，用于创建或整体更新该模块中的业务数据。管理网络网段及其属性。
 message PutNetgroupRequest {
   // path, required
-  int64 id = 1;
+  optional int64 id = 1;
   // Upstream JSON body. Vendor schema: netgroupdto.
   google.protobuf.Struct body = 2;
 }
@@ -1791,7 +1791,7 @@ message ListPortgroupsRequest {
 // 该接口属于“端口组管理”模块，用于创建或整体更新该模块中的业务数据。管理端口组及端口集合配置。
 message PutPortgroupRequest {
   // path, required
-  int64 id = 1;
+  optional int64 id = 1;
   // Upstream JSON body. Vendor schema: portgroupdto.
   google.protobuf.Struct body = 2;
 }
@@ -1867,14 +1867,14 @@ message CreateReportScheduleRequest {
 // 管理或查询报表任务及其生成结果。
 message DeleteReportScheduleRequest {
   // path, required: 计划 id
-  int64 id = 1;
+  optional int64 id = 1;
 }
 
 // UpdateReportScheduleRequest — PATCH /v1/reports/schedules/{id}
 // 管理或查询报表任务及其生成结果。
 message UpdateReportScheduleRequest {
   // path, required: 计划 id
-  int64 id = 1;
+  optional int64 id = 1;
   // Upstream JSON body. Vendor schema: updatereportschedulerequest.
   google.protobuf.Struct body = 2;
 }
@@ -1883,7 +1883,7 @@ message UpdateReportScheduleRequest {
 // 管理或查询报表任务及其生成结果。
 message ListReportExecutionsRequest {
   // path, required: 计划 id
-  int64 id = 1;
+  optional int64 id = 1;
 }
 
 // ListReportTemplatesRequest — GET /v1/reports/templates
@@ -1909,7 +1909,7 @@ message ListSitesRequest {
 // 查询或维护站点配置及站点信息。
 message PutSiteRequest {
   // path, required
-  int64 id = 1;
+  optional int64 id = 1;
   // Upstream JSON body. Vendor schema: sitedto.
   google.protobuf.Struct body = 2;
 }
@@ -1918,7 +1918,7 @@ message PutSiteRequest {
 // 查询或维护站点配置及站点信息。
 message DeleteSiteRequest {
   // path, required
-  int64 id = 1;
+  optional int64 id = 1;
 }
 
 // PreviewThreatIntelMappingRequest — POST /v1/threat-intel/mapping/preview
@@ -1951,14 +1951,14 @@ message CreateThreatIntelSourceRequest {
 // 查询或管理威胁情报相关数据。
 message GetThreatIntelSourceRequest {
   // path, required: tenant-local source id
-  string id = 1;
+  optional string id = 1;
 }
 
 // PublishThreatIntelSourceVersionRequest — POST /v1/threat-intel/sources/{id}/versions
 // 查询或管理威胁情报相关数据。
 message PublishThreatIntelSourceVersionRequest {
   // path, required: tenant-local source id
-  string id = 1;
+  optional string id = 1;
   // Upstream JSON body. Vendor schema: publishthreatintelsourceversionrequest.
   google.protobuf.Struct body = 2;
 }
