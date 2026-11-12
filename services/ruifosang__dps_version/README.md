@@ -127,6 +127,10 @@ octobus-tentacles ruifosang-dps-version --config config.json publish-enrichment 
 
 - 端点与参数名来自厂商 OpenAPI 文档；`src/endpoints.js` 是唯一映射表，方法名与说明在 `service.json`。
 - 请求体用 `google.protobuf.Struct` 原样透传，字段名遵循 vendor 文档；本包不做 schema 级校验。
+- `Struct` 用 double 表示数字，超过 2^53 的整数会丢精度。文档里有 24 个请求体 schema 含 `int64`
+  字段（如 `expected_version`、`expected_draft_revision`、`from_sec`、`created_unix`、`rule_id`）。
+  这些字段取值都是版本号、时间戳、记录 ID 量级，正常范围内精确；确需更大整数时请先在 2^53 内换算，
+  或改用能直接表达 int64 的调用方自行构造请求。
 - `StreamPackets` 在上游文档里是一次性 JSON 响应（"followed stream"），因此这里同样是普通 unary 方法。
 - 字节端点（文件、归档条目、作业产物、报表导出）返回 `binary_body`；文档未声明它们的响应体，
   状态码按文档记录为 200/206/304。
