@@ -26,6 +26,11 @@
       "type": "boolean",
       "default": false,
       "description": "私有部署使用自签证书时跳过 TLS 校验。"
+    },
+    "followRedirects": {
+      "type": "boolean",
+      "default": false,
+      "description": "是否跟随上游 3xx 重定向。默认关闭：跟随会把 POST 变成不带请求体的 GET，也会把未登录跳转当成 200 页面。"
     }
   }
 }

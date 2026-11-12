@@ -234,6 +234,62 @@ test("HEAD endpoints return headers without a payload", async () => {
   ]);
 });
 
+test("redirects are not followed, so a login page is never mistaken for data", async () => {
+  const calls = captureFetch(() => makeResponse(302, { headers: { location: "/login" } }));
+
+  const error = await expectGrpc(() => call("GetLiveness", {}), grpcStatus.UNKNOWN);
+  assert.equal(error.httpStatus, 302);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].init.redirect, "manual");
+
+  await expectGrpc(() => call("GetLiveness", {}, { config: { followRedirects: true } }), grpcStatus.UNKNOWN);
+  assert.equal(calls[1].init.redirect, "follow");
+});
+
+test("the timeout also covers reading the response body", async () => {
+  globalThis.fetch = (url, init) => Promise.resolve({
+    status: 200,
+    ok: true,
+    headers: responseHeaders({ "content-type": "application/json" }),
+    text: async () => "",
+    // Mimic a body that never finishes arriving.
+    arrayBuffer: () => new Promise((resolve, reject) => {
+      init.signal.addEventListener("abort", () => reject(new Error("aborted")));
+    }),
+  });
+
+  await expectGrpc(() => call("GetLiveness", {}, { config: { timeoutMs: 5 } }), grpcStatus.DEADLINE_EXCEEDED);
+});
+
+test("compressed responses drop a content-length that no longer matches the payload", async () => {
+  captureFetch(() => makeResponse(200, {
+    headers: { "content-type": "application/json", "content-encoding": "gzip", "content-length": "45" },
+    body: '{"ok":true,"padding":"' + "x".repeat(200) + '"}',
+  }));
+
+  const result = await call("GetLiveness", {});
+
+  assert.equal(result.data.ok, true);
+  assert.equal(result.headers, undefined);
+});
+
+test("blank secret values fall back to the configured ones", async () => {
+  const calls = captureFetch(() => makeResponse(200));
+
+  await call("GetMe", {}, { config: { cookie: "config-cookie=1" }, secret: { cookie: "", token: "  " } });
+
+  assert.equal(calls[0].init.headers.cookie, "config-cookie=1");
+  assert.equal(calls[0].init.headers.authorization, undefined);
+});
+
+test("byte requests ask for identity encoding", async () => {
+  const calls = captureFetch(() => makeResponse(200, { body: Buffer.from([7]) }));
+
+  await call("GetFileBytes", { sha256: "ef".repeat(32) });
+
+  assert.equal(calls[0].init.headers["accept-encoding"], "identity");
+});
+
 test("304 Not Modified is returned with its validators instead of raised", async () => {
   captureFetch(() => makeResponse(304, { headers: { etag: 'W/"v3"' } }));
 

@@ -65,10 +65,16 @@ const grpcError = (code, message, extra = {}) => {
 
 const invalidArgument = (message) => grpcError(grpcStatus.INVALID_ARGUMENT, message);
 
-const mergedBindings = (ctx = {}) => ({
-  ...(ctx?.config ?? {}),
-  ...(ctx?.secret ?? {}),
-});
+// Blank secret fields (common when a UI writes empty inputs) must not shadow config values.
+const mergedBindings = (ctx = {}) => {
+  const merged = { ...(ctx?.config ?? {}) };
+  for (const [key, value] of Object.entries(ctx?.secret ?? {})) {
+    if (value === undefined || value === null) continue;
+    if (typeof value === 'string' && value.trim() === '') continue;
+    merged[key] = value;
+  }
+  return merged;
+};
 
 const normalizeBaseUrl = (value) => {
   const raw = trimmedString(value);
@@ -109,17 +115,23 @@ const createTlsDispatcher = (skipTlsVerify) => {
   return insecureDispatcher;
 };
 
-const requestWithTimeout = async (url, init, options = {}) => {
-  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+// consume() runs inside the timeout window, so a stalled response body also surfaces as
+// DEADLINE_EXCEEDED instead of hanging until the socket idle timeout.
+const requestWithTimeout = async (url, init, options, consume) => {
+  const timeoutMs = options.timeoutMs;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const dispatcher = createTlsDispatcher(options.skipTlsVerify);
   try {
-    return await fetch(url, {
+    const response = await fetch(url, {
       ...init,
+      // DPS documents no redirects. Following one silently turns a POST into a GET (dropping
+      // the body) or an auth failure into a 200 login page, so it is opt-in only.
+      redirect: options.followRedirects ? 'follow' : 'manual',
       signal: controller.signal,
       ...(dispatcher ? { dispatcher } : {}),
     });
+    return await consume(response);
   } catch (error) {
     if (controller.signal.aborted) {
       throw grpcError(
@@ -127,6 +139,7 @@ const requestWithTimeout = async (url, init, options = {}) => {
         'request to DPS timed out after ' + timeoutMs + ' ms',
       );
     }
+    if (error instanceof GrpcError) throw error;
     throw grpcError(
       grpcStatus.UNAVAILABLE,
       'request to DPS failed: ' + (error instanceof Error ? error.message : String(error)),
@@ -191,6 +204,9 @@ const buildQuery = (entry, request) => {
 const buildHeaders = (entry, request, bindings, hasBody) => {
   const headers = {
     accept: entry.binary ? '*/*' : JSON_CONTENT_TYPE,
+    // Ask for the raw payload so that a forwarded content-length describes the bytes
+    // actually returned, and so byte endpoints never get a compressed body.
+    'accept-encoding': 'identity',
     ...resolveHeaders(bindings.headers),
   };
   const token = trimmedString(firstDefined(bindings.token, bindings.apiToken, bindings.api_token));
@@ -225,7 +241,11 @@ const resolveBody = (entry, request) => {
 
 const collectHeaders = (response) => {
   const headers = [];
+  const encoding = (response.headers.get('content-encoding') ?? '').toLowerCase();
+  // Once the body is decompressed the upstream content-length no longer describes it.
+  const lengthDescribesPayload = encoding === '' || encoding === 'identity';
   for (const name of FORWARDED_HEADERS) {
+    if (name === 'content-length' && !lengthDescribesPayload) continue;
     let values;
     if (name === 'set-cookie' && typeof response.headers.getSetCookie === 'function') {
       values = response.headers.getSetCookie();
@@ -301,30 +321,32 @@ const callEndpoint = async (ctx, entry) => {
   const url = baseUrl + buildPath(entry, request) + (query.toString() ? '?' + query.toString() : '');
   const init = { method: entry.http, headers };
   if (body !== undefined) init.body = body;
-  const response = await requestWithTimeout(url, init, {
+  return requestWithTimeout(url, init, {
     timeoutMs: resolveTimeoutMs(bindings),
     skipTlsVerify: Boolean(firstDefined(bindings.skipTlsVerify, bindings.skip_tls_verify, bindings.tlsInsecureSkipVerify)),
-  });
-  // 304 Not Modified is a documented answer for the archive-entry endpoints when the
-  // caller sends If-None-Match / If-Modified-Since, so it is returned rather than raised.
-  if (!response.ok && response.status !== 304) {
-    const text = await response.text().catch(() => '');
+    followRedirects: Boolean(firstDefined(bindings.followRedirects, bindings.follow_redirects)),
+  }, async (response) => {
+    // 304 Not Modified is a documented answer for the archive-entry endpoints when the
+    // caller sends If-None-Match / If-Modified-Since, so it is returned rather than raised.
+    if (!response.ok && response.status !== 304) {
+      const text = await response.text().catch(() => '');
+      const forwarded = collectHeaders(response);
+      const { message, problem } = describeFailure(response.status, text, forwarded);
+      throw grpcError(grpcCodeForHttpStatus(response.status), 'DPS ' + entry.rpc + ' failed: ' + message, {
+        httpStatus: response.status,
+        problemCode: problem?.code ? String(problem.code) : undefined,
+        traceId: problem?.trace_id ? String(problem.trace_id) : undefined,
+      });
+    }
+    const { contentType, data, binaryBody } = await readPayload(entry, response);
+    const result = { httpStatus: response.status };
+    if (contentType) result.contentType = contentType;
+    if (data !== undefined) result.data = data;
+    if (binaryBody !== undefined) result.binaryBody = binaryBody;
     const forwarded = collectHeaders(response);
-    const { message, problem } = describeFailure(response.status, text, forwarded);
-    throw grpcError(grpcCodeForHttpStatus(response.status), 'DPS ' + entry.rpc + ' failed: ' + message, {
-      httpStatus: response.status,
-      problemCode: problem?.code ? String(problem.code) : undefined,
-      traceId: problem?.trace_id ? String(problem.trace_id) : undefined,
-    });
-  }
-  const { contentType, data, binaryBody } = await readPayload(entry, response);
-  const result = { httpStatus: response.status };
-  if (contentType) result.contentType = contentType;
-  if (data !== undefined) result.data = data;
-  if (binaryBody !== undefined) result.binaryBody = binaryBody;
-  const forwarded = collectHeaders(response);
-  if (forwarded.length > 0) result.headers = forwarded;
-  return result;
+    if (forwarded.length > 0) result.headers = forwarded;
+    return result;
+  });
 };
 
 const methodFullName = (rpc) => SERVICE_NAME + '.' + SERVICE_NAME + '/' + rpc;

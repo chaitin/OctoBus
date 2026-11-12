@@ -24,6 +24,7 @@ vendor 文档的语义一致（资产与指纹确认、富化、传感器与采�
 - `cookie`：会话 Cookie（可选，见下文鉴权）。
 - `timeoutMs`：单次请求超时，默认 15000 毫秒，超时映射为 `DEADLINE_EXCEEDED`。
 - `skipTlsVerify`：私有部署自签证书时跳过 TLS 校验。
+- `followRedirects`：是否跟随上游 3xx，默认关闭（见下方"说明与限制"）。
 
 密钥：
 
@@ -129,3 +130,8 @@ octobus-tentacles ruifosang-dps-version --config config.json publish-enrichment 
 - `StreamPackets` 在上游文档里是一次性 JSON 响应（"followed stream"），因此这里同样是普通 unary 方法。
 - 字节端点（文件、归档条目、作业产物、报表导出）返回 `binary_body`；文档未声明它们的响应体，
   状态码按文档记录为 200/206/304。
+- 请求统一带 `Accept-Encoding: identity`：字节端点必须拿到未压缩的原始字节，JSON 端点的
+  `content-length` 也才能描述返回内容。若上游仍返回压缩体，本包不转发那个 `content-length`。
+- **不跟随重定向**（`followRedirects` 默认 false）。跟随会把 POST/PUT/PATCH 降级成不带请求体的
+  GET，也会把"未登录跳转登录页"变成 200 的 HTML——两种都是静默的错误结果。需要跟随请显式打开。
+- `timeoutMs` 覆盖整个请求，包括读取响应体；响应体卡住同样映射为 `DEADLINE_EXCEEDED`。
