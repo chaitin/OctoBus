@@ -109,18 +109,18 @@ CLI 命令名与说明。按类别简要列举：
 
 ```bash
 # 存活探针
-octobus-tentacles ruifosang-dps-version --config config.json get-liveness
+octobus-tentacles ruifosang-dps-version get-liveness --config config.json
 
 # 资产列表（from_sec / until_sec 为必填查询参数）
-octobus-tentacles ruifosang-dps-version --config config.json list-assets \
+octobus-tentacles ruifosang-dps-version list-assets --config config.json \
   --data-json '{"fromSec":1700000000,"untilSec":1700003600,"role":["server"],"page":1,"pageSize":50}'
 
 # 确认设备指纹候选（JSON 请求体放在 body 字段里）
-octobus-tentacles ruifosang-dps-version --config config.json confirm-device-candidates \
+octobus-tentacles ruifosang-dps-version confirm-device-candidates --config config.json \
   --data-json '{"body":{"confirmations":[{"detailId":"d-1","action":"confirm"}]}}'
 
 # 请求体较大时可以写进文件，用 --data 传文件路径
-octobus-tentacles ruifosang-dps-version --config config.json publish-enrichment --data payload.json
+octobus-tentacles ruifosang-dps-version publish-enrichment --config config.json --data payload.json
 ```
 
 ## 说明与限制
