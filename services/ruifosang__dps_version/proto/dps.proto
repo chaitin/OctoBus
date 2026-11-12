@@ -1,0 +1,1964 @@
+// Ruifosang DPS platform API (v1) — OpenAPI 3.1.0 surface.
+// Generated from the vendor OpenAPI definition; every RPC maps to one HTTP endpoint.
+
+syntax = "proto3";
+
+package Ruifosang_DPS_Version;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "miner/grpc-service/Ruifosang_DPS_Version";
+
+// ApiResponse is the uniform envelope for every DPS RPC.
+//
+// http_status carries the upstream HTTP status (for example 200, 204 or 206).
+// content_type carries the upstream Content-Type header when present.
+// data carries the decoded JSON payload for JSON endpoints, unchanged.
+// binary_body carries the raw bytes returned by byte endpoints (file, archive entry,
+// job artifact and report export).
+// headers carries the response headers this package forwards: content-length,
+// content-range, accept-ranges, etag, last-modified, location, retry-after and
+// set-cookie. content-type travels in content_type; set-cookie carries the session
+// cookie issued by /v1/auth/login and /v1/auth/password/login.
+message ApiResponse {
+  int32 http_status = 1;
+  string content_type = 2;
+  google.protobuf.Value data = 3;
+  bytes binary_body = 4;
+  repeated ResponseHeader headers = 5;
+}
+
+message ResponseHeader {
+  string name = 1;
+  string value = 2;
+}
+
+service Ruifosang_DPS_Version {
+  // GetLiveness — GET /livez
+  // 存活探针：用于检查服务进程是否仍在运行。
+  rpc GetLiveness(GetLivenessRequest) returns (ApiResponse);
+
+  // GetReadiness — GET /readyz
+  // 就绪探针：用于检查服务是否已准备好接收业务请求；未就绪时可能返回 503。
+  rpc GetReadiness(GetReadinessRequest) returns (ApiResponse);
+
+  // ListAssets — GET /v1/assets
+  // 按时间范围及可选筛选条件查询资产列表，支持分页和排序。
+  rpc ListAssets(ListAssetsRequest) returns (ApiResponse);
+
+  // ListDeviceCandidates — GET /v1/assets/device-candidates
+  // 查询或确认设备指纹识别产生的候选设备记录。
+  rpc ListDeviceCandidates(ListDeviceCandidatesRequest) returns (ApiResponse);
+
+  // ConfirmDeviceCandidates — POST /v1/assets/device-candidates/confirm
+  // 提交人工确认信息，将指定候选对象或识别结果确认为业务记录。
+  rpc ConfirmDeviceCandidates(ConfirmDeviceCandidatesRequest) returns (ApiResponse);
+
+  // ListDeviceCandidateDetails — GET /v1/assets/device-candidates/details/{detail_id}
+  // 根据详情记录 ID 查询该条记录关联的明细数据，并支持分页读取。
+  rpc ListDeviceCandidateDetails(ListDeviceCandidateDetailsRequest) returns (ApiResponse);
+
+  // ListDeviceCandidateSummaries — GET /v1/assets/device-candidates/summary
+  // 获取符合筛选条件的数据摘要，部分接口使用游标进行分页。
+  rpc ListDeviceCandidateSummaries(ListDeviceCandidateSummariesRequest) returns (ApiResponse);
+
+  // GetAssetOverview — GET /v1/assets/overview
+  // 获取指定业务范围和时间区间的汇总概览数据。
+  rpc GetAssetOverview(GetAssetOverviewRequest) returns (ApiResponse);
+
+  // ListProvisionalEndpoints — GET /v1/assets/provisional-endpoints
+  // 查询或确认尚未归并为正式资产的临时端点记录。
+  rpc ListProvisionalEndpoints(ListProvisionalEndpointsRequest) returns (ApiResponse);
+
+  // ConfirmProvisionalEndpoints — POST /v1/assets/provisional-endpoints/confirm
+  // 提交人工确认信息，将指定候选对象或识别结果确认为业务记录。
+  rpc ConfirmProvisionalEndpoints(ConfirmProvisionalEndpointsRequest) returns (ApiResponse);
+
+  // ListProvisionalEndpointDetails — GET /v1/assets/provisional-endpoints/details/{detail_id}
+  // 根据详情记录 ID 查询该条记录关联的明细数据，并支持分页读取。
+  rpc ListProvisionalEndpointDetails(ListProvisionalEndpointDetailsRequest) returns (ApiResponse);
+
+  // ListProvisionalEndpointSummaries — GET /v1/assets/provisional-endpoints/summary
+  // 获取符合筛选条件的数据摘要，部分接口使用游标进行分页。
+  rpc ListProvisionalEndpointSummaries(ListProvisionalEndpointSummariesRequest) returns (ApiResponse);
+
+  // ListServiceComponents — GET /v1/assets/service-components
+  // 查询或确认资产识别出的服务组件及其关联明细。
+  rpc ListServiceComponents(ListServiceComponentsRequest) returns (ApiResponse);
+
+  // ConfirmServiceComponents — POST /v1/assets/service-components/confirm
+  // 提交人工确认信息，将指定候选对象或识别结果确认为业务记录。
+  rpc ConfirmServiceComponents(ConfirmServiceComponentsRequest) returns (ApiResponse);
+
+  // ListServiceComponentDetails — GET /v1/assets/service-components/details/{detail_id}
+  // 根据详情记录 ID 查询该条记录关联的明细数据，并支持分页读取。
+  rpc ListServiceComponentDetails(ListServiceComponentDetailsRequest) returns (ApiResponse);
+
+  // ListServiceComponentSummaries — GET /v1/assets/service-components/summary
+  // 获取符合筛选条件的数据摘要，部分接口使用游标进行分页。
+  rpc ListServiceComponentSummaries(ListServiceComponentSummariesRequest) returns (ApiResponse);
+
+  // GetAsset — GET /v1/assets/{id}
+  // 查询或更新指定资产的详情信息。
+  rpc GetAsset(GetAssetRequest) returns (ApiResponse);
+
+  // PatchAsset — PATCH /v1/assets/{id}
+  // 查询或更新指定资产的详情信息。
+  rpc PatchAsset(PatchAssetRequest) returns (ApiResponse);
+
+  // RefingerprintAsset — POST /v1/assets/{id}/refingerprint
+  // 触发指定资产的重新指纹识别或重新归类操作。
+  rpc RefingerprintAsset(RefingerprintAssetRequest) returns (ApiResponse);
+
+  // ListAssetServices — GET /v1/assets/{id}/services
+  // 查询指定资产关联的服务信息。
+  rpc ListAssetServices(ListAssetServicesRequest) returns (ApiResponse);
+
+  // CommitEnrichmentBatch — POST /v1/enrichment/batch/commit
+  // 该接口属于“平台服务”模块，用于提交/执行该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。
+  rpc CommitEnrichmentBatch(CommitEnrichmentBatchRequest) returns (ApiResponse);
+
+  // PreviewEnrichmentBatch — POST /v1/enrichment/batch/preview
+  // 该接口属于“平台服务”模块，用于提交/执行该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。
+  rpc PreviewEnrichmentBatch(PreviewEnrichmentBatchRequest) returns (ApiResponse);
+
+  // ListBuiltinEnrichmentPackages — GET /v1/enrichment/builtin
+  // 该接口属于“平台服务”模块，用于查询/获取该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。
+  rpc ListBuiltinEnrichmentPackages(ListBuiltinEnrichmentPackagesRequest) returns (ApiResponse);
+
+  // ListEnrichmentOverrides — GET /v1/enrichment/overrides
+  // 该接口属于“平台服务”模块，用于查询/获取该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。
+  rpc ListEnrichmentOverrides(ListEnrichmentOverridesRequest) returns (ApiResponse);
+
+  // PutEnrichmentOverride — PUT /v1/enrichment/overrides/{id}
+  // 该接口属于“平台服务”模块，用于创建或整体更新该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。
+  rpc PutEnrichmentOverride(PutEnrichmentOverrideRequest) returns (ApiResponse);
+
+  // DeleteEnrichmentOverride — DELETE /v1/enrichment/overrides/{id}
+  // 该接口属于“平台服务”模块，用于删除该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。
+  rpc DeleteEnrichmentOverride(DeleteEnrichmentOverrideRequest) returns (ApiResponse);
+
+  // PreviewEnrichment — POST /v1/enrichment/preview
+  // 该接口属于“平台服务”模块，用于提交/执行该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。
+  rpc PreviewEnrichment(PreviewEnrichmentRequest) returns (ApiResponse);
+
+  // PublishEnrichment — POST /v1/enrichment/publish
+  // 发布当前配置或规则集；请关注接口返回的版本、摘要及发布结果。
+  rpc PublishEnrichment(PublishEnrichmentRequest) returns (ApiResponse);
+
+  // ListEnrichmentSuggestions — GET /v1/enrichment/suggestions
+  // 该接口属于“平台服务”模块，用于查询/获取该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。
+  rpc ListEnrichmentSuggestions(ListEnrichmentSuggestionsRequest) returns (ApiResponse);
+
+  // ListEnrichmentVersions — GET /v1/enrichment/versions
+  // 该接口属于“平台服务”模块，用于查询/获取该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。
+  rpc ListEnrichmentVersions(ListEnrichmentVersionsRequest) returns (ApiResponse);
+
+  // RestoreEnrichmentVersion — POST /v1/enrichment/versions/{version}/restore
+  // 该接口属于“平台服务”模块，用于提交/执行该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。
+  rpc RestoreEnrichmentVersion(RestoreEnrichmentVersionRequest) returns (ApiResponse);
+
+  // EstimateScanExport — POST /v1/export/scan-estimate
+  // 该接口属于“平台服务”模块，用于提交/执行该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。
+  rpc EstimateScanExport(EstimateScanExportRequest) returns (ApiResponse);
+
+  // GetFileRestoreConfig — GET /v1/file-restore/config
+  // 根据请求条件检索网络流量中关联的文件记录。
+  rpc GetFileRestoreConfig(GetFileRestoreConfigRequest) returns (ApiResponse);
+
+  // PutFileRestoreConfig — PUT /v1/file-restore/config
+  // 根据请求条件检索网络流量中关联的文件记录。
+  rpc PutFileRestoreConfig(PutFileRestoreConfigRequest) returns (ApiResponse);
+
+  // SwitchAdminScope — POST /v1/admin/scope-switch
+  // 切换当前管理会话的租户/作用域上下文。
+  rpc SwitchAdminScope(SwitchAdminScopeRequest) returns (ApiResponse);
+
+  // CreateAdminUser — POST /v1/admin/users
+  // 创建平台用户，并根据请求内容分配相应的用户属性或角色。
+  rpc CreateAdminUser(CreateAdminUserRequest) returns (ApiResponse);
+
+  // ListAppRules — GET /v1/app-rules
+  // 管理应用识别规则，包括查询、更新、删除、排序和发布规则集。
+  rpc ListAppRules(ListAppRulesRequest) returns (ApiResponse);
+
+  // PublishAppRules — POST /v1/app-rules/publish
+  // 发布当前配置或规则集；请关注接口返回的版本、摘要及发布结果。
+  rpc PublishAppRules(PublishAppRulesRequest) returns (ApiResponse);
+
+  // ReorderAppRules — POST /v1/app-rules/reorder
+  // 按请求中提供的 ID 顺序调整条目优先级或展示顺序。
+  rpc ReorderAppRules(ReorderAppRulesRequest) returns (ApiResponse);
+
+  // GetAppRulesetInfo — GET /v1/app-rules/ruleset
+  // 管理应用识别规则，包括查询、更新、删除、排序和发布规则集。
+  rpc GetAppRulesetInfo(GetAppRulesetInfoRequest) returns (ApiResponse);
+
+  // PutAppRule — PUT /v1/app-rules/{rule_id}
+  // 管理应用识别规则，包括查询、更新、删除、排序和发布规则集。
+  rpc PutAppRule(PutAppRuleRequest) returns (ApiResponse);
+
+  // DeleteAppRule — DELETE /v1/app-rules/{rule_id}
+  // 管理应用识别规则，包括查询、更新、删除、排序和发布规则集。
+  rpc DeleteAppRule(DeleteAppRuleRequest) returns (ApiResponse);
+
+  // ListApps — GET /v1/apps
+  // 查询或维护应用目录条目及其应用识别元数据。
+  rpc ListApps(ListAppsRequest) returns (ApiResponse);
+
+  // PutAppEntry — PUT /v1/apps/{engine_id}/{selector_id}
+  // 查询或维护应用目录条目及其应用识别元数据。
+  rpc PutAppEntry(PutAppEntryRequest) returns (ApiResponse);
+
+  // Login — POST /v1/auth/login
+  // 提交身份凭据以建立登录会话。
+  rpc Login(LoginRequest) returns (ApiResponse);
+
+  // Logout — POST /v1/auth/logout
+  // 结束当前登录会话。
+  rpc Logout(LogoutRequest) returns (ApiResponse);
+
+  // GetMe — GET /v1/auth/me
+  // 该接口属于“身份认证”模块，用于查询/获取该模块中的业务数据。处理登录、登出及当前身份相关操作。
+  rpc GetMe(GetMeRequest) returns (ApiResponse);
+
+  // LoginWithPassword — POST /v1/auth/password/login
+  // 提交身份凭据以建立登录会话。
+  rpc LoginWithPassword(LoginWithPasswordRequest) returns (ApiResponse);
+
+  // ListFacets — GET /v1/facets
+  // 该接口属于“统计维度”模块，用于查询/获取该模块中的业务数据。查询用于统计分析的维度和可选项。
+  rpc ListFacets(ListFacetsRequest) returns (ApiResponse);
+
+  // QueryFacets — POST /v1/facets/query
+  // 该接口属于“统计维度”模块，用于提交/执行该模块中的业务数据。查询用于统计分析的维度和可选项。
+  rpc QueryFacets(QueryFacetsRequest) returns (ApiResponse);
+
+  // GetFacetSchema — GET /v1/facets/schema
+  // 该接口属于“统计维度”模块，用于查询/获取该模块中的业务数据。查询用于统计分析的维度和可选项。
+  rpc GetFacetSchema(GetFacetSchemaRequest) returns (ApiResponse);
+
+  // ListFileFields — GET /v1/files/fields
+  // 根据请求条件检索网络流量中关联的文件记录。
+  rpc ListFileFields(ListFileFieldsRequest) returns (ApiResponse);
+
+  // SearchFiles — POST /v1/files/search
+  // 根据请求条件检索网络流量中关联的文件记录。
+  rpc SearchFiles(SearchFilesRequest) returns (ApiResponse);
+
+  // GetFileStats — POST /v1/files/stats
+  // 根据请求条件检索网络流量中关联的文件记录。
+  rpc GetFileStats(GetFileStatsRequest) returns (ApiResponse);
+
+  // ListArchiveEntries — GET /v1/files/{sha256}/archive/entries
+  // 根据请求条件检索网络流量中关联的文件记录。
+  rpc ListArchiveEntries(ListArchiveEntriesRequest) returns (ApiResponse);
+
+  // ListArchiveEntriesWithPassword — POST /v1/files/{sha256}/archive/entries
+  // 根据请求条件检索网络流量中关联的文件记录。
+  rpc ListArchiveEntriesWithPassword(ListArchiveEntriesWithPasswordRequest) returns (ApiResponse);
+
+  // GetArchiveEntryBytes — GET /v1/files/{sha256}/archive/entries/{index}/bytes
+  // 根据请求条件检索网络流量中关联的文件记录。
+  rpc GetArchiveEntryBytes(GetArchiveEntryBytesRequest) returns (ApiResponse);
+
+  // GetArchiveEntryBytesWithPassword — POST /v1/files/{sha256}/archive/entries/{index}/bytes
+  // 根据请求条件检索网络流量中关联的文件记录。
+  rpc GetArchiveEntryBytesWithPassword(GetArchiveEntryBytesWithPasswordRequest) returns (ApiResponse);
+
+  // HeadArchiveEntryBytes — HEAD /v1/files/{sha256}/archive/entries/{index}/bytes
+  // 根据请求条件检索网络流量中关联的文件记录。
+  rpc HeadArchiveEntryBytes(HeadArchiveEntryBytesRequest) returns (ApiResponse);
+
+  // GetFileBytes — GET /v1/files/{sha256}/bytes
+  // 根据请求条件检索网络流量中关联的文件记录。
+  rpc GetFileBytes(GetFileBytesRequest) returns (ApiResponse);
+
+  // EnrollSensor — POST /v1/fleet/enroll
+  // 该接口属于“探针管理”模块，用于提交/执行该模块中的业务数据。管理探针信息、配置、状态及分发相关操作。
+  rpc EnrollSensor(EnrollSensorRequest) returns (ApiResponse);
+
+  // ListSensorGroups — GET /v1/fleet/groups
+  // 该接口属于“探针管理”模块，用于查询/获取该模块中的业务数据。管理探针信息、配置、状态及分发相关操作。
+  rpc ListSensorGroups(ListSensorGroupsRequest) returns (ApiResponse);
+
+  // SensorHeartbeat — POST /v1/fleet/heartbeat
+  // 该接口属于“探针管理”模块，用于提交/执行该模块中的业务数据。管理探针信息、配置、状态及分发相关操作。
+  rpc SensorHeartbeat(SensorHeartbeatRequest) returns (ApiResponse);
+
+  // ListSensors — GET /v1/fleet/sensors
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc ListSensors(ListSensorsRequest) returns (ApiResponse);
+
+  // GetSensor — GET /v1/fleet/sensors/{id}
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc GetSensor(GetSensorRequest) returns (ApiResponse);
+
+  // PatchSensor — PATCH /v1/fleet/sensors/{id}
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc PatchSensor(PatchSensorRequest) returns (ApiResponse);
+
+  // GetSensorAppRuleset — GET /v1/fleet/sensors/{id}/app-ruleset
+  // 管理应用识别规则，包括查询、更新、删除、排序和发布规则集。
+  rpc GetSensorAppRuleset(GetSensorAppRulesetRequest) returns (ApiResponse);
+
+  // ApproveSensor — POST /v1/fleet/sensors/{id}/approve
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc ApproveSensor(ApproveSensorRequest) returns (ApiResponse);
+
+  // PutSensorCaptureConfig — PUT /v1/fleet/sensors/{id}/capture-config
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc PutSensorCaptureConfig(PutSensorCaptureConfigRequest) returns (ApiResponse);
+
+  // PutSensorCaptureFilter — PUT /v1/fleet/sensors/{id}/capture-filter
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc PutSensorCaptureFilter(PutSensorCaptureFilterRequest) returns (ApiResponse);
+
+  // ListSensorCaptureFilterAudit — GET /v1/fleet/sensors/{id}/capture-filter/audit
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc ListSensorCaptureFilterAudit(ListSensorCaptureFilterAuditRequest) returns (ApiResponse);
+
+  // GetSensorCaptureFilterCapability — GET /v1/fleet/sensors/{id}/capture-filter/capability
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc GetSensorCaptureFilterCapability(GetSensorCaptureFilterCapabilityRequest) returns (ApiResponse);
+
+  // ValidateSensorCaptureFilter — POST /v1/fleet/sensors/{id}/capture-filter/validate
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc ValidateSensorCaptureFilter(ValidateSensorCaptureFilterRequest) returns (ApiResponse);
+
+  // GetSensorConfig — GET /v1/fleet/sensors/{id}/config
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc GetSensorConfig(GetSensorConfigRequest) returns (ApiResponse);
+
+  // DecommissionSensor — POST /v1/fleet/sensors/{id}/decommission
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc DecommissionSensor(DecommissionSensorRequest) returns (ApiResponse);
+
+  // PutSensorDedupConfig — PUT /v1/fleet/sensors/{id}/dedup-config
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc PutSensorDedupConfig(PutSensorDedupConfigRequest) returns (ApiResponse);
+
+  // GetSensorFieldCatalog — GET /v1/fleet/sensors/{id}/field-catalog
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc GetSensorFieldCatalog(GetSensorFieldCatalogRequest) returns (ApiResponse);
+
+  // PublishSensorFieldCatalog — POST /v1/fleet/sensors/{id}/field-catalog
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc PublishSensorFieldCatalog(PublishSensorFieldCatalogRequest) returns (ApiResponse);
+
+  // ListSensorLogicalLinks — GET /v1/fleet/sensors/{id}/logical-links
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc ListSensorLogicalLinks(ListSensorLogicalLinksRequest) returns (ApiResponse);
+
+  // PutSensorLogicalLinks — PUT /v1/fleet/sensors/{id}/logical-links
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc PutSensorLogicalLinks(PutSensorLogicalLinksRequest) returns (ApiResponse);
+
+  // GetSensorMetrics — GET /v1/fleet/sensors/{id}/metrics
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc GetSensorMetrics(GetSensorMetricsRequest) returns (ApiResponse);
+
+  // GetSensorNetgroupDict — GET /v1/fleet/sensors/{id}/netgroup-dict
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc GetSensorNetgroupDict(GetSensorNetgroupDictRequest) returns (ApiResponse);
+
+  // PutSensorNpmConfig — PUT /v1/fleet/sensors/{id}/npm-config
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc PutSensorNpmConfig(PutSensorNpmConfigRequest) returns (ApiResponse);
+
+  // PutSensorObjectStorage — PUT /v1/fleet/sensors/{id}/object-storage
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc PutSensorObjectStorage(PutSensorObjectStorageRequest) returns (ApiResponse);
+
+  // PutSensorPcapDirs — PUT /v1/fleet/sensors/{id}/pcap-dirs
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc PutSensorPcapDirs(PutSensorPcapDirsRequest) returns (ApiResponse);
+
+  // GetSensorProtocolAnalysis — GET /v1/fleet/sensors/{id}/protocol-analysis
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc GetSensorProtocolAnalysis(GetSensorProtocolAnalysisRequest) returns (ApiResponse);
+
+  // PutSensorProtocolAnalysis — PUT /v1/fleet/sensors/{id}/protocol-analysis
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc PutSensorProtocolAnalysis(PutSensorProtocolAnalysisRequest) returns (ApiResponse);
+
+  // PublishSensorProtocolParseCapability — POST /v1/fleet/sensors/{id}/protocol-parse-capability
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc PublishSensorProtocolParseCapability(PublishSensorProtocolParseCapabilityRequest) returns (ApiResponse);
+
+  // RecommissionSensor — POST /v1/fleet/sensors/{id}/recommission
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc RecommissionSensor(RecommissionSensorRequest) returns (ApiResponse);
+
+  // PutSensorStorageConfig — PUT /v1/fleet/sensors/{id}/storage-config
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc PutSensorStorageConfig(PutSensorStorageConfigRequest) returns (ApiResponse);
+
+  // PutSensorStorageFilter — PUT /v1/fleet/sensors/{id}/storage-filter
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc PutSensorStorageFilter(PutSensorStorageFilterRequest) returns (ApiResponse);
+
+  // PutSensorStorageProfile — PUT /v1/fleet/sensors/{id}/storage-profile
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc PutSensorStorageProfile(PutSensorStorageProfileRequest) returns (ApiResponse);
+
+  // GetSensorStorageInventory — GET /v1/fleet/sensors/{id}/storage/inventory
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc GetSensorStorageInventory(GetSensorStorageInventoryRequest) returns (ApiResponse);
+
+  // GetSensorSvid — GET /v1/fleet/sensors/{id}/svid
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc GetSensorSvid(GetSensorSvidRequest) returns (ApiResponse);
+
+  // RenewSensorSvid — POST /v1/fleet/sensors/{id}/svid
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc RenewSensorSvid(RenewSensorSvidRequest) returns (ApiResponse);
+
+  // PutSensorWatermark — PUT /v1/fleet/sensors/{id}/watermark
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc PutSensorWatermark(PutSensorWatermarkRequest) returns (ApiResponse);
+
+  // GetHealth — GET /v1/health
+  // 该接口属于“健康检查”模块，用于查询/获取该模块中的业务数据。检查服务或依赖组件的存活状态与可用状态。
+  rpc GetHealth(GetHealthRequest) returns (ApiResponse);
+
+  // PageMultiIntervisitEdges — POST /v1/intervisit/edges/multi/page
+  // 该接口属于“访问关系分析”模块，用于提交/执行该模块中的业务数据。分析资产、主机或服务之间的访问关系。
+  rpc PageMultiIntervisitEdges(PageMultiIntervisitEdgesRequest) returns (ApiResponse);
+
+  // SearchMultiIntervisitEdges — POST /v1/intervisit/edges/multi/search
+  // 该接口属于“访问关系分析”模块，用于提交/执行该模块中的业务数据。分析资产、主机或服务之间的访问关系。
+  rpc SearchMultiIntervisitEdges(SearchMultiIntervisitEdgesRequest) returns (ApiResponse);
+
+  // PageIntervisitEdges — POST /v1/intervisit/edges/page
+  // 该接口属于“访问关系分析”模块，用于提交/执行该模块中的业务数据。分析资产、主机或服务之间的访问关系。
+  rpc PageIntervisitEdges(PageIntervisitEdgesRequest) returns (ApiResponse);
+
+  // SearchIntervisitEdges — POST /v1/intervisit/edges/search
+  // 该接口属于“访问关系分析”模块，用于提交/执行该模块中的业务数据。分析资产、主机或服务之间的访问关系。
+  rpc SearchIntervisitEdges(SearchIntervisitEdgesRequest) returns (ApiResponse);
+
+  // SearchIntervisitTopology — POST /v1/intervisit/topology/search
+  // 该接口属于“访问关系分析”模块，用于提交/执行该模块中的业务数据。分析资产、主机或服务之间的访问关系。
+  rpc SearchIntervisitTopology(SearchIntervisitTopologyRequest) returns (ApiResponse);
+
+  // ListJobs — GET /v1/jobs
+  // 该接口属于“任务管理”模块，用于查询/获取该模块中的业务数据。任务的创建、提交、执行状态查询与生命周期管理。
+  rpc ListJobs(ListJobsRequest) returns (ApiResponse);
+
+  // CreateJob — POST /v1/jobs
+  // 该接口属于“任务管理”模块，用于提交/执行该模块中的业务数据。任务的创建、提交、执行状态查询与生命周期管理。
+  rpc CreateJob(CreateJobRequest) returns (ApiResponse);
+
+  // GetJob — GET /v1/jobs/{id}
+  // 该接口属于“任务管理”模块，用于查询/获取该模块中的业务数据。任务的创建、提交、执行状态查询与生命周期管理。
+  rpc GetJob(GetJobRequest) returns (ApiResponse);
+
+  // DeleteJob — DELETE /v1/jobs/{id}
+  // 该接口属于“任务管理”模块，用于删除该模块中的业务数据。任务的创建、提交、执行状态查询与生命周期管理。
+  rpc DeleteJob(DeleteJobRequest) returns (ApiResponse);
+
+  // GetJobArtifact — GET /v1/jobs/{id}/artifacts/{name}
+  // 该接口属于“任务管理”模块，用于查询/获取该模块中的业务数据。任务的创建、提交、执行状态查询与生命周期管理。
+  rpc GetJobArtifact(GetJobArtifactRequest) returns (ApiResponse);
+
+  // CancelJob — POST /v1/jobs/{id}/cancel
+  // 该接口属于“任务管理”模块，用于提交/执行该模块中的业务数据。任务的创建、提交、执行状态查询与生命周期管理。
+  rpc CancelJob(CancelJobRequest) returns (ApiResponse);
+
+  // GetMetricsPipeline — GET /v1/metrics-pipeline
+  // 该接口属于“采集管道监控”模块，用于查询/获取该模块中的业务数据。查看采集链路、管道运行情况及监控信息。
+  rpc GetMetricsPipeline(GetMetricsPipelineRequest) returns (ApiResponse);
+
+  // ListNetgroups — GET /v1/netgroups
+  // 该接口属于“网段管理”模块，用于查询/获取该模块中的业务数据。管理网络网段及其属性。
+  rpc ListNetgroups(ListNetgroupsRequest) returns (ApiResponse);
+
+  // PublishNetgroupDict — POST /v1/netgroups/publish
+  // 发布当前配置或规则集；请关注接口返回的版本、摘要及发布结果。
+  rpc PublishNetgroupDict(PublishNetgroupDictRequest) returns (ApiResponse);
+
+  // PutNetgroup — PUT /v1/netgroups/{id}
+  // 该接口属于“网段管理”模块，用于创建或整体更新该模块中的业务数据。管理网络网段及其属性。
+  rpc PutNetgroup(PutNetgroupRequest) returns (ApiResponse);
+
+  // ListNpmFields — GET /v1/npm/fields
+  // 该接口属于“网络性能监控”模块，用于查询/获取该模块中的业务数据。查询网络性能指标和监控数据。
+  rpc ListNpmFields(ListNpmFieldsRequest) returns (ApiResponse);
+
+  // GetNpmSeries — GET /v1/npm/series
+  // 该接口属于“网络性能监控”模块，用于查询/获取该模块中的业务数据。查询网络性能指标和监控数据。
+  rpc GetNpmSeries(GetNpmSeriesRequest) returns (ApiResponse);
+
+  // GetNpmTop — GET /v1/npm/top
+  // 该接口属于“网络性能监控”模块，用于查询/获取该模块中的业务数据。查询网络性能指标和监控数据。
+  rpc GetNpmTop(GetNpmTopRequest) returns (ApiResponse);
+
+  // GetBranding — GET /v1/oem/branding
+  // 该接口属于“品牌设置”模块，用于查询/获取该模块中的业务数据。读取或更新平台品牌、名称及视觉展示配置。
+  rpc GetBranding(GetBrandingRequest) returns (ApiResponse);
+
+  // PutBranding — PUT /v1/oem/branding
+  // 该接口属于“品牌设置”模块，用于创建或整体更新该模块中的业务数据。读取或更新平台品牌、名称及视觉展示配置。
+  rpc PutBranding(PutBrandingRequest) returns (ApiResponse);
+
+  // GetPacketQueryCapabilities — GET /v1/packets/capabilities
+  // 根据请求条件检索网络数据包及其相关信息。
+  rpc GetPacketQueryCapabilities(GetPacketQueryCapabilitiesRequest) returns (ApiResponse);
+
+  // GetPacketDetail — POST /v1/packets/detail
+  // 根据请求条件检索网络数据包及其相关信息。
+  rpc GetPacketDetail(GetPacketDetailRequest) returns (ApiResponse);
+
+  // QueryPacketFacets — POST /v1/packets/facets
+  // 根据请求条件检索网络数据包及其相关信息。
+  rpc QueryPacketFacets(QueryPacketFacetsRequest) returns (ApiResponse);
+
+  // QueryPacketFacetsBatch — POST /v1/packets/facets/batch
+  // 根据请求条件检索网络数据包及其相关信息。
+  rpc QueryPacketFacetsBatch(QueryPacketFacetsBatchRequest) returns (ApiResponse);
+
+  // GetPacketHistogram — POST /v1/packets/histogram
+  // 根据请求条件检索网络数据包及其相关信息。
+  rpc GetPacketHistogram(GetPacketHistogramRequest) returns (ApiResponse);
+
+  // ListPackets — POST /v1/packets/list
+  // 根据请求条件检索网络数据包及其相关信息。
+  rpc ListPackets(ListPacketsRequest) returns (ApiResponse);
+
+  // SearchPackets — POST /v1/packets/search
+  // 根据请求条件检索网络数据包及其相关信息。
+  rpc SearchPackets(SearchPacketsRequest) returns (ApiResponse);
+
+  // ListPacketSensors — GET /v1/packets/sensors
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc ListPacketSensors(ListPacketSensorsRequest) returns (ApiResponse);
+
+  // StreamPackets — POST /v1/packets/stream
+  // 根据请求条件检索网络数据包及其相关信息。
+  rpc StreamPackets(StreamPacketsRequest) returns (ApiResponse);
+
+  // ListPortgroups — GET /v1/portgroups
+  // 该接口属于“端口组管理”模块，用于查询/获取该模块中的业务数据。管理端口组及端口集合配置。
+  rpc ListPortgroups(ListPortgroupsRequest) returns (ApiResponse);
+
+  // PutPortgroup — PUT /v1/portgroups/{id}
+  // 该接口属于“端口组管理”模块，用于创建或整体更新该模块中的业务数据。管理端口组及端口集合配置。
+  rpc PutPortgroup(PutPortgroupRequest) returns (ApiResponse);
+
+  // QueryProtocolAnalysis — POST /v1/protocol-analysis/query
+  // 该接口属于“协议分析”模块，用于提交/执行该模块中的业务数据。查询和分析网络协议相关数据。
+  rpc QueryProtocolAnalysis(QueryProtocolAnalysisRequest) returns (ApiResponse);
+
+  // ListProtocolAnalysisScenarios — GET /v1/protocol-analysis/scenarios
+  // 该接口属于“协议分析”模块，用于查询/获取该模块中的业务数据。查询和分析网络协议相关数据。
+  rpc ListProtocolAnalysisScenarios(ListProtocolAnalysisScenariosRequest) returns (ApiResponse);
+
+  // ListProtocolAnalysisSensors — GET /v1/protocol-analysis/sensors
+  // 管理探针/传感器相关信息、配置或运行状态。
+  rpc ListProtocolAnalysisSensors(ListProtocolAnalysisSensorsRequest) returns (ApiResponse);
+
+  // ListRecordFields — GET /v1/records/fields
+  // 该接口属于“会话检索”模块，用于查询/获取该模块中的业务数据。按时间、网络条件等筛选和查看网络会话记录。
+  rpc ListRecordFields(ListRecordFieldsRequest) returns (ApiResponse);
+
+  // PageRecords — POST /v1/records/page
+  // 该接口属于“会话检索”模块，用于提交/执行该模块中的业务数据。按时间、网络条件等筛选和查看网络会话记录。
+  rpc PageRecords(PageRecordsRequest) returns (ApiResponse);
+
+  // SearchRecords — POST /v1/records/search
+  // 该接口属于“会话检索”模块，用于提交/执行该模块中的业务数据。按时间、网络条件等筛选和查看网络会话记录。
+  rpc SearchRecords(SearchRecordsRequest) returns (ApiResponse);
+
+  // ExportReport — POST /v1/reports/export
+  // 管理或查询报表任务及其生成结果。
+  rpc ExportReport(ExportReportRequest) returns (ApiResponse);
+
+  // RenderReport — POST /v1/reports/render
+  // 管理或查询报表任务及其生成结果。
+  rpc RenderReport(RenderReportRequest) returns (ApiResponse);
+
+  // ListReportSchedules — GET /v1/reports/schedules
+  // 管理或查询报表任务及其生成结果。
+  rpc ListReportSchedules(ListReportSchedulesRequest) returns (ApiResponse);
+
+  // CreateReportSchedule — POST /v1/reports/schedules
+  // 管理或查询报表任务及其生成结果。
+  rpc CreateReportSchedule(CreateReportScheduleRequest) returns (ApiResponse);
+
+  // DeleteReportSchedule — DELETE /v1/reports/schedules/{id}
+  // 管理或查询报表任务及其生成结果。
+  rpc DeleteReportSchedule(DeleteReportScheduleRequest) returns (ApiResponse);
+
+  // UpdateReportSchedule — PATCH /v1/reports/schedules/{id}
+  // 管理或查询报表任务及其生成结果。
+  rpc UpdateReportSchedule(UpdateReportScheduleRequest) returns (ApiResponse);
+
+  // ListReportExecutions — GET /v1/reports/schedules/{id}/executions
+  // 管理或查询报表任务及其生成结果。
+  rpc ListReportExecutions(ListReportExecutionsRequest) returns (ApiResponse);
+
+  // ListReportTemplates — GET /v1/reports/templates
+  // 管理或查询报表任务及其生成结果。
+  rpc ListReportTemplates(ListReportTemplatesRequest) returns (ApiResponse);
+
+  // PreviewScenarioPipeline — POST /v1/scenarios/preview-pipeline
+  // 该接口属于“场景管理”模块，用于提交/执行该模块中的业务数据。管理平台分析场景及其配置。
+  rpc PreviewScenarioPipeline(PreviewScenarioPipelineRequest) returns (ApiResponse);
+
+  // ListSites — GET /v1/sites
+  // 查询或维护站点配置及站点信息。
+  rpc ListSites(ListSitesRequest) returns (ApiResponse);
+
+  // PutSite — PUT /v1/sites/{id}
+  // 查询或维护站点配置及站点信息。
+  rpc PutSite(PutSiteRequest) returns (ApiResponse);
+
+  // DeleteSite — DELETE /v1/sites/{id}
+  // 查询或维护站点配置及站点信息。
+  rpc DeleteSite(DeleteSiteRequest) returns (ApiResponse);
+
+  // PreviewThreatIntelMapping — POST /v1/threat-intel/mapping/preview
+  // 查询或管理威胁情报相关数据。
+  rpc PreviewThreatIntelMapping(PreviewThreatIntelMappingRequest) returns (ApiResponse);
+
+  // ListThreatIntelSourceProfiles — GET /v1/threat-intel/source-profiles
+  // 根据请求条件检索网络流量中关联的文件记录。
+  rpc ListThreatIntelSourceProfiles(ListThreatIntelSourceProfilesRequest) returns (ApiResponse);
+
+  // ListThreatIntelSources — GET /v1/threat-intel/sources
+  // 查询或管理威胁情报相关数据。
+  rpc ListThreatIntelSources(ListThreatIntelSourcesRequest) returns (ApiResponse);
+
+  // CreateThreatIntelSource — POST /v1/threat-intel/sources
+  // 查询或管理威胁情报相关数据。
+  rpc CreateThreatIntelSource(CreateThreatIntelSourceRequest) returns (ApiResponse);
+
+  // GetThreatIntelSource — GET /v1/threat-intel/sources/{id}
+  // 查询或管理威胁情报相关数据。
+  rpc GetThreatIntelSource(GetThreatIntelSourceRequest) returns (ApiResponse);
+
+  // PublishThreatIntelSourceVersion — POST /v1/threat-intel/sources/{id}/versions
+  // 查询或管理威胁情报相关数据。
+  rpc PublishThreatIntelSourceVersion(PublishThreatIntelSourceVersionRequest) returns (ApiResponse);
+
+}
+
+// ============================================================
+// Request messages
+// ============================================================
+
+// GetLivenessRequest — GET /livez
+// 存活探针：用于检查服务进程是否仍在运行。
+// This endpoint takes no parameters.
+message GetLivenessRequest {
+}
+
+// GetReadinessRequest — GET /readyz
+// 就绪探针：用于检查服务是否已准备好接收业务请求；未就绪时可能返回 503。
+// This endpoint takes no parameters.
+message GetReadinessRequest {
+}
+
+// ListAssetsRequest — GET /v1/assets
+// 按时间范围及可选筛选条件查询资产列表，支持分页和排序。
+message ListAssetsRequest {
+  // query, required
+  optional int64 from_sec = 1;
+  // query, required
+  optional int64 until_sec = 2;
+  // query, optional
+  optional string q = 3;
+  // query, optional
+  repeated string role = 4;
+  // query, optional
+  repeated string category = 5;
+  // query, optional
+  repeated string status = 6;
+  // query, optional
+  repeated string band = 7;
+  // query, optional
+  repeated string subnet_cidr = 8;
+  // query, optional
+  repeated string sensor_id = 9;
+  // query, optional
+  repeated string vendor = 10;
+  // query, optional
+  repeated string mproto = 11;
+  // query, optional
+  optional string side = 12;
+  // query, optional
+  optional bool is_local = 13;
+  // query, optional
+  repeated string has_evidence_kind = 14;
+  // query, optional
+  optional string sort_field = 15;
+  // query, optional
+  optional string sort_dir = 16;
+  // query, optional
+  optional int32 page = 17;
+  // query, optional
+  optional int32 page_size = 18;
+}
+
+// ListDeviceCandidatesRequest — GET /v1/assets/device-candidates
+// 查询或确认设备指纹识别产生的候选设备记录。
+message ListDeviceCandidatesRequest {
+  // query, required
+  optional int64 from_sec = 1;
+  // query, required
+  optional int64 until_sec = 2;
+  // query, optional
+  optional string q = 3;
+  // query, optional
+  optional string search_field = 4;
+  // query, optional
+  optional string search_operator = 5;
+  // query, optional
+  optional int32 page = 6;
+  // query, optional
+  optional int32 page_size = 7;
+}
+
+// ConfirmDeviceCandidatesRequest — POST /v1/assets/device-candidates/confirm
+// 提交人工确认信息，将指定候选对象或识别结果确认为业务记录。
+message ConfirmDeviceCandidatesRequest {
+  // Upstream JSON body. Vendor schema: assetfingerprintmanualconfirmationrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// ListDeviceCandidateDetailsRequest — GET /v1/assets/device-candidates/details/{detail_id}
+// 根据详情记录 ID 查询该条记录关联的明细数据，并支持分页读取。
+message ListDeviceCandidateDetailsRequest {
+  // path, required
+  optional string detail_id = 1;
+  // query, optional
+  optional string cursor = 2;
+  // query, optional
+  optional int32 page_size = 3;
+}
+
+// ListDeviceCandidateSummariesRequest — GET /v1/assets/device-candidates/summary
+// 获取符合筛选条件的数据摘要，部分接口使用游标进行分页。
+message ListDeviceCandidateSummariesRequest {
+  // query, required
+  optional int64 from_sec = 1;
+  // query, required
+  optional int64 until_sec = 2;
+  // query, optional
+  optional string q = 3;
+  // query, optional
+  optional string search_field = 4;
+  // query, optional
+  optional string search_operator = 5;
+  // query, optional
+  optional string cursor = 6;
+  // query, optional
+  optional int32 page_size = 7;
+}
+
+// GetAssetOverviewRequest — GET /v1/assets/overview
+// 获取指定业务范围和时间区间的汇总概览数据。
+message GetAssetOverviewRequest {
+  // query, required
+  optional int64 from_sec = 1;
+  // query, required
+  optional int64 until_sec = 2;
+}
+
+// ListProvisionalEndpointsRequest — GET /v1/assets/provisional-endpoints
+// 查询或确认尚未归并为正式资产的临时端点记录。
+message ListProvisionalEndpointsRequest {
+  // query, required
+  optional int64 from_sec = 1;
+  // query, required
+  optional int64 until_sec = 2;
+  // query, optional
+  optional string q = 3;
+  // query, optional
+  optional string search_field = 4;
+  // query, optional
+  optional string search_operator = 5;
+  // query, optional
+  optional int32 page = 6;
+  // query, optional
+  optional int32 page_size = 7;
+}
+
+// ConfirmProvisionalEndpointsRequest — POST /v1/assets/provisional-endpoints/confirm
+// 提交人工确认信息，将指定候选对象或识别结果确认为业务记录。
+message ConfirmProvisionalEndpointsRequest {
+  // Upstream JSON body. Vendor schema: assetfingerprintmanualconfirmationrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// ListProvisionalEndpointDetailsRequest — GET /v1/assets/provisional-endpoints/details/{detail_id}
+// 根据详情记录 ID 查询该条记录关联的明细数据，并支持分页读取。
+message ListProvisionalEndpointDetailsRequest {
+  // path, required
+  optional string detail_id = 1;
+  // query, optional
+  optional string cursor = 2;
+  // query, optional
+  optional int32 page_size = 3;
+}
+
+// ListProvisionalEndpointSummariesRequest — GET /v1/assets/provisional-endpoints/summary
+// 获取符合筛选条件的数据摘要，部分接口使用游标进行分页。
+message ListProvisionalEndpointSummariesRequest {
+  // query, required
+  optional int64 from_sec = 1;
+  // query, required
+  optional int64 until_sec = 2;
+  // query, optional
+  optional string q = 3;
+  // query, optional
+  optional string search_field = 4;
+  // query, optional
+  optional string search_operator = 5;
+  // query, optional
+  optional string cursor = 6;
+  // query, optional
+  optional int32 page_size = 7;
+}
+
+// ListServiceComponentsRequest — GET /v1/assets/service-components
+// 查询或确认资产识别出的服务组件及其关联明细。
+message ListServiceComponentsRequest {
+  // query, required
+  optional int64 from_sec = 1;
+  // query, required
+  optional int64 until_sec = 2;
+  // query, optional
+  optional string q = 3;
+  // query, optional
+  optional string search_field = 4;
+  // query, optional
+  optional string search_operator = 5;
+  // query, optional
+  optional int32 page = 6;
+  // query, optional
+  optional int32 page_size = 7;
+}
+
+// ConfirmServiceComponentsRequest — POST /v1/assets/service-components/confirm
+// 提交人工确认信息，将指定候选对象或识别结果确认为业务记录。
+message ConfirmServiceComponentsRequest {
+  // Upstream JSON body. Vendor schema: assetfingerprintmanualconfirmationrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// ListServiceComponentDetailsRequest — GET /v1/assets/service-components/details/{detail_id}
+// 根据详情记录 ID 查询该条记录关联的明细数据，并支持分页读取。
+message ListServiceComponentDetailsRequest {
+  // path, required
+  optional string detail_id = 1;
+  // query, optional
+  optional string cursor = 2;
+  // query, optional
+  optional int32 page_size = 3;
+}
+
+// ListServiceComponentSummariesRequest — GET /v1/assets/service-components/summary
+// 获取符合筛选条件的数据摘要，部分接口使用游标进行分页。
+message ListServiceComponentSummariesRequest {
+  // query, required
+  optional int64 from_sec = 1;
+  // query, required
+  optional int64 until_sec = 2;
+  // query, optional
+  optional string q = 3;
+  // query, optional
+  optional string search_field = 4;
+  // query, optional
+  optional string search_operator = 5;
+  // query, optional
+  optional string cursor = 6;
+  // query, optional
+  optional int32 page_size = 7;
+}
+
+// GetAssetRequest — GET /v1/assets/{id}
+// 查询或更新指定资产的详情信息。
+message GetAssetRequest {
+  // path, required
+  optional string id = 1;
+  // query, required
+  optional int64 from_sec = 2;
+  // query, required
+  optional int64 until_sec = 3;
+}
+
+// PatchAssetRequest — PATCH /v1/assets/{id}
+// 查询或更新指定资产的详情信息。
+message PatchAssetRequest {
+  // path, required
+  optional string id = 1;
+  // Upstream JSON body. Vendor schema: assetpatchrequest.
+  google.protobuf.Struct body = 2;
+}
+
+// RefingerprintAssetRequest — POST /v1/assets/{id}/refingerprint
+// 触发指定资产的重新指纹识别或重新归类操作。
+message RefingerprintAssetRequest {
+  // path, required
+  optional string id = 1;
+  // Upstream JSON body. Vendor schema: assetrefingerprintrequest.
+  google.protobuf.Struct body = 2;
+}
+
+// ListAssetServicesRequest — GET /v1/assets/{id}/services
+// 查询指定资产关联的服务信息。
+message ListAssetServicesRequest {
+  // path, required
+  optional string id = 1;
+  // query, required
+  optional int64 from_sec = 2;
+  // query, required
+  optional int64 until_sec = 3;
+}
+
+// CommitEnrichmentBatchRequest — POST /v1/enrichment/batch/commit
+// 该接口属于“平台服务”模块，用于提交/执行该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。
+message CommitEnrichmentBatchRequest {
+  // Upstream JSON body. Vendor schema: enrichmentbatchcsvcommitrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// PreviewEnrichmentBatchRequest — POST /v1/enrichment/batch/preview
+// 该接口属于“平台服务”模块，用于提交/执行该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。
+message PreviewEnrichmentBatchRequest {
+  // Upstream JSON body. Vendor schema: enrichmentbatchcsvpreviewrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// ListBuiltinEnrichmentPackagesRequest — GET /v1/enrichment/builtin
+// 该接口属于“平台服务”模块，用于查询/获取该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。
+// This endpoint takes no parameters.
+message ListBuiltinEnrichmentPackagesRequest {
+}
+
+// ListEnrichmentOverridesRequest — GET /v1/enrichment/overrides
+// 该接口属于“平台服务”模块，用于查询/获取该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。
+// This endpoint takes no parameters.
+message ListEnrichmentOverridesRequest {
+}
+
+// PutEnrichmentOverrideRequest — PUT /v1/enrichment/overrides/{id}
+// 该接口属于“平台服务”模块，用于创建或整体更新该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。
+message PutEnrichmentOverrideRequest {
+  // path, required: 0=create; positive=update
+  optional int64 id = 1;
+  // Upstream JSON body. Vendor schema: putenrichmentoverriderequest.
+  google.protobuf.Struct body = 2;
+}
+
+// DeleteEnrichmentOverrideRequest — DELETE /v1/enrichment/overrides/{id}
+// 该接口属于“平台服务”模块，用于删除该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。
+message DeleteEnrichmentOverrideRequest {
+  // path, required
+  optional int64 id = 1;
+  // query, required
+  optional int64 expected_draft_revision = 2;
+}
+
+// PreviewEnrichmentRequest — POST /v1/enrichment/preview
+// 该接口属于“平台服务”模块，用于提交/执行该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。
+message PreviewEnrichmentRequest {
+  // Upstream JSON body. Vendor schema: enrichmentpreviewrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// PublishEnrichmentRequest — POST /v1/enrichment/publish
+// 发布当前配置或规则集；请关注接口返回的版本、摘要及发布结果。
+message PublishEnrichmentRequest {
+  // Upstream JSON body. Vendor schema: publishenrichmentrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// ListEnrichmentSuggestionsRequest — GET /v1/enrichment/suggestions
+// 该接口属于“平台服务”模块，用于查询/获取该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。
+message ListEnrichmentSuggestionsRequest {
+  // query, required: 只接受会话字段白名单；源/目的同域复用候选。
+  optional string field = 1;
+  // query, optional
+  optional string q = 2;
+  // query, optional
+  optional string locale = 3;
+  // query, optional
+  optional int32 limit = 4;
+  // query, optional: 已跳过的候选数量；仅用于管理面下拉分页。
+  optional int32 offset = 5;
+  // query, optional: 可选国家父级；仅省/市候选使用。
+  optional int32 country_geoname_id = 6;
+  // query, optional: 可选一级行政区父级；仅城市候选使用。
+  optional int32 admin1_geoname_id = 7;
+}
+
+// ListEnrichmentVersionsRequest — GET /v1/enrichment/versions
+// 该接口属于“平台服务”模块，用于查询/获取该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。
+// This endpoint takes no parameters.
+message ListEnrichmentVersionsRequest {
+}
+
+// RestoreEnrichmentVersionRequest — POST /v1/enrichment/versions/{version}/restore
+// 该接口属于“平台服务”模块，用于提交/执行该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。
+message RestoreEnrichmentVersionRequest {
+  // path, required
+  optional int64 version = 1;
+  // Upstream JSON body. Vendor schema: restoreenrichmentrequest.
+  google.protobuf.Struct body = 2;
+}
+
+// EstimateScanExportRequest — POST /v1/export/scan-estimate
+// 该接口属于“平台服务”模块，用于提交/执行该模块中的业务数据。平台核心服务接口，包括资产、设备指纹、服务组件及运行状态等。
+// This endpoint takes no parameters.
+message EstimateScanExportRequest {
+}
+
+// GetFileRestoreConfigRequest — GET /v1/file-restore/config
+// 根据请求条件检索网络流量中关联的文件记录。
+// This endpoint takes no parameters.
+message GetFileRestoreConfigRequest {
+}
+
+// PutFileRestoreConfigRequest — PUT /v1/file-restore/config
+// 根据请求条件检索网络流量中关联的文件记录。
+message PutFileRestoreConfigRequest {
+  // Upstream JSON body. Vendor schema: putfilerestoreconfigrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// SwitchAdminScopeRequest — POST /v1/admin/scope-switch
+// 切换当前管理会话的租户/作用域上下文。
+message SwitchAdminScopeRequest {
+  // Upstream JSON body. Vendor schema: scopeswitchrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// CreateAdminUserRequest — POST /v1/admin/users
+// 创建平台用户，并根据请求内容分配相应的用户属性或角色。
+message CreateAdminUserRequest {
+  // Upstream JSON body. Vendor schema: createuserrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// ListAppRulesRequest — GET /v1/app-rules
+// 管理应用识别规则，包括查询、更新、删除、排序和发布规则集。
+// This endpoint takes no parameters.
+message ListAppRulesRequest {
+}
+
+// PublishAppRulesRequest — POST /v1/app-rules/publish
+// 发布当前配置或规则集；请关注接口返回的版本、摘要及发布结果。
+// This endpoint takes no parameters.
+message PublishAppRulesRequest {
+}
+
+// ReorderAppRulesRequest — POST /v1/app-rules/reorder
+// 按请求中提供的 ID 顺序调整条目优先级或展示顺序。
+message ReorderAppRulesRequest {
+  // Upstream JSON body. Vendor schema: reorderapprulesreq.
+  google.protobuf.Struct body = 1;
+}
+
+// GetAppRulesetInfoRequest — GET /v1/app-rules/ruleset
+// 管理应用识别规则，包括查询、更新、删除、排序和发布规则集。
+// This endpoint takes no parameters.
+message GetAppRulesetInfoRequest {
+}
+
+// PutAppRuleRequest — PUT /v1/app-rules/{rule_id}
+// 管理应用识别规则，包括查询、更新、删除、排序和发布规则集。
+message PutAppRuleRequest {
+  // path, required
+  optional int64 rule_id = 1;
+  // Upstream JSON body. Vendor schema: appruledto.
+  google.protobuf.Struct body = 2;
+}
+
+// DeleteAppRuleRequest — DELETE /v1/app-rules/{rule_id}
+// 管理应用识别规则，包括查询、更新、删除、排序和发布规则集。
+message DeleteAppRuleRequest {
+  // path, required
+  optional int64 rule_id = 1;
+}
+
+// ListAppsRequest — GET /v1/apps
+// 查询或维护应用目录条目及其应用识别元数据。
+// This endpoint takes no parameters.
+message ListAppsRequest {
+}
+
+// PutAppEntryRequest — PUT /v1/apps/{engine_id}/{selector_id}
+// 查询或维护应用目录条目及其应用识别元数据。
+message PutAppEntryRequest {
+  // path, required
+  optional int32 engine_id = 1;
+  // path, required
+  optional int32 selector_id = 2;
+  // Upstream JSON body. Vendor schema: appentrydto.
+  google.protobuf.Struct body = 3;
+}
+
+// LoginRequest — POST /v1/auth/login
+// 提交身份凭据以建立登录会话。
+message LoginRequest {
+  // Upstream JSON body. Vendor schema: loginrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// LogoutRequest — POST /v1/auth/logout
+// 结束当前登录会话。
+// This endpoint takes no parameters.
+message LogoutRequest {
+}
+
+// GetMeRequest — GET /v1/auth/me
+// 该接口属于“身份认证”模块，用于查询/获取该模块中的业务数据。处理登录、登出及当前身份相关操作。
+// This endpoint takes no parameters.
+message GetMeRequest {
+}
+
+// LoginWithPasswordRequest — POST /v1/auth/password/login
+// 提交身份凭据以建立登录会话。
+message LoginWithPasswordRequest {
+  // Upstream JSON body. Vendor schema: passwordloginrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// ListFacetsRequest — GET /v1/facets
+// 该接口属于“统计维度”模块，用于查询/获取该模块中的业务数据。查询用于统计分析的维度和可选项。
+// This endpoint takes no parameters.
+message ListFacetsRequest {
+}
+
+// QueryFacetsRequest — POST /v1/facets/query
+// 该接口属于“统计维度”模块，用于提交/执行该模块中的业务数据。查询用于统计分析的维度和可选项。
+message QueryFacetsRequest {
+  // Upstream JSON body. Vendor schema: facetqueryrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// GetFacetSchemaRequest — GET /v1/facets/schema
+// 该接口属于“统计维度”模块，用于查询/获取该模块中的业务数据。查询用于统计分析的维度和可选项。
+message GetFacetSchemaRequest {
+  // query, required
+  optional string sensor_id = 1;
+  // query, required
+  optional string protocol = 2;
+  // query, required
+  optional string kind = 3;
+  // query, required
+  optional string instance = 4;
+  // query, required
+  optional string side = 5;
+}
+
+// ListFileFieldsRequest — GET /v1/files/fields
+// 根据请求条件检索网络流量中关联的文件记录。
+// This endpoint takes no parameters.
+message ListFileFieldsRequest {
+}
+
+// SearchFilesRequest — POST /v1/files/search
+// 根据请求条件检索网络流量中关联的文件记录。
+message SearchFilesRequest {
+  // Upstream JSON body. Vendor schema: filessearchrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// GetFileStatsRequest — POST /v1/files/stats
+// 根据请求条件检索网络流量中关联的文件记录。
+message GetFileStatsRequest {
+  // Upstream JSON body. Vendor schema: filesstatsrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// ListArchiveEntriesRequest — GET /v1/files/{sha256}/archive/entries
+// 根据请求条件检索网络流量中关联的文件记录。
+message ListArchiveEntriesRequest {
+  // path, required: 64 位小写 hex
+  optional string sha256 = 1;
+}
+
+// ListArchiveEntriesWithPasswordRequest — POST /v1/files/{sha256}/archive/entries
+// 根据请求条件检索网络流量中关联的文件记录。
+message ListArchiveEntriesWithPasswordRequest {
+  // path, required: 64 位小写 hex
+  optional string sha256 = 1;
+  // Upstream JSON body. Vendor schema: filearchiveaccessrequest.
+  google.protobuf.Struct body = 2;
+}
+
+// GetArchiveEntryBytesRequest — GET /v1/files/{sha256}/archive/entries/{index}/bytes
+// 根据请求条件检索网络流量中关联的文件记录。
+message GetArchiveEntryBytesRequest {
+  // path, required: 64 位小写 hex
+  optional string sha256 = 1;
+  // path, required: 归档目录条目序号
+  optional int32 index = 2;
+  // header, optional: 单段字节范围，例如 bytes=0-65535
+  optional string range = 3;
+}
+
+// GetArchiveEntryBytesWithPasswordRequest — POST /v1/files/{sha256}/archive/entries/{index}/bytes
+// 根据请求条件检索网络流量中关联的文件记录。
+message GetArchiveEntryBytesWithPasswordRequest {
+  // path, required: 64 位小写 hex
+  optional string sha256 = 1;
+  // path, required: 归档目录条目序号
+  optional int32 index = 2;
+  // header, optional: 单段字节范围，例如 bytes=0-65535
+  optional string range = 3;
+  // Upstream JSON body. Vendor schema: filearchiveaccessrequest.
+  google.protobuf.Struct body = 4;
+}
+
+// HeadArchiveEntryBytesRequest — HEAD /v1/files/{sha256}/archive/entries/{index}/bytes
+// 根据请求条件检索网络流量中关联的文件记录。
+message HeadArchiveEntryBytesRequest {
+  // path, required: 64 位小写 hex
+  optional string sha256 = 1;
+  // path, required: 归档目录条目序号
+  optional int32 index = 2;
+  // header, optional: 单段字节范围，例如 bytes=0-65535
+  optional string range = 3;
+}
+
+// GetFileBytesRequest — GET /v1/files/{sha256}/bytes
+// 根据请求条件检索网络流量中关联的文件记录。
+message GetFileBytesRequest {
+  // path, required: 64 位小写 hex
+  optional string sha256 = 1;
+}
+
+// EnrollSensorRequest — POST /v1/fleet/enroll
+// 该接口属于“探针管理”模块，用于提交/执行该模块中的业务数据。管理探针信息、配置、状态及分发相关操作。
+message EnrollSensorRequest {
+  // Upstream JSON body. Vendor schema: enrollrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// ListSensorGroupsRequest — GET /v1/fleet/groups
+// 该接口属于“探针管理”模块，用于查询/获取该模块中的业务数据。管理探针信息、配置、状态及分发相关操作。
+message ListSensorGroupsRequest {
+  // query, optional: 前缀过滤(大小写不敏感;缺省=全部)。
+  optional string q = 1;
+  // query, optional: 本页条数(缺省 20,上限由后端钳)。
+  optional int32 limit = 2;
+  // query, optional: 偏移(分页;缺省 0)。
+  optional int32 offset = 3;
+}
+
+// SensorHeartbeatRequest — POST /v1/fleet/heartbeat
+// 该接口属于“探针管理”模块，用于提交/执行该模块中的业务数据。管理探针信息、配置、状态及分发相关操作。
+message SensorHeartbeatRequest {
+  // Upstream JSON body. Vendor schema: heartbeatrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// ListSensorsRequest — GET /v1/fleet/sensors
+// 管理探针/传感器相关信息、配置或运行状态。
+// This endpoint takes no parameters.
+message ListSensorsRequest {
+}
+
+// GetSensorRequest — GET /v1/fleet/sensors/{id}
+// 管理探针/传感器相关信息、配置或运行状态。
+message GetSensorRequest {
+  // path, required
+  optional string id = 1;
+}
+
+// PatchSensorRequest — PATCH /v1/fleet/sensors/{id}
+// 管理探针/传感器相关信息、配置或运行状态。
+message PatchSensorRequest {
+  // path, required
+  optional string id = 1;
+  // Upstream JSON body. Vendor schema: sensormetadatarequest.
+  google.protobuf.Struct body = 2;
+}
+
+// GetSensorAppRulesetRequest — GET /v1/fleet/sensors/{id}/app-ruleset
+// 管理应用识别规则，包括查询、更新、删除、排序和发布规则集。
+message GetSensorAppRulesetRequest {
+  // path, required
+  optional string id = 1;
+}
+
+// ApproveSensorRequest — POST /v1/fleet/sensors/{id}/approve
+// 管理探针/传感器相关信息、配置或运行状态。
+message ApproveSensorRequest {
+  // path, required
+  optional string id = 1;
+}
+
+// PutSensorCaptureConfigRequest — PUT /v1/fleet/sensors/{id}/capture-config
+// 管理探针/传感器相关信息、配置或运行状态。
+message PutSensorCaptureConfigRequest {
+  // path, required
+  optional string id = 1;
+  // Upstream JSON body. Vendor schema: captureconfigdto.
+  google.protobuf.Struct body = 2;
+}
+
+// PutSensorCaptureFilterRequest — PUT /v1/fleet/sensors/{id}/capture-filter
+// 管理探针/传感器相关信息、配置或运行状态。
+message PutSensorCaptureFilterRequest {
+  // path, required
+  optional string id = 1;
+  // Upstream JSON body. Vendor schema: capturefilterconfigrequest.
+  google.protobuf.Struct body = 2;
+}
+
+// ListSensorCaptureFilterAuditRequest — GET /v1/fleet/sensors/{id}/capture-filter/audit
+// 管理探针/传感器相关信息、配置或运行状态。
+message ListSensorCaptureFilterAuditRequest {
+  // query, optional
+  optional int64 since_unix = 1;
+  // query, optional
+  optional int64 until_unix = 2;
+  // query, optional
+  optional int64 cursor = 3;
+  // query, optional
+  optional int32 limit = 4;
+  // path, required
+  optional string id = 5;
+}
+
+// GetSensorCaptureFilterCapabilityRequest — GET /v1/fleet/sensors/{id}/capture-filter/capability
+// 管理探针/传感器相关信息、配置或运行状态。
+message GetSensorCaptureFilterCapabilityRequest {
+  // path, required
+  optional string id = 1;
+}
+
+// ValidateSensorCaptureFilterRequest — POST /v1/fleet/sensors/{id}/capture-filter/validate
+// 管理探针/传感器相关信息、配置或运行状态。
+message ValidateSensorCaptureFilterRequest {
+  // path, required
+  optional string id = 1;
+  // Upstream JSON body. Vendor schema: capturefilterconfigrequest.
+  google.protobuf.Struct body = 2;
+}
+
+// GetSensorConfigRequest — GET /v1/fleet/sensors/{id}/config
+// 管理探针/传感器相关信息、配置或运行状态。
+message GetSensorConfigRequest {
+  // path, required
+  optional string id = 1;
+}
+
+// DecommissionSensorRequest — POST /v1/fleet/sensors/{id}/decommission
+// 管理探针/传感器相关信息、配置或运行状态。
+message DecommissionSensorRequest {
+  // path, required
+  optional string id = 1;
+}
+
+// PutSensorDedupConfigRequest — PUT /v1/fleet/sensors/{id}/dedup-config
+// 管理探针/传感器相关信息、配置或运行状态。
+message PutSensorDedupConfigRequest {
+  // path, required
+  optional string id = 1;
+  // Upstream JSON body. Vendor schema: dedupconfigdto.
+  google.protobuf.Struct body = 2;
+}
+
+// GetSensorFieldCatalogRequest — GET /v1/fleet/sensors/{id}/field-catalog
+// 管理探针/传感器相关信息、配置或运行状态。
+message GetSensorFieldCatalogRequest {
+  // path, required
+  optional string id = 1;
+}
+
+// PublishSensorFieldCatalogRequest — POST /v1/fleet/sensors/{id}/field-catalog
+// 管理探针/传感器相关信息、配置或运行状态。
+message PublishSensorFieldCatalogRequest {
+  // path, required
+  optional string id = 1;
+  // Upstream JSON body. Vendor schema: fieldcatalogsnapshotrequest.
+  google.protobuf.Struct body = 2;
+}
+
+// ListSensorLogicalLinksRequest — GET /v1/fleet/sensors/{id}/logical-links
+// 管理探针/传感器相关信息、配置或运行状态。
+message ListSensorLogicalLinksRequest {
+  // path, required
+  optional string id = 1;
+}
+
+// PutSensorLogicalLinksRequest — PUT /v1/fleet/sensors/{id}/logical-links
+// 管理探针/传感器相关信息、配置或运行状态。
+message PutSensorLogicalLinksRequest {
+  // path, required
+  optional string id = 1;
+  // Upstream JSON body. Vendor schema: logicallinksrequest.
+  google.protobuf.Struct body = 2;
+}
+
+// GetSensorMetricsRequest — GET /v1/fleet/sensors/{id}/metrics
+// 管理探针/传感器相关信息、配置或运行状态。
+message GetSensorMetricsRequest {
+  // path, required: 探针 sensor_id
+  optional string id = 1;
+  // query, required: 指标 key(白名单,见 metrics field registry)
+  optional string metric = 2;
+  // query, required: 窗口起点(unix 秒)
+  optional int64 from = 3;
+  // query, required: 窗口终点(unix 秒,须 > from)
+  optional int64 to = 4;
+  // query, optional: avg|max|min,默认 avg(仅回显,响应恒含三者)
+  optional string agg = 5;
+  // query, optional: 期望桶宽(秒),缺省由分辨率路由裁决
+  optional int32 step = 6;
+}
+
+// GetSensorNetgroupDictRequest — GET /v1/fleet/sensors/{id}/netgroup-dict
+// 管理探针/传感器相关信息、配置或运行状态。
+message GetSensorNetgroupDictRequest {
+  // path, required
+  optional string id = 1;
+}
+
+// PutSensorNpmConfigRequest — PUT /v1/fleet/sensors/{id}/npm-config
+// 管理探针/传感器相关信息、配置或运行状态。
+message PutSensorNpmConfigRequest {
+  // path, required
+  optional string id = 1;
+  // Upstream JSON body. Vendor schema: npmconfigrequest.
+  google.protobuf.Struct body = 2;
+}
+
+// PutSensorObjectStorageRequest — PUT /v1/fleet/sensors/{id}/object-storage
+// 管理探针/传感器相关信息、配置或运行状态。
+message PutSensorObjectStorageRequest {
+  // path, required
+  optional string id = 1;
+  // Upstream JSON body. Vendor schema: objectstorageconfigrequest.
+  google.protobuf.Struct body = 2;
+}
+
+// PutSensorPcapDirsRequest — PUT /v1/fleet/sensors/{id}/pcap-dirs
+// 管理探针/传感器相关信息、配置或运行状态。
+message PutSensorPcapDirsRequest {
+  // path, required
+  optional string id = 1;
+  // Upstream JSON body. Vendor schema: storageruntimecfgdto.
+  google.protobuf.Struct body = 2;
+}
+
+// GetSensorProtocolAnalysisRequest — GET /v1/fleet/sensors/{id}/protocol-analysis
+// 管理探针/传感器相关信息、配置或运行状态。
+message GetSensorProtocolAnalysisRequest {
+  // path, required
+  optional string id = 1;
+}
+
+// PutSensorProtocolAnalysisRequest — PUT /v1/fleet/sensors/{id}/protocol-analysis
+// 管理探针/传感器相关信息、配置或运行状态。
+message PutSensorProtocolAnalysisRequest {
+  // header, required: get 回读的 desired_config_version，使用双引号 etag 形式
+  optional string if_match = 1 [json_name = "if-match"];
+  // path, required
+  optional string id = 2;
+  // Upstream JSON body. Vendor schema: protocolanalysisconfigdto.
+  google.protobuf.Struct body = 3;
+}
+
+// PublishSensorProtocolParseCapabilityRequest — POST /v1/fleet/sensors/{id}/protocol-parse-capability
+// 管理探针/传感器相关信息、配置或运行状态。
+message PublishSensorProtocolParseCapabilityRequest {
+  // path, required
+  optional string id = 1;
+  // Upstream JSON body. Vendor schema: protocolparsecapabilitysnapshotrequest.
+  google.protobuf.Struct body = 2;
+}
+
+// RecommissionSensorRequest — POST /v1/fleet/sensors/{id}/recommission
+// 管理探针/传感器相关信息、配置或运行状态。
+message RecommissionSensorRequest {
+  // path, required
+  optional string id = 1;
+}
+
+// PutSensorStorageConfigRequest — PUT /v1/fleet/sensors/{id}/storage-config
+// 管理探针/传感器相关信息、配置或运行状态。
+message PutSensorStorageConfigRequest {
+  // path, required
+  optional string id = 1;
+  // Upstream JSON body. Vendor schema: storagepolicydto.
+  google.protobuf.Struct body = 2;
+}
+
+// PutSensorStorageFilterRequest — PUT /v1/fleet/sensors/{id}/storage-filter
+// 管理探针/传感器相关信息、配置或运行状态。
+message PutSensorStorageFilterRequest {
+  // path, required
+  optional string id = 1;
+  // Upstream JSON body. Vendor schema: storagefilterconfigrequest.
+  google.protobuf.Struct body = 2;
+}
+
+// PutSensorStorageProfileRequest — PUT /v1/fleet/sensors/{id}/storage-profile
+// 管理探针/传感器相关信息、配置或运行状态。
+message PutSensorStorageProfileRequest {
+  // path, required
+  optional string id = 1;
+  // Upstream JSON body. Vendor schema: storageprofileconfigdto.
+  google.protobuf.Struct body = 2;
+}
+
+// GetSensorStorageInventoryRequest — GET /v1/fleet/sensors/{id}/storage/inventory
+// 管理探针/传感器相关信息、配置或运行状态。
+message GetSensorStorageInventoryRequest {
+  // path, required
+  optional string id = 1;
+}
+
+// GetSensorSvidRequest — GET /v1/fleet/sensors/{id}/svid
+// 管理探针/传感器相关信息、配置或运行状态。
+message GetSensorSvidRequest {
+  // path, required
+  optional string id = 1;
+}
+
+// RenewSensorSvidRequest — POST /v1/fleet/sensors/{id}/svid
+// 管理探针/传感器相关信息、配置或运行状态。
+message RenewSensorSvidRequest {
+  // path, required
+  optional string id = 1;
+  // Upstream JSON body. Vendor schema: enrollrequest.
+  google.protobuf.Struct body = 2;
+}
+
+// PutSensorWatermarkRequest — PUT /v1/fleet/sensors/{id}/watermark
+// 管理探针/传感器相关信息、配置或运行状态。
+message PutSensorWatermarkRequest {
+  // path, required
+  optional string id = 1;
+  // Upstream JSON body. Vendor schema: watermarkconfigrequest.
+  google.protobuf.Struct body = 2;
+}
+
+// GetHealthRequest — GET /v1/health
+// 该接口属于“健康检查”模块，用于查询/获取该模块中的业务数据。检查服务或依赖组件的存活状态与可用状态。
+// This endpoint takes no parameters.
+message GetHealthRequest {
+}
+
+// PageMultiIntervisitEdgesRequest — POST /v1/intervisit/edges/multi/page
+// 该接口属于“访问关系分析”模块，用于提交/执行该模块中的业务数据。分析资产、主机或服务之间的访问关系。
+message PageMultiIntervisitEdgesRequest {
+  // Upstream JSON body. Vendor schema: intervisitedgepagerequest.
+  google.protobuf.Struct body = 1;
+}
+
+// SearchMultiIntervisitEdgesRequest — POST /v1/intervisit/edges/multi/search
+// 该接口属于“访问关系分析”模块，用于提交/执行该模块中的业务数据。分析资产、主机或服务之间的访问关系。
+message SearchMultiIntervisitEdgesRequest {
+  // Upstream JSON body. Vendor schema: intervisitmultiedgesearchrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// PageIntervisitEdgesRequest — POST /v1/intervisit/edges/page
+// 该接口属于“访问关系分析”模块，用于提交/执行该模块中的业务数据。分析资产、主机或服务之间的访问关系。
+message PageIntervisitEdgesRequest {
+  // Upstream JSON body. Vendor schema: intervisitedgepagerequest.
+  google.protobuf.Struct body = 1;
+}
+
+// SearchIntervisitEdgesRequest — POST /v1/intervisit/edges/search
+// 该接口属于“访问关系分析”模块，用于提交/执行该模块中的业务数据。分析资产、主机或服务之间的访问关系。
+message SearchIntervisitEdgesRequest {
+  // Upstream JSON body. Vendor schema: intervisitedgesearchrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// SearchIntervisitTopologyRequest — POST /v1/intervisit/topology/search
+// 该接口属于“访问关系分析”模块，用于提交/执行该模块中的业务数据。分析资产、主机或服务之间的访问关系。
+message SearchIntervisitTopologyRequest {
+  // Upstream JSON body. Vendor schema: intervisittopologysearchrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// ListJobsRequest — GET /v1/jobs
+// 该接口属于“任务管理”模块，用于查询/获取该模块中的业务数据。任务的创建、提交、执行状态查询与生命周期管理。
+message ListJobsRequest {
+  // query, optional
+  optional string job_type = 1;
+  // query, optional
+  optional string state = 2;
+  // query, optional
+  optional string after = 3;
+  // query, optional
+  optional int32 limit = 4;
+  // query, optional: `true` = 列同租户全部创建者的任务(需 `viewaudit`);`false`(默认)= 只列自己的。
+  optional bool all = 5;
+}
+
+// CreateJobRequest — POST /v1/jobs
+// 该接口属于“任务管理”模块，用于提交/执行该模块中的业务数据。任务的创建、提交、执行状态查询与生命周期管理。
+message CreateJobRequest {
+  // Upstream JSON body. Vendor schema: createjobrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// GetJobRequest — GET /v1/jobs/{id}
+// 该接口属于“任务管理”模块，用于查询/获取该模块中的业务数据。任务的创建、提交、执行状态查询与生命周期管理。
+message GetJobRequest {
+  // path, required
+  optional string id = 1;
+}
+
+// DeleteJobRequest — DELETE /v1/jobs/{id}
+// 该接口属于“任务管理”模块，用于删除该模块中的业务数据。任务的创建、提交、执行状态查询与生命周期管理。
+message DeleteJobRequest {
+  // path, required
+  optional string id = 1;
+}
+
+// GetJobArtifactRequest — GET /v1/jobs/{id}/artifacts/{name}
+// 该接口属于“任务管理”模块，用于查询/获取该模块中的业务数据。任务的创建、提交、执行状态查询与生命周期管理。
+message GetJobArtifactRequest {
+  // path, required
+  optional string id = 1;
+  // path, required
+  optional string name = 2;
+}
+
+// CancelJobRequest — POST /v1/jobs/{id}/cancel
+// 该接口属于“任务管理”模块，用于提交/执行该模块中的业务数据。任务的创建、提交、执行状态查询与生命周期管理。
+message CancelJobRequest {
+  // path, required
+  optional string id = 1;
+}
+
+// GetMetricsPipelineRequest — GET /v1/metrics-pipeline
+// 该接口属于“采集管道监控”模块，用于查询/获取该模块中的业务数据。查看采集链路、管道运行情况及监控信息。
+// This endpoint takes no parameters.
+message GetMetricsPipelineRequest {
+}
+
+// ListNetgroupsRequest — GET /v1/netgroups
+// 该接口属于“网段管理”模块，用于查询/获取该模块中的业务数据。管理网络网段及其属性。
+// This endpoint takes no parameters.
+message ListNetgroupsRequest {
+}
+
+// PublishNetgroupDictRequest — POST /v1/netgroups/publish
+// 发布当前配置或规则集；请关注接口返回的版本、摘要及发布结果。
+message PublishNetgroupDictRequest {
+  // query, optional: 1 = 只校验不落库(不分配 slot、不 bump 探针)
+  optional int32 dry_run = 1;
+}
+
+// PutNetgroupRequest — PUT /v1/netgroups/{id}
+// 该接口属于“网段管理”模块，用于创建或整体更新该模块中的业务数据。管理网络网段及其属性。
+message PutNetgroupRequest {
+  // path, required
+  optional int64 id = 1;
+  // Upstream JSON body. Vendor schema: netgroupdto.
+  google.protobuf.Struct body = 2;
+}
+
+// ListNpmFieldsRequest — GET /v1/npm/fields
+// 该接口属于“网络性能监控”模块，用于查询/获取该模块中的业务数据。查询网络性能指标和监控数据。
+// This endpoint takes no parameters.
+message ListNpmFieldsRequest {
+}
+
+// GetNpmSeriesRequest — GET /v1/npm/series
+// 该接口属于“网络性能监控”模块，用于查询/获取该模块中的业务数据。查询网络性能指标和监控数据。
+message GetNpmSeriesRequest {
+  // query, required: 逗号分隔指标 key 列表
+  optional string metric = 1;
+  // query, required: sensor|iface|link|segment|ip_endpoint|app 等
+  optional string dim_kind = 2;
+  // query, optional: 对象键 dim_id,缺省=0
+  optional int32 dim_key = 3;
+  // query, optional: 逗号分隔探针 id 列表,缺省=不过滤
+  optional string sensor_id = 4;
+  // query, required: 窗口起点(unix 秒)
+  optional int64 from = 5;
+  // query, required: 窗口终点(unix 秒,须 > from)
+  optional int64 to = 6;
+  // query, optional: 期望桶宽(秒),缺省由五档路由裁决
+  optional int32 step = 7;
+}
+
+// GetNpmTopRequest — GET /v1/npm/top
+// 该接口属于“网络性能监控”模块，用于查询/获取该模块中的业务数据。查询网络性能指标和监控数据。
+message GetNpmTopRequest {
+  // query, required: 单一排序指标 key
+  optional string metric = 1;
+  // query, required: sensor|iface|link|segment|ip_endpoint|app 等
+  optional string dim_kind = 2;
+  // query, optional: 逗号分隔探针 id 列表,缺省=不过滤
+  optional string sensor_id = 3;
+  // query, required: 窗口起点(unix 秒)
+  optional int64 from = 4;
+  // query, required: 窗口终点(unix 秒,须 > from)
+  optional int64 to = 5;
+  // query, optional: 1..=200,缺省 50
+  optional int32 limit = 6;
+  // query, optional: desc(默认)|asc
+  optional string order = 7;
+}
+
+// GetBrandingRequest — GET /v1/oem/branding
+// 该接口属于“品牌设置”模块，用于查询/获取该模块中的业务数据。读取或更新平台品牌、名称及视觉展示配置。
+// This endpoint takes no parameters.
+message GetBrandingRequest {
+}
+
+// PutBrandingRequest — PUT /v1/oem/branding
+// 该接口属于“品牌设置”模块，用于创建或整体更新该模块中的业务数据。读取或更新平台品牌、名称及视觉展示配置。
+message PutBrandingRequest {
+  // Upstream JSON body. Vendor schema: putoembrandingrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// GetPacketQueryCapabilitiesRequest — GET /v1/packets/capabilities
+// 根据请求条件检索网络数据包及其相关信息。
+// This endpoint takes no parameters.
+message GetPacketQueryCapabilitiesRequest {
+}
+
+// GetPacketDetailRequest — POST /v1/packets/detail
+// 根据请求条件检索网络数据包及其相关信息。
+message GetPacketDetailRequest {
+  // Upstream JSON body. Vendor schema: packetdetailrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// QueryPacketFacetsRequest — POST /v1/packets/facets
+// 根据请求条件检索网络数据包及其相关信息。
+message QueryPacketFacetsRequest {
+  // Upstream JSON body. Vendor schema: packetfacetrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// QueryPacketFacetsBatchRequest — POST /v1/packets/facets/batch
+// 根据请求条件检索网络数据包及其相关信息。
+message QueryPacketFacetsBatchRequest {
+  // Upstream JSON body. Vendor schema: packetfacetsrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// GetPacketHistogramRequest — POST /v1/packets/histogram
+// 根据请求条件检索网络数据包及其相关信息。
+message GetPacketHistogramRequest {
+  // Upstream JSON body. Vendor schema: packethistogramrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// ListPacketsRequest — POST /v1/packets/list
+// 根据请求条件检索网络数据包及其相关信息。
+message ListPacketsRequest {
+  // Upstream JSON body. Vendor schema: packetlistrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// SearchPacketsRequest — POST /v1/packets/search
+// 根据请求条件检索网络数据包及其相关信息。
+message SearchPacketsRequest {
+  // Upstream JSON body. Vendor schema: packetsearchrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// ListPacketSensorsRequest — GET /v1/packets/sensors
+// 管理探针/传感器相关信息、配置或运行状态。
+// This endpoint takes no parameters.
+message ListPacketSensorsRequest {
+}
+
+// StreamPacketsRequest — POST /v1/packets/stream
+// 根据请求条件检索网络数据包及其相关信息。
+message StreamPacketsRequest {
+  // Upstream JSON body. Vendor schema: packetstreamrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// ListPortgroupsRequest — GET /v1/portgroups
+// 该接口属于“端口组管理”模块，用于查询/获取该模块中的业务数据。管理端口组及端口集合配置。
+// This endpoint takes no parameters.
+message ListPortgroupsRequest {
+}
+
+// PutPortgroupRequest — PUT /v1/portgroups/{id}
+// 该接口属于“端口组管理”模块，用于创建或整体更新该模块中的业务数据。管理端口组及端口集合配置。
+message PutPortgroupRequest {
+  // path, required
+  optional int64 id = 1;
+  // Upstream JSON body. Vendor schema: portgroupdto.
+  google.protobuf.Struct body = 2;
+}
+
+// QueryProtocolAnalysisRequest — POST /v1/protocol-analysis/query
+// 该接口属于“协议分析”模块，用于提交/执行该模块中的业务数据。查询和分析网络协议相关数据。
+message QueryProtocolAnalysisRequest {
+  // Upstream JSON body. Vendor schema: protocolanalysisqueryrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// ListProtocolAnalysisScenariosRequest — GET /v1/protocol-analysis/scenarios
+// 该接口属于“协议分析”模块，用于查询/获取该模块中的业务数据。查询和分析网络协议相关数据。
+// This endpoint takes no parameters.
+message ListProtocolAnalysisScenariosRequest {
+}
+
+// ListProtocolAnalysisSensorsRequest — GET /v1/protocol-analysis/sensors
+// 管理探针/传感器相关信息、配置或运行状态。
+// This endpoint takes no parameters.
+message ListProtocolAnalysisSensorsRequest {
+}
+
+// ListRecordFieldsRequest — GET /v1/records/fields
+// 该接口属于“会话检索”模块，用于查询/获取该模块中的业务数据。按时间、网络条件等筛选和查看网络会话记录。
+message ListRecordFieldsRequest {
+  // query, optional: 逻辑 record-type key,默认 session
+  optional string record_type = 1;
+}
+
+// PageRecordsRequest — POST /v1/records/page
+// 该接口属于“会话检索”模块，用于提交/执行该模块中的业务数据。按时间、网络条件等筛选和查看网络会话记录。
+message PageRecordsRequest {
+  // Upstream JSON body. Vendor schema: pagerequest.
+  google.protobuf.Struct body = 1;
+}
+
+// SearchRecordsRequest — POST /v1/records/search
+// 该接口属于“会话检索”模块，用于提交/执行该模块中的业务数据。按时间、网络条件等筛选和查看网络会话记录。
+message SearchRecordsRequest {
+  // Upstream JSON body. Vendor schema: recordssearchrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// ExportReportRequest — POST /v1/reports/export
+// 管理或查询报表任务及其生成结果。
+message ExportReportRequest {
+  // Upstream JSON body. Vendor schema: reportexportrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// RenderReportRequest — POST /v1/reports/render
+// 管理或查询报表任务及其生成结果。
+message RenderReportRequest {
+  // Upstream JSON body. Vendor schema: reportrenderrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// ListReportSchedulesRequest — GET /v1/reports/schedules
+// 管理或查询报表任务及其生成结果。
+// This endpoint takes no parameters.
+message ListReportSchedulesRequest {
+}
+
+// CreateReportScheduleRequest — POST /v1/reports/schedules
+// 管理或查询报表任务及其生成结果。
+message CreateReportScheduleRequest {
+  // Upstream JSON body. Vendor schema: createreportschedulerequest.
+  google.protobuf.Struct body = 1;
+}
+
+// DeleteReportScheduleRequest — DELETE /v1/reports/schedules/{id}
+// 管理或查询报表任务及其生成结果。
+message DeleteReportScheduleRequest {
+  // path, required: 计划 id
+  optional int64 id = 1;
+}
+
+// UpdateReportScheduleRequest — PATCH /v1/reports/schedules/{id}
+// 管理或查询报表任务及其生成结果。
+message UpdateReportScheduleRequest {
+  // path, required: 计划 id
+  optional int64 id = 1;
+  // Upstream JSON body. Vendor schema: updatereportschedulerequest.
+  google.protobuf.Struct body = 2;
+}
+
+// ListReportExecutionsRequest — GET /v1/reports/schedules/{id}/executions
+// 管理或查询报表任务及其生成结果。
+message ListReportExecutionsRequest {
+  // path, required: 计划 id
+  optional int64 id = 1;
+}
+
+// ListReportTemplatesRequest — GET /v1/reports/templates
+// 管理或查询报表任务及其生成结果。
+// This endpoint takes no parameters.
+message ListReportTemplatesRequest {
+}
+
+// PreviewScenarioPipelineRequest — POST /v1/scenarios/preview-pipeline
+// 该接口属于“场景管理”模块，用于提交/执行该模块中的业务数据。管理平台分析场景及其配置。
+message PreviewScenarioPipelineRequest {
+  // Upstream JSON body. Vendor schema: previewpipelinerequest.
+  google.protobuf.Struct body = 1;
+}
+
+// ListSitesRequest — GET /v1/sites
+// 查询或维护站点配置及站点信息。
+// This endpoint takes no parameters.
+message ListSitesRequest {
+}
+
+// PutSiteRequest — PUT /v1/sites/{id}
+// 查询或维护站点配置及站点信息。
+message PutSiteRequest {
+  // path, required
+  optional int64 id = 1;
+  // Upstream JSON body. Vendor schema: sitedto.
+  google.protobuf.Struct body = 2;
+}
+
+// DeleteSiteRequest — DELETE /v1/sites/{id}
+// 查询或维护站点配置及站点信息。
+message DeleteSiteRequest {
+  // path, required
+  optional int64 id = 1;
+}
+
+// PreviewThreatIntelMappingRequest — POST /v1/threat-intel/mapping/preview
+// 查询或管理威胁情报相关数据。
+message PreviewThreatIntelMappingRequest {
+  // Upstream JSON body. Vendor schema: threatintelmappingpreviewrequest.
+  google.protobuf.Struct body = 1;
+}
+
+// ListThreatIntelSourceProfilesRequest — GET /v1/threat-intel/source-profiles
+// 根据请求条件检索网络流量中关联的文件记录。
+// This endpoint takes no parameters.
+message ListThreatIntelSourceProfilesRequest {
+}
+
+// ListThreatIntelSourcesRequest — GET /v1/threat-intel/sources
+// 查询或管理威胁情报相关数据。
+// This endpoint takes no parameters.
+message ListThreatIntelSourcesRequest {
+}
+
+// CreateThreatIntelSourceRequest — POST /v1/threat-intel/sources
+// 查询或管理威胁情报相关数据。
+message CreateThreatIntelSourceRequest {
+  // Upstream JSON body. Vendor schema: createthreatintelsourcerequest.
+  google.protobuf.Struct body = 1;
+}
+
+// GetThreatIntelSourceRequest — GET /v1/threat-intel/sources/{id}
+// 查询或管理威胁情报相关数据。
+message GetThreatIntelSourceRequest {
+  // path, required: tenant-local source id
+  optional string id = 1;
+}
+
+// PublishThreatIntelSourceVersionRequest — POST /v1/threat-intel/sources/{id}/versions
+// 查询或管理威胁情报相关数据。
+message PublishThreatIntelSourceVersionRequest {
+  // path, required: tenant-local source id
+  optional string id = 1;
+  // Upstream JSON body. Vendor schema: publishthreatintelsourceversionrequest.
+  google.protobuf.Struct body = 2;
+}
