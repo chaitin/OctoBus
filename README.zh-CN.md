@@ -301,6 +301,18 @@ grpcurl -plaintext \
 
 OctoBus 转发到后端 Node instance 前会剥离 `x-octobus-*` 控制 metadata，但 `x-octobus-ext-*` 是透传例外。业务扩展 metadata 使用 `x-octobus-ext-*` 命名，例如 `x-octobus-ext-business-request-id` 和 `x-octobus-ext-username`，会透传给 service package。calculator 示例优先读取 `x-octobus-ext-business-request-id`，并兼容旧的 `x-business-request-id`。long-running service 的 gRPC 网关支持 unary、server streaming、client streaming 和 bidirectional streaming；on-demand service 只支持 unary invoke。
 
+HTTP header 改名转发默认关闭。可在启动 daemon 时配置，将认证信息复制到 MCP 和 Connect RPC 的 service metadata：
+
+```bash
+./bin/octobus serve --http-header-forward 'Authorization=x-octobus-ext-authorization'
+# 等价的环境变量配置：
+export OCTOBUS_HTTP_HEADER_FORWARD='Authorization=x-octobus-ext-authorization'
+```
+
+多个 `SOURCE=TARGET` 规则可重复传入参数或以逗号分隔。显式参数覆盖环境变量；`--http-header-forward=` 可禁用规则。header 名大小写不敏感，目标必须为后缀非空的 `x-octobus-ext-*`，重复目标会在启动时被拒绝。规则在 HTTP header 转为 metadata 前复制原始源 header 的全部值：覆盖客户端提交的同名目标，源不存在时清除目标；多个规则始终读取原始 header，不串联执行。源 header 保留，继续用于 capset 认证。规则仅用于 MCP / Connect RPC 的 HTTP 请求，不影响 gRPC metadata，也不记录 header 值。package 可通过 `ctx.getMetadata("x-octobus-ext-authorization")` 读取复制后的值。
+
+此功能只负责转发，不负责认证；需要认证时，package 必须自行校验收到的凭据。现有 capset 认证独立生效。
+
 ### Connect RPC
 
 Connect RPC 入口为：

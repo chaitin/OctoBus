@@ -59,6 +59,7 @@ func newServeCommand(addr *string) *cobra.Command {
 	var dataDir string
 	var dev bool
 	var runtimeHardening string
+	var httpHeaderForward []string
 	var onDemandTimeoutText string
 	var onDemandMaxOutputText string
 	var onDemandConcurrency int
@@ -72,6 +73,17 @@ func newServeCommand(addr *string) *cobra.Command {
 		Short: "Run the Octobus daemon",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			forwardSource := "--http-header-forward"
+			if !cmd.Flags().Changed("http-header-forward") {
+				forwardSource = "OCTOBUS_HTTP_HEADER_FORWARD"
+				if value := os.Getenv(forwardSource); value != "" {
+					httpHeaderForward = strings.Split(value, ",")
+				}
+			}
+			headerForwards, err := protocol.ParseHTTPHeaderForwards(httpHeaderForward)
+			if err != nil {
+				return fmt.Errorf("%s: %w", forwardSource, err)
+			}
 			source := "--runtime-hardening"
 			if !cmd.Flags().Changed("runtime-hardening") {
 				runtimeHardening = os.Getenv("OCTOBUS_RUNTIME_HARDENING")
@@ -142,6 +154,7 @@ func newServeCommand(addr *string) *cobra.Command {
 				addr:                    *addr,
 				dev:                     dev,
 				runtimeHardening:        level,
+				httpHeaderForwards:      headerForwards,
 				onDemandTimeout:         onDemandTimeout,
 				onDemandMaxOutputBytes:  onDemandMaxOutput,
 				onDemandConcurrency:     onDemandConcurrency,
@@ -154,6 +167,7 @@ func newServeCommand(addr *string) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&dataDir, "data-dir", defaultDataDir(), "octobus data directory")
+	cmd.Flags().StringSliceVar(&httpHeaderForward, "http-header-forward", nil, "copy HTTP headers to service metadata: SOURCE=x-octobus-ext-NAME (repeatable or comma-separated; env OCTOBUS_HTTP_HEADER_FORWARD; forwarding only, no authentication)")
 	cmd.Flags().BoolVar(&dev, "dev", false, "seed a fixed development admin token when none exists; requires a loopback listen address (not for production)")
 	cmd.Flags().StringVar(&runtimeHardening, "runtime-hardening", string(hardening.LevelOff), "restrictions applied to service runtimes: off, or node for an environment allowlist plus the Node.js permission model (requires Node.js 22.13+, 23.5+, or 24+; env OCTOBUS_RUNTIME_HARDENING)")
 	cmd.Flags().StringVar(&onDemandTimeoutText, "on-demand-timeout", "", "per-invocation timeout for on-demand runtimes (default 30s; env OCTOBUS_ONDEMAND_TIMEOUT)")
@@ -166,10 +180,11 @@ func newServeCommand(addr *string) *cobra.Command {
 }
 
 type serveOptions struct {
-	dataDir          string
-	addr             string
-	dev              bool
-	runtimeHardening hardening.Level
+	dataDir            string
+	addr               string
+	dev                bool
+	runtimeHardening   hardening.Level
+	httpHeaderForwards protocol.HTTPHeaderForwards
 	// Zero values keep the on-demand defaults.
 	onDemandTimeout        time.Duration
 	onDemandMaxOutputBytes int64
@@ -310,6 +325,7 @@ func serve(opts serveOptions) error {
 	defer accessLogger.Close()
 	gateway := &protocol.Gateway{
 		Store:                  st,
+		HTTPHeaderForwards:     opts.httpHeaderForwards,
 		DataDir:                dataDir,
 		AccessLogger:           accessLogger,
 		Logger:                 logger,

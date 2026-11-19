@@ -311,6 +311,18 @@ grpcurl -plaintext \
 
 Before forwarding to the backend Node instance, OctoBus strips `x-octobus-*` control metadata, except for `x-octobus-ext-*`, which is passed through. Business extension metadata should use the `x-octobus-ext-*` naming pattern, for example `x-octobus-ext-business-request-id` and `x-octobus-ext-username`, and is forwarded to the service package. The calculator example reads `x-octobus-ext-business-request-id` first and remains compatible with the older `x-business-request-id`. The gRPC gateway for long-running services supports unary, server streaming, client streaming, and bidirectional streaming. On-demand services only support unary invoke.
 
+HTTP header forwarding is disabled by default. To copy credentials into service metadata for MCP and Connect RPC, start the daemon with:
+
+```bash
+./bin/octobus serve --http-header-forward 'Authorization=x-octobus-ext-authorization'
+# Equivalent environment configuration:
+export OCTOBUS_HTTP_HEADER_FORWARD='Authorization=x-octobus-ext-authorization'
+```
+
+Repeat the flag or use comma-separated `SOURCE=TARGET` rules for multiple headers. An explicit flag overrides the environment variable; `--http-header-forward=` disables the rules. Names are case insensitive, targets must be nonempty `x-octobus-ext-*` names, and duplicate targets are rejected at startup. Rules copy all source values from the original HTTP headers before conversion to metadata: they overwrite client-supplied target values and clear the target when the source is absent. The original header remains available for capset authentication. Rules apply only to MCP and Connect RPC HTTP requests and do not change gRPC metadata or log header values. A package can read the copied value with `ctx.getMetadata("x-octobus-ext-authorization")`.
+
+This feature only forwards headers; it does not authenticate credentials. Packages must validate forwarded credentials themselves when needed. Capset authentication continues to operate independently.
+
 ### Connect RPC
 
 The Connect RPC endpoint is:
