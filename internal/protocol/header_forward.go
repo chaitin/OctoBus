@@ -3,6 +3,7 @@ package protocol
 import (
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 
 	"golang.org/x/net/http/httpguts"
@@ -28,12 +29,37 @@ func ParseHTTPHeaderForwards(rules []string) (HTTPHeaderForwards, error) {
 		if !strings.HasPrefix(target, "x-octobus-ext-") || len(target) == len("x-octobus-ext-") {
 			return HTTPHeaderForwards{}, fmt.Errorf("HTTP header forwarding rule %d target must be x-octobus-ext-*", i+1)
 		}
+		if source == target {
+			return HTTPHeaderForwards{}, fmt.Errorf("HTTP header forwarding rule %d source and target must differ", i+1)
+		}
+		if source == "host" {
+			return HTTPHeaderForwards{}, fmt.Errorf("HTTP header forwarding rule %d must not use Host, which is not carried in HTTP headers", i+1)
+		}
 		if _, exists := parsed.sourcesByTarget[target]; exists {
 			return HTTPHeaderForwards{}, fmt.Errorf("HTTP header forwarding rule %d has a duplicate target", i+1)
 		}
 		parsed.sourcesByTarget[target] = source
 	}
 	return parsed, nil
+}
+
+// CredentialSources returns configured source header names that commonly carry
+// credentials, sorted and deduplicated. Callers use it for a startup warning;
+// it never exposes header values.
+func (f HTTPHeaderForwards) CredentialSources() []string {
+	seen := make(map[string]bool)
+	var sources []string
+	for _, source := range f.sourcesByTarget {
+		switch source {
+		case "authorization", "proxy-authorization", "cookie":
+			if !seen[source] {
+				seen[source] = true
+				sources = append(sources, source)
+			}
+		}
+	}
+	sort.Strings(sources)
+	return sources
 }
 
 func (f HTTPHeaderForwards) apply(headers http.Header) http.Header {

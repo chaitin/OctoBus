@@ -107,7 +107,7 @@ gRPC 路由 metadata 使用项目 codename `octobus` 作为前缀：
 - `x-octobus-capset`
 - `x-octobus-instance`
 
-转发到 Node instance 前，Go gateway 必须剥离 `x-octobus-*` 控制 metadata，避免污染后端业务 handler。需要透传给 service package 的 OctoBus 业务扩展 metadata 使用 `x-octobus-ext-*`，例如 `x-octobus-ext-username`。
+转发到 Node instance 前，Go gateway 必须剥离 `x-octobus-*` 控制 metadata，避免污染后端业务 handler。需要透传给 service package 的 OctoBus 业务扩展 metadata 使用 `x-octobus-ext-*`，例如 `x-octobus-ext-username`。默认不全量透传 HTTP header；仅当 operator 显式配置 `--http-header-forward SOURCE=x-octobus-ext-NAME` 时，gateway 才把指定 HTTP header 复制进该透传通道，源 header 仍只用于 capset 鉴权。
 
 ### NodeSupervisor
 

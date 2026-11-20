@@ -133,7 +133,7 @@ grpcurl \
   gitlab.MergeRequestService/List
 ```
 
-业务扩展 metadata 使用 `x-octobus-ext-*` 命名，例如 `x-octobus-ext-business-request-id` 和 `x-octobus-ext-username`。这类 metadata 会透传给 service package，不参与 OctoBus 路由。calculator 示例优先读取 `x-octobus-ext-business-request-id`，并兼容旧的 `x-business-request-id`。
+业务扩展 metadata 使用 `x-octobus-ext-*` 命名，例如 `x-octobus-ext-business-request-id` 和 `x-octobus-ext-username`。这类 metadata 会透传给 service package，不参与 OctoBus 路由。默认不会把任意 HTTP header 映射进该通道；仅当 operator 显式配置 `--http-header-forward SOURCE=x-octobus-ext-NAME` 时，Connect RPC / MCP 的 HTTP 请求才会按规则复制指定 header，gRPC 客户端应直接发送 `x-octobus-ext-*` metadata。calculator 示例优先读取 `x-octobus-ext-business-request-id`，并兼容旧的 `x-business-request-id`。
 
 ## 非目标
 

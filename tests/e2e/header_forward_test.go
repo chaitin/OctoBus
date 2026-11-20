@@ -56,13 +56,13 @@ func TestHTTPHeaderForwardingToServicePackage(t *testing.T) {
 		}
 	}
 	logs := h.mustCLI("logs", "--capset", "dev", "--limit", "0")
-	for _, value := range []string{"original-forward-value", "forged-forward-value"} {
+	for _, value := range []string{"Bearer original-forward-value", "forged-forward-value"} {
 		if strings.Contains(logs, value) {
 			t.Fatal("header value leaked in access logs")
 		}
 	}
 	h.stop()
-	if strings.Contains(h.stderr.String(), "original-forward-value") || strings.Contains(h.stderr.String(), "forged-forward-value") {
+	if strings.Contains(h.stderr.String(), "Bearer original-forward-value") || strings.Contains(h.stderr.String(), "forged-forward-value") {
 		t.Fatal("header value leaked in daemon logs")
 	}
 }

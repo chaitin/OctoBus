@@ -282,6 +282,9 @@ func serve(opts serveOptions) error {
 		return fmt.Errorf("resolve data dir: %w", err)
 	}
 	logger.Info("daemon_starting", "addr", opts.addr, "data_dir", dataDir, "runtime_hardening", string(opts.runtimeHardening))
+	if sources := opts.httpHeaderForwards.CredentialSources(); len(sources) > 0 {
+		logger.Warn("http_header_forward_credentials", "sources", strings.Join(sources, ","), "detail", "forwarded values are visible to the service package; do not forward admin or capset credentials to untrusted packages")
+	}
 	var runtimeNode hardening.Node
 	var runtimeRulesPath string
 	if opts.runtimeHardening == hardening.LevelNode {

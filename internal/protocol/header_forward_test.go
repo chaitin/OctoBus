@@ -7,7 +7,7 @@ import (
 )
 
 func TestParseHTTPHeaderForwards(t *testing.T) {
-	for _, rule := range []string{"Authorization", "=x-octobus-ext-auth", "Bad Name=x-octobus-ext-auth", "Authorization=authorization", "Authorization=x-octobus-ext-", "Authorization=x-octobus-ext-ba\nd", "Authorization=x-octobus-ext-bad:name"} {
+	for _, rule := range []string{"Authorization", "=x-octobus-ext-auth", "Bad Name=x-octobus-ext-auth", "Authorization=authorization", "Authorization=x-octobus-ext-", "Authorization=x-octobus-ext-ba\nd", "Authorization=x-octobus-ext-bad:name", "X-Octobus-Ext-Auth=x-octobus-ext-auth", "Host=x-octobus-ext-host"} {
 		t.Run(rule, func(t *testing.T) {
 			if _, err := ParseHTTPHeaderForwards([]string{rule}); err == nil {
 				t.Fatal("expected invalid rule")
@@ -43,5 +43,25 @@ func TestHTTPHeaderForwards(t *testing.T) {
 	}
 	if !reflect.DeepEqual((HTTPHeaderForwards{}).apply(headers), original) {
 		t.Fatal("default must preserve headers")
+	}
+}
+
+func TestHTTPHeaderForwardsCredentialSources(t *testing.T) {
+	if got := (HTTPHeaderForwards{}).CredentialSources(); len(got) != 0 {
+		t.Fatalf("unexpected default credential sources: %v", got)
+	}
+	rules, err := ParseHTTPHeaderForwards([]string{
+		"Authorization=x-octobus-ext-auth",
+		" Cookie =x-octobus-ext-cookie",
+		"Proxy-Authorization=x-octobus-ext-proxy",
+		"X-Octobus-Ext-Auth=x-octobus-ext-other",
+		"Cookie=x-octobus-ext-second-cookie",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"authorization", "cookie", "proxy-authorization"}
+	if got := rules.CredentialSources(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("want %v, got %v", want, got)
 	}
 }
