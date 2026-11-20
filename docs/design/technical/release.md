@@ -19,8 +19,10 @@ remote；仓库文档不记录本地 remote。
 
 ## GitHub Actions
 
-公开仓库的唯一 CI 配置入口是 `.github/workflows/ci.yml`。默认 `validate` job 在 pull
-request、`main` 分支 push、`v*` tag push 和 `sdk-v*` tag push 上运行。
+公开仓库的 CI 配置位于 `.github/workflows/`：`ci.yml` 承担校验、npm 发布和 GitHub
+Release，`docker.yml` 发布容器镜像，`service-l2-gate.yml` 校验 service 变更。默认
+`validate` job 在 pull request、`main` 分支 push、`v*` tag push 和 `sdk-v*` tag push
+上运行。
 
 `validate` job 负责轻量验证：
 
@@ -87,6 +89,31 @@ SDK 通过同一个 workflow 中的 `publish-sdk` job 发布：
 
 发布目标是 npmjs 默认 registry。仓库不提交 registry token，也不在 `sdk/package.json`
 中绑定私有 registry。
+
+## GitHub Release
+
+GitHub Release 只是版本标记和变更记录入口，不是分发渠道。使用者仍然通过 npmjs 和
+Docker Hub 获取产物。
+
+GitHub Release 由同一个 workflow 中的 `publish-release` job 创建：
+
+- 仅在 `v<semver>` tag push 构建触发，允许 prerelease 后缀。
+- `sdk-v<semver>` tag 不创建 GitHub Release；SDK 只通过 npmjs 分发。
+- 依赖 `validate` 和 `publish-octobus` job 通过，因此 npm 发布失败或 tag 版本与
+  `npm/octobus/package.json` 不一致时不会创建 release。
+- Docker 镜像由独立的 `docker.yml` workflow 发布，不参与 release 门禁；镜像推送失败
+  不会阻止 release 创建。镜像只在 `v*` tag push 时推送，所有 tag（含 prerelease）都会
+  把 `:latest` 指向该镜像，与 npm 的 dist-tag 语义不同。
+- 正文使用 GitHub 自动生成的变更记录，基线固定为上一个稳定 `v*` tag（排除 prerelease
+  后缀），而不是上一个 release，避免跨过历史中没有 release 的 tag。
+- 不附加二进制或安装包附件。`scripts/build-octobus.sh` 会注入 build date，同一 tag
+  重复构建的产物字节不同，附件无法与 npm 上已发布的产物对应。
+- prerelease（npm dist-tag 为 `next`）标记为 prerelease，且不设置为 Latest。
+- release 已存在时跳过，因此重复运行的 tag build 不会改写已有 release。
+- release 创建失败后不要重新推送同一个 tag，npm 会拒绝重复版本；修复 workflow 后手动
+  执行 `gh release create <tag> --verify-tag --generate-notes --notes-start-tag
+  <上一个稳定 tag>` 补齐即可，prerelease 还需加 `--prerelease --latest=false`。
+- 需要 `contents: write` 权限，仅在 `publish-release` job 内声明。
 
 ## Lockfile And Generated File Policy
 

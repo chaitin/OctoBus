@@ -221,6 +221,10 @@ jobs:
     timeout-minutes: 10
     needs: validate
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    outputs:
+      # Single source of truth for the prerelease rule; the release job consumes
+      # it instead of re-deriving the same condition from the tag name.
+      dist_tag: ${{ steps.release.outputs.dist_tag }}
     permissions:
       contents: read
       id-token: write
@@ -313,3 +317,69 @@ jobs:
             npm publish "./$package_dir" "${publish_args[@]}"
           done
           npm publish ./npm/octobus "${publish_args[@]}"
+
+  publish-release:
+    name: publish GitHub release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs:
+      - validate
+      # Gating on the npm publish keeps a release from announcing a version
+      # that never reached the registry (bad tag/package version, npm failure).
+      - publish-octobus
+    # SDK tags are npm-only; GitHub releases exist for the daemon/CLI versions.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # The release notes baseline is found with git describe, which needs
+          # the surrounding tags.
+          fetch-depth: 0
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIST_TAG: ${{ needs.publish-octobus.outputs.dist_tag }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          # The tag shape is enforced by publish-octobus, which this job needs;
+          # re-checking it here would only let the two rules drift apart.
+
+          # Tag pushes can be re-run; never rewrite a release that already exists.
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "release $tag already exists; leaving it unchanged"
+            exit 0
+          fi
+
+          # GitHub defaults to the previous release, which ignores tags that never
+          # got one. Pin the baseline to the previous stable v* tag instead:
+          # a prerelease tag whose npm publish failed has no release, and using it
+          # as the baseline would drop the changelog before it for good.
+          previous="$(git describe --tags --match 'v[0-9]*' --exclude 'v*-*' --abbrev=0 "${tag}^" 2>/dev/null || true)"
+
+          args=(--verify-tag --title "$tag" --generate-notes)
+          if [ -n "$previous" ]; then
+            args+=(--notes-start-tag "$previous")
+          fi
+          if [ "$DIST_TAG" = "next" ]; then
+            # publish-octobus derives this from the published package version,
+            # so npm's dist-tag and the GitHub prerelease flag cannot diverge.
+            args+=(--prerelease --latest=false)
+          fi
+
+          if ! output="$(gh release create "$tag" "${args[@]}" 2>&1)"; then
+            printf '%s\n' "$output"
+            # The existence check above treats any API error as "missing", so a
+            # transient failure can land here with the release already present.
+            # gh renders the API code already_exists as "already exists"; match
+            # both spellings so this survives either formatting.
+            if grep -qiE 'already[ _]exists' <<<"$output"; then
+              echo "release $tag already exists; leaving it unchanged"
+              exit 0
+            fi
+            exit 1
+          fi
+          printf '%s\n' "$output"

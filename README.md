@@ -77,7 +77,7 @@ docker run --rm \
   -p 9000:9000 \
   -e OCTOBUS_BOOTSTRAP_ADMIN_TOKEN=... \
   -v octobus-data:/var/lib/octobus \
-  ghcr.io/chaitin/octobus:latest
+  docker.io/chaitin/octobus:latest
 ```
 
 The container listens on `0.0.0.0:9000` by default and stores daemon state under
@@ -91,14 +91,14 @@ user before starting the daemon:
 ```bash
 mkdir -p ./octobus-data
 # Replace <uid>:<gid> with the values used by the image:
-docker run --rm --entrypoint id ghcr.io/chaitin/octobus:latest -u octobus
-docker run --rm --entrypoint id ghcr.io/chaitin/octobus:latest -g octobus
+docker run --rm --entrypoint id docker.io/chaitin/octobus:latest -u octobus
+docker run --rm --entrypoint id docker.io/chaitin/octobus:latest -g octobus
 sudo chown -R <uid>:<gid> ./octobus-data
 
 docker run --rm \
   -p 9000:9000 \
   -v "$PWD/octobus-data:/var/lib/octobus" \
-  ghcr.io/chaitin/octobus:latest
+  docker.io/chaitin/octobus:latest
 ```
 
 ### Build from a checkout
