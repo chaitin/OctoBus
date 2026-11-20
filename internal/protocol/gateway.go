@@ -51,10 +51,11 @@ import (
 )
 
 type Gateway struct {
-	Store        *store.Store
-	DataDir      string
-	AccessLogger accessLogger
-	Logger       *slog.Logger
+	Store              *store.Store
+	DataDir            string
+	AccessLogger       accessLogger
+	HTTPHeaderForwards HTTPHeaderForwards
+	Logger             *slog.Logger
 	// RuntimeHardening selects the restrictions applied to on-demand runtimes.
 	RuntimeHardening hardening.Level
 	// RuntimeNode describes the node binary on-demand runtimes launch with.
@@ -768,7 +769,7 @@ func (g *Gateway) HandleConnectRPC(w http.ResponseWriter, r *http.Request) {
 		connect.NewErrorWriter().Write(recorder, r, connect.NewError(connect.CodeInternal, err))
 		return
 	}
-	ctx := metadata.NewIncomingContext(r.Context(), forwardMetadataFromHeaders(r.Header))
+	ctx := metadata.NewIncomingContext(r.Context(), forwardMetadataFromHeaders(g.HTTPHeaderForwards.apply(r.Header)))
 	ctx = context.WithValue(ctx, connectExposedMethodKey{}, item)
 	r = r.WithContext(ctx)
 	r.URL.Path = "/" + item.Method.FullName
@@ -812,7 +813,7 @@ func (g *Gateway) HandleMCP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(recorder, http.StatusUnauthorized, mcpProtocolError(nil, err.Error()))
 		return
 	}
-	r = r.WithContext(metadata.NewIncomingContext(r.Context(), forwardMetadataFromHeaders(r.Header)))
+	r = r.WithContext(metadata.NewIncomingContext(r.Context(), forwardMetadataFromHeaders(g.HTTPHeaderForwards.apply(r.Header))))
 	r.Body = http.MaxBytesReader(recorder, r.Body, DefaultMaxRequestBytes)
 	var req struct {
 		JSONRPC string          `json:"jsonrpc"`

@@ -128,9 +128,10 @@ func e2eCoverageDir() string {
 func e2eSubprocessEnv(extra ...string) []string {
 	env := make([]string, 0, len(os.Environ())+len(extra))
 	for _, entry := range os.Environ() {
-		// A hardening level exported in the developer's shell would change
-		// every daemon; tests that want one pass it explicitly.
-		if strings.HasPrefix(entry, "GOCOVERDIR=") || strings.HasPrefix(entry, "OCTOBUS_RUNTIME_HARDENING=") {
+		// A hardening level or header forwarding rule exported in the
+		// developer's shell would change every daemon; tests that want one
+		// pass it explicitly.
+		if strings.HasPrefix(entry, "GOCOVERDIR=") || strings.HasPrefix(entry, "OCTOBUS_RUNTIME_HARDENING=") || strings.HasPrefix(entry, "OCTOBUS_HTTP_HEADER_FORWARD=") {
 			continue
 		}
 		env = append(env, entry)

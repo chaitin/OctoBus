@@ -75,9 +75,16 @@ runtime mode、状态码和 route，但不能记录 config/secret 原文。acces
 
 ## Service Package 安全面
 
-service package 的 RPC request 不应把 token、password、cookie、webhook URL、session、
+service package 的 RPC request 默认不应把 token、password、cookie、webhook URL、session、
 AK/SK 或私钥作为正常输入。凭证应从 instance secret 读取；兼容旧字段时，runtime 也不能让
 request credential 覆盖 instance secret。
+
+显式启用 `--http-header-forward` 是有意的 opt-in 例外：gateway 会把指定 HTTP header（例如
+`Authorization`）复制到 `x-octobus-ext-*` metadata 交给 package，源 header 仍继续用于 capset
+鉴权。启用后需注意信任边界：capset 开启 token 时，转发值就是该 capset 的 token，package
+因此获得该 capset 的全域能力；`/admin/*` 与 `/capsets/*` 共用同一个 public listener，若把
+admin 或 capset 凭据转发给不可信 package，package 可复用该凭据访问 daemon API 完成提权。
+不要把 daemon 凭据转发给不可信 package，daemon 也不会校验转发后的值。
 
 service package 对上游 HTTP/API 的错误处理只能返回安全摘要，例如 HTTP status、body length
 或上游业务 code，不返回完整上游 raw body。需要跳过 TLS 校验时必须使用 per-request/per-client

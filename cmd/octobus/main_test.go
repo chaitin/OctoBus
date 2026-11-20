@@ -918,3 +918,35 @@ func TestParseOptionalDurationAllowZero(t *testing.T) {
 		}
 	}
 }
+
+func TestServeCommandHTTPHeaderForward(t *testing.T) {
+	for _, tc := range []struct {
+		name, env string
+		flags     []string
+		want      string
+	}{
+		{name: "invalid env", env: "Authorization=authorization", want: "OCTOBUS_HTTP_HEADER_FORWARD:"},
+		{name: "invalid flag", flags: []string{"--http-header-forward", "Authorization=authorization"}, want: "--http-header-forward:"},
+		{name: "flag overrides env", env: "invalid", flags: []string{"--http-header-forward", "Authorization=x-octobus-ext-auth"}, want: "not a directory"},
+		{name: "empty flag disables env", env: "invalid", flags: []string{"--http-header-forward="}, want: "not a directory"},
+		{name: "multiple env rules", env: "Authorization=x-octobus-ext-auth,Cookie=x-octobus-ext-cookie", want: "not a directory"},
+		{name: "repeated flags", flags: []string{"--http-header-forward", "Authorization=x-octobus-ext-auth", "--http-header-forward", "Cookie=x-octobus-ext-cookie"}, want: "not a directory"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("OCTOBUS_HTTP_HEADER_FORWARD", tc.env)
+			t.Setenv("OCTOBUS_RUNTIME_HARDENING", "off")
+			file := filepath.Join(t.TempDir(), "file")
+			if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			addr := "127.0.0.1:0"
+			cmd := newServeCommand(&addr)
+			cmd.SilenceUsage = true
+			cmd.SilenceErrors = true
+			cmd.SetArgs(append([]string{"--data-dir", filepath.Join(file, "child")}, tc.flags...))
+			if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("want %q, got %v", tc.want, err)
+			}
+		})
+	}
+}

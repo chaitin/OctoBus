@@ -3088,3 +3088,125 @@ func TestInvokeWarmMapsContextErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestHTTPHeaderForwardingProtocols(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+	st, err := store.Open(filepath.Join(dataDir, "octobus.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	compiled := compileFixture(t, dataDir)
+	files, err := protodesc.NewFiles(compiled.Files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reqAny, err := files.FindDescriptorByName("echo.v1.EchoRequest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	respAny, err := files.FindDescriptorByName("echo.v1.EchoResponse")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reqDesc := reqAny.(protoreflect.MessageDescriptor)
+	respDesc := respAny.(protoreflect.MessageDescriptor)
+	backendAddr, stopBackend, captured := startMetadataRawBackend(t, reqDesc, respDesc)
+	defer stopBackend()
+
+	service := domain.Service{ID: "echo", Name: "Echo", PackageSource: "fixture", PackageArtifactPath: "pkg", PackageSHA256: "pkgsha", DescriptorPath: filepath.Join(dataDir, "descriptor.protoset"), DescriptorSHA256: compiled.DescriptorSHA256, DescriptorVersion: compiled.DescriptorVersion, NodeEntry: "echo", Methods: compiled.Methods}
+	if err := st.UpsertService(ctx, service); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpsertInstance(ctx, domain.Instance{ID: "echo-test", ServiceID: "echo", Name: "Echo Test", Enabled: true, Status: domain.StatusRunning, ListenAddr: backendAddr, NodeEntry: "echo", ConfigJSON: []byte(`{}`)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.CreateCapset(ctx, domain.Capset{ID: "dev", Name: "Dev", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AddCapsetInstance(ctx, domain.CapsetInstance{ID: "dev:echo-test", CapsetID: "dev", ServiceID: "echo", InstanceID: "echo-test", IncludeAllMethods: true, Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AddCapsetMethod(ctx, domain.CapsetMethod{CapsetInstanceID: "dev:echo-test", MethodFullName: "echo.v1.EchoService/Echo", Enabled: true}); err != nil {
+		t.Fatal(err)
+	}
+	rules, err := ParseHTTPHeaderForwards([]string{"aUtHoRiZaTiOn=X-Octobus-Ext-Authorization"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	gateway := &Gateway{Store: st, HTTPHeaderForwards: rules}
+	t.Cleanup(func() { _ = gateway.Close() })
+
+	for _, protocol := range []string{"connect", "mcp"} {
+		for _, source := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s/source=%t", protocol, source), func(t *testing.T) {
+				path := "/capsets/dev/connect/echo-test/echo.v1.EchoService/Echo"
+				body := `{"text":"metadata"}`
+				if protocol == "mcp" {
+					path = "/capsets/dev/mcp"
+					body = `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"echo__echo-test__echo","arguments":{"text":"metadata"}}}`
+				}
+				req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+				req.Header.Set("Content-Type", "application/json")
+				req.Header.Set("X-Octobus-Ext-Authorization", "forged")
+				if source {
+					req.Header.Set("Authorization", "Bearer original")
+				}
+				w := httptest.NewRecorder()
+				gateway.Handler().ServeHTTP(w, req)
+				if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"echoed":"metadata"`) {
+					t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+				}
+				select {
+				case md := <-captured:
+					want := []string(nil)
+					if source {
+						want = []string{"Bearer original"}
+					}
+					if !reflect.DeepEqual(md.Get("x-octobus-ext-authorization"), want) {
+						t.Fatal("incorrect forwarded authorization")
+					}
+					if len(md.Get("authorization")) != 0 {
+						t.Fatal("raw authorization leaked")
+					}
+				case <-time.After(2 * time.Second):
+					t.Fatal("backend did not capture metadata")
+				}
+				if source && req.Header.Get("Authorization") != "Bearer original" {
+					t.Fatal("source header changed")
+				}
+			})
+		}
+	}
+	// Capset auth continues to use the original Authorization header.
+	if _, err := st.AddCapsetToken(ctx, domain.CapsetToken{ID: "key", CapsetID: "dev"}, "original"); err != nil {
+		t.Fatal(err)
+	}
+	for _, token := range []string{"original", "wrong"} {
+		req := httptest.NewRequest(http.MethodPost, "/capsets/dev/connect/echo-test/echo.v1.EchoService/Echo", strings.NewReader(`{"text":"auth"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		gateway.Handler().ServeHTTP(w, req)
+		if token == "original" {
+			if w.Code != http.StatusOK {
+				t.Fatalf("authorized status=%d", w.Code)
+			}
+			<-captured
+		} else if w.Code != http.StatusUnauthorized {
+			t.Fatalf("unauthorized status=%d", w.Code)
+		}
+	}
+	raw, err := proto.Marshal(dynamicpb.NewMessage(reqDesc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	grpcCtx := metadata.NewIncomingContext(ctx, metadata.Pairs("x-octobus-capset", "dev", "x-octobus-instance", "echo-test", "authorization", "Bearer original", "x-octobus-ext-authorization", "grpc-client"))
+	if _, err := gateway.UnaryProxy(grpcCtx, "/echo.v1.EchoService/Echo", raw); err != nil {
+		t.Fatal(err)
+	}
+	if got := (<-captured).Get("x-octobus-ext-authorization"); len(got) != 1 || got[0] != "grpc-client" {
+		t.Fatal("HTTP rules affected gRPC")
+	}
+}

@@ -126,7 +126,9 @@ Go gateway 使用上述 metadata 做确定性路由。gRPC catalog 中的 routin
 
 gateway 在转发给 Node instance 前剥离 Octobus 控制 metadata。控制 metadata 包括 `x-octobus-*` 中除 `x-octobus-ext-*` 以外的字段。需要透传给 service package 的 Octobus 业务扩展字段使用 `x-octobus-ext-*`，例如 `x-octobus-ext-business-request-id` 和 `x-octobus-ext-username`，不会被剥离。calculator 示例优先读取 `x-octobus-ext-business-request-id`，并 fallback 到旧的 `x-business-request-id`。
 
-Connect RPC 普通 JSON 调用只从 HTTP header 透传明确允许的业务 metadata：`x-business-request-id` 和 `x-octobus-ext-*`。不全量透传 HTTP header，避免 hop-by-hop header、content negotiation header、`Host`、`Authorization` 或 Octobus 控制 header 泄漏到 service package；`Authorization` 只用于 capset 鉴权。
+Connect RPC 普通 JSON 调用默认只从 HTTP header 透传明确允许的业务 metadata：`x-business-request-id` 和 `x-octobus-ext-*`。默认不全量透传 HTTP header，避免 hop-by-hop header、content negotiation header、`Host`、`Authorization` 或 Octobus 控制 header 泄漏到 service package；`Authorization` 只用于 capset 鉴权。
+
+例外是 operator 显式启用的 header 改名转发：配置 `--http-header-forward SOURCE=x-octobus-ext-NAME`（或环境变量 `OCTOBUS_HTTP_HEADER_FORWARD`）后，gateway 在把 HTTP header 转换为 metadata 前按规则复制源 header。源 header 仍只用于 capset 鉴权，规则不改变认证语义；目标必须是 `x-octobus-ext-*`，因此仍落在既有透传通道内。该配置默认关闭；启用后所选 header 的原始值会交给 service package，信任边界由 operator 负责。
 
 预期使用场景：系统会把 gRPC 调用规约通过 catalog/reflection 或外部文档交给 agent，agent 再根据文档使用 `grpcurl` 或自行写代码完成调用。
 
