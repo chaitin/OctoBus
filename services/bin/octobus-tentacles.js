@@ -345,6 +345,10 @@ const services = {
     entryFile: "../riversafe__waf/bin/riversafe-waf.js",
     serviceModule: "../riversafe__waf/src/service.js",
   },
+  "ruifosang-dps-version": {
+    entryFile: "../ruifosang__dps_version/bin/ruifosang-dps-version.js",
+    serviceModule: "../ruifosang__dps_version/src/service.js",
+  },
   "ruijie-behavior-firewall-r2-3-2-t0": {
     entryFile: "../ruijie__behavior_firewall_r2-3-2-t0/bin/ruijie-behavior-firewall-r2-3-2-t0.js",
     serviceModule: "../ruijie__behavior_firewall_r2-3-2-t0/src/service.js",
