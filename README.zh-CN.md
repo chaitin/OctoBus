@@ -69,7 +69,7 @@ docker run --rm \
   -p 9000:9000 \
   -e OCTOBUS_BOOTSTRAP_ADMIN_TOKEN=... \
   -v octobus-data:/var/lib/octobus \
-  ghcr.io/chaitin/octobus:latest
+  docker.io/chaitin/octobus:latest
 ```
 
 容器默认监听 `0.0.0.0:9000`，daemon 状态保存在 `/var/lib/octobus`。
@@ -81,14 +81,14 @@ docker run --rm \
 ```bash
 mkdir -p ./octobus-data
 # 将 <uid>:<gid> 替换为镜像中 octobus 用户的实际 UID:GID：
-docker run --rm --entrypoint id ghcr.io/chaitin/octobus:latest -u octobus
-docker run --rm --entrypoint id ghcr.io/chaitin/octobus:latest -g octobus
+docker run --rm --entrypoint id docker.io/chaitin/octobus:latest -u octobus
+docker run --rm --entrypoint id docker.io/chaitin/octobus:latest -g octobus
 sudo chown -R <uid>:<gid> ./octobus-data
 
 docker run --rm \
   -p 9000:9000 \
   -v "$PWD/octobus-data:/var/lib/octobus" \
-  ghcr.io/chaitin/octobus:latest
+  docker.io/chaitin/octobus:latest
 ```
 
 ### 从 checkout 构建
